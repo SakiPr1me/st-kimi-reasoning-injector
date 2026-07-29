@@ -1,0 +1,7 @@
+{
+    "name": "Kimi Reasoning Content Injector",
+    "description": "注入 reasoning_content (玄学方法增加夺舍率，没效果就AI全责)",
+    "version": "1.0.0",
+    "author": "Local",
+    "js": ["index.js"]
+}
