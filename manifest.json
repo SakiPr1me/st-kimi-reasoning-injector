@@ -1,8 +1,8 @@
 {
     "name": "Kimi Reasoning Content Injector",
     "display_name": "Kimi破限注入",
-    "description": "两种注入方式（reasoning_content / partial）+ Name 注入，思维链折叠 or 进正文按需切换",
-    "version": "1.7.2",
+    "description": "两种注入方式（reasoning_content / partial）+ 思维链折叠，按需切换破限强度",
+    "version": "1.8.0",
     "author": "Local",
     "js": [
         "index.js"
