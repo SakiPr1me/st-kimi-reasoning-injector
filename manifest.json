@@ -1,7 +1,10 @@
 {
     "name": "Kimi Reasoning Content Injector",
-    "description": "注入 reasoning_content (玄学方法增加夺舍率，没效果就AI全责)",
-    "version": "1.0.0",
+    "display_name": "Kimi破限注入",
+    "description": "两种注入方式（reasoning_content / partial）+ Name 注入，思维链折叠 or 进正文按需切换",
+    "version": "1.7.2",
     "author": "Local",
-    "js": ["index.js"]
+    "js": [
+        "index.js"
+    ]
 }
