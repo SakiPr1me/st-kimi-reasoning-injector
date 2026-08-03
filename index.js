@@ -259,6 +259,29 @@ function applyThinkingFold(messageId) {
 
 eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, applyThinkingFold);
 
+// ===== 流式折叠补帧：ST 流式每帧更新 .mes_text 但不触发 CHARACTER_MESSAGE_RENDERED，用 MutationObserver 补 =====
+let foldObserver = null;
+function connectFoldObserver() {
+    if (foldObserver || !settings.thinkingFold) return;
+    const chatEl = document.querySelector("#chat");
+    if (!chatEl) return;
+    foldObserver = new MutationObserver((mutations) => {
+        if (!settings.thinkingFold) return;
+        const seen = new Set();
+        for (const mut of mutations) {
+            const mesEl = mut.target && mut.target.closest ? mut.target.closest(".mes") : null;
+            if (!mesEl) continue;
+            const mesid = mesEl.getAttribute("mesid");
+            if (mesid === null || mesid === undefined) continue;
+            const id = Number(mesid);
+            if (seen.has(id) || mesEl.querySelector(".mes_text .kimi-fold")) continue;
+            seen.add(id);
+            applyThinkingFold(id);
+        }
+    });
+    foldObserver.observe(chatEl, { subtree: true, childList: true });
+}
+
 jQuery(async () => {
     const settingsHtml = `
         <div class="extension-settings" id="${extensionName}_settings">
@@ -319,6 +342,7 @@ jQuery(async () => {
     `;
 
     $("#extensions_settings").append(settingsHtml);
+    connectFoldObserver();
     $('<style id="kimi-fold-style">' + foldCSS + '</style>').appendTo('head');
 
     $("#" + extensionName + "_enabled").on("change", function () {
