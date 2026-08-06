@@ -1,8 +1,8 @@
 {
     "name": "Kimi Reasoning Content Injector",
-    "display_name": "Kimi破限注入",
-    "description": "两种注入方式（reasoning_content / partial）+ 思维链折叠，按需切换破限强度",
-    "version": "1.8.1",
+    "display_name": "KIMI工具箱",
+    "description": "KIMI工具箱：注入 + 折叠 + 自动重roll + 换行修正",
+    "version": "1.11.54",
     "author": "Local",
     "js": [
         "index.js"
