@@ -3,7 +3,7 @@ import { saveSettingsDebounced, substituteParams, eventSource, event_types, mess
 import { SWIPE_DIRECTION, SWIPE_SOURCE } from "../../../constants.js";
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
 
-console.log("[Kimi插件] v1.11.54 已加载（默认设置：种子精简/折叠宽松/limit30）");
+console.log("[余温工具箱] v1.11.55 已加载（默认设置：种子精简/折叠宽松/limit30）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -24,8 +24,12 @@ const defaultSettings = {
     nameValue: "余小温",      // Name 注入的角色名（可自行填写）
     nameModes: ["reasoning_content", "partial"], // name 应用到哪些注入分支（可多选）
     autoStopEnabled: true,           // 自动截断：检测到标记即停止生成（省token）
-    autoStopMarker: '<NG_scene>',    // 自动截断标记（可自定义，如 <NG_scene>）
+    autoStopMarker: '<mutter>',    // 自动截断标记（可自定义，如 <mutter>）
     rerollPaused: false,             // 暂停自动重roll（横幅按钮/设置开关控制）
+    dsThinkingMode: 'native',        // DeepSeek 思维链开关：native=原生思维链(thinking enabled) | disabled=正文思维链(thinking disabled)
+    dsReasoningEffort: "max",        // DeepSeek 思考强度：off=不注入(用DeepSeek默认high) | low | high | xhigh | max
+    wordReplaceEnabled: true,        // 词汇替换总开关（默认开=自动应用）
+    wordReplacements: [],            // 词汇替换规则：{find, replace, mode:'simple'|'regex', enabled, scopeDisplay, scopePrompt}
 };
 
 if (!extension_settings[extensionName]) {
@@ -57,8 +61,16 @@ if (settings.nameEnabled === undefined) settings.nameEnabled = defaultSettings.n
 if (settings.nameValue === undefined) settings.nameValue = defaultSettings.nameValue;
 if (!Array.isArray(settings.nameModes)) settings.nameModes = Array.isArray(defaultSettings.nameModes) ? defaultSettings.nameModes.slice() : ['reasoning_content', 'partial'];
 if (settings.autoStopEnabled === undefined) settings.autoStopEnabled = true;
-if (settings.autoStopMarker === undefined) settings.autoStopMarker = '<NG_scene>';
+if (settings.autoStopMarker === undefined) settings.autoStopMarker = '<mutter>';
 if (settings.rerollPaused === undefined) settings.rerollPaused = false;
+// dsThinkingEnabled（旧）迁移到 dsThinkingMode
+if (settings.dsThinkingMode === undefined) {
+    settings.dsThinkingMode = (settings.dsThinkingEnabled === false) ? 'disabled' : 'native';
+}
+delete settings.dsThinkingEnabled;
+if (settings.dsReasoningEffort === undefined) settings.dsReasoningEffort = "max";
+if (settings.wordReplaceEnabled === undefined) settings.wordReplaceEnabled = true;
+if (!Array.isArray(settings.wordReplacements)) settings.wordReplacements = [];
 // 清理已移除的设置（v1.5.0 桥与种子位置；Name 注入已重新启用，不再删除）
 delete settings.bridgeEnabled;
 delete settings.bridgeText;
@@ -139,6 +151,44 @@ function buildSeed(template) {
     return resolveTemplate(template);
 }
 
+// 根据注入模式动态调整种子里的 <cot>（文本框内容不动，注入时按 step2 开关调整）：
+//   partial 开启 → 确保 <cot>\n 在 Phase 0： 前（没有则插入）
+//   partial 关闭 → 移除种子里的 <cot>（有则删）
+function applyCotByMode(seedText) {
+    if (!seedText) return seedText;
+    const modes = Array.isArray(settings.injectModes) ? settings.injectModes : [];
+    const hasPartial = modes.includes('partial');
+    if (hasPartial) {
+        if (/<cot>/i.test(seedText)) return seedText;
+        return seedText.replace(/Phase\s*0\s*：/, '<cot>\nPhase 0：');
+    }
+    // 无 partial：移除 <cot>（含其后换行）
+    return seedText.replace(/<cot>\s*\n\s*/i, '').replace(/<cot>\s*/i, '');
+}
+
+// 应用单条规则到文本（供「应用至以往所有」单条使用；只检查 enabled/find，不检查作用域）
+function applySingleRule(r, text) {
+    if (!r || r.enabled === false || !r.find || typeof text !== 'string' || !text) return text;
+    try {
+        if (r.mode === 'regex') return text.replace(new RegExp(r.find, 'g'), r.replace ?? '');
+        return text.split(r.find).join(r.replace ?? '');
+    } catch (e) { console.warn('[余温工具箱] 词汇替换规则无效:', r.find, e); return text; }
+}
+
+// 词汇替换：按作用域过滤规则，对文本应用替换（scope: 'display' | 'prompt'）
+// 简单模式 = split/join 字面替换（无正则转义坑，小白友好）；正则模式 = new RegExp（进阶，非法正则 try/catch 兜底）
+function applyReplacements(text, scope) {
+    if (!settings.wordReplaceEnabled || typeof text !== 'string' || !text) return text;
+    const rules = Array.isArray(settings.wordReplacements) ? settings.wordReplacements : [];
+    for (const r of rules) {
+        if (!r || r.enabled === false || !r.find) continue;
+        if (scope === 'display' && !r.scopeDisplay) continue;
+        if (scope === 'prompt' && !r.scopePrompt) continue;
+        text = applySingleRule(r, text);
+    }
+    return text;
+}
+
 // 在事件时机预解析种子，缓存给 fetch 用（此时主应用宏引擎能读到正确的本地变量）
 function refreshSeed() {
     try {
@@ -147,7 +197,7 @@ function refreshSeed() {
             seedResolved = '';
             return;
         }
-        seedResolved = buildSeed(t.trim());
+        seedResolved = applyCotByMode(buildSeed(t.trim()));
     } catch (e) {
         console.warn('[Kimi注入] refreshSeed 失败:', e);
         seedResolved = settings.reasoningContent; // 退回原文
@@ -198,6 +248,30 @@ function injectSeed(msgs, seed) {
     return changed;
 }
 
+// 在 custom_include_body（YAML 字符串）里 upsert 一个顶层键。
+// topKey 匹配顶层键行（不含缩进），替换该键及其后续缩进行；不存在则追加。
+function upsertYamlTopKey(yaml, topKey, blockText) {
+    if (!yaml) return blockText;
+    const lines = String(yaml).split('\n');
+    const out = [];
+    let replaced = false;
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const m = line.match(/^([A-Za-z_][A-Za-z0-9_-]*)\s*:/);
+        if (m && m[1] === topKey) {
+            out.push(blockText);
+            let j = i + 1;
+            while (j < lines.length && /^[ \t]/.test(lines[j])) j++;
+            i = j - 1;
+            replaced = true;
+            continue;
+        }
+        out.push(line);
+    }
+    if (!replaced) out.push(blockText);
+    return out.join('\n');
+}
+
 const originalFetch = window.fetch;
 window.fetch = async function(...args) {
     const [resource, config] = args;
@@ -210,7 +284,7 @@ window.fetch = async function(...args) {
 
             // 1) 种子注入（partial / reasoning_content 可多选）
             if (settings.enabled && settings.reasoningContent.trim() !== "") {
-                const seed = seedResolved || buildSeed(settings.reasoningContent.trim());
+                const seed = applyCotByMode(seedResolved || buildSeed(settings.reasoningContent.trim()));
                 if (injectSeed(msgs, seed)) changed = true;
             }
 
@@ -231,22 +305,50 @@ window.fetch = async function(...args) {
 
             // 2) reasoning_effort：K3 顶层参数，控制思考强度/时长（off=不注入用默认 max）
             // 借道 CUSTOM 源自带的「自定义请求体」custom_include_body（YAML）透传给 K3——不需要改 ST 核心、拷走即用
-            if (settings.enabled && settings.reasoningEffort && settings.reasoningEffort !== 'off') {
+            // ⚠️ 仅非 deepseek 时用：deepseek 走下面第 3) 段的 dsReasoningEffort，避免两套 effort 打架
+            const isDeepSeek = typeof bodyObj.model === 'string' && bodyObj.model.toLowerCase().includes('deepseek');
+            if (!isDeepSeek && settings.enabled && settings.reasoningEffort && settings.reasoningEffort !== 'off') {
                 bodyObj.reasoning_effort = settings.reasoningEffort;
-                const effortYaml = 'reasoning_effort: ' + settings.reasoningEffort;
-                const existing = String(bodyObj.custom_include_body || '');
-                if (existing.trim() === '') {
-                    bodyObj.custom_include_body = effortYaml;
-                } else if (/\breasoning_effort\s*:/.test(existing)) {
-                    bodyObj.custom_include_body = existing.replace(/\breasoning_effort\s*:[^\n]*/m, effortYaml);
-                } else {
-                    bodyObj.custom_include_body = existing + '\n' + effortYaml;
-                }
+                bodyObj.custom_include_body = upsertYamlTopKey(String(bodyObj.custom_include_body || ''), 'reasoning_effort', 'reasoning_effort: ' + settings.reasoningEffort);
                 changed = true;
+            }
+
+            // 3) DeepSeek 专用：思考开关 + 思考强度（仅当模型名含 deepseek 时生效）
+            // 必须走 custom_include_body（YAML）——ST 的 requestBody 只展开 bodyParams，
+            // 顶层 bodyObj.thinking / bodyObj.reasoning_effort 不会被带进最终请求（已查 ST 源码确认）
+            if (isDeepSeek && settings.enabled) {
+                if (settings.dsThinkingMode === 'disabled') {
+                    bodyObj.thinking = { type: 'disabled' };
+                    bodyObj.custom_include_body = upsertYamlTopKey(String(bodyObj.custom_include_body || ''), 'thinking', 'thinking:\n  type: disabled');
+                    changed = true;
+                }
+                if (settings.dsReasoningEffort && settings.dsReasoningEffort !== 'off') {
+                    bodyObj.reasoning_effort = settings.dsReasoningEffort;
+                    bodyObj.custom_include_body = upsertYamlTopKey(String(bodyObj.custom_include_body || ''), 'reasoning_effort', 'reasoning_effort: ' + settings.dsReasoningEffort);
+                    changed = true;
+                }
+            }
+
+            // 4) 词汇替换 · 仅后端提示词：替换发给 AI 的历史消息（跳过 system 指南，避免规则误改 NSFW_GUIDE/禁词表）
+            // 只改请求体，不改存储、不改显示。让 AI 生成时「看到」目标词而非原词。
+            if (settings.wordReplaceEnabled) {
+                let promptChanged = false;
+                for (const m of msgs) {
+                    if (m && m.role !== 'system' && typeof m.content === 'string') {
+                        const replaced = applyReplacements(m.content, 'prompt');
+                        if (replaced !== m.content) { m.content = replaced; promptChanged = true; }
+                    }
+                }
+                if (promptChanged) changed = true;
             }
 
             if (changed) {
                 config.body = JSON.stringify(bodyObj);
+                const last = msgs.at(-1);
+                const rc = last && last.reasoning_content;
+                console.log('[Kimi注入] 改写后最后一条:', 'role=' + (last && last.role), '| partial=' + (last && last.partial ? 'true' : 'false'), '| reasoning_content=' + (rc ? '已注入(' + rc.slice(0, 80).replace(/\n/g, '\\n') + '...)' : '无'));
+            } else {
+                console.log('[Kimi注入] 未改写', 'enabled=' + settings.enabled, '| reasoningContent非空=' + (settings.reasoningContent.trim() !== ''), '| injectModes=' + JSON.stringify(settings.injectModes));
             }
         } catch (e) {
             console.error("[Kimi注入] 失败:", e);
@@ -269,6 +371,7 @@ let rerollBlockedNotified = false;       // 本聊天是否已提示过"预算�
 let lastObservedMesId = -1;              // 本次生成期间 DOM 有变化的消息 id（swipe 空回定位用）
 let emptyRerollTargetId = -1;            // GENERATION_ENDED 判定空回时的目标消息 id（fallback 用）
 let isDryRun = false;                  // 提示词查看器 dry-run 模式（不参与生成状态管理）
+let generationStartLastMes = null;     // GENERATION_STARTED 时最后一条消息的 mes（空回重roll判别：最后一条没变=查看器/无新消息→跳过）
 const origMesMap = new Map(); // messageId -> 修正前的原始 mes（「修正回退」用）
 let autoStopTriggered = false;             // 本次生成是否已触发自动截断（防重复 stopGeneration）
 let earlyRerollHandled = false;            // 流式截断重roll 是否已处理（GENERATION_ENDED 兜底防 MESSAGE_RECEIVED 缺失时双重重roll）
@@ -614,6 +717,7 @@ window.__kimiStopReroll = () => {
 const foldState = new Map(); // messageId -> { open, scrollTop, atBottom }
 const foldAppliedText = new Map(); // messageId -> 上次折叠时的纯文本（防死循环/防重复）
 const foldRenderedCache = new Map(); // messageId -> { thinkingText, thinkingHtml }（<scene> 出现后思考已固定，复用渲染结果）
+const displayReplaceMap = new Map(); // messageId -> 已应用显示替换的原始 mes（词汇替换防重复/防覆盖）
 
 const foldCSS = `
 .kimi-fold{width:100%;color:inherit;cursor:pointer;margin:12px 0;}
@@ -861,6 +965,13 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     earlyRerollMessageId = -1;
     streamGotToken = false;    // 本次生成是否收到过 token（空回检测）
     isGenerating = true;
+    // 记录生成开始时的最后一条消息内容（空回重roll判别：JS-Slash-Runner 提示词查看器会触发真实生成
+    // 但在发出 API 请求前 stopGeneration → 零token 且不新增消息 → 最后一条没变 → 不该重roll）
+    try {
+        const ctxStart = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        const lastStart = ctxStart?.chat?.at(-1);
+        generationStartLastMes = (lastStart && typeof lastStart.mes === 'string') ? lastStart.mes : null;
+    } catch (e) { generationStartLastMes = null; }
     manualStopClicked = false;
     emptyRerollHandled = false;
     emptyRerollTargetId = -1;
@@ -937,6 +1048,25 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
     // 之前 pending 会在 500 后新的 GENERATION_STARTED 里被清掉，fallback 看到 pending=false 就放弃了）
     const rerollTargetId = emptyRerollTargetId;
     emptyRerollTargetId = -1;
+
+    // 空回重roll判别：JS-Slash-Runner 提示词查看器打开时会触发一条【真实】Generate('normal')，
+    // 但它在 API 请求发出前 stopGeneration → 零token + 不新增/不修改任何消息。
+    // 若 ENDED 时最后一条消息与生成开始前完全相同 → 本轮没有产生任何消息 → 是查看器（或网络失败），不重roll。
+    // （真实空回：normal 新增空占位 / swipe 换空分支 / regenerate 换新占位 → 最后一条必变，不受影响。）
+    const lastMesNow = (() => {
+        try {
+            const ctxNow = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+            const lastNow = ctxNow?.chat?.at(-1);
+            return (lastNow && typeof lastNow.mes === 'string') ? lastNow.mes : null;
+        } catch (e) { return null; }
+    })();
+    const lastUnchanged = (generationStartLastMes !== null && lastMesNow !== null && lastMesNow === generationStartLastMes);
+    generationStartLastMes = null;
+    if (lastUnchanged) {
+        console.log('[Kimi插件] 空回但最后一条消息未变化（提示词查看器/无新消息）→ 跳过自动重roll');
+        return;
+    }
+
     console.log(`[Kimi插件] 空回 → 自动重roll target=${rerollTargetId}`);
     if (rerollTargetId >= 0) handleEmptyReroll(rerollTargetId);
 });
@@ -989,7 +1119,9 @@ eventSource.on(event_types.CHAT_CHANGED, () => {
     foldState.clear();
     foldAppliedText.clear();
     foldRenderedCache.clear();
+    displayReplaceMap.clear();
     origMesMap.clear();
+    wordApplyUndo.clear(); // 换聊天清词汇替换「回退修改」的撤销记录，防跨聊天污染
     autoRerollCount = 0;
     updateRerollStatus();
     lastAutoRerollMessageId = -1;
@@ -1030,6 +1162,7 @@ function connectFoldObserver() {
             // 流式早期检测：英文思维链 / 正文超时无标记 → 截断重roll（与折叠开关独立）
             checkStreamingAbort(id);
             if (settings.thinkingFold) applyThinkingFold(id);
+            applyDisplayReplace(id); // 显示层词汇替换（在折叠处理后，对文本节点替换，保留标签结构）
         }
     });
     foldObserver.observe(chatEl, { subtree: true, childList: true, characterData: true });
@@ -1060,6 +1193,150 @@ function unfoldAllMessages() {
     foldState.clear();
     foldAppliedText.clear();
     foldRenderedCache.clear();
+    displayReplaceMap.clear();
+}
+
+// 显示层词汇替换：对 .mes_text 的文本节点应用 applyReplacements(scope='display')，保留标签结构。
+// displayReplaceMap 记录「已应用替换的原始 mes」——原始文本变了才重新替换（流式/重渲染防重复）
+function applyDisplayReplace(id) {
+    if (!settings.wordReplaceEnabled) return;
+    try {
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        const msg = ctx?.chat?.[id];
+        if (!msg || msg.is_user || msg.is_system) return;
+        if (typeof msg.mes !== 'string' || msg.mes.trim() === '') return;
+        const el = document.querySelector(`.mes[mesid="${id}"] .mes_text`);
+        if (!el) return;
+        const mesEl = el.closest('.mes');
+        // 编辑模式跳过（ST 点铅笔有编辑框时，不能动文本）
+        if (mesEl && (mesEl.querySelector('#curEditTextarea') || mesEl.querySelector('.reasoning_edit_textarea'))) return;
+        if (displayReplaceMap.get(id) === msg.mes) {
+            // 防重复：原始文本没变。但 ST/fold 重建会把 .mes_text 重写成原文（含待替换词），
+            // 此时必须重新替换，否则显示层回退成未替换状态（如"乳尖"没被换成"乳头"）。
+            const rules = Array.isArray(settings.wordReplacements) ? settings.wordReplacements : [];
+            const domText = el.textContent || '';
+            let needsReapply = false;
+            for (const r of rules) {
+                if (!r || r.enabled === false || !r.find || !r.scopeDisplay) continue;
+                if (domText.includes(r.find)) { needsReapply = true; break; }
+            }
+            if (!needsReapply) return;
+        }
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+            const replaced = applyReplacements(node.nodeValue, 'display');
+            if (replaced !== node.nodeValue) node.nodeValue = replaced;
+        }
+        displayReplaceMap.set(id, msg.mes);
+    } catch (e) { console.warn('[余温工具箱] 显示替换失败:', e); }
+}
+
+// 全量刷新显示替换：对当前所有已渲染消息「还原为原始渲染 → 重新折叠 → 重新应用显示替换」。
+// 规则增删改 / 总开关切换时调用 → 历史消息即时生效（像 ST 正则那样，不用等新生成）。
+// 关闭总开关时（wordReplaceEnabled=false）applyDisplayReplace 内部直接 return → 等于全量还原。
+function refreshAllDisplayReplace() {
+    try {
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        displayReplaceMap.clear();
+        document.querySelectorAll('#chat .mes').forEach((mesEl) => {
+            const mesid = mesEl.getAttribute('mesid');
+            if (mesid === null || mesid === undefined) return;
+            const id = Number(mesid);
+            const msg = ctx?.chat?.[id];
+            if (!msg || typeof msg.mes !== 'string') return;
+            const el = mesEl.querySelector('.mes_text');
+            if (!el) return;
+            if (mesEl.querySelector('#curEditTextarea') || mesEl.querySelector('.reasoning_edit_textarea')) return; // 编辑模式跳过
+            // 还原为原始渲染（重新走 messageFormatting 完整管线，保留 Regex 美化）
+            el.innerHTML = messageFormatting(msg.mes, msg.name || '', msg.is_system, msg.is_user, id);
+            if (settings.thinkingFold) applyThinkingFold(id);
+            applyDisplayReplace(id);
+        });
+    } catch (e) { console.warn('[余温工具箱] 刷新显示替换失败:', e); }
+}
+
+// 「应用至以往所有」撤销记录：rule 对象 -> [{id, original}]（应用前的原文快照）
+const wordApplyUndo = new Map();
+
+// 应用「单条规则」到历史所有消息（写回 chat[id].mes + 重渲染）。用户点该条规则的「应用至以往所有」。
+// 应用前先记录原文快照（wordApplyUndo），点「回退此条」可一键恢复。
+function applyRuleToHistory(ruleIdx) {
+    const rule = Array.isArray(settings.wordReplacements) ? settings.wordReplacements[ruleIdx] : null;
+    if (!rule) return 0;
+    const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+    const chat = ctx?.chat;
+    if (!Array.isArray(chat)) return 0;
+    const undo = [];
+    let count = 0;
+    for (let i = 0; i < chat.length; i++) {
+        const m = chat[i];
+        if (!m || typeof m.mes !== 'string') continue;
+        const replaced = applySingleRule(rule, m.mes);
+        if (replaced !== m.mes) {
+            undo.push({ id: i, original: m.mes });
+            m.mes = replaced;
+            reRenderMessage(i);
+            count++;
+        }
+    }
+    // 覆盖旧记录（保留最近一次应用前的状态，避免多次应用后误回退到中间态）
+    if (undo.length) wordApplyUndo.set(rule, undo);
+    return count;
+}
+
+// 回退「单条规则」对历史消息的改写：恢复应用前的原文快照。
+function undoRuleToHistory(ruleIdx) {
+    const rule = Array.isArray(settings.wordReplacements) ? settings.wordReplacements[ruleIdx] : null;
+    if (!rule) return 0;
+    const undo = wordApplyUndo.get(rule);
+    if (!undo || !undo.length) return 0;
+    const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+    const chat = ctx?.chat;
+    if (!Array.isArray(chat)) return 0;
+    let count = 0;
+    for (const { id, original } of undo) {
+        const m = chat[id];
+        if (m && typeof m.mes === 'string' && m.mes !== original) {
+            m.mes = original;
+            reRenderMessage(id);
+            count++;
+        }
+    }
+    wordApplyUndo.delete(rule);
+    return count;
+}
+
+function htmlEscape(s) {
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// 渲染词汇替换规则行（UI 用 + 追加，增删改后重新渲染）
+function renderWordReplaceRows() {
+    const rules = Array.isArray(settings.wordReplacements) ? settings.wordReplacements : [];
+    const rows = rules.map((r, i) => `
+        <div style="margin-top:4px;padding:5px;border:1px solid rgba(128,128,128,.2);border-radius:4px">
+          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+            <input type="checkbox" class="wr-enabled" data-idx="${i}" ${r.enabled === false ? '' : 'checked'} title="启用该规则"/>
+            <input type="text" class="wr-find" data-idx="${i}" value="${htmlEscape(r.find)}" placeholder="查找" style="width:100px"/>
+            <span>→</span>
+            <input type="text" class="wr-replace" data-idx="${i}" value="${htmlEscape(r.replace)}" placeholder="替换" style="width:100px"/>
+            <select class="wr-mode" data-idx="${i}" style="width:52px;flex:none">
+              <option value="simple" ${r.mode === 'regex' ? '' : 'selected'}>简单</option>
+              <option value="regex" ${r.mode === 'regex' ? 'selected' : ''}>正则</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px">
+            <label style="font-size:0.75em"><input type="checkbox" class="wr-scope-display" data-idx="${i}" ${r.scopeDisplay ? 'checked' : ''}/>仅显示</label>
+            <label style="font-size:0.75em"><input type="checkbox" class="wr-scope-prompt" data-idx="${i}" ${r.scopePrompt ? 'checked' : ''}/>仅后端提示词</label>
+            <button class="wr-apply-hist" data-idx="${i}" style="margin-left:auto;padding:2px 6px;border-radius:3px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-size:.8em">应用至以往所有(如奇怪绰号)</button>
+            <button class="wr-undo" data-idx="${i}" style="padding:2px 6px;border-radius:3px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-size:.8em" title="恢复该条规则「应用至以往所有」修改前的所有历史消息原文">回退修改</button>
+            <button class="wr-del" data-idx="${i}" style="padding:2px 6px;border-radius:3px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-size:.8em">删除</button>
+          </div>
+        </div>`).join('');
+    const container = document.getElementById(extensionName + "_word_list");
+    if (container) container.innerHTML = rows;
+    return rows; // 返回 HTML 字符串（settingsHtml 初始渲染用；若返回 undefined 会显示 "undefined"）
 }
 
 jQuery(async () => {
@@ -1071,20 +1348,46 @@ jQuery(async () => {
         <div class="extension-settings" id="${extensionName}_settings">
             <div class="inline-drawer">
                 <div class="inline-drawer-toggle inline-drawer-header">
-                    <b>KIMI工具箱</b>
+                    <b>余温工具箱</b>
                     <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
                 </div>
                 <div class="inline-drawer-content" style="display: none;">
 
                     <label class="checkbox_label">
                         <input id="${extensionName}_enabled" type="checkbox" ${settings.enabled ? 'checked' : ''}/>
-                        启用
+                        插件开关
                     </label>
 
 <div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
 
+<!-- Deepseek 思维链开关（最上面） -->
+<div style="margin-top:6px">
+<label for="${extensionName}_ds_thinking_mode" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>Deepseek思维链开关：</b></label>
+<select id="${extensionName}_ds_thinking_mode" class="text_pole" style="width:100%">
+<option value="native" ${settings.dsThinkingMode !== 'disabled' ? 'selected' : ''}>原生思维链</option>
+<option value="disabled" ${settings.dsThinkingMode === 'disabled' ? 'selected' : ''}>正文思维链(thinking disabled)</option>
+</select>
+</div>
+
+<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
+
+<!-- DeepSeek 思考强度 -->
 <div style="margin-top:5px">
-<label for="${extensionName}_effort" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>Kimi3 思考强度 注入：</b></label>
+<label for="${extensionName}_ds_effort" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>Deepseek思考强度：</b></label>
+<select id="${extensionName}_ds_effort" class="text_pole" style="width:100%">
+<option value="off" ${settings.dsReasoningEffort==='off'?'selected':''}>off（不注入，用 DeepSeek 默认 high）</option>
+<option value="low" ${settings.dsReasoningEffort==='low'?'selected':''}>low（flash: low / pro: high）</option>
+<option value="high" ${settings.dsReasoningEffort==='high'?'selected':''}>high（flash: high / pro: high）</option>
+<option value="xhigh" ${settings.dsReasoningEffort==='xhigh'?'selected':''}>xhigh（flash: high / pro: max）</option>
+<option value="max" ${settings.dsReasoningEffort==='max'?'selected':''}>max（flash: max / pro: max）</option>
+</select>
+</div>
+
+<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
+
+<!-- Kimi3 思考强度（移到 Deepseek 思考强度之下） -->
+<div style="margin-top:5px">
+<label for="${extensionName}_effort" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>Kimi3 思考强度：</b></label>
 <select id="${extensionName}_effort" class="text_pole" style="width:100%">
 <option value="off" ${settings.reasoningEffort==='off'?'selected':''}>off（不注入，用 K3 默认 max）</option>
 <option value="low" ${settings.reasoningEffort==='low'?'selected':''}>low（思考快）</option>
@@ -1095,12 +1398,8 @@ jQuery(async () => {
 
 <div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
 
-                    <div style="margin-top: 5px;">
-                        <label for="${extensionName}_reasoning_value" style="display:block; margin-bottom:5px; font-size: 0.9em; color: var(--grey_color);">Reasoning Content：</label>
-                        <textarea id="${extensionName}_reasoning_value" class="text_pole" style="width: 100%; box-sizing: border-box; height: 120px;">${settings.reasoningContent}</textarea>
-                    </div>
 <div style="margin-top:5px">
-<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">注入方式：</label>
+<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>注入破限：</b></label>
 <label class="checkbox_label">
 <input id="${extensionName}_inject_rc" type="checkbox" ${settings.injectModes.includes('reasoning_content')?'checked':''}/>
 step 1：中破限·原生思维链夺舍（reasoning_content注入）
@@ -1109,6 +1408,10 @@ step 1：中破限·原生思维链夺舍（reasoning_content注入）
 <input id="${extensionName}_inject_partial" type="checkbox" ${settings.injectModes.includes('partial')?'checked':''}/>
 step 2：强破限·正文输出思维链夺舍（partial注入）
 </label>
+<div style="margin-top:8px">
+<label for="${extensionName}_reasoning_value" style="display:block; margin-bottom:5px; font-size: 0.9em; color: var(--grey_color);"><b>Reasoning Content：</b></label>
+<textarea id="${extensionName}_reasoning_value" class="text_pole" style="width: 100%; box-sizing: border-box; height: 120px;">${settings.reasoningContent}</textarea>
+</div>
 </div>
 
 <div style="margin-top:6px">
@@ -1116,10 +1419,7 @@ step 2：强破限·正文输出思维链夺舍（partial注入）
 使用方法：<br>
 · 只打开step 1：原生思维链不进正文，正文质量理论最高。有概率极端内容夺舍失败（AI 道歉），好在出现英文可手动截停，重roll可破，主要看渠道。<br>
 · 同时打开step 1和step2：思维链放进正文，破限较强，稳定夺舍。有概率在思考完就截断。这种截断在使用无限能源时会扣费！<br>
-<br>
-⚠️注意：<br>
-1、两种破限方式都需要搭配专用预设<br>
-2、仅测试opencode渠道，其它自测
+⚠️注意：两种破限方式都需要搭配专用预设，渠道仅测试opencode，其它自测。
 </p>
 </div>
 
@@ -1148,11 +1448,63 @@ step 2：强破限·正文输出思维链夺舍（partial注入）
 <input id="${extensionName}_reroll_mintokens" type="number" min="0" max="5000" step="10" class="text_pole" style="width:100px;box-sizing:border-box" value="${settings.rerollMinThinkingTokens}"/>
 <span style="font-size:0.75em;color:var(--grey_color)"> token</span>
 </div>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">注意：<br>
-1、截断阈值用于防止思考不足或者不思考直接出正文，监测方法是指定token内有没有出现下面的<code>正文分隔标记</code><br>
-2、玩夸张的内容时，英文重roll虽然可以避免英文思维链（大概率道歉），但是中文思维链也有道歉几率只是比较低！你要多关注下手动截断。</p>
+<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">注意：玩极端的内容时，容易出现英文思维链，重roll虽然可以避免大概率道歉的英文思维链，但是中文思维链也有道歉几率，只是比较低！你要多关注下手动截断。</p>
 </div>
 
+<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
+<div style="margin-top:5px">
+<label class="checkbox_label">
+<input id="${extensionName}_thinking_fold" type="checkbox" ${settings.thinkingFold ? 'checked' : ''}/>
+<b>思维链美化折叠</b>
+</label>
+<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">当选择正文思维链，爆出的思维链放正文不好看，用美化把它折叠起来。不想要美化也可以关掉，打开不显示&lt;scene&gt;之前内容的<b>正则</b>。</p>
+<div style="margin-top:5px">
+<label for="${extensionName}_foldmode" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">折叠识别：</label>
+<select id="${extensionName}_foldmode" class="text_pole" style="width:100%">
+<option value="strict" ${settings.foldMode==='strict'?'selected':''}>严格（分隔标记 + 特征词判断）</option>
+<option value="loose" ${settings.foldMode==='loose'?'selected':''}>宽松（无标记一律折叠，可能误伤普通回复）</option>
+</select>
+</div>
+<div style="margin-top:5px">
+<label for="${extensionName}_foldmarker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">正文分隔标记：</label>
+<input id="${extensionName}_foldmarker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${foldMarkerHtml}"/>
+<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">以此标记为分解，拆分思考/正文，思考渲染成美化</p>
+</div>
+</div>
+
+<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
+<div style="margin-top:6px">
+<label class="checkbox_label">
+<input id="${extensionName}_autostop_enabled" type="checkbox" ${settings.autoStopEnabled ? 'checked' : ''}/>
+<b>检测到结束标记自动截断</b>
+</label>
+<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">流式中检测到指定标记，立即停止生成，目前不收费，不知道哪天会修。之前安装过截断插件的可以把那个关掉只用这个就行了。</p>
+<div style="margin-top:5px">
+<label for="${extensionName}_autostop_marker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">截断标记：</label>
+<input id="${extensionName}_autostop_marker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${autoStopMarkerHtml}"/>
+</div>
+</div>
+
+<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
+
+<!-- 折叠块：自动修正正文换行 + Name 注入（不常用，点开才显示） -->
+<details>
+<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">自动修正正文换行 &amp; Name 注入 ▸</summary>
+<div style="margin-top:8px">
+<label class="checkbox_label">
+<input id="${extensionName}_fix_generate" type="checkbox" ${settings.fixMesOnGenerate !== false ? 'checked' : ''}/>
+<b>自动修正正文换行</b>
+</label>
+<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">如果出现只有单换行的情况(没有空行)，插件为其自动补上。可自定义，用逗号分隔。</p>
+<div style="margin-top:5px">
+<label for="${extensionName}_fix_marker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">正文修正标记：</label>
+<input id="${extensionName}_fix_marker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${fixMarkerHtml}"/>
+</div>
+<div style="margin-top:5px">
+<button id="${extensionName}_fix_now" class="menu_button" style="display:inline-block;width:auto;margin-right:6px">修正当前楼层</button>
+<button id="${extensionName}_fix_revert" class="menu_button" style="display:inline-block;width:auto">修正回退</button>
+</div>
+</div>
 <div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
 <div style="margin-top:6px">
 <label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>Name 注入（不知道有没有用总之试试）：</b></label>
@@ -1176,54 +1528,27 @@ partial
 </label>
 </div>
 </div>
+</details>
+
+<!-- 词汇替换（放最下面，折叠块） -->
+<details>
+<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">词汇替换 ▸</summary>
+<div style="margin-top:8px">
+<label class="checkbox_label">
+<input id="${extensionName}_word_enabled" type="checkbox" ${settings.wordReplaceEnabled ? 'checked' : ''}/>
+启用（生成后自动应用）
+</label>
+<div id="${extensionName}_word_list" style="margin-top:5px">
+${renderWordReplaceRows()}
+</div>
+<div style="margin-top:5px">
+<button id="${extensionName}_word_add" class="menu_button" style="display:inline-block;width:auto">+ 添加规则</button>
+</div>
+<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">每行：查找→替换，模式可选简单/正则；勾选应用层（仅显示 / 仅后端提示词，可都勾）。规则勿碰 &lt;scene&gt;/&lt;content&gt; 等标签。</p>
+</div>
+</details>
 
 <div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
-<div style="margin-top:5px">
-<label class="checkbox_label">
-<input id="${extensionName}_thinking_fold" type="checkbox" ${settings.thinkingFold ? 'checked' : ''}/>
-<b>思维链美化折叠</b>
-</label>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">当使用强破限时思维链放正文不好看，用美化把它折叠起来。不想要美化也可以关掉，打开不显示&lt;scene&gt;之前内容的正则。</p>
-<div style="margin-top:5px">
-<label for="${extensionName}_foldmode" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">折叠识别：</label>
-<select id="${extensionName}_foldmode" class="text_pole" style="width:100%">
-<option value="strict" ${settings.foldMode==='strict'?'selected':''}>严格（分隔标记 + 特征词判断）</option>
-<option value="loose" ${settings.foldMode==='loose'?'selected':''}>宽松（无标记一律折叠，可能误伤普通回复）</option>
-</select>
-</div>
-<div style="margin-top:5px">
-<label for="${extensionName}_foldmarker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">正文分隔标记：</label>
-<input id="${extensionName}_foldmarker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${foldMarkerHtml}"/>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">以此标记为分解，拆分思考/正文，思考渲染成美化</p>
-</div>
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
-<label class="checkbox_label">
-<input id="${extensionName}_fix_generate" type="checkbox" ${settings.fixMesOnGenerate !== false ? 'checked' : ''}/>
-<b>自动修正正文换行</b>
-</label>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">如果出现只有单换行的情况(没有空行)，插件为其自动补上。可自定义，用逗号分隔。</p>
-<div style="margin-top:5px">
-<label for="${extensionName}_fix_marker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">正文修正标记：</label>
-<input id="${extensionName}_fix_marker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${fixMarkerHtml}"/>
-</div>
-<div style="margin-top:5px">
-<button id="${extensionName}_fix_now" class="menu_button" style="display:inline-block;width:auto;margin-right:6px">修正当前楼层</button>
-<button id="${extensionName}_fix_revert" class="menu_button" style="display:inline-block;width:auto">修正回退</button>
-</div>
-</div>
-
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
-<div style="margin-top:6px">
-<label class="checkbox_label">
-<input id="${extensionName}_autostop_enabled" type="checkbox" ${settings.autoStopEnabled ? 'checked' : ''}/>
-<b>检测到结束标记自动截断（省token）</b>
-</label>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">流式中检测到指定标记（如 &lt;NG_scene&gt;）立即停止生成，剩余内容不收费。不重roll。</p>
-<div style="margin-top:5px">
-<label for="${extensionName}_autostop_marker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">截断标记：</label>
-<input id="${extensionName}_autostop_marker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${autoStopMarkerHtml}"/>
-</div>
-</div>
 
 
                 </div>
@@ -1353,12 +1678,81 @@ partial
         saveSettingsDebounced();
     });
 
+    $("#" + extensionName + "_ds_thinking_mode").on("change", function () {
+        settings.dsThinkingMode = $(this).val();
+        saveSettingsDebounced();
+    });
+    $("#" + extensionName + "_ds_effort").on("change", function () {
+        settings.dsReasoningEffort = $(this).val();
+        saveSettingsDebounced();
+    });
+
+    // ===== 词汇替换 =====
+    $("#" + extensionName + "_word_enabled").on("change", function () {
+        settings.wordReplaceEnabled = $(this).is(":checked");
+        saveSettingsDebounced();
+        refreshAllDisplayReplace(); // 即时生效（还原或应用显示替换，像 ST 正则 reload）
+    });
+    $("#" + extensionName + "_word_add").on("click", function () {
+        if (!Array.isArray(settings.wordReplacements)) settings.wordReplacements = [];
+        settings.wordReplacements.push({ find: "", replace: "", mode: "simple", enabled: true, scopeDisplay: true, scopePrompt: true });
+        renderWordReplaceRows();
+        saveSettingsDebounced();
+    });
+    $("#" + extensionName + "_word_list").on("click", ".wr-apply-hist", function () {
+        const idx = Number($(this).attr("data-idx"));
+        const n = applyRuleToHistory(idx);
+        console.log(`[余温工具箱] 已应用该条规则到 ${n} 条历史消息`);
+    });
+    $("#" + extensionName + "_word_list").on("click", ".wr-undo", function () {
+        const idx = Number($(this).attr("data-idx"));
+        const n = undoRuleToHistory(idx);
+        if (n > 0) console.log(`[余温工具箱] 已回退该条规则 ${n} 条历史消息`);
+        else console.log('[余温工具箱] 该条规则没有可回退的记录');
+    });
+    // 规则行事件委托（规则动态增删，用容器委托）
+    $("#" + extensionName + "_word_list").on("change", ".wr-enabled, .wr-find, .wr-replace, .wr-mode, .wr-scope-display, .wr-scope-prompt", function () {
+        const idx = Number($(this).attr("data-idx"));
+        const r = Array.isArray(settings.wordReplacements) ? settings.wordReplacements[idx] : null;
+        if (!r) return;
+        if ($(this).hasClass("wr-enabled")) r.enabled = $(this).is(":checked");
+        else if ($(this).hasClass("wr-find")) r.find = $(this).val();
+        else if ($(this).hasClass("wr-replace")) r.replace = $(this).val();
+        else if ($(this).hasClass("wr-mode")) r.mode = $(this).val();
+        else if ($(this).hasClass("wr-scope-display")) r.scopeDisplay = $(this).is(":checked");
+        else if ($(this).hasClass("wr-scope-prompt")) r.scopePrompt = $(this).is(":checked");
+        saveSettingsDebounced();
+        refreshAllDisplayReplace(); // 规则一变即全量重渲染（显示即时，像 ST 正则）
+    });
+    $("#" + extensionName + "_word_list").on("click", ".wr-del", function () {
+        const idx = Number($(this).attr("data-idx"));
+        if (Array.isArray(settings.wordReplacements)) {
+            const rule = settings.wordReplacements[idx];
+            if (rule) wordApplyUndo.delete(rule); // 规则删除时清掉它的撤销记录
+            settings.wordReplacements.splice(idx, 1);
+            renderWordReplaceRows();
+            saveSettingsDebounced();
+            refreshAllDisplayReplace();
+        }
+    });
+
     // 多选注入方式：勾选/取消时增删数组元素
     function toggleInjectMode(mode, on) {
         if (!Array.isArray(settings.injectModes)) settings.injectModes = ['partial'];
         const set = new Set(settings.injectModes);
         if (on) set.add(mode); else set.delete(mode);
         settings.injectModes = Array.from(set);
+        // partial（step2）开关联动：文本框里的 <cot> 随开关增删
+        // 开了 step2 → 文本框里一定有 <cot>；关掉 → 移除 <cot>
+        if (mode === 'partial') {
+            const cur = String(settings.reasoningContent || '');
+            if (on && !/<cot>/i.test(cur)) {
+                settings.reasoningContent = cur.replace(/Phase\s*0\s*：/, '<cot>\nPhase 0：');
+            } else if (!on && /<cot>/i.test(cur)) {
+                settings.reasoningContent = cur.replace(/<cot>\s*\n\s*/i, '').replace(/<cot>\s*/i, '');
+            }
+            $("#" + extensionName + "_reasoning_value").val(settings.reasoningContent);
+        }
         saveSettingsDebounced();
     }
     $("#" + extensionName + "_inject_partial").on("change", function () {
