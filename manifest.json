@@ -2,7 +2,7 @@
     "name": "Kimi Reasoning Content Injector",
     "display_name": "余温工具箱",
     "description": "余温工具箱：注入 + 折叠 + 自动重roll + 换行修正 + Deepseek适配",
-    "version": "1.11.55",
+    "version": "1.11.56",
     "author": "Local",
     "js": [
         "index.js"

@@ -3,7 +3,7 @@ import { saveSettingsDebounced, substituteParams, eventSource, event_types, mess
 import { SWIPE_DIRECTION, SWIPE_SOURCE } from "../../../constants.js";
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
 
-console.log("[余温工具箱] v1.11.55 已加载（默认设置：种子精简/折叠宽松/limit30）");
+console.log("[余温工具箱] v1.11.56 已加载（默认设置：种子精简/折叠宽松/limit30）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
