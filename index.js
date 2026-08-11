@@ -1,11 +1,34 @@
 import { extension_settings } from "../../../extensions.js";
-import { saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, swipe, stopGeneration, Generate } from "../../../../script.js";
+import { saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, stopGeneration, Generate } from "../../../../script.js";
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
 
 // SWIPE 常量本地兜底：ST 1.15.0 才引入（1.13 无 SWIPE_DIRECTION/SWIPE_SOURCE），
 // 直接 import 会让 1.13 加载报错、插件静默失败。此处定义同值副本（值与原版完全一致）。
 const SWIPE_DIRECTION = { LEFT: 'left', RIGHT: 'right' };
 const SWIPE_SOURCE = { DELETE: 'delete', KEYBOARD: 'keyboard', BACK: 'back', AUTO_SWIPE: 'auto_swipe', SLASH_COMMAND: 'slash_command', SWIPE_PICKER: 'swipe_picker' };
+
+// 兼容封装：1.18 用通用 swipe(event, direction, options)，1.13 只有 ctx.swipe.left/right（无 forceMesId）。
+// 统一走 getContext().swipe，规避直接 import swipe 在 1.13 上加载失败的问题。
+async function doSwipe(targetId) {
+    try {
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        if (typeof ctx?.swipe === 'function') {
+            // 1.18+：通用 swipe，支持 forceMesId 精确定位
+            await ctx.swipe(null, SWIPE_DIRECTION.RIGHT, {
+                source: SWIPE_SOURCE.AUTO_SWIPE,
+                repeated: true,
+                forceMesId: targetId,
+            });
+            return true;
+        }
+        if (ctx?.swipe?.right) {
+            // 1.13：swipe.right({source, repeated})，无 forceMesId（降级为操作最后一条消息）
+            await ctx.swipe.right({ source: SWIPE_SOURCE.AUTO_SWIPE, repeated: true });
+            return true;
+        }
+    } catch (e) { console.warn('[余温工具箱] swipe 调用失败:', e); }
+    return false;
+}
 
 console.log("[余温工具箱] v1.11.58 已加载（兼容 ST 1.13 + 旧WebView）");
 const extensionName = "kimi_reasoning_injector";
@@ -566,11 +589,7 @@ async function triggerAutoSwipe(messageId) {
             console.log(`[Kimi插件] 重roll目标修正：消息#${messageId} → #${lastId}（regenerate 删建后索引变化）`);
         }
         console.log(`[Kimi插件] 触发自动重roll：消息#${targetId} 开新分支`);
-        await swipe(null, SWIPE_DIRECTION.RIGHT, {
-            source: SWIPE_SOURCE.AUTO_SWIPE,
-            repeated: true,
-            forceMesId: targetId,
-        });
+        await doSwipe(targetId);
         console.log(`[Kimi插件] 自动重roll swipe 完成`);
     } catch (e) {
         console.warn('[Kimi插件] 自动重roll失败:', e);
