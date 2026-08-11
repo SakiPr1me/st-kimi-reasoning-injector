@@ -7,7 +7,7 @@ import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../
 const SWIPE_DIRECTION = { LEFT: 'left', RIGHT: 'right' };
 const SWIPE_SOURCE = { DELETE: 'delete', KEYBOARD: 'keyboard', BACK: 'back', AUTO_SWIPE: 'auto_swipe', SLASH_COMMAND: 'slash_command', SWIPE_PICKER: 'swipe_picker' };
 
-console.log("[余温工具箱] v1.11.57 已加载（兼容 ST 1.13）");
+console.log("[余温工具箱] v1.11.58 已加载（兼容 ST 1.13 + 旧WebView）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -224,7 +224,7 @@ function injectSeed(msgs, seed) {
     const nameValue = settings.nameValue || '余小温';
     const applyName = (mode) => nameEnabled && nameModes.includes(mode);
     let changed = false;
-    const last = msgs.length > 0 ? msgs.at(-1) : null;
+    const last = msgs.length > 0 ? msgs[msgs.length - 1] : null;
 
     // reasoning_content：挂在当前最后一条 assistant 上
     if (modes.includes('reasoning_content')) {
@@ -348,7 +348,7 @@ window.fetch = async function(...args) {
 
             if (changed) {
                 config.body = JSON.stringify(bodyObj);
-                const last = msgs.at(-1);
+                const last = msgs[msgs.length - 1];
                 const rc = last && last.reasoning_content;
                 console.log('[Kimi注入] 改写后最后一条:', 'role=' + (last && last.role), '| partial=' + (last && last.partial ? 'true' : 'false'), '| reasoning_content=' + (rc ? '已注入(' + rc.slice(0, 80).replace(/\n/g, '\\n') + '...)' : '无'));
             } else {
@@ -973,7 +973,7 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     // 但在发出 API 请求前 stopGeneration → 零token 且不新增消息 → 最后一条没变 → 不该重roll）
     try {
         const ctxStart = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-        const lastStart = ctxStart?.chat?.at(-1);
+        const lastStart = ctxStart?.chat?.[ctxStart.chat.length - 1];
         generationStartLastMes = (lastStart && typeof lastStart.mes === 'string') ? lastStart.mes : null;
     } catch (e) { generationStartLastMes = null; }
     manualStopClicked = false;
@@ -1060,7 +1060,7 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
     const lastMesNow = (() => {
         try {
             const ctxNow = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-            const lastNow = ctxNow?.chat?.at(-1);
+            const lastNow = ctxNow?.chat?.[ctxNow.chat.length - 1];
             return (lastNow && typeof lastNow.mes === 'string') ? lastNow.mes : null;
         } catch (e) { return null; }
     })();
