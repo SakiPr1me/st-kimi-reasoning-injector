@@ -7,21 +7,21 @@ import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../
 const SWIPE_DIRECTION = { LEFT: 'left', RIGHT: 'right' };
 const SWIPE_SOURCE = { DELETE: 'delete', KEYBOARD: 'keyboard', BACK: 'back', AUTO_SWIPE: 'auto_swipe', SLASH_COMMAND: 'slash_command', SWIPE_PICKER: 'swipe_picker' };
 
-// 兼容封装：1.18 用通用 swipe(event, direction, options)，1.13 只有 ctx.swipe.left/right（无 forceMesId）。
+// 兼容封装：1.18 通用 swipe 在 ctx.swipe.to(event, dir, opts)，1.13 只有 ctx.swipe.right({source,repeated})（无 forceMesId）。
 // 统一走 getContext().swipe，规避直接 import swipe 在 1.13 上加载失败的问题。
 async function doSwipe(targetId) {
     try {
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-        if (typeof ctx?.swipe === 'function') {
-            // 1.18+：通用 swipe，支持 forceMesId 精确定位
-            await ctx.swipe(null, SWIPE_DIRECTION.RIGHT, {
+        if (typeof ctx?.swipe?.to === 'function') {
+            // 1.18+：ctx.swipe.to 是通用 swipe，支持 forceMesId 精确定位
+            await ctx.swipe.to(null, SWIPE_DIRECTION.RIGHT, {
                 source: SWIPE_SOURCE.AUTO_SWIPE,
                 repeated: true,
                 forceMesId: targetId,
             });
             return true;
         }
-        if (ctx?.swipe?.right) {
+        if (typeof ctx?.swipe?.right === 'function') {
             // 1.13：swipe.right({source, repeated})，无 forceMesId（降级为操作最后一条消息）
             await ctx.swipe.right({ source: SWIPE_SOURCE.AUTO_SWIPE, repeated: true });
             return true;
