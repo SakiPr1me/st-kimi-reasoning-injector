@@ -1,9 +1,13 @@
 import { extension_settings } from "../../../extensions.js";
 import { saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, swipe, stopGeneration, Generate } from "../../../../script.js";
-import { SWIPE_DIRECTION, SWIPE_SOURCE } from "../../../constants.js";
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
 
-console.log("[余温工具箱] v1.11.56 已加载（默认设置：种子精简/折叠宽松/limit30）");
+// SWIPE 常量本地兜底：ST 1.15.0 才引入（1.13 无 SWIPE_DIRECTION/SWIPE_SOURCE），
+// 直接 import 会让 1.13 加载报错、插件静默失败。此处定义同值副本（值与原版完全一致）。
+const SWIPE_DIRECTION = { LEFT: 'left', RIGHT: 'right' };
+const SWIPE_SOURCE = { DELETE: 'delete', KEYBOARD: 'keyboard', BACK: 'back', AUTO_SWIPE: 'auto_swipe', SLASH_COMMAND: 'slash_command', SWIPE_PICKER: 'swipe_picker' };
+
+console.log("[余温工具箱] v1.11.57 已加载（兼容 ST 1.13）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
