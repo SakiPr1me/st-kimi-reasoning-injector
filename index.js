@@ -30,7 +30,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.11.58 已加载（兼容 ST 1.13 + 旧WebView）");
+console.log("[余温工具箱] v1.12.0 已加载（多语言：中/英/韩；兼容 ST 1.13 + 旧WebView）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -1417,7 +1417,7 @@ jQuery(async () => {
 <option value="en" ${settings.language === 'en' ? 'selected' : ''}>English</option>
 <option value="ko" ${settings.language === 'ko' ? 'selected' : ''}>한국어</option>
 </select>
-<p style="font-size:0.75em;color:var(--grey_color);margin:4px 0 0 0">切换语言会自动替换 Reasoning Content 为对应语言版本（可再手动编辑）；<br>「<cot> 注入」「partial 身份锚」「默认角色名」也会跟随语言。</p>
+<p style="font-size:0.75em;color:var(--grey_color);margin:4px 0 0 0">切换语言会自动替换 Reasoning Content 为对应语言版本（可再手动编辑）；<br>「&lt;cot&gt; 注入」「partial 身份锚」「默认角色名」也会跟随语言。</p>
 </div>
 
 <div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
