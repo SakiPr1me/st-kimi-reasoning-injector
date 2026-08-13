@@ -84,6 +84,87 @@ const COT_INSERT_RE = /(Phase\s*0\s*)([：:])/;
 // 移除 <cot>（含其后换行）
 const COT_STRIP_RE = /<cot>\s*\n\s*/i;
 
+// ===== 三语 UI 文案（设置面板所有文字；key 见 t() 引用） =====
+const UI = {
+    zh: {
+        pluginName: "余温工具箱", enabled: "插件开关",
+        langLabel: "语言 / Language：", langZh: "中文（默认）", langEn: "English", langKo: "한국어",
+        langHint: "切换语言会自动替换 Reasoning Content 为对应语言版本（可再手动编辑）；「&lt;cot&gt; 注入」「partial 身份锚」「默认角色名」也会跟随语言。",
+        dsModeLabel: "Deepseek思维链开关：", dsNative: "原生思维链", dsDisabled: "正文思维链(thinking disabled)",
+        dsEffortLabel: "Deepseek思考强度：", dsEffortOff: "off（不注入，用 DeepSeek 默认 high）", dsEffortLow: "low（flash: low / pro: high）", dsEffortHigh: "high（flash: high / pro: high）", dsEffortXhigh: "xhigh（flash: high / pro: max）", dsEffortMax: "max（flash: max / pro: max）",
+        k3EffortLabel: "Kimi3 思考强度：", k3EffortOff: "off（不注入，用 K3 默认 max）", k3EffortLow: "low（思考快）", k3EffortHigh: "high", k3EffortMax: "max（思考最久）",
+        injectLabel: "注入破限：", injectStep1: "step 1：中破限·原生思维链夺舍（reasoning_content注入）", injectStep2: "step 2：强破限·正文输出思维链夺舍（partial注入）",
+        rcLabel: "Reasoning Content：",
+        usageTitle: "使用方法：", usage1: "· 只打开step 1：原生思维链不进正文，正文质量理论最高。有概率极端内容夺舍失败（AI 道歉），好在出现英文可手动截停，重roll可破，主要看渠道。", usage2: "· 同时打开step 1和step2：思维链放进正文，破限较强，稳定夺舍。有概率在思考完就截断。这种截断在使用无限能源时会扣费！", usage3: "⚠️注意：两种破限方式都需要搭配专用预设，渠道仅测试opencode，其它自测。",
+        rerollLabel: "自动重roll：", rerollEnglish: "思维链是英文（触审易道歉） → 自动重roll", rerollNoThink: "无思维链直接出正文（没思考or少思考） → 自动重roll", rerollEmpty: "空回复（PVP）→ 自动重roll",
+        rerollLimitLabel: "连续自动重roll上限：", rerollTimes: " 次", rerollMinTokensLabel: "思考太短截断阈值：",
+        rerollWarning: "注意：玩极端的内容时，容易出现英文思维链，重roll虽然可以避免大概率道歉的英文思维链，但是中文思维链也有道歉几率，只是比较低！你要多关注下手动截断。",
+        foldLabel: "思维链美化折叠", foldHint: "当选择正文思维链，爆出的思维链放正文不好看，用美化把它折叠起来。不想要美化也可以关掉，打开不显示&lt;scene&gt;之前内容的<b>正则</b>。",
+        foldModeLabel: "折叠识别：", foldStrict: "严格（分隔标记 + 特征词判断）", foldLoose: "宽松（无标记一律折叠，可能误伤普通回复）",
+        foldMarkerLabel: "正文分隔标记：", foldMarkerHint: "以此标记为分解，拆分思考/正文，思考渲染成美化",
+        autoStopLabel: "检测到结束标记自动截断", autoStopHint: "流式中检测到指定标记，立即停止生成，目前不收费，不知道哪天会修。之前安装过截断插件的可以把那个关掉只用这个就行了。",
+        autoStopMarkerLabel: "截断标记：",
+        foldTitle: "自动修正正文换行 & Name 注入 ▸", fixLabel: "自动修正正文换行", fixHint: "如果出现只有单换行的情况(没有空行)，插件为其自动补上。可自定义，用逗号分隔。", fixMarkerLabel: "正文修正标记：", fixNow: "修正当前楼层", fixRevert: "修正回退",
+        nameLabel: "Name 注入（不知道有没有用总之试试）：", nameEnabled: "启用 Name 注入", nameValueLabel: "Name 值：", nameScopeLabel: "应用到分支：",
+        wordTitle: "词汇替换 ▸", wordEnabled: "启用（生成后自动应用）", wordAdd: "+ 添加规则",
+        wordHint: "每行：查找→替换，模式可选简单/正则；勾选应用层（仅显示 / 仅后端提示词，可都勾）。规则勿碰 &lt;scene&gt;/&lt;content&gt; 等标签。",
+        wrEnabled: "启用该规则", wrFind: "查找", wrReplace: "替换", wrSimple: "简单", wrRegex: "正则", wrDisplay: "仅显示", wrPrompt: "仅后端提示词", wrDelete: "删除",
+    },
+    en: {
+        pluginName: "Yu Wen Toolkit", enabled: "Plugin Toggle",
+        langLabel: "Language: ", langZh: "中文 (Default)", langEn: "English", langKo: "한국어",
+        langHint: "Switching language auto-replaces Reasoning Content (editable afterwards); <cot> injection, partial anchor, default name also follow the language.",
+        dsModeLabel: "DeepSeek Thinking Mode: ", dsNative: "Native thinking", dsDisabled: "Body CoT (thinking disabled)",
+        dsEffortLabel: "DeepSeek Effort: ", dsEffortOff: "off (no inject, DeepSeek default high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
+        k3EffortLabel: "Kimi3 Effort: ", k3EffortOff: "off (no inject, K3 default max)", k3EffortLow: "low (fast thinking)", k3EffortHigh: "high", k3EffortMax: "max (longest thinking)",
+        injectLabel: "Injection Modes: ", injectStep1: "step 1: medium jailbreak - native CoT takeover (reasoning_content)", injectStep2: "step 2: strong jailbreak - body CoT takeover (partial)",
+        rcLabel: "Reasoning Content: ",
+        usageTitle: "Usage: ", usage1: "· Step 1 only: native CoT stays out of the body - theoretically best body quality. Extreme content may fail takeover (AI apologizes); stop manually if English thinking appears, reroll usually fixes it (depends on the channel).", usage2: "· Step 1 + Step 2: CoT goes into the body - stronger jailbreak, stable takeover. May stop right after thinking. That stop still costs tokens on unlimited-energy plans!", usage3: "⚠️ Both modes need the matching preset. Only tested on opencode channel.",
+        rerollLabel: "Auto Reroll: ", rerollEnglish: "English thinking (easily triggers moderation apology) → auto reroll", rerollNoThink: "No thinking, straight to body (no/little thinking) → auto reroll", rerollEmpty: "Empty reply (PVP) → auto reroll",
+        rerollLimitLabel: "Max consecutive auto rerolls: ", rerollTimes: " times", rerollMinTokensLabel: "Short-thinking cutoff threshold: ",
+        rerollWarning: "Note: extreme content often produces English thinking. Reroll avoids the high-risk English thinking, but Chinese thinking can still trigger apologies (lower chance). Watch for manual stops.",
+        foldLabel: "CoT Fold Beautify", foldHint: "With body CoT, leaked thinking looks ugly in the body - fold it with beautify. Can disable and use a <b>regex</b> that hides everything before &lt;scene&gt; instead.",
+        foldModeLabel: "Fold Detection: ", foldStrict: "strict (separator + keyword)", foldLoose: "loose (fold everything without marker, may catch normal replies)",
+        foldMarkerLabel: "Body Separator Marker: ", foldMarkerHint: "Split thinking/body at this marker; thinking is rendered as beautified fold",
+        autoStopLabel: "Auto-Stop on End Marker", autoStopHint: "Stop generation immediately when the marker appears mid-stream. Currently free - might be patched someday. If you had a stop plugin before, disable it and use this one.",
+        autoStopMarkerLabel: "Stop Marker: ",
+        foldTitle: "Body Line-Fix & Name Injection ▸", fixLabel: "Auto-fix body line breaks", fixHint: "If only single newlines appear (no blank line), the plugin adds them automatically. Customize with comma-separated values.", fixMarkerLabel: "Body Fix Marker: ", fixNow: "Fix Current Message", fixRevert: "Revert Fix",
+        nameLabel: "Name Injection (may or may not work, try it): ", nameEnabled: "Enable Name injection", nameValueLabel: "Name value: ", nameScopeLabel: "Apply to branches: ",
+        wordTitle: "Word Replacement ▸", wordEnabled: "Enable (auto-apply after generation)", wordAdd: "+ Add Rule",
+        wordHint: "Each row: find → replace; mode simple/regex; scope checkboxes (display-only / prompt-only, both allowed). Don't touch &lt;scene&gt;/&lt;content&gt; tags.",
+        wrEnabled: "Enable this rule", wrFind: "Find", wrReplace: "Replace", wrSimple: "Simple", wrRegex: "Regex", wrDisplay: "Display only", wrPrompt: "Prompt only", wrDelete: "Delete",
+    },
+    ko: {
+        pluginName: "위온 툴킷", enabled: "플러그인 스위치",
+        langLabel: "언어 / Language: ", langZh: "中文 (기본)", langEn: "English", langKo: "한국어",
+        langHint: "언어 전환 시 Reasoning Content가 해당 언어 버전으로 자동 교체됩니다(수동 편집 가능). &lt;cot&gt; 주입·partial 앵커·기본 캐릭터명도 언어를 따릅니다.",
+        dsModeLabel: "DeepSeek 사고 모드: ", dsNative: "네이티브 사고", dsDisabled: "본문 CoT (thinking disabled)",
+        dsEffortLabel: "DeepSeek 강도: ", dsEffortOff: "off (주입 안 함, DeepSeek 기본 high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
+        k3EffortLabel: "Kimi3 강도: ", k3EffortOff: "off (주입 안 함, K3 기본 max)", k3EffortLow: "low (빠른 사고)", k3EffortHigh: "high", k3EffortMax: "max (가장 긴 사고)",
+        injectLabel: "주입 모드: ", injectStep1: "step 1: 중간 탈옥·네이티브 CoT 탈취 (reasoning_content)", injectStep2: "step 2: 강한 탈옥·본문 CoT 탈취 (partial)",
+        rcLabel: "Reasoning Content: ",
+        usageTitle: "사용법: ", usage1: "· step 1만: 네이티브 CoT가 본문에 안 들어가서 본문 품질이 이론상 최고. 극단적 내용은 탈취 실패(AI 사과) 가능성이 있고, 영어 사고가 나오면 수동 중단 + reroll로 해결(채널에 따라 다름).", usage2: "· step 1+2 동시: CoT가 본문에 들어가 탈옥이 강하고 안정적. 사고 직후 끊길 수 있음. 무제한 에너지 요금제에서는 이 끊김이 과금될 수 있음!", usage3: "⚠️ 두 방식 모두 전용 프리셋 필요. opencode 채널에서만 테스트됨.",
+        rerollLabel: "자동 reroll: ", rerollEnglish: "영어 사고(심사 사과 유발 쉬움) → 자동 reroll", rerollNoThink: "사고 없이 바로 본문 (사고 없음/적음) → 자동 reroll", rerollEmpty: "빈 응답 (PVP) → 자동 reroll",
+        rerollLimitLabel: "연속 자동 reroll 상한: ", rerollTimes: " 회", rerollMinTokensLabel: "사고 너무 짧음 절단 기준: ",
+        rerollWarning: "주의: 극단적 콘텐츠에서는 영어 사고가 자주 나옵니다. reroll로 사과 확률 높은 영어 사고를 피할 수 있지만, 한국어 사고도 사과 확률이 낮지만 있습니다! 수동 중단에 신경 쓰세요.",
+        foldLabel: "CoT 접기 미화", foldHint: "본문 CoT 선택 시 본문에 새어나온 사고가 보기 안 좋으니 미화로 접습니다. 미화를 끄고 &lt;scene&gt; 이전 내용을 숨기는 <b>정규식</b>을 켜도 됩니다.",
+        foldModeLabel: "접기 인식: ", foldStrict: "엄격 (구분 마커 + 특징 단어)", foldLoose: "느슨 (마커 없으면 전부 접기, 일반 응답 오접기 가능)",
+        foldMarkerLabel: "본문 구분 마커: ", foldMarkerHint: "이 마커를 기준으로 사고/본문 분리, 사고는 미화로 렌더링",
+        autoStopLabel: "종료 마커 감지 시 자동 중단", autoStopHint: "스트리밍 중 지정 마커가 나오면 즉시 생성 중단. 현재 무료지만 언제 고쳐질지 모름. 기존 중단 플러그인이 있으면 끄고 이걸 쓰세요.",
+        autoStopMarkerLabel: "중단 마커: ",
+        foldTitle: "본문 줄바꿈 보정 & Name 주입 ▸", fixLabel: "본문 줄바꿈 자동 보정", fixHint: "단일 줄바꿈만 있는 경우(빈 줄 없음) 자동으로 보충. 쉼표로 구분해 커스터마이즈 가능.", fixMarkerLabel: "본문 보정 마커: ", fixNow: "현재 메시지 보정", fixRevert: "보정 되돌리기",
+        nameLabel: "Name 주입 (효과 불확실, 일단 시도): ", nameEnabled: "Name 주입 활성화", nameValueLabel: "Name 값: ", nameScopeLabel: "적용 분기: ",
+        wordTitle: "단어 치환 ▸", wordEnabled: "활성화 (생성 후 자동 적용)", wordAdd: "+ 규칙 추가",
+        wordHint: "각 행: 찾기→바꾸기; 모드 simple/정규식; 적용 범위 체크 (표시 전용 / 프롬프트 전용, 둘 다 가능). &lt;scene&gt;/&lt;content&gt; 등 태그는 건드리지 마세요.",
+        wrEnabled: "이 규칙 활성화", wrFind: "찾기", wrReplace: "바꾸기", wrSimple: "단순", wrRegex: "정규식", wrDisplay: "표시 전용", wrPrompt: "프롬프트 전용", wrDelete: "삭제",
+    }
+};
+// 按当前语言取文案；缺 key 时回退中文
+function t(key) {
+    const dict = UI[settings.language] || UI.zh;
+    return dict[key] !== undefined ? dict[key] : UI.zh[key];
+}
+
 if (!extension_settings[extensionName]) {
     extension_settings[extensionName] = defaultSettings;
 }
@@ -1369,21 +1450,21 @@ function renderWordReplaceRows() {
     const rows = rules.map((r, i) => `
         <div style="margin-top:4px;padding:5px;border:1px solid rgba(128,128,128,.2);border-radius:4px">
           <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-            <input type="checkbox" class="wr-enabled" data-idx="${i}" ${r.enabled === false ? '' : 'checked'} title="启用该规则"/>
-            <input type="text" class="wr-find" data-idx="${i}" value="${htmlEscape(r.find)}" placeholder="查找" style="width:100px"/>
+            <input type="checkbox" class="wr-enabled" data-idx="${i}" ${r.enabled === false ? '' : 'checked'} title="${t('wrEnabled')}"/>
+            <input type="text" class="wr-find" data-idx="${i}" value="${htmlEscape(r.find)}" placeholder="${t('wrFind')}" style="width:100px"/>
             <span>→</span>
-            <input type="text" class="wr-replace" data-idx="${i}" value="${htmlEscape(r.replace)}" placeholder="替换" style="width:100px"/>
+            <input type="text" class="wr-replace" data-idx="${i}" value="${htmlEscape(r.replace)}" placeholder="${t('wrReplace')}" style="width:100px"/>
             <select class="wr-mode" data-idx="${i}" style="width:52px;flex:none">
-              <option value="simple" ${r.mode === 'regex' ? '' : 'selected'}>简单</option>
-              <option value="regex" ${r.mode === 'regex' ? 'selected' : ''}>正则</option>
+              <option value="simple" ${r.mode === 'regex' ? '' : 'selected'}>${t('wrSimple')}</option>
+              <option value="regex" ${r.mode === 'regex' ? 'selected' : ''}>${t('wrRegex')}</option>
             </select>
           </div>
           <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px">
-            <label style="font-size:0.75em"><input type="checkbox" class="wr-scope-display" data-idx="${i}" ${r.scopeDisplay ? 'checked' : ''}/>仅显示</label>
-            <label style="font-size:0.75em"><input type="checkbox" class="wr-scope-prompt" data-idx="${i}" ${r.scopePrompt ? 'checked' : ''}/>仅后端提示词</label>
+            <label style="font-size:0.75em"><input type="checkbox" class="wr-scope-display" data-idx="${i}" ${r.scopeDisplay ? 'checked' : ''}/>${t('wrDisplay')}</label>
+            <label style="font-size:0.75em"><input type="checkbox" class="wr-scope-prompt" data-idx="${i}" ${r.scopePrompt ? 'checked' : ''}/>${t('wrPrompt')}</label>
             <button class="wr-apply-hist" data-idx="${i}" style="margin-left:auto;padding:2px 6px;border-radius:3px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-size:.8em">应用至以往所有(如奇怪绰号)</button>
             <button class="wr-undo" data-idx="${i}" style="padding:2px 6px;border-radius:3px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-size:.8em" title="恢复该条规则「应用至以往所有」修改前的所有历史消息原文">回退修改</button>
-            <button class="wr-del" data-idx="${i}" style="padding:2px 6px;border-radius:3px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-size:.8em">删除</button>
+            <button class="wr-del" data-idx="${i}" style="padding:2px 6px;border-radius:3px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-size:.8em">${t('wrDelete')}</button>
           </div>
         </div>`).join('');
     const container = document.getElementById(extensionName + "_word_list");
@@ -1391,43 +1472,43 @@ function renderWordReplaceRows() {
     return rows; // 返回 HTML 字符串（settingsHtml 初始渲染用；若返回 undefined 会显示 "undefined"）
 }
 
-jQuery(async () => {
+function initSettingsPanel() {
     const foldMarkerHtml = String(settings.foldMarker ?? '<scene>').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    const nameValueHtml = String(settings.nameValue ?? '余小温').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const nameValueHtml = String(settings.nameValue ?? (LANG_NAME_DEFAULT[settings.language] || '余小温')).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const fixMarkerHtml = String(settings.fixMarker ?? 'content').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const autoStopMarkerHtml = String(settings.autoStopMarker ?? '<NG_scene>').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const settingsHtml = `
         <div class="extension-settings" id="${extensionName}_settings">
             <div class="inline-drawer">
                 <div class="inline-drawer-toggle inline-drawer-header">
-                    <b>余温工具箱</b>
+                    <b>${t('pluginName')}</b>
                     <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
                 </div>
                 <div class="inline-drawer-content" style="display: none;">
 
                     <label class="checkbox_label">
                         <input id="${extensionName}_enabled" type="checkbox" ${settings.enabled ? 'checked' : ''}/>
-                        插件开关
+                        ${t('enabled')}
                     </label>
 
 <div style="margin-top:6px">
-<label for="${extensionName}_language" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>语言 / Language：</b></label>
+<label for="${extensionName}_language" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('langLabel')}</b></label>
 <select id="${extensionName}_language" class="text_pole" style="width:100%">
-<option value="zh" ${settings.language !== 'en' && settings.language !== 'ko' ? 'selected' : ''}>中文（默认）</option>
-<option value="en" ${settings.language === 'en' ? 'selected' : ''}>English</option>
-<option value="ko" ${settings.language === 'ko' ? 'selected' : ''}>한국어</option>
+<option value="zh" ${settings.language !== 'en' && settings.language !== 'ko' ? 'selected' : ''}>${t('langZh')}</option>
+<option value="en" ${settings.language === 'en' ? 'selected' : ''}>${t('langEn')}</option>
+<option value="ko" ${settings.language === 'ko' ? 'selected' : ''}>${t('langKo')}</option>
 </select>
-<p style="font-size:0.75em;color:var(--grey_color);margin:4px 0 0 0">切换语言会自动替换 Reasoning Content 为对应语言版本（可再手动编辑）；<br>「&lt;cot&gt; 注入」「partial 身份锚」「默认角色名」也会跟随语言。</p>
+<p style="font-size:0.75em;color:var(--grey_color);margin:4px 0 0 0">${t('langHint')}</p>
 </div>
 
 <div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
 
 <!-- Deepseek 思维链开关（最上面） -->
 <div style="margin-top:6px">
-<label for="${extensionName}_ds_thinking_mode" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>Deepseek思维链开关：</b></label>
+<label for="${extensionName}_ds_thinking_mode" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('dsModeLabel')}</b></label>
 <select id="${extensionName}_ds_thinking_mode" class="text_pole" style="width:100%">
-<option value="native" ${settings.dsThinkingMode !== 'disabled' ? 'selected' : ''}>原生思维链</option>
-<option value="disabled" ${settings.dsThinkingMode === 'disabled' ? 'selected' : ''}>正文思维链(thinking disabled)</option>
+<option value="native" ${settings.dsThinkingMode !== 'disabled' ? 'selected' : ''}>${t('dsNative')}</option>
+<option value="disabled" ${settings.dsThinkingMode === 'disabled' ? 'selected' : ''}>${t('dsDisabled')}</option>
 </select>
 </div>
 
@@ -1435,13 +1516,13 @@ jQuery(async () => {
 
 <!-- DeepSeek 思考强度 -->
 <div style="margin-top:5px">
-<label for="${extensionName}_ds_effort" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>Deepseek思考强度：</b></label>
+<label for="${extensionName}_ds_effort" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('dsEffortLabel')}</b></label>
 <select id="${extensionName}_ds_effort" class="text_pole" style="width:100%">
-<option value="off" ${settings.dsReasoningEffort==='off'?'selected':''}>off（不注入，用 DeepSeek 默认 high）</option>
-<option value="low" ${settings.dsReasoningEffort==='low'?'selected':''}>low（flash: low / pro: high）</option>
-<option value="high" ${settings.dsReasoningEffort==='high'?'selected':''}>high（flash: high / pro: high）</option>
-<option value="xhigh" ${settings.dsReasoningEffort==='xhigh'?'selected':''}>xhigh（flash: high / pro: max）</option>
-<option value="max" ${settings.dsReasoningEffort==='max'?'selected':''}>max（flash: max / pro: max）</option>
+<option value="off" ${settings.dsReasoningEffort==='off'?'selected':''}>${t('dsEffortOff')}</option>
+<option value="low" ${settings.dsReasoningEffort==='low'?'selected':''}>${t('dsEffortLow')}</option>
+<option value="high" ${settings.dsReasoningEffort==='high'?'selected':''}>${t('dsEffortHigh')}</option>
+<option value="xhigh" ${settings.dsReasoningEffort==='xhigh'?'selected':''}>${t('dsEffortXhigh')}</option>
+<option value="max" ${settings.dsReasoningEffort==='max'?'selected':''}>${t('dsEffortMax')}</option>
 </select>
 </div>
 
@@ -1449,88 +1530,88 @@ jQuery(async () => {
 
 <!-- Kimi3 思考强度（移到 Deepseek 思考强度之下） -->
 <div style="margin-top:5px">
-<label for="${extensionName}_effort" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>Kimi3 思考强度：</b></label>
+<label for="${extensionName}_effort" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('k3EffortLabel')}</b></label>
 <select id="${extensionName}_effort" class="text_pole" style="width:100%">
-<option value="off" ${settings.reasoningEffort==='off'?'selected':''}>off（不注入，用 K3 默认 max）</option>
-<option value="low" ${settings.reasoningEffort==='low'?'selected':''}>low（思考快）</option>
-<option value="high" ${settings.reasoningEffort==='high'?'selected':''}>high</option>
-<option value="max" ${settings.reasoningEffort==='max'?'selected':''}>max（思考最久）</option>
+<option value="off" ${settings.reasoningEffort==='off'?'selected':''}>${t('k3EffortOff')}</option>
+<option value="low" ${settings.reasoningEffort==='low'?'selected':''}>${t('k3EffortLow')}</option>
+<option value="high" ${settings.reasoningEffort==='high'?'selected':''}>${t('k3EffortHigh')}</option>
+<option value="max" ${settings.reasoningEffort==='max'?'selected':''}>${t('k3EffortMax')}</option>
 </select>
 </div>
 
 <div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
 
 <div style="margin-top:5px">
-<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>注入破限：</b></label>
+<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('injectLabel')}</b></label>
 <label class="checkbox_label">
 <input id="${extensionName}_inject_rc" type="checkbox" ${settings.injectModes.includes('reasoning_content')?'checked':''}/>
-step 1：中破限·原生思维链夺舍（reasoning_content注入）
+${t('injectStep1')}
 </label>
 <label class="checkbox_label">
 <input id="${extensionName}_inject_partial" type="checkbox" ${settings.injectModes.includes('partial')?'checked':''}/>
-step 2：强破限·正文输出思维链夺舍（partial注入）
+${t('injectStep2')}
 </label>
 <div style="margin-top:8px">
-<label for="${extensionName}_reasoning_value" style="display:block; margin-bottom:5px; font-size: 0.9em; color: var(--grey_color);"><b>Reasoning Content：</b></label>
+<label for="${extensionName}_reasoning_value" style="display:block; margin-bottom:5px; font-size: 0.9em; color: var(--grey_color);"><b>${t('rcLabel')}</b></label>
 <textarea id="${extensionName}_reasoning_value" class="text_pole" style="width: 100%; box-sizing: border-box; height: 120px;">${settings.reasoningContent}</textarea>
 </div>
 </div>
 
 <div style="margin-top:6px">
 <p style="font-size:0.75em;color:var(--grey_color);line-height:1.5">
-使用方法：<br>
-· 只打开step 1：原生思维链不进正文，正文质量理论最高。有概率极端内容夺舍失败（AI 道歉），好在出现英文可手动截停，重roll可破，主要看渠道。<br>
-· 同时打开step 1和step2：思维链放进正文，破限较强，稳定夺舍。有概率在思考完就截断。这种截断在使用无限能源时会扣费！<br>
-⚠️注意：两种破限方式都需要搭配专用预设，渠道仅测试opencode，其它自测。
+${t('usageTitle')}<br>
+${t('usage1')}<br>
+${t('usage2')}<br>
+${t('usage3')}
 </p>
 </div>
 
 <div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
 <div style="margin-top:6px">
-<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>自动重roll：</b></label>
+<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('rerollLabel')}</b></label>
 <label class="checkbox_label">
 <input id="${extensionName}_reroll_english" type="checkbox" ${settings.rerollOnEnglishThinking ? 'checked' : ''}/>
-思维链是英文（触审易道歉） → 自动重roll
+${t('rerollEnglish')}
 </label>
 <label class="checkbox_label">
 <input id="${extensionName}_reroll_nothink" type="checkbox" ${settings.rerollOnNoThinking ? 'checked' : ''}/>
-无思维链直接出正文（没思考or少思考） → 自动重roll
+${t('rerollNoThink')}
 </label>
 <label class="checkbox_label">
 <input id="${extensionName}_reroll_empty" type="checkbox" ${settings.rerollOnEmpty ? 'checked' : ''}/>
-空回复（PVP）→ 自动重roll
+${t('rerollEmpty')}
 </label>
 <div style="margin-top:5px">
-<label for="${extensionName}_reroll_limit" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">连续自动重roll上限：</label>
+<label for="${extensionName}_reroll_limit" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('rerollLimitLabel')}</label>
 <input id="${extensionName}_reroll_limit" type="number" min="1" max="999" step="1" class="text_pole" style="width:80px;box-sizing:border-box" value="${settings.autoRerollLimit}"/>
-<span style="font-size:0.75em;color:var(--grey_color)"> 次</span>
+<span style="font-size:0.75em;color:var(--grey_color)">${t('rerollTimes')}</span>
 </div>
 <div style="margin-top:5px">
-<label for="${extensionName}_reroll_mintokens" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">思考太短截断阈值：</label>
+<label for="${extensionName}_reroll_mintokens" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('rerollMinTokensLabel')}</label>
 <input id="${extensionName}_reroll_mintokens" type="number" min="0" max="5000" step="10" class="text_pole" style="width:100px;box-sizing:border-box" value="${settings.rerollMinThinkingTokens}"/>
 <span style="font-size:0.75em;color:var(--grey_color)"> token</span>
 </div>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">注意：玩极端的内容时，容易出现英文思维链，重roll虽然可以避免大概率道歉的英文思维链，但是中文思维链也有道歉几率，只是比较低！你要多关注下手动截断。</p>
+<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">${t('rerollWarning')}</p>
 </div>
 
 <div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
 <div style="margin-top:5px">
 <label class="checkbox_label">
 <input id="${extensionName}_thinking_fold" type="checkbox" ${settings.thinkingFold ? 'checked' : ''}/>
-<b>思维链美化折叠</b>
+<b>${t('foldLabel')}</b>
 </label>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">当选择正文思维链，爆出的思维链放正文不好看，用美化把它折叠起来。不想要美化也可以关掉，打开不显示&lt;scene&gt;之前内容的<b>正则</b>。</p>
+<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">${t('foldHint')}</p>
 <div style="margin-top:5px">
-<label for="${extensionName}_foldmode" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">折叠识别：</label>
+<label for="${extensionName}_foldmode" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('foldModeLabel')}</label>
 <select id="${extensionName}_foldmode" class="text_pole" style="width:100%">
-<option value="strict" ${settings.foldMode==='strict'?'selected':''}>严格（分隔标记 + 特征词判断）</option>
-<option value="loose" ${settings.foldMode==='loose'?'selected':''}>宽松（无标记一律折叠，可能误伤普通回复）</option>
+<option value="strict" ${settings.foldMode==='strict'?'selected':''}>${t('foldStrict')}</option>
+<option value="loose" ${settings.foldMode==='loose'?'selected':''}>${t('foldLoose')}</option>
 </select>
 </div>
 <div style="margin-top:5px">
-<label for="${extensionName}_foldmarker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">正文分隔标记：</label>
+<label for="${extensionName}_foldmarker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('foldMarkerLabel')}</label>
 <input id="${extensionName}_foldmarker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${foldMarkerHtml}"/>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">以此标记为分解，拆分思考/正文，思考渲染成美化</p>
+<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">${t('foldMarkerHint')}</p>
 </div>
 </div>
 
@@ -1538,11 +1619,11 @@ step 2：强破限·正文输出思维链夺舍（partial注入）
 <div style="margin-top:6px">
 <label class="checkbox_label">
 <input id="${extensionName}_autostop_enabled" type="checkbox" ${settings.autoStopEnabled ? 'checked' : ''}/>
-<b>检测到结束标记自动截断</b>
+<b>${t('autoStopLabel')}</b>
 </label>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">流式中检测到指定标记，立即停止生成，目前不收费，不知道哪天会修。之前安装过截断插件的可以把那个关掉只用这个就行了。</p>
+<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">${t('autoStopHint')}</p>
 <div style="margin-top:5px">
-<label for="${extensionName}_autostop_marker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">截断标记：</label>
+<label for="${extensionName}_autostop_marker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('autoStopMarkerLabel')}</label>
 <input id="${extensionName}_autostop_marker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${autoStopMarkerHtml}"/>
 </div>
 </div>
@@ -1551,35 +1632,35 @@ step 2：强破限·正文输出思维链夺舍（partial注入）
 
 <!-- 折叠块：自动修正正文换行 + Name 注入（不常用，点开才显示） -->
 <details>
-<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">自动修正正文换行 &amp; Name 注入 ▸</summary>
+<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">${t('foldTitle')}</summary>
 <div style="margin-top:8px">
 <label class="checkbox_label">
 <input id="${extensionName}_fix_generate" type="checkbox" ${settings.fixMesOnGenerate !== false ? 'checked' : ''}/>
-<b>自动修正正文换行</b>
+<b>${t('fixLabel')}</b>
 </label>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">如果出现只有单换行的情况(没有空行)，插件为其自动补上。可自定义，用逗号分隔。</p>
+<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">${t('fixHint')}</p>
 <div style="margin-top:5px">
-<label for="${extensionName}_fix_marker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">正文修正标记：</label>
+<label for="${extensionName}_fix_marker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('fixMarkerLabel')}</label>
 <input id="${extensionName}_fix_marker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${fixMarkerHtml}"/>
 </div>
 <div style="margin-top:5px">
-<button id="${extensionName}_fix_now" class="menu_button" style="display:inline-block;width:auto;margin-right:6px">修正当前楼层</button>
-<button id="${extensionName}_fix_revert" class="menu_button" style="display:inline-block;width:auto">修正回退</button>
+<button id="${extensionName}_fix_now" class="menu_button" style="display:inline-block;width:auto;margin-right:6px">${t('fixNow')}</button>
+<button id="${extensionName}_fix_revert" class="menu_button" style="display:inline-block;width:auto">${t('fixRevert')}</button>
 </div>
 </div>
 <div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
 <div style="margin-top:6px">
-<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>Name 注入（不知道有没有用总之试试）：</b></label>
+<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('nameLabel')}</b></label>
 <label class="checkbox_label">
 <input id="${extensionName}_name_enabled" type="checkbox" ${settings.nameEnabled?'checked':''}/>
-启用 Name 注入
+${t('nameEnabled')}
 </label>
 <div style="margin-top:3px">
-<label for="${extensionName}_name_value" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">Name 值：</label>
+<label for="${extensionName}_name_value" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('nameValueLabel')}</label>
 <input id="${extensionName}_name_value" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${nameValueHtml}"/>
 </div>
 <div style="margin-top:3px">
-<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">应用到分支：</label>
+<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('nameScopeLabel')}</label>
 <label class="checkbox_label">
 <input id="${extensionName}_name_rc" type="checkbox" ${settings.nameModes.includes('reasoning_content')?'checked':''}/>
 reasoning_content
@@ -1594,19 +1675,19 @@ partial
 
 <!-- 词汇替换（放最下面，折叠块） -->
 <details>
-<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">词汇替换 ▸</summary>
+<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">${t('wordTitle')}</summary>
 <div style="margin-top:8px">
 <label class="checkbox_label">
 <input id="${extensionName}_word_enabled" type="checkbox" ${settings.wordReplaceEnabled ? 'checked' : ''}/>
-启用（生成后自动应用）
+${t('wordEnabled')}
 </label>
 <div id="${extensionName}_word_list" style="margin-top:5px">
 ${renderWordReplaceRows()}
 </div>
 <div style="margin-top:5px">
-<button id="${extensionName}_word_add" class="menu_button" style="display:inline-block;width:auto">+ 添加规则</button>
+<button id="${extensionName}_word_add" class="menu_button" style="display:inline-block;width:auto">${t('wordAdd')}</button>
 </div>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">每行：查找→替换，模式可选简单/正则；勾选应用层（仅显示 / 仅后端提示词，可都勾）。规则勿碰 &lt;scene&gt;/&lt;content&gt; 等标签。</p>
+<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">${t('wordHint')}</p>
 </div>
 </details>
 
@@ -1620,8 +1701,8 @@ ${renderWordReplaceRows()}
 
     $("#extensions_settings").append(settingsHtml);
     connectFoldObserver();
-    $('<style id="kimi-fold-style">' + foldCSS + '</style>').appendTo('head');
-    $('<style id="kimi-reroll-btn-style">' + rerollBtnCSS + '</style>').appendTo('head');
+    if (!$('#kimi-fold-style').length) $('<style id="kimi-fold-style">' + foldCSS + '</style>').appendTo('head');
+    if (!$('#kimi-reroll-btn-style').length) $('<style id="kimi-reroll-btn-style">' + rerollBtnCSS + '</style>').appendTo('head');
 
     $("#" + extensionName + "_enabled").on("change", function () {
         settings.enabled = $(this).is(":checked");
@@ -1728,6 +1809,9 @@ ${renderWordReplaceRows()}
         }
         saveSettingsDebounced();
         console.log("[余温工具箱] 语言切换为:", lang, "| Reasoning Content 已更新");
+        // 重新渲染设置面板（全部 UI 文案跟随新语言）
+        $("#" + extensionName + "_settings").remove();
+        initSettingsPanel();
     });
 
     $("#" + extensionName + "_name_enabled").on("change", function () {
@@ -1844,6 +1928,9 @@ ${renderWordReplaceRows()}
     });
 
     // 监听 ST 构建完 prompt 的事件：截获已渲染 thinking 块 + 预解析种子（提示词查看器同款机制）
-    eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, onSettingsReady);
     updateRerollStatus();
-});
+}
+
+// 全局事件只绑定一次（语言切换重渲染 initSettingsPanel 时不会重复监听）
+eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, onSettingsReady);
+jQuery(initSettingsPanel);
