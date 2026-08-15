@@ -1154,17 +1154,26 @@ function fmtThinkingTime(ms, live) {
 function reasoningTimerTick() {
     if (!settings.reasoningTimer) return;
     try {
-        // ST 结构：details.mes_reasoning_details[data-state] > summary > .mes_reasoning_header_title
-        document.querySelectorAll('#chat .mes_reasoning_details[data-state="thinking"]').forEach(el => {
-            const mesEl = el.closest('.mes');
+        // 不依赖 ST 的 data-state（实测加载后是 none）：遍历所有思维链块，
+        // 标题无数字（ST 的「思考中...」/Thinking...）即视为思考中，在标题旁维护独立计时 span
+        document.querySelectorAll('#chat .mes_reasoning_details').forEach(details => {
+            const mesEl = details.closest('.mes');
             const mesid = mesEl?.getAttribute('mesid');
             if (mesid === null || mesid === undefined) return;
             const id = Number(mesid);
+            const title = details.querySelector('.mes_reasoning_header_title');
+            const titleText = title?.textContent || '';
+            const isThinking = /\d/.test(titleText) === false && /思考|Think|사고/.test(titleText);
+            if (!isThinking) return;
             if (!reasoningStartMap.has(id)) reasoningStartMap.set(id, Date.now());
-            const titleEl = el.querySelector('.mes_reasoning_header_title');
-            if (!titleEl) return;
-            const ms = Date.now() - reasoningStartMap.get(id);
-            titleEl.textContent = String(t('thinkingLive')).replace('{s}', fmtThinkingTime(ms, true));
+            let span = details.querySelector('.kimi-thinking-timer');
+            if (!span) {
+                span = document.createElement('span');
+                span.className = 'kimi-thinking-timer';
+                span.style.cssText = 'opacity:.75;font-size:.85em;margin-left:6px;white-space:nowrap';
+                if (title?.parentElement) title.parentElement.appendChild(span);
+            }
+            span.textContent = '· ' + fmtThinkingTime(Date.now() - reasoningStartMap.get(id), true);
         });
     } catch (e) { /* 静默 */ }
 }
@@ -1172,7 +1181,6 @@ function reasoningTimerTick() {
 function startReasoningTimer() {
     if (reasoningTimerInterval) return;
     if (!settings.reasoningTimer) return;
-    connectReasoningTitleObserver(); // 拦截 ST 写回「思考中...」的覆盖（一次性连接）
     reasoningTimerInterval = setInterval(reasoningTimerTick, 500);
 }
 function stopReasoningTimer() {
@@ -1183,36 +1191,6 @@ function stopReasoningTimer() {
     reasoningStartMap.clear();
 }
 
-// 防闪烁：ST 流式中频繁 updateDom → 把标题写回「思考中...」（无数字），
-// 观察器检测到这种覆盖立即改回秒数。防死循环：改回的文本含数字，下次观察直接跳过。
-let reasoningTitleObserver = null;
-function connectReasoningTitleObserver() {
-    if (reasoningTitleObserver) return;
-    const chatEl = document.getElementById('chat');
-    if (!chatEl) return;
-    reasoningTitleObserver = new MutationObserver((mutations) => {
-        if (!settings.reasoningTimer) return;
-        for (const mut of mutations) {
-            if (mut.type !== 'characterData') continue;
-            const node = mut.target;
-            if (!(node instanceof Text)) continue;
-            const titleEl = node.parentElement;
-            if (!titleEl || !titleEl.classList.contains('mes_reasoning_header_title')) continue;
-            const details = titleEl.closest('.mes_reasoning_details');
-            if (!details || details.dataset.state !== 'thinking') continue;
-            // 文本已含数字（我们写的秒数）→ 跳过；ST 的「思考中...」无数字 → 改回
-            if (/\d/.test(titleEl.textContent)) continue;
-            const mesEl = details.closest('.mes');
-            const mesid = mesEl?.getAttribute('mesid');
-            if (mesid === null || mesid === undefined) continue;
-            const id = Number(mesid);
-            if (!reasoningStartMap.has(id)) reasoningStartMap.set(id, Date.now());
-            const ms = Date.now() - reasoningStartMap.get(id);
-            titleEl.textContent = String(t('thinkingLive')).replace('{s}', fmtThinkingTime(ms, true));
-        }
-    });
-    reasoningTitleObserver.observe(chatEl, { subtree: true, characterData: true });
-}
 // 结束定格：STREAM_REASONING_DONE 带精确时长（reasoning.js emit），等 ST updateDom 写完再覆盖
 eventSource.on(event_types.STREAM_REASONING_DONE, (reasoning, durationMs, messageId) => {
     if (!settings.reasoningTimer) return;
@@ -1221,6 +1199,7 @@ eventSource.on(event_types.STREAM_REASONING_DONE, (reasoning, durationMs, messag
             if (!(durationMs > 0)) return;
             const titleEl = document.querySelector(`.mes[mesid="${messageId}"] .mes_reasoning_header_title`);
             if (titleEl) {
+                titleEl.closest('.mes_reasoning_details')?.querySelector('.kimi-thinking-timer')?.remove();
                 titleEl.textContent = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(durationMs, false));
             }
         } catch (e) { /* 静默 */ }
@@ -1240,6 +1219,7 @@ function pinReasoningTitle(messageId) {
         if (!titleEl) return;
         const details = titleEl.closest('.mes_reasoning_details');
         if (details && details.dataset.state === 'thinking') return; // 还在思考中，交给实时计时
+        details?.querySelector('.kimi-thinking-timer')?.remove();
         titleEl.textContent = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(dur, false));
     } catch (e) { /* 静默 */ }
 }
