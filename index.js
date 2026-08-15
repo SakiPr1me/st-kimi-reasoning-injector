@@ -1185,7 +1185,7 @@ function reasoningTimerTick() {
                 span.style.cssText = 'opacity:.75;font-size:.85em;margin-left:6px;white-space:nowrap';
                 if (title?.parentElement) title.parentElement.appendChild(span);
             }
-            span.textContent = '· ' + fmtThinkingTime(Date.now() - startMs, true);
+            span.textContent = fmtThinkingTime(Date.now() - startMs, true);
         });
     } catch (e) { /* 静默 */ }
 }
