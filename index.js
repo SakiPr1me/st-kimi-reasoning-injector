@@ -123,6 +123,7 @@ const UI = {
         dsEffortLabel: "Deepseek思考强度：", dsEffortOff: "off（不注入，用 DeepSeek 默认 high）", dsEffortLow: "low（flash: low / pro: high）", dsEffortHigh: "high（flash: high / pro: high）", dsEffortXhigh: "xhigh（flash: high / pro: max）", dsEffortMax: "max（flash: max / pro: max）",
         k3EffortLabel: "Kimi3 思考强度：", k3EffortOff: "off（不注入，用 K3 默认 max）", k3EffortLow: "low（思考快）", k3EffortHigh: "high", k3EffortMax: "max（思考最久）",
         injectLabel: "注入破限：", injectStep1: "step 1：中破限·原生思维链夺舍（reasoning_content注入）", injectStep2: "step 2：强破限·正文输出思维链夺舍（partial注入）",
+        injectTitle: "注入", modelTitle: "模型参数", rerollTitle: "自动重roll", autoStopTitle: "自动截断", beautifyTitle: "思维链美化折叠", fixTitle: "修正与替换",
         targetLabel: "注入模式：", targetKimi: "KIMI 注入（默认，Meta 起手，<cot> 可注入）", targetDs: "DS 注入（We need 起手，触发 DS 最大思考，无 <cot>）",
         targetCustom: "自定义", customAdd: "＋ 追加模板", customDel: "删除", customName: "自定义模板", customHint: "选中后可在 Reasoning Content 里直接编辑；切语言不会覆盖自定义内容。",
         rcLabel: "Reasoning Content：",
@@ -152,6 +153,7 @@ const UI = {
         dsEffortLabel: "DeepSeek Effort: ", dsEffortOff: "off (no inject, DeepSeek default high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 Effort: ", k3EffortOff: "off (no inject, K3 default max)", k3EffortLow: "low (fast thinking)", k3EffortHigh: "high", k3EffortMax: "max (longest thinking)",
         injectLabel: "Injection Modes: ", injectStep1: "step 1: medium jailbreak - native CoT takeover (reasoning_content)", injectStep2: "step 2: strong jailbreak - body CoT takeover (partial)",
+        injectTitle: "Injection", modelTitle: "Model Settings", rerollTitle: "Auto Reroll", autoStopTitle: "Auto-Stop", beautifyTitle: "CoT Fold Beautify", fixTitle: "Fix & Replace",
         targetLabel: "Injection Target: ", targetKimi: "KIMI Injection (default, Meta opener, <cot> allowed)", targetDs: "DS Injection (We need opener, triggers DS max thinking, no <cot>)",
         targetCustom: "Custom", customAdd: "+ Add Template", customDel: "Delete", customName: "Custom Template", customHint: "Edit the content in Reasoning Content once selected; language switch won't touch custom content.",
         rcLabel: "Reasoning Content: ",
@@ -181,6 +183,7 @@ const UI = {
         dsEffortLabel: "DeepSeek 강도: ", dsEffortOff: "off (주입 안 함, DeepSeek 기본 high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 강도: ", k3EffortOff: "off (주입 안 함, K3 기본 max)", k3EffortLow: "low (빠른 사고)", k3EffortHigh: "high", k3EffortMax: "max (가장 긴 사고)",
         injectLabel: "주입 모드: ", injectStep1: "step 1: 중간 탈옥·네이티브 CoT 탈취 (reasoning_content)", injectStep2: "step 2: 강한 탈옥·본문 CoT 탈취 (partial)",
+        injectTitle: "주입", modelTitle: "모델 설정", rerollTitle: "자동 reroll", autoStopTitle: "자동 중단", beautifyTitle: "CoT 접기 미화", fixTitle: "보정 & 치환",
         targetLabel: "주입 대상: ", targetKimi: "KIMI 주입 (기본, Meta 시작, <cot> 가능)", targetDs: "DS 주입 (We need 시작, DS 최대 사고 유발, <cot> 없음)",
         targetCustom: "커스텀", customAdd: "＋ 템플릿 추가", customDel: "삭제", customName: "커스텀 템플릿", customHint: "선택 후 Reasoning Content에서 직접 편집 가능. 언어 전환 시 커스텀 내용은 덮어쓰지 않습니다.",
         rcLabel: "Reasoning Content: ",
@@ -1657,45 +1660,11 @@ function initSettingsPanel() {
 
 <div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
 
-<!-- Deepseek 思维链开关（最上面） -->
-<div style="margin-top:6px">
-<label for="${extensionName}_ds_thinking_mode" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('dsModeLabel')}</b></label>
-<select id="${extensionName}_ds_thinking_mode" class="text_pole" style="width:100%">
-<option value="native" ${settings.dsThinkingMode !== 'disabled' ? 'selected' : ''}>${t('dsNative')}</option>
-<option value="disabled" ${settings.dsThinkingMode === 'disabled' ? 'selected' : ''}>${t('dsDisabled')}</option>
-</select>
-</div>
+<!-- ═══ 注入（默认展开）═══ -->
+<details open>
+<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">▸ ${t('injectTitle')}</summary>
+<div style="margin-top:8px">
 
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
-
-<!-- DeepSeek 思考强度 -->
-<div style="margin-top:5px">
-<label for="${extensionName}_ds_effort" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('dsEffortLabel')}</b></label>
-<select id="${extensionName}_ds_effort" class="text_pole" style="width:100%">
-<option value="off" ${settings.dsReasoningEffort==='off'?'selected':''}>${t('dsEffortOff')}</option>
-<option value="low" ${settings.dsReasoningEffort==='low'?'selected':''}>${t('dsEffortLow')}</option>
-<option value="high" ${settings.dsReasoningEffort==='high'?'selected':''}>${t('dsEffortHigh')}</option>
-<option value="xhigh" ${settings.dsReasoningEffort==='xhigh'?'selected':''}>${t('dsEffortXhigh')}</option>
-<option value="max" ${settings.dsReasoningEffort==='max'?'selected':''}>${t('dsEffortMax')}</option>
-</select>
-</div>
-
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
-
-<!-- Kimi3 思考强度（移到 Deepseek 思考强度之下） -->
-<div style="margin-top:5px">
-<label for="${extensionName}_effort" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('k3EffortLabel')}</b></label>
-<select id="${extensionName}_effort" class="text_pole" style="width:100%">
-<option value="off" ${settings.reasoningEffort==='off'?'selected':''}>${t('k3EffortOff')}</option>
-<option value="low" ${settings.reasoningEffort==='low'?'selected':''}>${t('k3EffortLow')}</option>
-<option value="high" ${settings.reasoningEffort==='high'?'selected':''}>${t('k3EffortHigh')}</option>
-<option value="max" ${settings.reasoningEffort==='max'?'selected':''}>${t('k3EffortMax')}</option>
-</select>
-</div>
-
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
-
-<div style="margin-top:5px">
 <label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('targetLabel')}</b></label>
 <div id="${extensionName}_target_radios" style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center">
 <label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="kimi" ${settings.injectTarget === 'kimi' ? 'checked' : ''}/>KIMI</label>
@@ -1709,10 +1678,9 @@ ${(settings.customPresets || []).map(p => {
 <button id="${extensionName}_add_custom" type="button" style="padding:2px 8px;border-radius:3px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-size:.85em">${t('customAdd')}</button>
 <span style="font-size:0.72em;color:var(--grey_color)">${t('customHint')}</span>
 </div>
-</div>
+
 <div style="border-top:1px solid rgba(128,128,128,.25);margin:10px 0;"></div>
 
-<div style="margin-top:5px">
 <label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('injectLabel')}</b></label>
 <label class="checkbox_label">
 <input id="${extensionName}_inject_rc" type="checkbox" ${settings.injectModes.includes('reasoning_content')?'checked':''}/>
@@ -1726,20 +1694,56 @@ ${t('injectStep2')}
 <label for="${extensionName}_reasoning_value" style="display:block; margin-bottom:5px; font-size: 0.9em; color: var(--grey_color);"><b>${t('rcLabel')}</b></label>
 <textarea id="${extensionName}_reasoning_value" class="text_pole" style="width: 100%; box-sizing: border-box; height: 120px;">${settings.reasoningContent}</textarea>
 </div>
-</div>
 
-<div style="margin-top:6px">
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5">
-${t('usageTitle')}<br>
+<div style="border-top:1px solid rgba(128,128,128,.25);margin:10px 0;"></div>
+
+<!-- 使用方法（子折叠，默认收起） -->
+<details>
+<summary style="cursor:pointer;font-size:0.85em;color:var(--grey_color);font-weight:bold">▸ ${t('usageTitle')}</summary>
+<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:6px 0 0">
 ${t('usage1')}<br>
 ${t('usage2')}<br>
 ${t('usage3')}
 </p>
+</details>
 </div>
+</details>
 
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
-<div style="margin-top:6px">
-<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('rerollLabel')}</b></label>
+<!-- ═══ 模型参数 ═══ -->
+<details>
+<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">▸ ${t('modelTitle')}</summary>
+<div style="margin-top:8px">
+<label for="${extensionName}_ds_thinking_mode" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('dsModeLabel')}</b></label>
+<select id="${extensionName}_ds_thinking_mode" class="text_pole" style="width:100%">
+<option value="native" ${settings.dsThinkingMode !== 'disabled' ? 'selected' : ''}>${t('dsNative')}</option>
+<option value="disabled" ${settings.dsThinkingMode === 'disabled' ? 'selected' : ''}>${t('dsDisabled')}</option>
+</select>
+<div style="margin-top:5px">
+<label for="${extensionName}_ds_effort" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('dsEffortLabel')}</b></label>
+<select id="${extensionName}_ds_effort" class="text_pole" style="width:100%">
+<option value="off" ${settings.dsReasoningEffort==='off'?'selected':''}>${t('dsEffortOff')}</option>
+<option value="low" ${settings.dsReasoningEffort==='low'?'selected':''}>${t('dsEffortLow')}</option>
+<option value="high" ${settings.dsReasoningEffort==='high'?'selected':''}>${t('dsEffortHigh')}</option>
+<option value="xhigh" ${settings.dsReasoningEffort==='xhigh'?'selected':''}>${t('dsEffortXhigh')}</option>
+<option value="max" ${settings.dsReasoningEffort==='max'?'selected':''}>${t('dsEffortMax')}</option>
+</select>
+</div>
+<div style="margin-top:5px">
+<label for="${extensionName}_effort" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('k3EffortLabel')}</b></label>
+<select id="${extensionName}_effort" class="text_pole" style="width:100%">
+<option value="off" ${settings.reasoningEffort==='off'?'selected':''}>${t('k3EffortOff')}</option>
+<option value="low" ${settings.reasoningEffort==='low'?'selected':''}>${t('k3EffortLow')}</option>
+<option value="high" ${settings.reasoningEffort==='high'?'selected':''}>${t('k3EffortHigh')}</option>
+<option value="max" ${settings.reasoningEffort==='max'?'selected':''}>${t('k3EffortMax')}</option>
+</select>
+</div>
+</div>
+</details>
+
+<!-- ═══ 自动重roll ═══ -->
+<details>
+<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">▸ ${t('rerollTitle')}</summary>
+<div style="margin-top:8px">
 <label class="checkbox_label">
 <input id="${extensionName}_reroll_english" type="checkbox" ${settings.rerollOnEnglishThinking ? 'checked' : ''}/>
 ${t('rerollEnglish')}
@@ -1764,9 +1768,12 @@ ${t('rerollEmpty')}
 </div>
 <p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">${t('rerollWarning')}</p>
 </div>
+</details>
 
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
-<div style="margin-top:5px">
+<!-- ═══ 思维链美化折叠 ═══ -->
+<details>
+<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">▸ ${t('beautifyTitle')}</summary>
+<div style="margin-top:8px">
 <label class="checkbox_label">
 <input id="${extensionName}_thinking_fold" type="checkbox" ${settings.thinkingFold ? 'checked' : ''}/>
 <b>${t('foldLabel')}</b>
@@ -1794,9 +1801,12 @@ ${t('foldHeightLabel')}
 <p style="font-size:0.72em;color:var(--grey_color);line-height:1.5;margin:2px 0 0">${t('foldHeightHint')}</p>
 </div>
 </div>
+</details>
 
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
-<div style="margin-top:6px">
+<!-- ═══ 自动截断 ═══ -->
+<details>
+<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">▸ ${t('autoStopTitle')}</summary>
+<div style="margin-top:8px">
 <label class="checkbox_label">
 <input id="${extensionName}_autostop_enabled" type="checkbox" ${settings.autoStopEnabled ? 'checked' : ''}/>
 <b>${t('autoStopLabel')}</b>
@@ -1807,12 +1817,11 @@ ${t('foldHeightLabel')}
 <input id="${extensionName}_autostop_marker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${autoStopMarkerHtml}"/>
 </div>
 </div>
+</details>
 
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
-
-<!-- 折叠块：自动修正正文换行 + Name 注入（不常用，点开才显示） -->
+<!-- ═══ 修正与替换 ═══ -->
 <details>
-<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">${t('foldTitle')}</summary>
+<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">▸ ${t('fixTitle')}</summary>
 <div style="margin-top:8px">
 <label class="checkbox_label">
 <input id="${extensionName}_fix_generate" type="checkbox" ${settings.fixMesOnGenerate !== false ? 'checked' : ''}/>
@@ -1827,9 +1836,7 @@ ${t('foldHeightLabel')}
 <button id="${extensionName}_fix_now" class="menu_button" style="display:inline-block;width:auto;margin-right:6px">${t('fixNow')}</button>
 <button id="${extensionName}_fix_revert" class="menu_button" style="display:inline-block;width:auto">${t('fixRevert')}</button>
 </div>
-</div>
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
-<div style="margin-top:6px">
+<div style="border-top:1px solid rgba(128,128,128,.25);margin:10px 0;"></div>
 <label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('nameLabel')}</b></label>
 <label class="checkbox_label">
 <input id="${extensionName}_name_enabled" type="checkbox" ${settings.nameEnabled?'checked':''}/>
@@ -1850,13 +1857,7 @@ reasoning_content
 partial
 </label>
 </div>
-</div>
-</details>
-
-<!-- 词汇替换（放最下面，折叠块） -->
-<details>
-<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">${t('wordTitle')}</summary>
-<div style="margin-top:8px">
+<div style="border-top:1px solid rgba(128,128,128,.25);margin:10px 0;"></div>
 <label class="checkbox_label">
 <input id="${extensionName}_word_enabled" type="checkbox" ${settings.wordReplaceEnabled ? 'checked' : ''}/>
 ${t('wordEnabled')}
@@ -1871,11 +1872,10 @@ ${renderWordReplaceRows()}
 </div>
 </details>
 
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
-
-<!-- 其他功能（放最底部） -->
-<div style="margin-top:5px">
-<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('miscLabel')}</b></label>
+<!-- ═══ 其他功能 ═══ -->
+<details>
+<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">▸ ${t('miscLabel')}</summary>
+<div style="margin-top:8px">
 <label class="checkbox_label">
 <input id="${extensionName}_keep_scroll" type="checkbox" ${settings.keepScrollOnGenerate ? 'checked' : ''}/>
 ${t('keepScrollLabel')}
@@ -1889,6 +1889,7 @@ ${t('showTpsLabel')}
 <p style="font-size:0.72em;color:var(--grey_color);line-height:1.5;margin:2px 0 0">${t('showTpsHint')}</p>
 </div>
 </div>
+</details>
 
                 </div>
             </div>
