@@ -661,8 +661,32 @@ function checkStreamingAbort(messageId) {
     }
 }
 
+// ===== 生成完成保持聊天滚动位置（通用兜底）=====
+// 真凶：ST 1.18 生成完成 finalize 会重建消息 DOM（onProgressStreaming isFinal →
+// messageTextDom.innerHTML 重写 + reasoningHandler.finish updateDom），消息高度骤变，
+// 浏览器把滚动条 clamp 到楼层顶部。原生思维链模式下 kimi 折叠不参与，此兜底覆盖所有情况：
+// 流式每 token 记录当前滚动位置 → 生成结束后等 DOM 稳定（双 rAF）恢复。
+let lastStreamScrollTop = null;
+eventSource.on(event_types.STREAM_TOKEN_RECEIVED, () => {
+    const chatEl = document.getElementById('chat');
+    if (chatEl) lastStreamScrollTop = chatEl.scrollTop;
+});
+eventSource.on(event_types.GENERATION_ENDED, () => {
+    if (lastStreamScrollTop === null) return;
+    const target = lastStreamScrollTop;
+    lastStreamScrollTop = null;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        try {
+            const chatEl = document.getElementById('chat');
+            if (chatEl) chatEl.scrollTop = target;
+        } catch (e) { /* 滚动恢复失败静默 */ }
+    }));
+});
+
 // 自动截断：流式中检测到指定标记（如 <NG_scene>）立即停止生成（省 token，不重roll）。
 // 简单方案：STREAM_TOKEN_RECEIVED 单 token 检测（用户原版方式，<NG_scene> 通常单 chunk 完整出现，零开销）。
+// ⚠️ 只检测正文流式 token：原生思维链（reasoning_content 通道）走 ST 的 state.reasoning 单独通道，
+//    不会触发 STREAM_TOKEN_RECEIVED —— 所以原生思维链里出现截断标记不会误截断（正是预期行为）。
 function checkAutoStop(text) {
     if (!settings.enabled) return;
     if (!settings.autoStopEnabled) return;
