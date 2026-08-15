@@ -553,12 +553,24 @@ const origMesMap = new Map(); // messageId -> 修正前的原始 mes（「修正
 let autoStopTriggered = false;             // 本次生成是否已触发自动截断（防重复 stopGeneration）
 let earlyRerollHandled = false;            // 流式截断重roll 是否已处理（GENERATION_ENDED 兜底防 MESSAGE_RECEIVED 缺失时双重重roll）
 
+// 注入种子本身是否英文开头（用户手动贴英文模板时，模型跟随英文思考不算夺舍失败）
+function seedIsEnglish() {
+    const seed = String(settings.reasoningContent || '').trim();
+    const sample = seed.slice(0, 200);
+    const meaningful = sample.replace(/\s/g, '');
+    if (!meaningful || meaningful.length < 8) return false;
+    const latin = (sample.match(/[A-Za-z]/g) || []).length;
+    return latin / meaningful.length > 0.5;
+}
+
 // 判断推理内容"开头一段是不是英文"（夺舍失败：模型开英文拒绝/英文思考）
 function startsWithEnglish(reasoning) {
     if (!reasoning) return false;
     // 仅 KIMI 模式做英文检测：DS 模式 We need 起手天然英文；
     // 自定义模板内容由用户掌控（可能是英文），检测会误杀 → 均跳过
     if (settings.injectTarget !== 'kimi') return false;
+    // 注入种子本身就是英文（用户手动贴的英文模板）→ 模型跟随意，不算夺舍失败
+    if (seedIsEnglish()) return false;
     const firstPara = String(reasoning).split(/\n\s*\n/)[0] || '';
     const sample = (firstPara.trim() || String(reasoning).trim()).slice(0, 200);
     const meaningful = sample.replace(/\s/g, '');
@@ -587,7 +599,7 @@ function checkStreamingAbort(messageId) {
 
         // ① 英文思维链（原生 reasoning 通道；partial 模式思考在 content，用 <scene> 前文本兜底）
         // ① 英文思维链（仅 KIMI 模式：DS We need 起手天然英文、自定义模板用户掌控，均跳过）
-        if (settings.rerollOnEnglishThinking && settings.injectTarget === 'kimi') {
+        if (settings.rerollOnEnglishThinking && settings.injectTarget === 'kimi' && !seedIsEnglish()) {
             let sample = '';
             if (reasoning.length > 0) {
                 sample = reasoning.slice(0, 120);
