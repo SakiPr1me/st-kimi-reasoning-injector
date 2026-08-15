@@ -968,6 +968,115 @@ function applyReasoningHeightCss(on) {
 // 启动时按设置同步（刷新/重载后保持）
 if (settings.reasoningHeightCss) applyReasoningHeightCss(true);
 
+// ===== 设置面板卡片样式（吸收 cocktail 卡片化策略：主题变量 + 圆角 + hover，不抄代码）=====
+const KIMI_SETTINGS_CSS = `
+#kimi_reasoning_injector_settings .inline-drawer-content {
+    padding-top: 2px;
+}
+#kimi_reasoning_injector_settings .kimi-card {
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.08);
+    margin-top: 10px;
+}
+#kimi_reasoning_injector_settings .kimi-card:first-of-type {
+    margin-top: 8px;
+}
+#kimi_reasoning_injector_settings .kimi-card > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--SmartThemeBodyColor, inherit);
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+    list-style: none;
+    outline: none;
+}
+#kimi_reasoning_injector_settings .kimi-card > summary::-webkit-details-marker { display: none; }
+#kimi_reasoning_injector_settings .kimi-card > summary::after {
+    content: '▸';
+    transition: transform 0.18s ease;
+    opacity: 0.7;
+    font-size: 13px;
+    line-height: 1;
+}
+#kimi_reasoning_injector_settings .kimi-card[open] > summary::after {
+    transform: rotate(90deg);
+}
+#kimi_reasoning_injector_settings .kimi-card > summary:hover {
+    filter: brightness(1.08);
+}
+#kimi_reasoning_injector_settings .kimi-card-body {
+    padding: 10px 12px;
+}
+#kimi_reasoning_injector_settings .kimi-label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.88em;
+    color: var(--SmartThemeBodyColor, var(--grey_color));
+    opacity: 0.85;
+    font-weight: 600;
+}
+#kimi_reasoning_injector_settings .kimi-hint {
+    font-size: 0.72em;
+    color: var(--SmartThemeBodyColor, var(--grey_color));
+    opacity: 0.72;
+    line-height: 1.5;
+    margin: 3px 0 0;
+}
+#kimi_reasoning_injector_settings .kimi-row {
+    margin-top: 8px;
+}
+#kimi_reasoning_injector_settings .kimi-inner-card {
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 10px;
+    padding: 8px 10px;
+    margin-top: 8px;
+    background: rgba(255, 255, 255, 0.03);
+}
+#kimi_reasoning_injector_settings .kimi-num {
+    width: 80px;
+    box-sizing: border-box;
+    display: inline-block;
+}
+#kimi_reasoning_injector_settings .kimi-sep {
+    border-top: 1px solid var(--SmartThemeBorderColor);
+    margin: 10px 0;
+    opacity: 0.6;
+}
+#kimi_reasoning_injector_settings .kimi-btn {
+    padding: 3px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--SmartThemeBodyColor, inherit);
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: filter 0.15s ease;
+}
+#kimi_reasoning_injector_settings .kimi-custom-del {
+    cursor: pointer;
+    opacity: 0.7;
+    font-size: 0.85em;
+    transition: opacity 0.15s ease, filter 0.15s ease;
+}
+#kimi_reasoning_injector_settings .kimi-custom-del:hover {
+    opacity: 1;
+    filter: brightness(1.3);
+}
+#kimi_reasoning_injector_settings .kimi-btn:hover {
+    filter: brightness(1.15);
+}
+`;
+
 // 楼层 token 数旁显示生成速度（t/s）：token_count ÷ (gen_finished - gen_started)
 function showTpsForMessage(messageId) {
     if (!settings.showTps) return;
@@ -1649,39 +1758,39 @@ function initSettingsPanel() {
                     </label>
 
 <div style="margin-top:6px">
-<label for="${extensionName}_language" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('langLabel')}</b></label>
+<label class="kimi-label" for="${extensionName}_language">${t('langLabel')}</label>
 <select id="${extensionName}_language" class="text_pole" style="width:100%">
 <option value="zh" ${settings.language !== 'en' && settings.language !== 'ko' ? 'selected' : ''}>${t('langZh')}</option>
 <option value="en" ${settings.language === 'en' ? 'selected' : ''}>${t('langEn')}</option>
 <option value="ko" ${settings.language === 'ko' ? 'selected' : ''}>${t('langKo')}</option>
 </select>
-<p style="font-size:0.75em;color:var(--grey_color);margin:4px 0 0 0">${t('langHint')}</p>
+<p class="kimi-hint">${t('langHint')}</p>
 </div>
 
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
+<div class="kimi-sep"></div>
 
 <!-- ═══ 注入（默认展开）═══ -->
-<details open>
-<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">▸ ${t('injectTitle')}</summary>
-<div style="margin-top:8px">
+<details open class="kimi-card">
+<summary>${t('injectTitle')}</summary>
+<div class="kimi-card-body">
 
-<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('targetLabel')}</b></label>
+<label class="kimi-label">${t('targetLabel')}</label>
 <div id="${extensionName}_target_radios" style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center">
 <label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="kimi" ${settings.injectTarget === 'kimi' ? 'checked' : ''}/>KIMI</label>
 <label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="ds" ${settings.injectTarget === 'ds' ? 'checked' : ''}/>DS</label>
 ${(settings.customPresets || []).map(p => {
     const checked = settings.injectTarget === 'custom:' + p.id ? 'checked' : '';
-    return `<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="${extensionName}_inject_target" value="custom:${p.id}" ${checked}/>${String(p.name || t('customName')).replace(/</g,'&lt;')} <span class="kimi-custom-del" data-id="${p.id}" style="cursor:pointer;color:var(--grey_color);font-size:.85em" title="${t('customDel')}">✕</span></label>`;
+    return `<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="${extensionName}_inject_target" value="custom:${p.id}" ${checked}/>${String(p.name || t('customName')).replace(/</g,'&lt;')} <span class="kimi-custom-del" data-id="${p.id}" title="${t('customDel')}">✕</span></label>`;
 }).join('')}
 </div>
 <div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-<button id="${extensionName}_add_custom" type="button" style="padding:2px 8px;border-radius:3px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-size:.85em">${t('customAdd')}</button>
-<span style="font-size:0.72em;color:var(--grey_color)">${t('customHint')}</span>
+<button id="${extensionName}_add_custom" type="button" class="kimi-btn">${t('customAdd')}</button>
+<span class="kimi-hint">${t('customHint')}</span>
 </div>
 
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:10px 0;"></div>
+<div class="kimi-sep"></div>
 
-<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('injectLabel')}</b></label>
+<label class="kimi-label">${t('injectLabel')}</label>
 <label class="checkbox_label">
 <input id="${extensionName}_inject_rc" type="checkbox" ${settings.injectModes.includes('reasoning_content')?'checked':''}/>
 ${t('injectStep1')}
@@ -1690,17 +1799,17 @@ ${t('injectStep1')}
 <input id="${extensionName}_inject_partial" type="checkbox" ${settings.injectModes.includes('partial')?'checked':''}/>
 ${t('injectStep2')}
 </label>
-<div style="margin-top:8px">
-<label for="${extensionName}_reasoning_value" style="display:block; margin-bottom:5px; font-size: 0.9em; color: var(--grey_color);"><b>${t('rcLabel')}</b></label>
+<div class="kimi-card-body">
+<label class="kimi-label" for="${extensionName}_reasoning_value">${t('rcLabel')}</b></label>
 <textarea id="${extensionName}_reasoning_value" class="text_pole" style="width: 100%; box-sizing: border-box; height: 120px;">${settings.reasoningContent}</textarea>
 </div>
 
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:10px 0;"></div>
+<div class="kimi-sep"></div>
 
 <!-- 使用方法（子折叠，默认收起） -->
-<details>
-<summary style="cursor:pointer;font-size:0.85em;color:var(--grey_color);font-weight:bold">▸ ${t('usageTitle')}</summary>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:6px 0 0">
+<details class="kimi-inner-card">
+<summary class="kimi-sub-summary">${t('usageTitle')}</summary>
+<p class="kimi-hint">
 ${t('usage1')}<br>
 ${t('usage2')}<br>
 ${t('usage3')}
@@ -1710,16 +1819,16 @@ ${t('usage3')}
 </details>
 
 <!-- ═══ 模型参数 ═══ -->
-<details>
-<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">▸ ${t('modelTitle')}</summary>
-<div style="margin-top:8px">
-<label for="${extensionName}_ds_thinking_mode" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('dsModeLabel')}</b></label>
+<details class="kimi-card">
+<summary>${t('modelTitle')}</summary>
+<div class="kimi-card-body">
+<label class="kimi-label" for="${extensionName}_ds_thinking_mode">${t('dsModeLabel')}</label>
 <select id="${extensionName}_ds_thinking_mode" class="text_pole" style="width:100%">
 <option value="native" ${settings.dsThinkingMode !== 'disabled' ? 'selected' : ''}>${t('dsNative')}</option>
 <option value="disabled" ${settings.dsThinkingMode === 'disabled' ? 'selected' : ''}>${t('dsDisabled')}</option>
 </select>
 <div style="margin-top:5px">
-<label for="${extensionName}_ds_effort" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('dsEffortLabel')}</b></label>
+<label class="kimi-label" for="${extensionName}_ds_effort">${t('dsEffortLabel')}</label>
 <select id="${extensionName}_ds_effort" class="text_pole" style="width:100%">
 <option value="off" ${settings.dsReasoningEffort==='off'?'selected':''}>${t('dsEffortOff')}</option>
 <option value="low" ${settings.dsReasoningEffort==='low'?'selected':''}>${t('dsEffortLow')}</option>
@@ -1729,7 +1838,7 @@ ${t('usage3')}
 </select>
 </div>
 <div style="margin-top:5px">
-<label for="${extensionName}_effort" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('k3EffortLabel')}</b></label>
+<label class="kimi-label" for="${extensionName}_effort">${t('k3EffortLabel')}</label>
 <select id="${extensionName}_effort" class="text_pole" style="width:100%">
 <option value="off" ${settings.reasoningEffort==='off'?'selected':''}>${t('k3EffortOff')}</option>
 <option value="low" ${settings.reasoningEffort==='low'?'selected':''}>${t('k3EffortLow')}</option>
@@ -1741,9 +1850,9 @@ ${t('usage3')}
 </details>
 
 <!-- ═══ 自动重roll ═══ -->
-<details>
-<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">▸ ${t('rerollTitle')}</summary>
-<div style="margin-top:8px">
+<details class="kimi-card">
+<summary>${t('rerollTitle')}</summary>
+<div class="kimi-card-body">
 <label class="checkbox_label">
 <input id="${extensionName}_reroll_english" type="checkbox" ${settings.rerollOnEnglishThinking ? 'checked' : ''}/>
 ${t('rerollEnglish')}
@@ -1757,97 +1866,97 @@ ${t('rerollNoThink')}
 ${t('rerollEmpty')}
 </label>
 <div style="margin-top:5px">
-<label for="${extensionName}_reroll_limit" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('rerollLimitLabel')}</label>
-<input id="${extensionName}_reroll_limit" type="number" min="1" max="999" step="1" class="text_pole" style="width:80px;box-sizing:border-box" value="${settings.autoRerollLimit}"/>
-<span style="font-size:0.75em;color:var(--grey_color)">${t('rerollTimes')}</span>
+<label class="kimi-label" for="${extensionName}_reroll_limit">${t('rerollLimitLabel')}</label>
+<input id="${extensionName}_reroll_limit" type="number" min="1" max="999" step="1" class="text_pole kimi-num" value="${settings.autoRerollLimit}"/>
+<span class="kimi-hint" style="display:inline">${t('rerollTimes')}</span>
 </div>
 <div style="margin-top:5px">
-<label for="${extensionName}_reroll_mintokens" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('rerollMinTokensLabel')}</label>
-<input id="${extensionName}_reroll_mintokens" type="number" min="0" max="5000" step="10" class="text_pole" style="width:100px;box-sizing:border-box" value="${settings.rerollMinThinkingTokens}"/>
-<span style="font-size:0.75em;color:var(--grey_color)"> token</span>
+<label class="kimi-label" for="${extensionName}_reroll_mintokens">${t('rerollMinTokensLabel')}</label>
+<input id="${extensionName}_reroll_mintokens" type="number" min="0" max="5000" step="10" class="text_pole kimi-num" style="width:100px" value="${settings.rerollMinThinkingTokens}"/>
+<span class="kimi-hint" style="display:inline"> token</span>
 </div>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">${t('rerollWarning')}</p>
+<p class="kimi-hint">${t('rerollWarning')}</p>
 </div>
 </details>
 
 <!-- ═══ 思维链美化折叠 ═══ -->
-<details>
-<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">▸ ${t('beautifyTitle')}</summary>
-<div style="margin-top:8px">
+<details class="kimi-card">
+<summary>${t('beautifyTitle')}</summary>
+<div class="kimi-card-body">
 <label class="checkbox_label">
 <input id="${extensionName}_thinking_fold" type="checkbox" ${settings.thinkingFold ? 'checked' : ''}/>
 <b>${t('foldLabel')}</b>
 </label>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">${t('foldHint')}</p>
+<p class="kimi-hint">${t('foldHint')}</p>
 <div style="margin-top:5px">
-<label for="${extensionName}_foldmode" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('foldModeLabel')}</label>
+<label class="kimi-label" for="${extensionName}_foldmode">${t('foldModeLabel')}</label>
 <select id="${extensionName}_foldmode" class="text_pole" style="width:100%">
 <option value="strict" ${settings.foldMode==='strict'?'selected':''}>${t('foldStrict')}</option>
 <option value="loose" ${settings.foldMode==='loose'?'selected':''}>${t('foldLoose')}</option>
 </select>
 </div>
 <div style="margin-top:5px">
-<label for="${extensionName}_foldmarker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('foldMarkerLabel')}</label>
+<label class="kimi-label" for="${extensionName}_foldmarker">${t('foldMarkerLabel')}</label>
 <input id="${extensionName}_foldmarker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${foldMarkerHtml}"/>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">${t('foldMarkerHint')}</p>
+<p class="kimi-hint">${t('foldMarkerHint')}</p>
 </div>
 <div style="margin-top:6px">
 <label class="checkbox_label" style="display:inline-flex;align-items:center;gap:6px">
 <input id="${extensionName}_reasoning_height" type="checkbox" ${settings.reasoningHeightCss ? 'checked' : ''}/>
 ${t('foldHeightLabel')}
-<input id="${extensionName}_reasoning_height_value" type="number" min="50" max="2000" step="10" class="text_pole" style="width:80px;box-sizing:border-box" value="${settings.reasoningHeightCssValue || 250}"/>
-<span style="font-size:0.8em;color:var(--grey_color)">px</span>
+<input id="${extensionName}_reasoning_height_value" type="number" min="50" max="2000" step="10" class="text_pole kimi-num" value="${settings.reasoningHeightCssValue || 250}"/>
+<span class="kimi-hint" style="display:inline">px</span>
 </label>
-<p style="font-size:0.72em;color:var(--grey_color);line-height:1.5;margin:2px 0 0">${t('foldHeightHint')}</p>
+<p class="kimi-hint">${t('foldHeightHint')}</p>
 </div>
 </div>
 </details>
 
 <!-- ═══ 自动截断 ═══ -->
-<details>
-<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">▸ ${t('autoStopTitle')}</summary>
-<div style="margin-top:8px">
+<details class="kimi-card">
+<summary>${t('autoStopTitle')}</summary>
+<div class="kimi-card-body">
 <label class="checkbox_label">
 <input id="${extensionName}_autostop_enabled" type="checkbox" ${settings.autoStopEnabled ? 'checked' : ''}/>
 <b>${t('autoStopLabel')}</b>
 </label>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">${t('autoStopHint')}</p>
+<p class="kimi-hint">${t('autoStopHint')}</p>
 <div style="margin-top:5px">
-<label for="${extensionName}_autostop_marker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('autoStopMarkerLabel')}</label>
+<label class="kimi-label" for="${extensionName}_autostop_marker">${t('autoStopMarkerLabel')}</label>
 <input id="${extensionName}_autostop_marker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${autoStopMarkerHtml}"/>
 </div>
 </div>
 </details>
 
 <!-- ═══ 修正与替换 ═══ -->
-<details>
-<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">▸ ${t('fixTitle')}</summary>
-<div style="margin-top:8px">
+<details class="kimi-card">
+<summary>${t('fixTitle')}</summary>
+<div class="kimi-card-body">
 <label class="checkbox_label">
 <input id="${extensionName}_fix_generate" type="checkbox" ${settings.fixMesOnGenerate !== false ? 'checked' : ''}/>
 <b>${t('fixLabel')}</b>
 </label>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">${t('fixHint')}</p>
+<p class="kimi-hint">${t('fixHint')}</p>
 <div style="margin-top:5px">
-<label for="${extensionName}_fix_marker" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('fixMarkerLabel')}</label>
+<label class="kimi-label" for="${extensionName}_fix_marker">${t('fixMarkerLabel')}</label>
 <input id="${extensionName}_fix_marker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${fixMarkerHtml}"/>
 </div>
 <div style="margin-top:5px">
 <button id="${extensionName}_fix_now" class="menu_button" style="display:inline-block;width:auto;margin-right:6px">${t('fixNow')}</button>
 <button id="${extensionName}_fix_revert" class="menu_button" style="display:inline-block;width:auto">${t('fixRevert')}</button>
 </div>
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:10px 0;"></div>
-<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('nameLabel')}</b></label>
+<div class="kimi-sep"></div>
+<label class="kimi-label">${t('nameLabel')}</label>
 <label class="checkbox_label">
 <input id="${extensionName}_name_enabled" type="checkbox" ${settings.nameEnabled?'checked':''}/>
 ${t('nameEnabled')}
 </label>
 <div style="margin-top:3px">
-<label for="${extensionName}_name_value" style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('nameValueLabel')}</label>
+<label class="kimi-label" for="${extensionName}_name_value">${t('nameValueLabel')}</label>
 <input id="${extensionName}_name_value" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${nameValueHtml}"/>
 </div>
 <div style="margin-top:3px">
-<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)">${t('nameScopeLabel')}</label>
+<label class="kimi-label">${t('nameScopeLabel')}</label>
 <label class="checkbox_label">
 <input id="${extensionName}_name_rc" type="checkbox" ${settings.nameModes.includes('reasoning_content')?'checked':''}/>
 reasoning_content
@@ -1857,7 +1966,7 @@ reasoning_content
 partial
 </label>
 </div>
-<div style="border-top:1px solid rgba(128,128,128,.25);margin:10px 0;"></div>
+<div class="kimi-sep"></div>
 <label class="checkbox_label">
 <input id="${extensionName}_word_enabled" type="checkbox" ${settings.wordReplaceEnabled ? 'checked' : ''}/>
 ${t('wordEnabled')}
@@ -1868,25 +1977,25 @@ ${renderWordReplaceRows()}
 <div style="margin-top:5px">
 <button id="${extensionName}_word_add" class="menu_button" style="display:inline-block;width:auto">${t('wordAdd')}</button>
 </div>
-<p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">${t('wordHint')}</p>
+<p class="kimi-hint">${t('wordHint')}</p>
 </div>
 </details>
 
 <!-- ═══ 其他功能 ═══ -->
-<details>
-<summary style="cursor:pointer;font-size:0.9em;color:var(--grey_color);font-weight:bold">▸ ${t('miscLabel')}</summary>
-<div style="margin-top:8px">
+<details class="kimi-card">
+<summary>${t('miscLabel')}</summary>
+<div class="kimi-card-body">
 <label class="checkbox_label">
 <input id="${extensionName}_keep_scroll" type="checkbox" ${settings.keepScrollOnGenerate ? 'checked' : ''}/>
 ${t('keepScrollLabel')}
 </label>
-<p style="font-size:0.72em;color:var(--grey_color);line-height:1.5;margin:2px 0 0">${t('keepScrollHint')}</p>
+<p class="kimi-hint">${t('keepScrollHint')}</p>
 <div style="margin-top:6px">
 <label class="checkbox_label">
 <input id="${extensionName}_show_tps" type="checkbox" ${settings.showTps ? 'checked' : ''}/>
 ${t('showTpsLabel')}
 </label>
-<p style="font-size:0.72em;color:var(--grey_color);line-height:1.5;margin:2px 0 0">${t('showTpsHint')}</p>
+<p class="kimi-hint">${t('showTpsHint')}</p>
 </div>
 </div>
 </details>
@@ -1899,6 +2008,7 @@ ${t('showTpsLabel')}
     $("#extensions_settings").append(settingsHtml);
     connectFoldObserver();
     if (!$('#kimi-fold-style').length) $('<style id="kimi-fold-style">' + foldCSS + '</style>').appendTo('head');
+    if (!$('#kimi-settings-style').length) $('<style id="kimi-settings-style">' + KIMI_SETTINGS_CSS + '</style>').appendTo('head');
     if (!$('#kimi-reroll-btn-style').length) $('<style id="kimi-reroll-btn-style">' + rerollBtnCSS + '</style>').appendTo('head');
 
     $("#" + extensionName + "_enabled").on("change", function () {
@@ -2102,7 +2212,7 @@ ${t('showTpsLabel')}
             radios.innerHTML = [
                 `<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="kimi" ${settings.injectTarget === 'kimi' ? 'checked' : ''}/>KIMI</label>`,
                 `<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="ds" ${settings.injectTarget === 'ds' ? 'checked' : ''}/>DS</label>`,
-                ...customs.map(p => `<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="${extensionName}_inject_target" value="custom:${p.id}" ${settings.injectTarget === 'custom:' + p.id ? 'checked' : ''}/>${String(p.name || t('customName')).replace(/</g, '&lt;')} <span class="kimi-custom-del" data-id="${p.id}" style="cursor:pointer;color:var(--grey_color);font-size:.85em" title="${t('customDel')}">✕</span></label>`)
+                ...customs.map(p => `<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="${extensionName}_inject_target" value="custom:${p.id}" ${settings.injectTarget === 'custom:' + p.id ? 'checked' : ''}/>${String(p.name || t('customName')).replace(/</g, '&lt;')} <span class="kimi-custom-del" data-id="${p.id}" title="${t('customDel')}">✕</span></label>`)
             ].join('');
         }
         saveSettingsDebounced();
@@ -2124,7 +2234,7 @@ ${t('showTpsLabel')}
             radios.innerHTML = [
                 `<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="kimi" ${settings.injectTarget === 'kimi' ? 'checked' : ''}/>KIMI</label>`,
                 `<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="ds" ${settings.injectTarget === 'ds' ? 'checked' : ''}/>DS</label>`,
-                ...(settings.customPresets || []).map(p => `<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="${extensionName}_inject_target" value="custom:${p.id}" ${settings.injectTarget === 'custom:' + p.id ? 'checked' : ''}/>${String(p.name || t('customName')).replace(/</g, '&lt;')} <span class="kimi-custom-del" data-id="${p.id}" style="cursor:pointer;color:var(--grey_color);font-size:.85em" title="${t('customDel')}">✕</span></label>`)
+                ...(settings.customPresets || []).map(p => `<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="${extensionName}_inject_target" value="custom:${p.id}" ${settings.injectTarget === 'custom:' + p.id ? 'checked' : ''}/>${String(p.name || t('customName')).replace(/</g, '&lt;')} <span class="kimi-custom-del" data-id="${p.id}" title="${t('customDel')}">✕</span></label>`)
             ].join('');
         }
         saveSettingsDebounced();
