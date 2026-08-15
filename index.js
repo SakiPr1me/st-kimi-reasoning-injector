@@ -1144,8 +1144,8 @@ const reasoningStartMap = new Map(); // messageId -> 思考开始时间戳（插
 let reasoningTimerInterval = null;
 
 function fmtThinkingTime(ms, live) {
-    // 统一显示总秒数（不转分钟）：思考中整秒，结束定格 1 位小数
-    return `${(ms / 1000).toFixed(live ? 0 : 1)}s`;
+    // 统一显示总秒数（不转分钟），思考中与定格都带 1 位小数，和 ST 计时同步精度
+    return `${(ms / 1000).toFixed(1)}s`;
 }
 
 function reasoningTimerTick() {
