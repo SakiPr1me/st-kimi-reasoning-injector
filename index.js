@@ -1154,7 +1154,8 @@ function fmtThinkingTime(ms, live) {
 function reasoningTimerTick() {
     if (!settings.reasoningTimer) return;
     try {
-        document.querySelectorAll('#chat .mes_reasoning[data-state="thinking"]').forEach(el => {
+        // ST 结构：details.mes_reasoning_details[data-state] > summary > .mes_reasoning_header_title
+        document.querySelectorAll('#chat .mes_reasoning_details[data-state="thinking"]').forEach(el => {
             const mesEl = el.closest('.mes');
             const mesid = mesEl?.getAttribute('mesid');
             if (mesid === null || mesid === undefined) return;
