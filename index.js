@@ -1017,7 +1017,8 @@ const KIMI_SETTINGS_CSS = `
     margin-right: 6px;
     font-size: 13px;
     line-height: 1;
-    opacity: 0.9;
+    color: var(--SmartThemeQuoteColor);
+    opacity: 0.85;
 }
 #kimi_reasoning_injector_settings .kimi-card[open] > summary::after {
     transform: rotate(90deg);
@@ -1782,7 +1783,7 @@ function initSettingsPanel() {
 
 <!-- ═══ 注入（默认展开）═══ -->
 <details open class="kimi-card">
-<summary><span class="kimi-card-ico">⚡</span>${t('injectTitle')}</summary>
+<summary><i class="fa-solid fa-bolt kimi-card-ico" aria-hidden="true"></i>${t('injectTitle')}</summary>
 <div class="kimi-card-body">
 
 <label class="kimi-label">${t('targetLabel')}</label>
@@ -1831,7 +1832,7 @@ ${t('usage3')}
 
 <!-- ═══ 模型参数 ═══ -->
 <details class="kimi-card">
-<summary><span class="kimi-card-ico">🧠</span>${t('modelTitle')}</summary>
+<summary><i class="fa-solid fa-brain kimi-card-ico" aria-hidden="true"></i>${t('modelTitle')}</summary>
 <div class="kimi-card-body">
 <label class="kimi-label" for="${extensionName}_ds_thinking_mode">${t('dsModeLabel')}</label>
 <select id="${extensionName}_ds_thinking_mode" class="text_pole" style="width:100%">
@@ -1862,7 +1863,7 @@ ${t('usage3')}
 
 <!-- ═══ 自动重roll ═══ -->
 <details class="kimi-card">
-<summary><span class="kimi-card-ico">🔄</span>${t('rerollTitle')}</summary>
+<summary><i class="fa-solid fa-arrows-rotate kimi-card-ico" aria-hidden="true"></i>${t('rerollTitle')}</summary>
 <div class="kimi-card-body">
 <label class="checkbox_label">
 <input id="${extensionName}_reroll_english" type="checkbox" ${settings.rerollOnEnglishThinking ? 'checked' : ''}/>
@@ -1892,7 +1893,7 @@ ${t('rerollEmpty')}
 
 <!-- ═══ 思维链美化折叠 ═══ -->
 <details class="kimi-card">
-<summary><span class="kimi-card-ico">🎨</span>${t('beautifyTitle')}</summary>
+<summary><i class="fa-solid fa-palette kimi-card-ico" aria-hidden="true"></i>${t('beautifyTitle')}</summary>
 <div class="kimi-card-body">
 <label class="checkbox_label">
 <input id="${extensionName}_thinking_fold" type="checkbox" ${settings.thinkingFold ? 'checked' : ''}/>
@@ -1925,7 +1926,7 @@ ${t('foldHeightLabel')}
 
 <!-- ═══ 自动截断 ═══ -->
 <details class="kimi-card">
-<summary><span class="kimi-card-ico">✂️</span>${t('autoStopTitle')}</summary>
+<summary><i class="fa-solid fa-scissors kimi-card-ico" aria-hidden="true"></i>${t('autoStopTitle')}</summary>
 <div class="kimi-card-body">
 <label class="checkbox_label">
 <input id="${extensionName}_autostop_enabled" type="checkbox" ${settings.autoStopEnabled ? 'checked' : ''}/>
@@ -1941,7 +1942,7 @@ ${t('foldHeightLabel')}
 
 <!-- ═══ 替换 ═══ -->
 <details class="kimi-card">
-<summary><span class="kimi-card-ico">🧹</span>${t('wordTitle')}</summary>
+<summary><i class="fa-solid fa-broom kimi-card-ico" aria-hidden="true"></i>${t('wordTitle')}</summary>
 <div class="kimi-card-body">
 
 <label class="checkbox_label">
@@ -1956,13 +1957,11 @@ ${renderWordReplaceRows()}
 </div>
 <p class="kimi-hint">${t('wordHint')}</p>
 </div>
-
-</div>
 </details>
 
 <!-- ═══ 其他功能 ═══ -->
 <details class="kimi-card">
-<summary><span class="kimi-card-ico">🛠️</span>${t('miscLabel')}</summary>
+<summary><i class="fa-solid fa-screwdriver-wrench kimi-card-ico" aria-hidden="true"></i>${t('miscLabel')}</summary>
 <div class="kimi-card-body">
 <label class="checkbox_label">
 <input id="${extensionName}_keep_scroll" type="checkbox" ${settings.keepScrollOnGenerate ? 'checked' : ''}/>
@@ -1980,7 +1979,7 @@ ${t('showTpsLabel')}
 </details>
 <!-- ═══ 修正（最不常用，放最下面）═══ -->
 <details class="kimi-card kimi-last">
-<summary><span class="kimi-card-ico">🔧</span>${t('fixTitle')}</summary>
+<summary><i class="fa-solid fa-wrench kimi-card-ico" aria-hidden="true"></i>${t('fixTitle')}</summary>
 <div class="kimi-card-body">
 
 <label class="checkbox_label">
@@ -1995,8 +1994,6 @@ ${t('showTpsLabel')}
 <div style="margin-top:5px">
 <button id="${extensionName}_fix_now" class="menu_button" style="display:inline-block;width:auto;margin-right:6px">${t('fixNow')}</button>
 <button id="${extensionName}_fix_revert" class="menu_button" style="display:inline-block;width:auto">${t('fixRevert')}</button>
-</div>
-
 </div>
 <div class="kimi-sep"></div>
 <label class="kimi-label">${t('nameLabel')}</label>
@@ -2019,7 +2016,7 @@ reasoning_content
 partial
 </label>
 </div>
-
+</div>
 </details>
 
 
