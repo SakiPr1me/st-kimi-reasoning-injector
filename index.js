@@ -144,6 +144,7 @@ const UI = {
         wordEnabled: "启用（生成后自动应用）", wordAdd: "+ 添加规则",
         wordHint: "每行：查找→替换，模式可选简单/正则；勾选应用层（仅显示 / 仅后端提示词，可都勾）。规则勿碰 &lt;scene&gt;/&lt;content&gt; 等标签。",
         wrEnabled: "启用该规则", wrFind: "查找", wrReplace: "替换", wrSimple: "简单", wrRegex: "正则", wrDisplay: "仅显示", wrPrompt: "仅后端提示词", wrDelete: "删除",
+        wrApplyHist: "应用至以往所有(如奇怪绰号)", wrUndo: "回退修改", wrUndoTitle: "恢复该条规则「应用至以往所有」修改前的所有历史消息原文",
     },
     en: {
         pluginName: "Yu Wen Toolkit", enabled: "Plugin Toggle",
@@ -174,6 +175,7 @@ const UI = {
         wordEnabled: "Enable (auto-apply after generation)", wordAdd: "+ Add Rule",
         wordHint: "Each row: find → replace; mode simple/regex; scope checkboxes (display-only / prompt-only, both allowed). Don't touch &lt;scene&gt;/&lt;content&gt; tags.",
         wrEnabled: "Enable this rule", wrFind: "Find", wrReplace: "Replace", wrSimple: "Simple", wrRegex: "Regex", wrDisplay: "Display only", wrPrompt: "Prompt only", wrDelete: "Delete",
+        wrApplyHist: "Apply to all history (e.g. weird nicknames)", wrUndo: "Undo Changes", wrUndoTitle: "Restore all historical messages to their state before this rule's Apply-to-All",
     },
     ko: {
         pluginName: "위온 툴킷", enabled: "플러그인 스위치",
@@ -204,6 +206,7 @@ const UI = {
         wordEnabled: "활성화 (생성 후 자동 적용)", wordAdd: "+ 규칙 추가",
         wordHint: "각 행: 찾기→바꾸기; 모드 simple/정규식; 적용 범위 체크 (표시 전용 / 프롬프트 전용, 둘 다 가능). &lt;scene&gt;/&lt;content&gt; 등 태그는 건드리지 마세요.",
         wrEnabled: "이 규칙 활성화", wrFind: "찾기", wrReplace: "바꾸기", wrSimple: "단순", wrRegex: "정규식", wrDisplay: "표시 전용", wrPrompt: "프롬프트 전용", wrDelete: "삭제",
+        wrApplyHist: "이전 전체에 적용 (예: 이상한 별명)", wrUndo: "변경 되돌리기", wrUndoTitle: "이 규칙의 전체 적용 전 모든 과거 메시지 원문 복원",
     }
 };
 // 按当前语言取文案；缺 key 时回退中文
@@ -1740,9 +1743,9 @@ function renderWordReplaceRows() {
           <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px">
             <label style="font-size:0.75em"><input type="checkbox" class="wr-scope-display" data-idx="${i}" ${r.scopeDisplay ? 'checked' : ''}/>${t('wrDisplay')}</label>
             <label style="font-size:0.75em"><input type="checkbox" class="wr-scope-prompt" data-idx="${i}" ${r.scopePrompt ? 'checked' : ''}/>${t('wrPrompt')}</label>
-            <button class="wr-apply-hist" data-idx="${i}" style="margin-left:auto;padding:2px 6px;border-radius:3px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-size:.8em">应用至以往所有(如奇怪绰号)</button>
-            <button class="wr-undo" data-idx="${i}" style="padding:2px 6px;border-radius:3px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-size:.8em" title="恢复该条规则「应用至以往所有」修改前的所有历史消息原文">回退修改</button>
-            <button class="wr-del" data-idx="${i}" style="padding:2px 6px;border-radius:3px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer;font-size:.8em">${t('wrDelete')}</button>
+            <button class="wr-apply-hist kimi-btn" data-idx="${i}" style="margin-left:auto">${t('wrApplyHist')}</button>
+            <button class="wr-undo kimi-btn" data-idx="${i}" title="${t('wrUndoTitle')}">${t('wrUndo')}</button>
+            <button class="wr-del kimi-btn" data-idx="${i}">${t('wrDelete')}</button>
           </div>
         </div>`).join('');
     const container = document.getElementById(extensionName + "_word_list");
