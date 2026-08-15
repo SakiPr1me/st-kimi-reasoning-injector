@@ -399,8 +399,15 @@ function refreshSeed() {
 }
 
 function onSettingsReady(generateData) {
-    captureRenderedThinking(generateData);
-    refreshSeed();
+    // try/finally 保证 refreshSeed 一定执行：
+    // 若 captureRenderedThinking 抛异常，seedResolved 会残留旧种子（切模式后注入旧内容）
+    try {
+        captureRenderedThinking(generateData);
+    } catch (e) {
+        console.warn('[Kimi注入] captureRenderedThinking 失败:', e);
+    } finally {
+        refreshSeed();
+    }
 }
 
 // 按注入方式把种子塞进请求 messages（可多选，逐个执行）：
@@ -2236,6 +2243,9 @@ partial
             $("#" + extensionName + "_reroll_english").prop('checked', false);
             try { toastr.info('已关闭英文思维链重roll（DS 模式用不到）；需要时可到「自动重roll」重新开启', '余温工具箱', { timeOut: 4000 }); } catch (e) {}
         }
+        // 立即刷新预解析种子缓存：切模式后 seedResolved 与 settings.reasoningContent 同步，
+        // 防止下次生成走「非标准路径」时注入旧种子（如 KIMI 种子残留）
+        try { refreshSeed(); } catch (e) { console.warn('[Kimi工具箱] refreshSeed 失败:', e); }
         saveSettingsDebounced();
         console.log("[余温工具箱] 注入模式切换为:", target, "| Reasoning Content 已更新");
     }
@@ -2262,6 +2272,8 @@ partial
         }
         saveSettingsDebounced();
         try { toastr.success('已追加空白模板，请在 Reasoning Content 中填写', '余温工具箱', { timeOut: 3000 }); } catch (e) {}
+        // 追加后 content 为空：立即清掉种子缓存，避免注入旧种子
+        try { refreshSeed(); } catch (e) { console.warn('[Kimi工具箱] refreshSeed 失败:', e); }
     });
 
     // ===== 删除自定义模板（事件委托，命名空间防重复绑定）=====
@@ -2283,6 +2295,8 @@ partial
             ].join('');
         }
         saveSettingsDebounced();
+        // 删除模板后立即刷新种子缓存（若删的是当前选中模板，内容已回退 KIMI）
+        try { refreshSeed(); } catch (e) { console.warn('[Kimi工具箱] refreshSeed 失败:', e); }
     });
 
     $("#" + extensionName + "_name_enabled").on("change", function () {
