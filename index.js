@@ -1836,8 +1836,8 @@ ${t('injectStep1')}
 <input id="${extensionName}_inject_partial" type="checkbox" ${settings.injectModes.includes('partial')?'checked':''}/>
 ${t('injectStep2')}
 </label>
-<div class="kimi-card-body">
-<label class="kimi-label" for="${extensionName}_reasoning_value">${t('rcLabel')}</b></label>
+<div style="margin-top:8px">
+<label class="kimi-label" for="${extensionName}_reasoning_value">${t('rcLabel')}</label>
 <textarea id="${extensionName}_reasoning_value" class="text_pole" style="width: 100%; box-sizing: border-box; height: 120px;">${settings.reasoningContent}</textarea>
 </div>
 
