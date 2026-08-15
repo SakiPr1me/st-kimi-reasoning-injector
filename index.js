@@ -1163,7 +1163,8 @@ function reasoningTimerTick() {
             const id = Number(mesid);
             const title = details.querySelector('.mes_reasoning_header_title');
             const titleText = title?.textContent || '';
-            const isThinking = /\d/.test(titleText) === false && /思考|Think|사고/.test(titleText);
+            // 思考中：标题无数字 + 含思考字样，且不是结束占位（「思考了一会」/Thought for some time）
+            const isThinking = !/\d/.test(titleText) && /思考|Think|사고/.test(titleText) && !/一会|some time/i.test(titleText);
             if (!isThinking) return;
             if (!reasoningStartMap.has(id)) reasoningStartMap.set(id, Date.now());
             let span = details.querySelector('.kimi-thinking-timer');
