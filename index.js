@@ -1164,10 +1164,16 @@ function reasoningTimerTick() {
             // 思考中：标题无数字 + 含思考字样，且不是结束占位（「思考了一会」/Thought for some time）
             const isThinking = !/\d/.test(titleText) && /思考|Think|사고/.test(titleText) && !/一会|some time/i.test(titleText);
             if (!isThinking) {
-                // 已结束：移除残留 span，防重roll/换分支后旧计时残留
+                // 已结束（思考完成，正文输出阶段/完全结束）：持续钉住精确秒——
+                // ST 正文输出阶段还会把标题更新成「几分钟」（humanize），tick 持续覆盖
                 const stale = details.querySelector('.kimi-thinking-timer');
                 if (stale) stale.remove();
                 reasoningStartMap.delete(id);
+                const dur = Number(ctx?.chat?.[id]?.extra?.reasoning_duration || 0);
+                if (dur > 0 && title) {
+                    const done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(dur, false));
+                    if (title.textContent !== done) title.textContent = done;
+                }
                 return;
             }
             // 起点用 ST 权威值：消息 gen_started（reasoning.js 的 initialTime 同源），保证与 ST 计时一致
@@ -1190,7 +1196,7 @@ function reasoningTimerTick() {
 function startReasoningTimer() {
     if (reasoningTimerInterval) return;
     if (!settings.reasoningTimer) return;
-    reasoningTimerInterval = setInterval(reasoningTimerTick, 500);
+    reasoningTimerInterval = setInterval(reasoningTimerTick, 300);
 }
 function stopReasoningTimer() {
     if (reasoningTimerInterval) {
