@@ -123,7 +123,7 @@ const UI = {
         dsEffortLabel: "Deepseek思考强度：", dsEffortOff: "off（不注入，用 DeepSeek 默认 high）", dsEffortLow: "low（flash: low / pro: high）", dsEffortHigh: "high（flash: high / pro: high）", dsEffortXhigh: "xhigh（flash: high / pro: max）", dsEffortMax: "max（flash: max / pro: max）",
         k3EffortLabel: "Kimi3 思考强度：", k3EffortOff: "off（不注入，用 K3 默认 max）", k3EffortLow: "low（思考快）", k3EffortHigh: "high", k3EffortMax: "max（思考最久）",
         injectLabel: "注入破限：", injectStep1: "step 1：中破限·原生思维链夺舍（reasoning_content注入）", injectStep2: "step 2：强破限·正文输出思维链夺舍（partial注入）",
-        injectTitle: "注入", modelTitle: "模型参数", rerollTitle: "自动重roll", autoStopTitle: "自动截断", beautifyTitle: "思维链美化折叠", fixTitle: "修正与替换",
+        injectTitle: "注入", modelTitle: "模型参数", rerollTitle: "自动重roll", autoStopTitle: "自动截断", beautifyTitle: "思维链美化折叠", fixTitle: "修正", wordTitle: "替换（清理标签、烦人字）",
         targetLabel: "注入模式：", targetKimi: "KIMI 注入（默认，Meta 起手，<cot> 可注入）", targetDs: "DS 注入（We need 起手，触发 DS 最大思考，无 <cot>）",
         targetCustom: "自定义", customAdd: "＋ 追加模板", customDel: "删除", customName: "自定义模板", customHint: "选中后可在 Reasoning Content 里直接编辑；切语言不会覆盖自定义内容。",
         rcLabel: "Reasoning Content：",
@@ -139,9 +139,9 @@ const UI = {
         foldMarkerLabel: "正文分隔标记：", foldMarkerHint: "以此标记为分解，拆分思考/正文，思考渲染成美化",
         autoStopLabel: "检测到结束标记自动截断", autoStopHint: "流式中检测到指定标记，立即停止生成，目前不收费，不知道哪天会修。之前安装过截断插件的可以把那个关掉只用这个就行了。",
         autoStopMarkerLabel: "截断标记：",
-        foldTitle: "自动修正正文换行 &amp; Name 注入 ▸", fixLabel: "自动修正正文换行", fixHint: "如果出现只有单换行的情况(没有空行)，插件为其自动补上。可自定义，用逗号分隔。", fixMarkerLabel: "正文修正标记：", fixNow: "修正当前楼层", fixRevert: "修正回退",
+        foldTitle: "自动修正正文换行 &amp; Name 注入", fixLabel: "自动修正正文换行", fixHint: "如果出现只有单换行的情况(没有空行)，插件为其自动补上。可自定义，用逗号分隔。", fixMarkerLabel: "正文修正标记：", fixNow: "修正当前楼层", fixRevert: "修正回退",
         nameLabel: "Name 注入（不知道有没有用总之试试）：", nameEnabled: "启用 Name 注入", nameValueLabel: "Name 值：", nameScopeLabel: "应用到分支：",
-        wordTitle: "词汇替换 ▸", wordEnabled: "启用（生成后自动应用）", wordAdd: "+ 添加规则",
+        wordEnabled: "启用（生成后自动应用）", wordAdd: "+ 添加规则",
         wordHint: "每行：查找→替换，模式可选简单/正则；勾选应用层（仅显示 / 仅后端提示词，可都勾）。规则勿碰 &lt;scene&gt;/&lt;content&gt; 等标签。",
         wrEnabled: "启用该规则", wrFind: "查找", wrReplace: "替换", wrSimple: "简单", wrRegex: "正则", wrDisplay: "仅显示", wrPrompt: "仅后端提示词", wrDelete: "删除",
     },
@@ -153,7 +153,7 @@ const UI = {
         dsEffortLabel: "DeepSeek Effort: ", dsEffortOff: "off (no inject, DeepSeek default high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 Effort: ", k3EffortOff: "off (no inject, K3 default max)", k3EffortLow: "low (fast thinking)", k3EffortHigh: "high", k3EffortMax: "max (longest thinking)",
         injectLabel: "Injection Modes: ", injectStep1: "step 1: medium jailbreak - native CoT takeover (reasoning_content)", injectStep2: "step 2: strong jailbreak - body CoT takeover (partial)",
-        injectTitle: "Injection", modelTitle: "Model Settings", rerollTitle: "Auto Reroll", autoStopTitle: "Auto-Stop", beautifyTitle: "CoT Fold Beautify", fixTitle: "Fix & Replace",
+        injectTitle: "Injection", modelTitle: "Model Settings", rerollTitle: "Auto Reroll", autoStopTitle: "Auto-Stop", beautifyTitle: "CoT Fold Beautify", fixTitle: "Fix", wordTitle: "Replace (Cleanup Tags & Words)",
         targetLabel: "Injection Target: ", targetKimi: "KIMI Injection (default, Meta opener, <cot> allowed)", targetDs: "DS Injection (We need opener, triggers DS max thinking, no <cot>)",
         targetCustom: "Custom", customAdd: "+ Add Template", customDel: "Delete", customName: "Custom Template", customHint: "Edit the content in Reasoning Content once selected; language switch won't touch custom content.",
         rcLabel: "Reasoning Content: ",
@@ -169,9 +169,9 @@ const UI = {
         foldMarkerLabel: "Body Separator Marker: ", foldMarkerHint: "Split thinking/body at this marker; thinking is rendered as beautified fold",
         autoStopLabel: "Auto-Stop on End Marker", autoStopHint: "Stop generation immediately when the marker appears mid-stream. Currently free - might be patched someday. If you had a stop plugin before, disable it and use this one.",
         autoStopMarkerLabel: "Stop Marker: ",
-        foldTitle: "Body Line-Fix &amp; Name Injection ▸", fixLabel: "Auto-fix body line breaks", fixHint: "If only single newlines appear (no blank line), the plugin adds them automatically. Customize with comma-separated values.", fixMarkerLabel: "Body Fix Marker: ", fixNow: "Fix Current Message", fixRevert: "Revert Fix",
-        nameLabel: "Name Injection (may or may not work, try it): ", nameEnabled: "Enable Name injection", nameValueLabel: "Name value: ", nameScopeLabel: "Apply to branches: ",
-        wordTitle: "Word Replacement ▸", wordEnabled: "Enable (auto-apply after generation)", wordAdd: "+ Add Rule",
+        foldTitle: "Body Line-Fix &amp; Name Injection", fixLabel: "Auto-fix body line breaks", fixHint: "If only single newlines appear (no blank line), the plugin adds them automatically. Customize with comma-separated values.", fixMarkerLabel: "Body Fix Marker: ", fixNow: "Fix Current Message", fixRevert: "Revert Fix",
+        nameLabel: "Name Injection (uncertain, trying anyway): ", nameEnabled: "Enable Name Injection", nameValueLabel: "Name Value: ", nameScopeLabel: "Apply to: ",
+        wordEnabled: "Enable (auto-apply after generation)", wordAdd: "+ Add Rule",
         wordHint: "Each row: find → replace; mode simple/regex; scope checkboxes (display-only / prompt-only, both allowed). Don't touch &lt;scene&gt;/&lt;content&gt; tags.",
         wrEnabled: "Enable this rule", wrFind: "Find", wrReplace: "Replace", wrSimple: "Simple", wrRegex: "Regex", wrDisplay: "Display only", wrPrompt: "Prompt only", wrDelete: "Delete",
     },
@@ -183,7 +183,7 @@ const UI = {
         dsEffortLabel: "DeepSeek 강도: ", dsEffortOff: "off (주입 안 함, DeepSeek 기본 high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 강도: ", k3EffortOff: "off (주입 안 함, K3 기본 max)", k3EffortLow: "low (빠른 사고)", k3EffortHigh: "high", k3EffortMax: "max (가장 긴 사고)",
         injectLabel: "주입 모드: ", injectStep1: "step 1: 중간 탈옥·네이티브 CoT 탈취 (reasoning_content)", injectStep2: "step 2: 강한 탈옥·본문 CoT 탈취 (partial)",
-        injectTitle: "주입", modelTitle: "모델 설정", rerollTitle: "자동 reroll", autoStopTitle: "자동 중단", beautifyTitle: "CoT 접기 미화", fixTitle: "보정 & 치환",
+        injectTitle: "주입", modelTitle: "모델 설정", rerollTitle: "자동 reroll", autoStopTitle: "자동 중단", beautifyTitle: "CoT 접기 미화", fixTitle: "보정", wordTitle: "치환 (태그·거슬리는 단어 정리)",
         targetLabel: "주입 대상: ", targetKimi: "KIMI 주입 (기본, Meta 시작, <cot> 가능)", targetDs: "DS 주입 (We need 시작, DS 최대 사고 유발, <cot> 없음)",
         targetCustom: "커스텀", customAdd: "＋ 템플릿 추가", customDel: "삭제", customName: "커스텀 템플릿", customHint: "선택 후 Reasoning Content에서 직접 편집 가능. 언어 전환 시 커스텀 내용은 덮어쓰지 않습니다.",
         rcLabel: "Reasoning Content: ",
@@ -199,9 +199,9 @@ const UI = {
         foldMarkerLabel: "본문 구분 마커: ", foldMarkerHint: "이 마커를 기준으로 사고/본문 분리, 사고는 미화로 렌더링",
         autoStopLabel: "종료 마커 감지 시 자동 중단", autoStopHint: "스트리밍 중 지정 마커가 나오면 즉시 생성 중단. 현재 무료지만 언제 고쳐질지 모름. 기존 중단 플러그인이 있으면 끄고 이걸 쓰세요.",
         autoStopMarkerLabel: "중단 마커: ",
-        foldTitle: "본문 줄바꿈 보정 &amp; Name 주입 ▸", fixLabel: "본문 줄바꿈 자동 보정", fixHint: "단일 줄바꿈만 있는 경우(빈 줄 없음) 자동으로 보충. 쉼표로 구분해 커스터마이즈 가능.", fixMarkerLabel: "본문 보정 마커: ", fixNow: "현재 메시지 보정", fixRevert: "보정 되돌리기",
+        foldTitle: "본문 줄바꿈 보정 &amp; Name 주입", fixLabel: "본문 줄바꿈 자동 보정", fixHint: "단일 줄바꿈만 있는 경우(빈 줄 없음) 자동으로 보충. 쉼표로 구분해 커스터마이즈 가능.", fixMarkerLabel: "본문 보정 마커: ", fixNow: "현재 메시지 보정", fixRevert: "보정 되돌리기",
         nameLabel: "Name 주입 (효과 불확실, 일단 시도): ", nameEnabled: "Name 주입 활성화", nameValueLabel: "Name 값: ", nameScopeLabel: "적용 분기: ",
-        wordTitle: "단어 치환 ▸", wordEnabled: "활성화 (생성 후 자동 적용)", wordAdd: "+ 규칙 추가",
+        wordEnabled: "활성화 (생성 후 자동 적용)", wordAdd: "+ 규칙 추가",
         wordHint: "각 행: 찾기→바꾸기; 모드 simple/정규식; 적용 범위 체크 (표시 전용 / 프롬프트 전용, 둘 다 가능). &lt;scene&gt;/&lt;content&gt; 등 태그는 건드리지 마세요.",
         wrEnabled: "이 규칙 활성화", wrFind: "찾기", wrReplace: "바꾸기", wrSimple: "단순", wrRegex: "정규식", wrDisplay: "표시 전용", wrPrompt: "프롬프트 전용", wrDelete: "삭제",
     }
@@ -975,6 +975,7 @@ const KIMI_SETTINGS_CSS = `
 }
 #kimi_reasoning_injector_settings .kimi-card {
     border: 1px solid var(--SmartThemeBorderColor);
+    border-left: 3px solid var(--SmartThemeQuoteColor);
     border-radius: 12px;
     overflow: hidden;
     background: rgba(0, 0, 0, 0.08);
@@ -982,6 +983,10 @@ const KIMI_SETTINGS_CSS = `
 }
 #kimi_reasoning_injector_settings .kimi-card:first-of-type {
     margin-top: 8px;
+}
+#kimi_reasoning_injector_settings .kimi-card.kimi-last {
+    margin-top: 14px;
+    margin-bottom: 30px;
 }
 #kimi_reasoning_injector_settings .kimi-card > summary {
     display: flex;
@@ -1007,6 +1012,12 @@ const KIMI_SETTINGS_CSS = `
     opacity: 0.7;
     font-size: 13px;
     line-height: 1;
+}
+#kimi_reasoning_injector_settings .kimi-card > summary .kimi-card-ico {
+    margin-right: 6px;
+    font-size: 13px;
+    line-height: 1;
+    opacity: 0.9;
 }
 #kimi_reasoning_injector_settings .kimi-card[open] > summary::after {
     transform: rotate(90deg);
@@ -1771,7 +1782,7 @@ function initSettingsPanel() {
 
 <!-- ═══ 注入（默认展开）═══ -->
 <details open class="kimi-card">
-<summary>${t('injectTitle')}</summary>
+<summary><span class="kimi-card-ico">⚡</span>${t('injectTitle')}</summary>
 <div class="kimi-card-body">
 
 <label class="kimi-label">${t('targetLabel')}</label>
@@ -1820,7 +1831,7 @@ ${t('usage3')}
 
 <!-- ═══ 模型参数 ═══ -->
 <details class="kimi-card">
-<summary>${t('modelTitle')}</summary>
+<summary><span class="kimi-card-ico">🧠</span>${t('modelTitle')}</summary>
 <div class="kimi-card-body">
 <label class="kimi-label" for="${extensionName}_ds_thinking_mode">${t('dsModeLabel')}</label>
 <select id="${extensionName}_ds_thinking_mode" class="text_pole" style="width:100%">
@@ -1851,7 +1862,7 @@ ${t('usage3')}
 
 <!-- ═══ 自动重roll ═══ -->
 <details class="kimi-card">
-<summary>${t('rerollTitle')}</summary>
+<summary><span class="kimi-card-ico">🔄</span>${t('rerollTitle')}</summary>
 <div class="kimi-card-body">
 <label class="checkbox_label">
 <input id="${extensionName}_reroll_english" type="checkbox" ${settings.rerollOnEnglishThinking ? 'checked' : ''}/>
@@ -1881,7 +1892,7 @@ ${t('rerollEmpty')}
 
 <!-- ═══ 思维链美化折叠 ═══ -->
 <details class="kimi-card">
-<summary>${t('beautifyTitle')}</summary>
+<summary><span class="kimi-card-ico">🎨</span>${t('beautifyTitle')}</summary>
 <div class="kimi-card-body">
 <label class="checkbox_label">
 <input id="${extensionName}_thinking_fold" type="checkbox" ${settings.thinkingFold ? 'checked' : ''}/>
@@ -1914,7 +1925,7 @@ ${t('foldHeightLabel')}
 
 <!-- ═══ 自动截断 ═══ -->
 <details class="kimi-card">
-<summary>${t('autoStopTitle')}</summary>
+<summary><span class="kimi-card-ico">✂️</span>${t('autoStopTitle')}</summary>
 <div class="kimi-card-body">
 <label class="checkbox_label">
 <input id="${extensionName}_autostop_enabled" type="checkbox" ${settings.autoStopEnabled ? 'checked' : ''}/>
@@ -1928,10 +1939,50 @@ ${t('foldHeightLabel')}
 </div>
 </details>
 
-<!-- ═══ 修正与替换 ═══ -->
+<!-- ═══ 替换 ═══ -->
 <details class="kimi-card">
-<summary>${t('fixTitle')}</summary>
+<summary><span class="kimi-card-ico">🧹</span>${t('wordTitle')}</summary>
 <div class="kimi-card-body">
+
+<label class="checkbox_label">
+<input id="${extensionName}_word_enabled" type="checkbox" ${settings.wordReplaceEnabled ? 'checked' : ''}/>
+${t('wordEnabled')}
+</label>
+<div id="${extensionName}_word_list" style="margin-top:5px">
+${renderWordReplaceRows()}
+</div>
+<div style="margin-top:5px">
+<button id="${extensionName}_word_add" class="menu_button" style="display:inline-block;width:auto">${t('wordAdd')}</button>
+</div>
+<p class="kimi-hint">${t('wordHint')}</p>
+</div>
+
+</div>
+</details>
+
+<!-- ═══ 其他功能 ═══ -->
+<details class="kimi-card">
+<summary><span class="kimi-card-ico">🛠️</span>${t('miscLabel')}</summary>
+<div class="kimi-card-body">
+<label class="checkbox_label">
+<input id="${extensionName}_keep_scroll" type="checkbox" ${settings.keepScrollOnGenerate ? 'checked' : ''}/>
+${t('keepScrollLabel')}
+</label>
+<p class="kimi-hint">${t('keepScrollHint')}</p>
+<div style="margin-top:6px">
+<label class="checkbox_label">
+<input id="${extensionName}_show_tps" type="checkbox" ${settings.showTps ? 'checked' : ''}/>
+${t('showTpsLabel')}
+</label>
+<p class="kimi-hint">${t('showTpsHint')}</p>
+</div>
+</div>
+</details>
+<!-- ═══ 修正（最不常用，放最下面）═══ -->
+<details class="kimi-card kimi-last">
+<summary><span class="kimi-card-ico">🔧</span>${t('fixTitle')}</summary>
+<div class="kimi-card-body">
+
 <label class="checkbox_label">
 <input id="${extensionName}_fix_generate" type="checkbox" ${settings.fixMesOnGenerate !== false ? 'checked' : ''}/>
 <b>${t('fixLabel')}</b>
@@ -1944,6 +1995,8 @@ ${t('foldHeightLabel')}
 <div style="margin-top:5px">
 <button id="${extensionName}_fix_now" class="menu_button" style="display:inline-block;width:auto;margin-right:6px">${t('fixNow')}</button>
 <button id="${extensionName}_fix_revert" class="menu_button" style="display:inline-block;width:auto">${t('fixRevert')}</button>
+</div>
+
 </div>
 <div class="kimi-sep"></div>
 <label class="kimi-label">${t('nameLabel')}</label>
@@ -1966,39 +2019,9 @@ reasoning_content
 partial
 </label>
 </div>
-<div class="kimi-sep"></div>
-<label class="checkbox_label">
-<input id="${extensionName}_word_enabled" type="checkbox" ${settings.wordReplaceEnabled ? 'checked' : ''}/>
-${t('wordEnabled')}
-</label>
-<div id="${extensionName}_word_list" style="margin-top:5px">
-${renderWordReplaceRows()}
-</div>
-<div style="margin-top:5px">
-<button id="${extensionName}_word_add" class="menu_button" style="display:inline-block;width:auto">${t('wordAdd')}</button>
-</div>
-<p class="kimi-hint">${t('wordHint')}</p>
-</div>
+
 </details>
 
-<!-- ═══ 其他功能 ═══ -->
-<details class="kimi-card">
-<summary>${t('miscLabel')}</summary>
-<div class="kimi-card-body">
-<label class="checkbox_label">
-<input id="${extensionName}_keep_scroll" type="checkbox" ${settings.keepScrollOnGenerate ? 'checked' : ''}/>
-${t('keepScrollLabel')}
-</label>
-<p class="kimi-hint">${t('keepScrollHint')}</p>
-<div style="margin-top:6px">
-<label class="checkbox_label">
-<input id="${extensionName}_show_tps" type="checkbox" ${settings.showTps ? 'checked' : ''}/>
-${t('showTpsLabel')}
-</label>
-<p class="kimi-hint">${t('showTpsHint')}</p>
-</div>
-</div>
-</details>
 
                 </div>
             </div>
