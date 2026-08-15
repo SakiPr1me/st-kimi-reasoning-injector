@@ -429,6 +429,13 @@ function injectSeed(msgs, seed) {
             last.reasoning_content = seed;
             if (applyName('reasoning_content')) last.name = nameValue;
             changed = true;
+        } else {
+            // 兜底：最后一条不是 assistant（自定义后端/异常结构）时，
+            // 像 partial 一样追加一条 assistant 占位，挂上种子（防静默丢失）
+            const msg = { role: 'assistant', content: '', reasoning_content: seed };
+            if (applyName('reasoning_content')) msg.name = nameValue;
+            msgs.push(msg);
+            changed = true;
         }
     }
 
