@@ -2025,6 +2025,13 @@ ${t('foldHeightLabel')}
 </label>
 <p class="kimi-hint">${t('foldHeightHint')}</p>
 </div>
+<div style="margin-top:6px">
+<label class="checkbox_label">
+<input id="${extensionName}_reasoning_timer" type="checkbox" ${settings.reasoningTimer ? 'checked' : ''}/>
+${t('reasoningTimerLabel')}
+</label>
+<p class="kimi-hint">${t('reasoningTimerHint')}</p>
+</div>
 </div>
 </details>
 
@@ -2078,13 +2085,6 @@ ${t('keepScrollLabel')}
 ${t('showTpsLabel')}
 </label>
 <p class="kimi-hint">${t('showTpsHint')}</p>
-</div>
-<div style="margin-top:6px">
-<label class="checkbox_label">
-<input id="${extensionName}_reasoning_timer" type="checkbox" ${settings.reasoningTimer ? 'checked' : ''}/>
-${t('reasoningTimerLabel')}
-</label>
-<p class="kimi-hint">${t('reasoningTimerHint')}</p>
 </div>
 </div>
 </details>
