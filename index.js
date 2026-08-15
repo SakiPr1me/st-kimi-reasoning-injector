@@ -61,7 +61,9 @@ const defaultSettings = {
     wordReplaceEnabled: true,        // 词汇替换总开关（默认开=自动应用）
     wordReplacements: [],            // 词汇替换规则：{find, replace, mode:'simple'|'regex', enabled, scopeDisplay, scopePrompt}
     customPresets: [],               // 自定义注入模板：[{id, name, content}]（追加按钮添加；injectTarget='custom:<id>'）
-    reasoningHeightCss: false,       // 思维链固定高度滚动（.mes_reasoning max-height:250px + 滚动条）
+    reasoningHeightCss: false,       // 思维链固定高度滚动（.mes_reasoning max-height + 滚动条）
+    reasoningHeightCssValue: 250,    // 固定高度数值（px，可自定义）
+    showTps: true,                   // 楼层 token 数旁显示生成速度（t/s）
 };
 
 // ===== 双模式三语预设 =====
@@ -128,7 +130,8 @@ const UI = {
         rerollLimitLabel: "连续自动重roll上限：", rerollTimes: " 次", rerollMinTokensLabel: "思考太短截断阈值：",
         rerollWarning: "注意：玩极端的内容时，容易出现英文思维链，重roll虽然可以避免大概率道歉的英文思维链，但是中文思维链也有道歉几率，只是比较低！你要多关注下手动截断。",
         foldLabel: "思维链美化折叠", foldHint: "当选择正文思维链，爆出的思维链放正文不好看，用美化把它折叠起来。不想要美化也可以关掉，打开不显示&lt;scene&gt;之前内容的<b>正则</b>。",
-        foldHeightLabel: "思维链区域固定高度滚动", foldHeightHint: "给思维链区域加 250px 最大高度 + 滚动条（长思维链不再撑爆楼层；注入等效自定义 CSS）",
+        foldHeightLabel: "思维链区域固定高度滚动", foldHeightHint: "给思维链区域加最大高度 + 滚动条（长思维链不再撑爆楼层；注入等效自定义 CSS）",
+        showTpsLabel: "楼层显示生成速度（t/s）", showTpsHint: "在 token 数旁显示每秒 token 数（token 数 ÷ 生成耗时），和 AI 回复计时器同一数据源",
         foldModeLabel: "折叠识别：", foldStrict: "严格（分隔标记 + 特征词判断）", foldLoose: "宽松（无标记一律折叠，可能误伤普通回复）",
         foldMarkerLabel: "正文分隔标记：", foldMarkerHint: "以此标记为分解，拆分思考/正文，思考渲染成美化",
         autoStopLabel: "检测到结束标记自动截断", autoStopHint: "流式中检测到指定标记，立即停止生成，目前不收费，不知道哪天会修。之前安装过截断插件的可以把那个关掉只用这个就行了。",
@@ -155,7 +158,8 @@ const UI = {
         rerollLimitLabel: "Max consecutive auto rerolls: ", rerollTimes: " times", rerollMinTokensLabel: "Short-thinking cutoff threshold: ",
         rerollWarning: "Note: extreme content often produces English thinking. Reroll avoids the high-risk English thinking, but Chinese thinking can still trigger apologies (lower chance). Watch for manual stops.",
         foldLabel: "CoT Fold Beautify", foldHint: "With body CoT, leaked thinking looks ugly in the body - fold it with beautify. Can disable and use a <b>regex</b> that hides everything before &lt;scene&gt; instead.",
-        foldHeightLabel: "Fixed-height scroll for reasoning", foldHeightHint: "Give the reasoning area a 250px max-height + scrollbar (long CoT won't blow up the message; same as injecting custom CSS)",
+        foldHeightLabel: "Fixed-height scroll for reasoning", foldHeightHint: "Give the reasoning area a max-height + scrollbar (long CoT won't blow up the message; same as injecting custom CSS)",
+        showTpsLabel: "Show generation speed (t/s) on messages", showTpsHint: "Shows tokens per second next to the token counter (tokens ÷ generation time), same data source as the AI reply timer",
         foldModeLabel: "Fold Detection: ", foldStrict: "strict (separator + keyword)", foldLoose: "loose (fold everything without marker, may catch normal replies)",
         foldMarkerLabel: "Body Separator Marker: ", foldMarkerHint: "Split thinking/body at this marker; thinking is rendered as beautified fold",
         autoStopLabel: "Auto-Stop on End Marker", autoStopHint: "Stop generation immediately when the marker appears mid-stream. Currently free - might be patched someday. If you had a stop plugin before, disable it and use this one.",
@@ -182,7 +186,8 @@ const UI = {
         rerollLimitLabel: "연속 자동 reroll 상한: ", rerollTimes: " 회", rerollMinTokensLabel: "사고 너무 짧음 절단 기준: ",
         rerollWarning: "주의: 극단적 콘텐츠에서는 영어 사고가 자주 나옵니다. reroll로 사과 확률 높은 영어 사고를 피할 수 있지만, 한국어 사고도 사과 확률이 낮지만 있습니다! 수동 중단에 신경 쓰세요.",
         foldLabel: "CoT 접기 미화", foldHint: "본문 CoT 선택 시 본문에 새어나온 사고가 보기 안 좋으니 미화로 접습니다. 미화를 끄고 &lt;scene&gt; 이전 내용을 숨기는 <b>정규식</b>을 켜도 됩니다.",
-        foldHeightLabel: "사고 영역 고정 높이 스크롤", foldHeightHint: "사고 영역에 250px 최대 높이 + 스크롤바 추가 (긴 CoT가 메시지를 부풀리지 않음; 커스텀 CSS 주입과 동일)",
+        foldHeightLabel: "사고 영역 고정 높이 스크롤", foldHeightHint: "사고 영역에 최대 높이 + 스크롤바 추가 (긴 CoT가 메시지를 부풀리지 않음; 커스텀 CSS 주입과 동일)",
+        showTpsLabel: "메시지에 생성 속도 표시 (t/s)", showTpsHint: "token 수 옆에 초당 token 수 표시 (token 수 ÷ 생성 시간), AI 응답 타이머와 같은 데이터 소스",
         foldModeLabel: "접기 인식: ", foldStrict: "엄격 (구분 마커 + 특징 단어)", foldLoose: "느슨 (마커 없으면 전부 접기, 일반 응답 오접기 가능)",
         foldMarkerLabel: "본문 구분 마커: ", foldMarkerHint: "이 마커를 기준으로 사고/본문 분리, 사고는 미화로 렌더링",
         autoStopLabel: "종료 마커 감지 시 자동 중단", autoStopHint: "스트리밍 중 지정 마커가 나오면 즉시 생성 중단. 현재 무료지만 언제 고쳐질지 모름. 기존 중단 플러그인이 있으면 끄고 이걸 쓰세요.",
@@ -209,6 +214,8 @@ if (settings.language === undefined) settings.language = 'zh';
 if (settings.injectTarget === undefined) settings.injectTarget = 'kimi';
 if (!Array.isArray(settings.customPresets)) settings.customPresets = [];
 if (settings.reasoningHeightCss === undefined) settings.reasoningHeightCss = false;
+if (!Number.isFinite(settings.reasoningHeightCssValue) || settings.reasoningHeightCssValue <= 0) settings.reasoningHeightCssValue = 250;
+if (settings.showTps === undefined) settings.showTps = true;
 
 if (settings.reasoningContent === undefined) settings.reasoningContent = defaultSettings.reasoningContent;
 if (settings.reasoningEffort === undefined) settings.reasoningEffort = defaultSettings.reasoningEffort;
@@ -909,18 +916,16 @@ const foldRenderedCache = new Map(); // messageId -> { thinkingText, thinkingHtm
 const displayReplaceMap = new Map(); // messageId -> 已应用显示替换的原始 mes（词汇替换防重复/防覆盖）
 
 // 思维链区域固定高度滚动（等效注入自定义 CSS；ST 自定义 CSS 入口：设置 → 用户界面 → Custom CSS）
-const REASONING_HEIGHT_CSS = `
-.mes_reasoning {
-    max-height: 250px;
-    overflow-y: auto;
-    overflow-x: hidden;
-}`;
+function reasoningHeightPx() {
+    const v = Number(settings.reasoningHeightCssValue);
+    return (Number.isFinite(v) && v >= 50 && v <= 2000) ? v : 250;
+}
 function applyReasoningHeightCss(on) {
     try {
         if (on) {
-            if (!$('#kimi-reasoning-height-style').length) {
-                $('<style id="kimi-reasoning-height-style">' + REASONING_HEIGHT_CSS + '</style>').appendTo('head');
-            }
+            const css = `\n.mes_reasoning {\n    max-height: ${reasoningHeightPx()}px;\n    overflow-y: auto;\n    overflow-x: hidden;\n}`;
+            $('#kimi-reasoning-height-style').remove();
+            $('<style id="kimi-reasoning-height-style">' + css + '</style>').appendTo('head');
         } else {
             $('#kimi-reasoning-height-style').remove();
         }
@@ -928,6 +933,31 @@ function applyReasoningHeightCss(on) {
 }
 // 启动时按设置同步（刷新/重载后保持）
 if (settings.reasoningHeightCss) applyReasoningHeightCss(true);
+
+// 楼层 token 数旁显示生成速度（t/s）：token_count ÷ (gen_finished - gen_started)
+function showTpsForMessage(messageId) {
+    if (!settings.showTps) return;
+    try {
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        const msg = ctx?.chat?.[messageId];
+        if (!msg || msg.is_user || msg.is_system) return;
+        const tokens = Number(msg.extra?.token_count || 0);
+        const t0 = new Date(msg.gen_started).getTime();
+        const t1 = new Date(msg.gen_finished).getTime();
+        if (!tokens || !Number.isFinite(t0) || !Number.isFinite(t1) || t1 <= t0) return;
+        const secs = (t1 - t0) / 1000;
+        if (secs <= 0) return;
+        const el = document.querySelector(`.mes[mesid="${messageId}"] .tokenCounterDisplay`);
+        if (!el) return;
+        // 防重复：ST 渲染会重建节点，但 swipe/重渲染可能复用，先清旧的
+        el.querySelectorAll('.kimi-tps').forEach(n => n.remove());
+        const span = document.createElement('span');
+        span.className = 'kimi-tps';
+        span.textContent = ` ${(tokens / secs).toFixed(1)} t/s`;
+        span.style.cssText = 'font-size:0.85em;opacity:.75;margin-left:2px;white-space:nowrap';
+        el.appendChild(span);
+    } catch (e) { /* 显示层失败静默 */ }
+}
 
 const foldCSS = `
 .kimi-fold{width:100%;color:inherit;cursor:pointer;margin:12px 0;}
@@ -978,7 +1008,20 @@ function fixMarkerBlocks(text, marker, fixSingles) {
 }
 
 // 轻量渲染已废弃（破坏颜色）：流式思考阶段直接包裹 ST 的 messageFormatting 渲染结果，零额外渲染成本
+// v1.12.2：生成完成折叠思维链时保持聊天滚动位置——
+// 折叠把消息从「整段思维链+正文」骤减为「一行标题+正文」，浏览器会把滚动条 clamp 到楼层顶部
+// （用户说的「生成完自动跳到楼层最前端」真凶就是它）。包装函数：折叠前后保持 #chat scrollTop。
 function applyThinkingFold(messageId) {
+    const chatEl = document.getElementById('chat');
+    const keepScroll = chatEl ? chatEl.scrollTop : null;
+    try {
+        applyThinkingFoldInner(messageId);
+    } finally {
+        if (keepScroll !== null && chatEl) chatEl.scrollTop = keepScroll;
+    }
+}
+
+function applyThinkingFoldInner(messageId) {
     if (!settings.enabled || !settings.thinkingFold) return; // 启用总开关关闭时不折叠
     if (messageId === 0) return; // 第 0 楼是开场白，不做折叠美化
     try {
@@ -1159,8 +1202,9 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id) => {
     if (settings.fixMesOnGenerate !== false && isAssistant && !isEmpty) fixMesForMessage(id);
     checkNativeReroll(id);
     applyThinkingFold(id);
+    showTpsForMessage(id);
 });
-eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => applyThinkingFold(id));
+eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => { applyThinkingFold(id); showTpsForMessage(id); });
 
 // 新生成开始：清掉流式截断状态、空回状态，防止残留
 eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
@@ -1710,11 +1754,20 @@ ${t('rerollEmpty')}
 <p style="font-size:0.75em;color:var(--grey_color);line-height:1.5;margin:3px 0 0">${t('foldMarkerHint')}</p>
 </div>
 <div style="margin-top:6px">
-<label class="checkbox_label">
+<label class="checkbox_label" style="display:inline-flex;align-items:center;gap:6px">
 <input id="${extensionName}_reasoning_height" type="checkbox" ${settings.reasoningHeightCss ? 'checked' : ''}/>
 ${t('foldHeightLabel')}
+<input id="${extensionName}_reasoning_height_value" type="number" min="50" max="2000" step="10" class="text_pole" style="width:80px;box-sizing:border-box" value="${settings.reasoningHeightCssValue || 250}"/>
+<span style="font-size:0.8em;color:var(--grey_color)">px</span>
 </label>
 <p style="font-size:0.72em;color:var(--grey_color);line-height:1.5;margin:2px 0 0">${t('foldHeightHint')}</p>
+</div>
+<div style="margin-top:6px">
+<label class="checkbox_label">
+<input id="${extensionName}_show_tps" type="checkbox" ${settings.showTps ? 'checked' : ''}/>
+${t('showTpsLabel')}
+</label>
+<p style="font-size:0.72em;color:var(--grey_color);line-height:1.5;margin:2px 0 0">${t('showTpsHint')}</p>
 </div>
 </div>
 
@@ -1860,6 +1913,27 @@ ${renderWordReplaceRows()}
         applyReasoningHeightCss(settings.reasoningHeightCss);
         saveSettingsDebounced();
     });
+    $("#" + extensionName + "_reasoning_height_value").on("input", function () {
+        const v = parseInt($(this).val(), 10);
+        settings.reasoningHeightCssValue = (Number.isFinite(v) && v >= 50 && v <= 2000) ? v : 250;
+        // 开启状态下实时更新注入的 CSS
+        if (settings.reasoningHeightCss) applyReasoningHeightCss(true);
+        saveSettingsDebounced();
+    });
+    $("#" + extensionName + "_show_tps").on("change", function () {
+        settings.showTps = $(this).is(":checked");
+        saveSettingsDebounced();
+        // 立即刷新当前已渲染楼层的 tps（开=补显示，关=清除）
+        try {
+            document.querySelectorAll('.kimi-tps').forEach(n => n.remove());
+            if (settings.showTps) {
+                document.querySelectorAll('#chat .mes').forEach(mesEl => {
+                    const mesid = mesEl.getAttribute('mesid');
+                    if (mesid !== null) showTpsForMessage(Number(mesid));
+                });
+            }
+        } catch (e) { console.warn('[Kimi工具箱] tps 刷新失败:', e); }
+    });
 
     $("#" + extensionName + "_foldmode").on("change", function () {
         settings.foldMode = $(this).val();
@@ -1949,8 +2023,8 @@ ${renderWordReplaceRows()}
             const content = preset ? preset.content : '';
             settings.reasoningContent = content;
             $("#" + extensionName + "_reasoning_value").val(content);
-        } else if (allPresetValues().includes(String(settings.reasoningContent || ''))) {
-            // 内置模式：若 reasoningContent 仍是任一内置默认预设（用户没自定义），换成新模式当前语言的预设
+        } else if (!String(settings.reasoningContent || '').trim() || allPresetValues().includes(String(settings.reasoningContent || ''))) {
+            // 内置模式：内容为空（如刚追加过模板）或仍是任一内置默认预设（用户没自定义）→ 换成新模式当前语言的预设
             const presets = currentPresets();
             settings.reasoningContent = presets[settings.language] || presets.zh;
             $("#" + extensionName + "_reasoning_value").val(settings.reasoningContent);
@@ -1959,7 +2033,7 @@ ${renderWordReplaceRows()}
         if (target === 'ds' && settings.rerollOnEnglishThinking) {
             settings.rerollOnEnglishThinking = false;
             $("#" + extensionName + "_reroll_english").prop('checked', false);
-            try { toastr.info('DS 模式下英文思维链检测已禁用，自动关闭「英文思维链重roll」', '余温工具箱', { timeOut: 4000 }); } catch (e) {}
+            try { toastr.info('已关闭英文思维链重roll（DS 模式用不到）；需要时可到「自动重roll」重新开启', '余温工具箱', { timeOut: 4000 }); } catch (e) {}
         }
         saveSettingsDebounced();
         console.log("[余温工具箱] 注入模式切换为:", target, "| Reasoning Content 已更新");
