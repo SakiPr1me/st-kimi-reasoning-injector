@@ -1154,6 +1154,7 @@ function fmtThinkingTime(ms, live) {
 function reasoningTimerTick() {
     if (!settings.reasoningTimer) return;
     try {
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         // 不依赖 ST 的 data-state（实测加载后是 none）：遍历所有思维链块，
         // 标题无数字（ST 的「思考中...」/Thinking...）即视为思考中，在标题旁维护独立计时 span
         document.querySelectorAll('#chat .mes_reasoning_details').forEach(details => {
@@ -1165,8 +1166,18 @@ function reasoningTimerTick() {
             const titleText = title?.textContent || '';
             // 思考中：标题无数字 + 含思考字样，且不是结束占位（「思考了一会」/Thought for some time）
             const isThinking = !/\d/.test(titleText) && /思考|Think|사고/.test(titleText) && !/一会|some time/i.test(titleText);
-            if (!isThinking) return;
-            if (!reasoningStartMap.has(id)) reasoningStartMap.set(id, Date.now());
+            if (!isThinking) {
+                // 已结束：移除残留 span，防重roll/换分支后旧计时残留
+                const stale = details.querySelector('.kimi-thinking-timer');
+                if (stale) stale.remove();
+                reasoningStartMap.delete(id);
+                return;
+            }
+            // 起点用 ST 权威值：消息 gen_started（reasoning.js 的 initialTime 同源），保证与 ST 计时一致
+            const msg = ctx?.chat?.[id];
+            const genStart = new Date(msg?.gen_started || Date.now()).getTime();
+            if (Number.isFinite(genStart)) reasoningStartMap.set(id, genStart);
+            const startMs = reasoningStartMap.get(id) || Date.now();
             let span = details.querySelector('.kimi-thinking-timer');
             if (!span) {
                 span = document.createElement('span');
@@ -1174,7 +1185,7 @@ function reasoningTimerTick() {
                 span.style.cssText = 'opacity:.75;font-size:.85em;margin-left:6px;white-space:nowrap';
                 if (title?.parentElement) title.parentElement.appendChild(span);
             }
-            span.textContent = '· ' + fmtThinkingTime(Date.now() - reasoningStartMap.get(id), true);
+            span.textContent = '· ' + fmtThinkingTime(Date.now() - startMs, true);
         });
     } catch (e) { /* 静默 */ }
 }
@@ -1190,6 +1201,8 @@ function stopReasoningTimer() {
         reasoningTimerInterval = null;
     }
     reasoningStartMap.clear();
+    // 兜底清理残留计时 span（生成结束/切聊天/关开关）
+    document.querySelectorAll('.kimi-thinking-timer').forEach(n => n.remove());
 }
 
 // 结束定格：STREAM_REASONING_DONE 带精确时长（reasoning.js emit），等 ST updateDom 写完再覆盖
@@ -1498,6 +1511,9 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     earlyRerollMessageId = -1;
     streamGotToken = false;    // 本次生成是否收到过 token（空回检测）
     isGenerating = true;
+    // 新生成开始：清掉所有残留计时 span（重roll/swipe 换分支后旧计时归零）
+    document.querySelectorAll('.kimi-thinking-timer').forEach(n => n.remove());
+    reasoningStartMap.clear();
     startReasoningTimer();     // 原生思维链实时计时：思考中显示秒数
     // 记录生成开始时的最后一条消息内容（空回重roll判别：JS-Slash-Runner 提示词查看器会触发真实生成
     // 但在发出 API 请求前 stopGeneration → 零token 且不新增消息 → 最后一条没变 → 不该重roll）
