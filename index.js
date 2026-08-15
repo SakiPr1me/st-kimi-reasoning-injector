@@ -65,6 +65,7 @@ const defaultSettings = {
     reasoningHeightCssValue: 250,    // 固定高度数值（px，可自定义）
     showTps: true,                   // 楼层 token 数旁显示生成速度（t/s）
     keepScrollOnGenerate: true,      // 生成完成保持聊天滚动位置（防 ST finalize 重排跳顶）
+    reasoningTimer: true,            // 原生思维链实时计时：思考中显示秒数，结束定格精确秒
 };
 
 // ===== 双模式三语预设 =====
@@ -134,7 +135,9 @@ const UI = {
         foldLabel: "思维链美化折叠", foldHint: "当选择正文思维链，爆出的思维链放正文不好看，用美化把它折叠起来。不想要美化也可以关掉，打开不显示&lt;scene&gt;之前内容的<b>正则</b>。",
         foldHeightLabel: "思维链区域固定高度滚动", foldHeightHint: "给思维链区域加最大高度 + 滚动条（长思维链不再撑爆楼层；注入等效自定义 CSS）",
         showTpsLabel: "楼层显示生成速度（t/s）", showTpsHint: "在 token 数旁显示每秒 token 数（token 数 ÷ 生成耗时），和 AI 回复计时器同一数据源",
+        thinkingLive: "思考中 {s}", thinkingDone: "思考 {s}",
         miscLabel: "其他功能", keepScrollLabel: "生成完成保持滚动位置", keepScrollHint: "ST 生成完成会重建消息 DOM 导致滚动条跳到楼层顶部，开启后保持你正在看的位置（流式结束时恢复）",
+        reasoningTimerLabel: "思维链实时计时（思考中显示秒数）", reasoningTimerHint: "原生思维链思考中显示「思考中 Xs」实时跳动，思考结束定格精确秒（ST 默认只精确到分钟）",
         foldModeLabel: "折叠识别：", foldStrict: "严格（分隔标记 + 特征词判断）", foldLoose: "宽松（无标记一律折叠，可能误伤普通回复）",
         foldMarkerLabel: "正文分隔标记：", foldMarkerHint: "以此标记为分解，拆分思考/正文，思考渲染成美化",
         autoStopLabel: "检测到结束标记自动截断", autoStopHint: "流式中检测到指定标记，立即停止生成，目前不收费，不知道哪天会修。之前安装过截断插件的可以把那个关掉只用这个就行了。",
@@ -165,6 +168,7 @@ const UI = {
         foldLabel: "CoT Fold Beautify", foldHint: "With body CoT, leaked thinking looks ugly in the body - fold it with beautify. Can disable and use a <b>regex</b> that hides everything before &lt;scene&gt; instead.",
         foldHeightLabel: "Fixed-height scroll for reasoning", foldHeightHint: "Give the reasoning area a max-height + scrollbar (long CoT won't blow up the message; same as injecting custom CSS)",
         showTpsLabel: "Show generation speed (t/s) on messages", showTpsHint: "Shows tokens per second next to the token counter (tokens ÷ generation time), same data source as the AI reply timer",
+        thinkingLive: "Thinking {s}", thinkingDone: "Thought for {s}",
         miscLabel: "Other", keepScrollLabel: "Keep scroll position after generation", keepScrollHint: "ST rebuilds message DOM on finish which snaps the scrollbar to the top; enable to keep your current reading position (restored when streaming ends)",
         foldModeLabel: "Fold Detection: ", foldStrict: "strict (separator + keyword)", foldLoose: "loose (fold everything without marker, may catch normal replies)",
         foldMarkerLabel: "Body Separator Marker: ", foldMarkerHint: "Split thinking/body at this marker; thinking is rendered as beautified fold",
@@ -196,6 +200,7 @@ const UI = {
         foldLabel: "CoT 접기 미화", foldHint: "본문 CoT 선택 시 본문에 새어나온 사고가 보기 안 좋으니 미화로 접습니다. 미화를 끄고 &lt;scene&gt; 이전 내용을 숨기는 <b>정규식</b>을 켜도 됩니다.",
         foldHeightLabel: "사고 영역 고정 높이 스크롤", foldHeightHint: "사고 영역에 최대 높이 + 스크롤바 추가 (긴 CoT가 메시지를 부풀리지 않음; 커스텀 CSS 주입과 동일)",
         showTpsLabel: "메시지에 생성 속도 표시 (t/s)", showTpsHint: "token 수 옆에 초당 token 수 표시 (token 수 ÷ 생성 시간), AI 응답 타이머와 같은 데이터 소스",
+        thinkingLive: "사고 중 {s}", thinkingDone: "사고 {s}",
         miscLabel: "기타 기능", keepScrollLabel: "생성 완료 후 스크롤 위치 유지", keepScrollHint: "ST는 완료 시 메시지 DOM을 재구성해 스크롤바가 맨 위로 튑니다. 켜면 보고 있던 위치를 유지합니다 (스트리밍 종료 시 복원)",
         foldModeLabel: "접기 인식: ", foldStrict: "엄격 (구분 마커 + 특징 단어)", foldLoose: "느슨 (마커 없으면 전부 접기, 일반 응답 오접기 가능)",
         foldMarkerLabel: "본문 구분 마커: ", foldMarkerHint: "이 마커를 기준으로 사고/본문 분리, 사고는 미화로 렌더링",
@@ -227,6 +232,7 @@ if (settings.reasoningHeightCss === undefined) settings.reasoningHeightCss = fal
 if (!Number.isFinite(settings.reasoningHeightCssValue) || settings.reasoningHeightCssValue <= 0) settings.reasoningHeightCssValue = 250;
 if (settings.showTps === undefined) settings.showTps = true;
 if (settings.keepScrollOnGenerate === undefined) settings.keepScrollOnGenerate = true;
+if (settings.reasoningTimer === undefined) settings.reasoningTimer = true;
 
 if (settings.reasoningContent === undefined) settings.reasoningContent = defaultSettings.reasoningContent;
 if (settings.reasoningEffort === undefined) settings.reasoningEffort = defaultSettings.reasoningEffort;
@@ -1131,6 +1137,63 @@ function showTpsForMessage(messageId) {
     } catch (e) { /* 显示层失败静默 */ }
 }
 
+// ===== 原生思维链实时计时：思考中显示秒数（跳动），结束定格精确秒 =====
+// ST 原生：思考中显示 "Thinking..."（无时间），结束后 humanize 只精确到分钟。
+// 插件接管标题：思考中每秒刷新「思考中 Xs」，STREAM_REASONING_DONE 拿精确时长定格。
+const reasoningStartMap = new Map(); // messageId -> 思考开始时间戳（插件自计，近似）
+let reasoningTimerInterval = null;
+
+function fmtThinkingTime(ms, live) {
+    const totalSec = ms / 1000;
+    if (totalSec < 60) return `${totalSec.toFixed(live ? 0 : 1)}s`;
+    const m = Math.floor(totalSec / 60);
+    const s = Math.round(totalSec % 60);
+    return `${m}m ${s}s`;
+}
+
+function reasoningTimerTick() {
+    if (!settings.reasoningTimer) return;
+    try {
+        document.querySelectorAll('#chat .mes_reasoning[data-state="thinking"]').forEach(el => {
+            const mesEl = el.closest('.mes');
+            const mesid = mesEl?.getAttribute('mesid');
+            if (mesid === null || mesid === undefined) return;
+            const id = Number(mesid);
+            if (!reasoningStartMap.has(id)) reasoningStartMap.set(id, Date.now());
+            const titleEl = el.querySelector('.mes_reasoning_header_title');
+            if (!titleEl) return;
+            const ms = Date.now() - reasoningStartMap.get(id);
+            titleEl.textContent = String(t('thinkingLive')).replace('{s}', fmtThinkingTime(ms, true));
+        });
+    } catch (e) { /* 静默 */ }
+}
+
+function startReasoningTimer() {
+    if (reasoningTimerInterval) return;
+    if (!settings.reasoningTimer) return;
+    reasoningTimerInterval = setInterval(reasoningTimerTick, 500);
+}
+function stopReasoningTimer() {
+    if (reasoningTimerInterval) {
+        clearInterval(reasoningTimerInterval);
+        reasoningTimerInterval = null;
+    }
+    reasoningStartMap.clear();
+}
+// 结束定格：STREAM_REASONING_DONE 带精确时长（reasoning.js emit），等 ST updateDom 写完再覆盖
+eventSource.on(event_types.STREAM_REASONING_DONE, (reasoning, durationMs, messageId) => {
+    if (!settings.reasoningTimer) return;
+    setTimeout(() => {
+        try {
+            if (!(durationMs > 0)) return;
+            const titleEl = document.querySelector(`.mes[mesid="${messageId}"] .mes_reasoning_header_title`);
+            if (titleEl) {
+                titleEl.textContent = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(durationMs, false));
+            }
+        } catch (e) { /* 静默 */ }
+    }, 100);
+});
+
 const foldCSS = `
 .kimi-fold{width:100%;color:inherit;cursor:pointer;margin:12px 0;}
 .kimi-fold>summary{display:flex;justify-content:center;align-items:center;opacity:.6;transition:opacity .2s;outline:none;margin-bottom:6px;cursor:pointer;}
@@ -1403,6 +1466,7 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     earlyRerollMessageId = -1;
     streamGotToken = false;    // 本次生成是否收到过 token（空回检测）
     isGenerating = true;
+    startReasoningTimer();     // 原生思维链实时计时：思考中显示秒数
     // 记录生成开始时的最后一条消息内容（空回重roll判别：JS-Slash-Runner 提示词查看器会触发真实生成
     // 但在发出 API 请求前 stopGeneration → 零token 且不新增消息 → 最后一条没变 → 不该重roll）
     try {
@@ -1577,6 +1641,7 @@ eventSource.on(event_types.CHAT_CHANGED, () => {
     emptyRerollTargetId = -1;
     autoStopTriggered = false;
     earlyRerollHandled = false;
+    stopReasoningTimer(); // 生成结束：停止思考计时（STREAM_REASONING_DONE 已定格精确秒）
     // 切换聊天后 ST 重渲染全部消息：折叠由 MutationObserver 覆盖，tps 需要手动补（等渲染完成）
     setTimeout(() => {
         if (!settings.showTps) return;
@@ -2014,6 +2079,13 @@ ${t('showTpsLabel')}
 </label>
 <p class="kimi-hint">${t('showTpsHint')}</p>
 </div>
+<div style="margin-top:6px">
+<label class="checkbox_label">
+<input id="${extensionName}_reasoning_timer" type="checkbox" ${settings.reasoningTimer ? 'checked' : ''}/>
+${t('reasoningTimerLabel')}
+</label>
+<p class="kimi-hint">${t('reasoningTimerHint')}</p>
+</div>
 </div>
 </details>
 <!-- ═══ 修正（最不常用，放最下面）═══ -->
@@ -2147,6 +2219,11 @@ partial
     $("#" + extensionName + "_keep_scroll").on("change", function () {
         settings.keepScrollOnGenerate = $(this).is(":checked");
         if (!settings.keepScrollOnGenerate) lastStreamScrollTop = null;
+        saveSettingsDebounced();
+    });
+    $("#" + extensionName + "_reasoning_timer").on("change", function () {
+        settings.reasoningTimer = $(this).is(":checked");
+        if (!settings.reasoningTimer) stopReasoningTimer();
         saveSettingsDebounced();
     });
 
