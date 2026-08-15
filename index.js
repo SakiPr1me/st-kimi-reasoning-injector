@@ -1103,6 +1103,10 @@ const KIMI_SETTINGS_CSS = `
     font-size: 0.85em;
     transition: opacity 0.15s ease, filter 0.15s ease;
 }
+/* 思维链计时接管：隐藏 ST 原生标题，插件 span 完全显示（零竞争，ST 写隐藏元素） */
+.mes_reasoning_details.kimi-timer-active .mes_reasoning_header_title {
+    display: none;
+}
 #kimi_reasoning_injector_settings .kimi-custom-del:hover {
     opacity: 1;
     filter: brightness(1.3);
@@ -1142,36 +1146,6 @@ function showTpsForMessage(messageId) {
 // 插件接管标题：思考中每秒刷新「思考中 Xs」，STREAM_REASONING_DONE 拿精确时长定格。
 const reasoningStartMap = new Map(); // messageId -> 思考开始时间戳（插件自计，近似）
 let reasoningTimerInterval = null;
-const reasoningPinned = new Map(); // messageId -> 定格文本（正文输出阶段 ST 写分钟级时，observer 立即改回）
-let reasoningPinObserver = null;
-
-// 拦截 ST 对定格标题的覆盖：ST 每帧写「思考了 1 分钟」（humanize），
-// observer 在 microtask（绘制前）改回定格 → 用户看不到夺舍
-function connectReasoningPinObserver() {
-    if (reasoningPinObserver) return;
-    const chatEl = document.getElementById('chat');
-    if (!chatEl) return;
-    reasoningPinObserver = new MutationObserver((mutations) => {
-        if (!settings.reasoningTimer) return;
-        for (const mut of mutations) {
-            if (mut.type !== 'characterData') continue;
-            const node = mut.target;
-            if (!(node instanceof Text)) continue;
-            const titleEl = node.parentElement;
-            if (!titleEl || !titleEl.classList.contains('mes_reasoning_header_title')) continue;
-            const details = titleEl.closest('.mes_reasoning_details');
-            if (!details) continue;
-            const mesEl = details.closest('.mes');
-            const mesid = mesEl?.getAttribute('mesid');
-            if (mesid === null || mesid === undefined) continue;
-            const pinned = reasoningPinned.get(Number(mesid));
-            if (!pinned) continue;
-            // ST 写成了别的（分钟级/思考中）→ 立即改回定格；改回后文本=定格，不再触发
-            if (titleEl.textContent !== pinned) titleEl.textContent = pinned;
-        }
-    });
-    reasoningPinObserver.observe(chatEl, { subtree: true, characterData: true });
-}
 
 function fmtThinkingTime(ms, live) {
     // 统一显示总秒数（不转分钟），思考中与定格都带 1 位小数，和 ST 计时同步精度
@@ -1182,8 +1156,7 @@ function reasoningTimerTick() {
     if (!settings.reasoningTimer) return;
     try {
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-        // 不依赖 ST 的 data-state（实测加载后是 none）：遍历所有思维链块，
-        // 标题无数字（ST 的「思考中...」/Thinking...）即视为思考中，在标题旁维护独立计时 span
+        // span 完全接管：ST 标题被 CSS 隐藏（kimi-timer-active），我们的 span 显示完整文案
         document.querySelectorAll('#chat .mes_reasoning_details').forEach(details => {
             const mesEl = details.closest('.mes');
             const mesid = mesEl?.getAttribute('mesid');
@@ -1191,57 +1164,36 @@ function reasoningTimerTick() {
             const id = Number(mesid);
             const title = details.querySelector('.mes_reasoning_header_title');
             const titleText = title?.textContent || '';
-            // 思考中：标题无数字 + 含思考字样，且不是结束占位（「思考了一会」/Thought for some time）
-            const isThinking = !/\d/.test(titleText) && /思考|Think|사고/.test(titleText) && !/一会|some time/i.test(titleText);
-            // 起点用 ST 权威值：消息 gen_started（reasoning.js 的 initialTime 同源），保证与 ST 计时一致
+            const isThinkingTitle = !/\d/.test(titleText) && /思考|Think|사고/.test(titleText) && !/一会|some time/i.test(titleText);
             const msg = ctx?.chat?.[id];
             const genStart = new Date(msg?.gen_started || Date.now()).getTime();
             const startMs = Number.isFinite(genStart) ? genStart : Date.now();
             const dur = Number(msg?.extra?.reasoning_duration || 0);
-
-            if (!isThinking) {
-                // 已结束（标题有数字/结束占位）：移除 span，标题定格
-                const stale = details.querySelector('.kimi-thinking-timer');
-                if (stale) stale.remove();
-                reasoningStartMap.delete(id);
-                if (dur > 0 && title) {
-                    const done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(dur, false));
-                    if (title.textContent !== done) title.textContent = done;
-                    reasoningPinned.set(id, done); // observer 防 ST 覆盖
-                } else {
-                    reasoningPinned.delete(id);
-                }
-                return;
-            }
-
-            // 思考结束的可靠信号：正文 .mes_text 已开始输出（原生模式思考在前、正文在后）
             const bodyEl = mesEl.querySelector('.mes_text');
             const hasBody = bodyEl && bodyEl.textContent.trim().length > 0;
-            if (dur > 0 || hasBody) {
-                // 思考已结束：定格。有 ST 精确时长用它，否则用 gen_started 累计值（≈思考时长）
-                const stale = details.querySelector('.kimi-thinking-timer');
-                if (stale) stale.remove();
-                reasoningStartMap.delete(id);
-                const finalMs = dur > 0 ? dur : (Date.now() - startMs);
-                if (title) {
-                    const done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(finalMs, false));
-                    if (title.textContent !== done) title.textContent = done;
-                    reasoningPinned.set(id, done); // observer 防 ST 覆盖
-                }
+
+            let done = null;
+            if (dur > 0) {
+                // ST 精确时长优先
+                done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(dur, false));
+            } else if (hasBody && isThinkingTitle) {
+                // 无精确时长但正文已开始输出 → 用累计值定格（≈思考时长）
+                done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(Date.now() - startMs, false));
+            } else if (!isThinkingTitle) {
+                // 非思考中且无时长（如历史消息「思考了一会」无数据）→ 不接管，保持 ST 显示
                 return;
             }
 
-            // 真思考中：span 实时跳动
-            reasoningStartMap.set(id, startMs);
-            reasoningPinned.delete(id);
+            // 接管：加隐藏类 + span 显示（创建 span 插到标题旁）
+            details.classList.add('kimi-timer-active');
             let span = details.querySelector('.kimi-thinking-timer');
             if (!span) {
                 span = document.createElement('span');
                 span.className = 'kimi-thinking-timer';
-                span.style.cssText = 'opacity:.75;font-size:.85em;margin-left:6px;white-space:nowrap';
+                span.style.cssText = 'opacity:.85;font-size:.9em;margin-left:6px;white-space:nowrap';
                 if (title?.parentElement) title.parentElement.appendChild(span);
             }
-            span.textContent = fmtThinkingTime(Date.now() - startMs, true);
+            span.textContent = done || String(t('thinkingLive')).replace('{s}', fmtThinkingTime(Date.now() - startMs, true));
         });
     } catch (e) { /* 静默 */ }
 }
@@ -1249,7 +1201,6 @@ function reasoningTimerTick() {
 function startReasoningTimer() {
     if (reasoningTimerInterval) return;
     if (!settings.reasoningTimer) return;
-    connectReasoningPinObserver(); // 拦截 ST 写分钟级覆盖（一次性连接）
     reasoningTimerInterval = setInterval(reasoningTimerTick, 300);
 }
 function stopReasoningTimer() {
@@ -1258,46 +1209,10 @@ function stopReasoningTimer() {
         reasoningTimerInterval = null;
     }
     reasoningStartMap.clear();
-    reasoningPinned.clear();
-    // 兜底清理残留计时 span（生成结束/切聊天/关开关）
+    // 清理残留计时 span 与接管类
     document.querySelectorAll('.kimi-thinking-timer').forEach(n => n.remove());
-}
-
-// 结束定格：STREAM_REASONING_DONE 带精确时长（reasoning.js emit），等 ST updateDom 写完再覆盖
-eventSource.on(event_types.STREAM_REASONING_DONE, (reasoning, durationMs, messageId) => {
-    if (!settings.reasoningTimer) return;
-    setTimeout(() => {
-        try {
-            if (!(durationMs > 0)) return;
-            const titleEl = document.querySelector(`.mes[mesid="${messageId}"] .mes_reasoning_header_title`);
-            if (titleEl) {
-                titleEl.closest('.mes_reasoning_details')?.querySelector('.kimi-thinking-timer')?.remove();
-                const done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(durationMs, false));
-                titleEl.textContent = done;
-                reasoningPinned.set(messageId, done); // observer 防 ST 覆盖
-            }
-        } catch (e) { /* 静默 */ }
-    }, 100);
-});
-
-// 定格写回（防重渲染覆盖）：ST 在 MESSAGE_RECEIVED/重渲染后可能把标题重写成 humanize 分钟级，
-// 用 extra.reasoning_duration（毫秒）重新写精确秒。挂在所有重渲染钩子上。
-function pinReasoningTitle(messageId) {
-    if (!settings.reasoningTimer) return;
-    try {
-        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-        const msg = ctx?.chat?.[messageId];
-        const dur = Number(msg?.extra?.reasoning_duration || 0);
-        if (!(dur > 0)) return;
-        const titleEl = document.querySelector(`.mes[mesid="${messageId}"] .mes_reasoning_header_title`);
-        if (!titleEl) return;
-        const details = titleEl.closest('.mes_reasoning_details');
-        if (details && details.dataset.state === 'thinking') return; // 还在思考中，交给实时计时
-        details?.querySelector('.kimi-thinking-timer')?.remove();
-        const done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(dur, false));
-        titleEl.textContent = done;
-        reasoningPinned.set(messageId, done); // observer 防 ST 覆盖
-    } catch (e) { /* 静默 */ }
+    document.querySelectorAll('.mes_reasoning_details.kimi-timer-active').forEach(n => n.classList.remove('kimi-timer-active'));
+    document.querySelectorAll('.kimi-thinking-timer').forEach(n => n.remove());
 }
 
 const foldCSS = `
@@ -1544,19 +1459,18 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id) => {
     checkNativeReroll(id);
     applyThinkingFold(id);
     showTpsForMessage(id);
-    pinReasoningTitle(id);
-});
-eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => { applyThinkingFold(id); showTpsForMessage(id); pinReasoningTitle(id); });
+    });
+eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => { applyThinkingFold(id); showTpsForMessage(id); });
 
 // v1.12.3：手动 swipe / 编辑 / 删除后的重渲染不触发 CHARACTER_MESSAGE_RENDERED，
 // 思维链美化折叠和 tps 会丢失 → 补刷新钩子
-eventSource.on(event_types.MESSAGE_SWIPED, (id) => { applyThinkingFold(id); showTpsForMessage(id); pinReasoningTitle(id); });
-eventSource.on(event_types.MESSAGE_EDITED, (id) => { applyThinkingFold(id); showTpsForMessage(id); pinReasoningTitle(id); });
+eventSource.on(event_types.MESSAGE_SWIPED, (id) => { applyThinkingFold(id); showTpsForMessage(id); });
+eventSource.on(event_types.MESSAGE_EDITED, (id) => { applyThinkingFold(id); showTpsForMessage(id); });
 eventSource.on(event_types.MESSAGE_DELETED, () => {
     // 删除后 ST 重渲染全部消息：逐个补折叠 + tps
     document.querySelectorAll('#chat .mes').forEach(mesEl => {
         const mesid = mesEl.getAttribute('mesid');
-        if (mesid !== null) { applyThinkingFold(Number(mesid)); showTpsForMessage(Number(mesid)); pinReasoningTitle(Number(mesid)); }
+        if (mesid !== null) { applyThinkingFold(Number(mesid)); showTpsForMessage(Number(mesid)); }
     });
 });
 
@@ -1576,7 +1490,6 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     // 新生成开始：清掉所有残留计时 span（重roll/swipe 换分支后旧计时归零）
     document.querySelectorAll('.kimi-thinking-timer').forEach(n => n.remove());
     reasoningStartMap.clear();
-    reasoningPinned.clear();
     startReasoningTimer();     // 原生思维链实时计时：思考中显示秒数
     // 记录生成开始时的最后一条消息内容（空回重roll判别：JS-Slash-Runner 提示词查看器会触发真实生成
     // 但在发出 API 请求前 stopGeneration → 零token 且不新增消息 → 最后一条没变 → 不该重roll）
@@ -1752,7 +1665,6 @@ eventSource.on(event_types.CHAT_CHANGED, () => {
     emptyRerollTargetId = -1;
     autoStopTriggered = false;
     earlyRerollHandled = false;
-    stopReasoningTimer(); // 生成结束：停止思考计时（STREAM_REASONING_DONE 已定格精确秒）
     // 切换聊天后 ST 重渲染全部消息：折叠由 MutationObserver 覆盖，tps 需要手动补（等渲染完成）
     setTimeout(() => {
         if (!settings.showTps && !settings.reasoningTimer) return;
@@ -1762,8 +1674,7 @@ eventSource.on(event_types.CHAT_CHANGED, () => {
                 if (mesid === null) return;
                 const id = Number(mesid);
                 showTpsForMessage(id);
-                pinReasoningTitle(id);
-            });
+                });
         } catch (e) { /* 静默 */ }
     }, 300);
 });
@@ -2615,6 +2526,8 @@ partial
 
     // 监听 ST 构建完 prompt 的事件：截获已渲染 thinking 块 + 预解析种子（提示词查看器同款机制）
     updateRerollStatus();
+    // 思维链计时常驻（interval 幂等，覆盖生成中/结束后/切聊天所有阶段）
+    if (settings.reasoningTimer) startReasoningTimer();
 }
 
 // 全局事件只绑定一次（语言切换重渲染 initSettingsPanel 时不会重复监听）
