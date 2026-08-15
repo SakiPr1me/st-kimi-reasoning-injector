@@ -64,6 +64,7 @@ const defaultSettings = {
     reasoningHeightCss: false,       // 思维链固定高度滚动（.mes_reasoning max-height + 滚动条）
     reasoningHeightCssValue: 250,    // 固定高度数值（px，可自定义）
     showTps: true,                   // 楼层 token 数旁显示生成速度（t/s）
+    keepScrollOnGenerate: true,      // 生成完成保持聊天滚动位置（防 ST finalize 重排跳顶）
 };
 
 // ===== 双模式三语预设 =====
@@ -132,6 +133,7 @@ const UI = {
         foldLabel: "思维链美化折叠", foldHint: "当选择正文思维链，爆出的思维链放正文不好看，用美化把它折叠起来。不想要美化也可以关掉，打开不显示&lt;scene&gt;之前内容的<b>正则</b>。",
         foldHeightLabel: "思维链区域固定高度滚动", foldHeightHint: "给思维链区域加最大高度 + 滚动条（长思维链不再撑爆楼层；注入等效自定义 CSS）",
         showTpsLabel: "楼层显示生成速度（t/s）", showTpsHint: "在 token 数旁显示每秒 token 数（token 数 ÷ 生成耗时），和 AI 回复计时器同一数据源",
+        miscLabel: "其他功能", keepScrollLabel: "生成完成保持滚动位置", keepScrollHint: "ST 生成完成会重建消息 DOM 导致滚动条跳到楼层顶部，开启后保持你正在看的位置（流式结束时恢复）",
         foldModeLabel: "折叠识别：", foldStrict: "严格（分隔标记 + 特征词判断）", foldLoose: "宽松（无标记一律折叠，可能误伤普通回复）",
         foldMarkerLabel: "正文分隔标记：", foldMarkerHint: "以此标记为分解，拆分思考/正文，思考渲染成美化",
         autoStopLabel: "检测到结束标记自动截断", autoStopHint: "流式中检测到指定标记，立即停止生成，目前不收费，不知道哪天会修。之前安装过截断插件的可以把那个关掉只用这个就行了。",
@@ -160,6 +162,7 @@ const UI = {
         foldLabel: "CoT Fold Beautify", foldHint: "With body CoT, leaked thinking looks ugly in the body - fold it with beautify. Can disable and use a <b>regex</b> that hides everything before &lt;scene&gt; instead.",
         foldHeightLabel: "Fixed-height scroll for reasoning", foldHeightHint: "Give the reasoning area a max-height + scrollbar (long CoT won't blow up the message; same as injecting custom CSS)",
         showTpsLabel: "Show generation speed (t/s) on messages", showTpsHint: "Shows tokens per second next to the token counter (tokens ÷ generation time), same data source as the AI reply timer",
+        miscLabel: "Other", keepScrollLabel: "Keep scroll position after generation", keepScrollHint: "ST rebuilds message DOM on finish which snaps the scrollbar to the top; enable to keep your current reading position (restored when streaming ends)",
         foldModeLabel: "Fold Detection: ", foldStrict: "strict (separator + keyword)", foldLoose: "loose (fold everything without marker, may catch normal replies)",
         foldMarkerLabel: "Body Separator Marker: ", foldMarkerHint: "Split thinking/body at this marker; thinking is rendered as beautified fold",
         autoStopLabel: "Auto-Stop on End Marker", autoStopHint: "Stop generation immediately when the marker appears mid-stream. Currently free - might be patched someday. If you had a stop plugin before, disable it and use this one.",
@@ -188,6 +191,7 @@ const UI = {
         foldLabel: "CoT 접기 미화", foldHint: "본문 CoT 선택 시 본문에 새어나온 사고가 보기 안 좋으니 미화로 접습니다. 미화를 끄고 &lt;scene&gt; 이전 내용을 숨기는 <b>정규식</b>을 켜도 됩니다.",
         foldHeightLabel: "사고 영역 고정 높이 스크롤", foldHeightHint: "사고 영역에 최대 높이 + 스크롤바 추가 (긴 CoT가 메시지를 부풀리지 않음; 커스텀 CSS 주입과 동일)",
         showTpsLabel: "메시지에 생성 속도 표시 (t/s)", showTpsHint: "token 수 옆에 초당 token 수 표시 (token 수 ÷ 생성 시간), AI 응답 타이머와 같은 데이터 소스",
+        miscLabel: "기타 기능", keepScrollLabel: "생성 완료 후 스크롤 위치 유지", keepScrollHint: "ST는 완료 시 메시지 DOM을 재구성해 스크롤바가 맨 위로 튑니다. 켜면 보고 있던 위치를 유지합니다 (스트리밍 종료 시 복원)",
         foldModeLabel: "접기 인식: ", foldStrict: "엄격 (구분 마커 + 특징 단어)", foldLoose: "느슨 (마커 없으면 전부 접기, 일반 응답 오접기 가능)",
         foldMarkerLabel: "본문 구분 마커: ", foldMarkerHint: "이 마커를 기준으로 사고/본문 분리, 사고는 미화로 렌더링",
         autoStopLabel: "종료 마커 감지 시 자동 중단", autoStopHint: "스트리밍 중 지정 마커가 나오면 즉시 생성 중단. 현재 무료지만 언제 고쳐질지 모름. 기존 중단 플러그인이 있으면 끄고 이걸 쓰세요.",
@@ -216,6 +220,7 @@ if (!Array.isArray(settings.customPresets)) settings.customPresets = [];
 if (settings.reasoningHeightCss === undefined) settings.reasoningHeightCss = false;
 if (!Number.isFinite(settings.reasoningHeightCssValue) || settings.reasoningHeightCssValue <= 0) settings.reasoningHeightCssValue = 250;
 if (settings.showTps === undefined) settings.showTps = true;
+if (settings.keepScrollOnGenerate === undefined) settings.keepScrollOnGenerate = true;
 
 if (settings.reasoningContent === undefined) settings.reasoningContent = defaultSettings.reasoningContent;
 if (settings.reasoningEffort === undefined) settings.reasoningEffort = defaultSettings.reasoningEffort;
@@ -668,10 +673,12 @@ function checkStreamingAbort(messageId) {
 // 流式每 token 记录当前滚动位置 → 生成结束后等 DOM 稳定（双 rAF）恢复。
 let lastStreamScrollTop = null;
 eventSource.on(event_types.STREAM_TOKEN_RECEIVED, () => {
+    if (!settings.keepScrollOnGenerate) return;
     const chatEl = document.getElementById('chat');
     if (chatEl) lastStreamScrollTop = chatEl.scrollTop;
 });
 eventSource.on(event_types.GENERATION_ENDED, () => {
+    if (!settings.keepScrollOnGenerate) return;
     if (lastStreamScrollTop === null) return;
     const target = lastStreamScrollTop;
     lastStreamScrollTop = null;
@@ -1786,13 +1793,6 @@ ${t('foldHeightLabel')}
 </label>
 <p style="font-size:0.72em;color:var(--grey_color);line-height:1.5;margin:2px 0 0">${t('foldHeightHint')}</p>
 </div>
-<div style="margin-top:6px">
-<label class="checkbox_label">
-<input id="${extensionName}_show_tps" type="checkbox" ${settings.showTps ? 'checked' : ''}/>
-${t('showTpsLabel')}
-</label>
-<p style="font-size:0.72em;color:var(--grey_color);line-height:1.5;margin:2px 0 0">${t('showTpsHint')}</p>
-</div>
 </div>
 
 <div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
@@ -1873,6 +1873,22 @@ ${renderWordReplaceRows()}
 
 <div style="border-top:1px solid rgba(128,128,128,.25);margin:12px 0;"></div>
 
+<!-- 其他功能（放最底部） -->
+<div style="margin-top:5px">
+<label style="display:block;margin-bottom:3px;font-size:0.9em;color:var(--grey_color)"><b>${t('miscLabel')}</b></label>
+<label class="checkbox_label">
+<input id="${extensionName}_keep_scroll" type="checkbox" ${settings.keepScrollOnGenerate ? 'checked' : ''}/>
+${t('keepScrollLabel')}
+</label>
+<p style="font-size:0.72em;color:var(--grey_color);line-height:1.5;margin:2px 0 0">${t('keepScrollHint')}</p>
+<div style="margin-top:6px">
+<label class="checkbox_label">
+<input id="${extensionName}_show_tps" type="checkbox" ${settings.showTps ? 'checked' : ''}/>
+${t('showTpsLabel')}
+</label>
+<p style="font-size:0.72em;color:var(--grey_color);line-height:1.5;margin:2px 0 0">${t('showTpsHint')}</p>
+</div>
+</div>
 
                 </div>
             </div>
@@ -1957,6 +1973,11 @@ ${renderWordReplaceRows()}
                 });
             }
         } catch (e) { console.warn('[Kimi工具箱] tps 刷新失败:', e); }
+    });
+    $("#" + extensionName + "_keep_scroll").on("change", function () {
+        settings.keepScrollOnGenerate = $(this).is(":checked");
+        if (!settings.keepScrollOnGenerate) lastStreamScrollTop = null;
+        saveSettingsDebounced();
     });
 
     $("#" + extensionName + "_foldmode").on("change", function () {
