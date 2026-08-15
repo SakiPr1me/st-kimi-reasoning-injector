@@ -1144,11 +1144,8 @@ const reasoningStartMap = new Map(); // messageId -> 思考开始时间戳（插
 let reasoningTimerInterval = null;
 
 function fmtThinkingTime(ms, live) {
-    const totalSec = ms / 1000;
-    if (totalSec < 60) return `${totalSec.toFixed(live ? 0 : 1)}s`;
-    const m = Math.floor(totalSec / 60);
-    const s = Math.round(totalSec % 60);
-    return `${m}m ${s}s`;
+    // 统一显示总秒数（不转分钟）：思考中整秒，结束定格 1 位小数
+    return `${(ms / 1000).toFixed(live ? 0 : 1)}s`;
 }
 
 function reasoningTimerTick() {
