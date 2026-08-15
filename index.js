@@ -1163,24 +1163,42 @@ function reasoningTimerTick() {
             const titleText = title?.textContent || '';
             // 思考中：标题无数字 + 含思考字样，且不是结束占位（「思考了一会」/Thought for some time）
             const isThinking = !/\d/.test(titleText) && /思考|Think|사고/.test(titleText) && !/一会|some time/i.test(titleText);
+            // 起点用 ST 权威值：消息 gen_started（reasoning.js 的 initialTime 同源），保证与 ST 计时一致
+            const msg = ctx?.chat?.[id];
+            const genStart = new Date(msg?.gen_started || Date.now()).getTime();
+            const startMs = Number.isFinite(genStart) ? genStart : Date.now();
+            const dur = Number(msg?.extra?.reasoning_duration || 0);
+
             if (!isThinking) {
-                // 已结束（思考完成，正文输出阶段/完全结束）：持续钉住精确秒——
-                // ST 正文输出阶段还会把标题更新成「几分钟」（humanize），tick 持续覆盖
+                // 已结束（标题有数字/结束占位）：移除 span，标题定格
                 const stale = details.querySelector('.kimi-thinking-timer');
                 if (stale) stale.remove();
                 reasoningStartMap.delete(id);
-                const dur = Number(ctx?.chat?.[id]?.extra?.reasoning_duration || 0);
                 if (dur > 0 && title) {
                     const done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(dur, false));
                     if (title.textContent !== done) title.textContent = done;
                 }
                 return;
             }
-            // 起点用 ST 权威值：消息 gen_started（reasoning.js 的 initialTime 同源），保证与 ST 计时一致
-            const msg = ctx?.chat?.[id];
-            const genStart = new Date(msg?.gen_started || Date.now()).getTime();
-            if (Number.isFinite(genStart)) reasoningStartMap.set(id, genStart);
-            const startMs = reasoningStartMap.get(id) || Date.now();
+
+            // 思考结束的可靠信号：正文 .mes_text 已开始输出（原生模式思考在前、正文在后）
+            const bodyEl = mesEl.querySelector('.mes_text');
+            const hasBody = bodyEl && bodyEl.textContent.trim().length > 0;
+            if (dur > 0 || hasBody) {
+                // 思考已结束：定格。有 ST 精确时长用它，否则用 gen_started 累计值（≈思考时长）
+                const stale = details.querySelector('.kimi-thinking-timer');
+                if (stale) stale.remove();
+                reasoningStartMap.delete(id);
+                const finalMs = dur > 0 ? dur : (Date.now() - startMs);
+                if (title) {
+                    const done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(finalMs, false));
+                    if (title.textContent !== done) title.textContent = done;
+                }
+                return;
+            }
+
+            // 真思考中：span 实时跳动
+            reasoningStartMap.set(id, startMs);
             let span = details.querySelector('.kimi-thinking-timer');
             if (!span) {
                 span = document.createElement('span');
