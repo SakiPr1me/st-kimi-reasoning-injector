@@ -1,6 +1,7 @@
 import { extension_settings } from "../../../extensions.js";
 import { saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, stopGeneration, Generate } from "../../../../script.js";
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
+import { toggleDrawer } from "../../../utils.js";
 
 // SWIPE 常量本地兜底：ST 1.15.0 才引入（1.13 无 SWIPE_DIRECTION/SWIPE_SOURCE），
 // 直接 import 会让 1.13 加载报错、插件静默失败。此处定义同值副本（值与原版完全一致）。
@@ -1843,9 +1844,12 @@ ${renderWordReplaceRows()}
         }
         saveSettingsDebounced();
         console.log("[余温工具箱] 语言切换为:", lang, "| Reasoning Content 已更新");
-        // 重新渲染设置面板（全部 UI 文案跟随新语言）
+        // 重新渲染设置面板（全部 UI 文案跟随新语言），但保留展开状态不闭合
+        const drawerEl = document.getElementById(extensionName + "_settings");
+        const wasOpen = drawerEl && drawerEl.querySelector('.inline-drawer-content')?.style.display === 'block';
         $("#" + extensionName + "_settings").remove();
         initSettingsPanel();
+        if (wasOpen) toggleDrawer(document.getElementById(extensionName + "_settings"), true);
     });
 
     // ===== 注入模式切换（KIMI / DS）=====
@@ -1860,9 +1864,7 @@ ${renderWordReplaceRows()}
         }
         saveSettingsDebounced();
         console.log("[余温工具箱] 注入模式切换为:", target, "| Reasoning Content 已更新");
-        // 重新渲染设置面板（文案/选项选中态跟随新模式）
-        $("#" + extensionName + "_settings").remove();
-        initSettingsPanel();
+        // 即时生效：UI 没有随模式变化的文案/选中态，无需重渲染，面板保持展开
     });
 
     $("#" + extensionName + "_name_enabled").on("change", function () {
