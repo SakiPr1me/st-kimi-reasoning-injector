@@ -1364,6 +1364,18 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id) => {
 });
 eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => { applyThinkingFold(id); showTpsForMessage(id); });
 
+// v1.12.3：手动 swipe / 编辑 / 删除后的重渲染不触发 CHARACTER_MESSAGE_RENDERED，
+// 思维链美化折叠和 tps 会丢失 → 补刷新钩子
+eventSource.on(event_types.MESSAGE_SWIPED, (id) => { applyThinkingFold(id); showTpsForMessage(id); });
+eventSource.on(event_types.MESSAGE_EDITED, (id) => { applyThinkingFold(id); showTpsForMessage(id); });
+eventSource.on(event_types.MESSAGE_DELETED, () => {
+    // 删除后 ST 重渲染全部消息：逐个补折叠 + tps
+    document.querySelectorAll('#chat .mes').forEach(mesEl => {
+        const mesid = mesEl.getAttribute('mesid');
+        if (mesid !== null) { applyThinkingFold(Number(mesid)); showTpsForMessage(Number(mesid)); }
+    });
+});
+
 // 新生成开始：清掉流式截断状态、空回状态，防止残留
 eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     isDryRun = !!dryRun; // ST 提示词查看器 dry-run（Generate 第三个参数）
@@ -1551,6 +1563,16 @@ eventSource.on(event_types.CHAT_CHANGED, () => {
     emptyRerollTargetId = -1;
     autoStopTriggered = false;
     earlyRerollHandled = false;
+    // 切换聊天后 ST 重渲染全部消息：折叠由 MutationObserver 覆盖，tps 需要手动补（等渲染完成）
+    setTimeout(() => {
+        if (!settings.showTps) return;
+        try {
+            document.querySelectorAll('#chat .mes').forEach(mesEl => {
+                const mesid = mesEl.getAttribute('mesid');
+                if (mesid !== null) showTpsForMessage(Number(mesid));
+            });
+        } catch (e) { /* 静默 */ }
+    }, 300);
 });
 
 // ===== 流式折叠补帧（同步版）：ST 流式每帧替换 .mes_text innerHTML（script.js:3669）。
