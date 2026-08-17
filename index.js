@@ -1763,16 +1763,19 @@ function applyDisplayReplace(id) {
             }
             if (!needsReapply) return;
         }
-        // v1.12.1：跳过「酒馆 RegEx 美化生成的折叠结构（<details>/<summary>）」内部的文本，
-        // 避免词汇显示替换把摘要/弹幕/布告栏/推进等美化组件的折叠标签（如 <summary>）误替换成别的词，
-        // 导致这些模块的 HTML 结构被破坏、显示挤在一起。词汇替换只应作用于「正文文本」。
+        // v1.12.1：跳过「美化生成内容」内部的文本，词汇替换只应作用于「正文文本」。
+        // 只处理正文，明确跳过以下美化/结构内容，避免把摘要/弹幕/布告栏/推进等美化组件的
+        // 折叠标签（<summary>）、CSS 选择器（summary/details）误替换成别的词，导致结构被破坏、显示挤在一起：
+        //  - <style> 内的 CSS（含 summary/details 等选择器，裸 `summary` 命中这里最危险）
+        //  - <details>/<summary> 折叠结构（美化折叠框本体）
+        //  - <script>（若存在）
         const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
             acceptNode(node) {
                 try {
-                    // 近祖先若是美化折叠组件（details），则跳过其内部文本（含折叠标题 summary 文本）
                     let a = node.parentNode;
                     while (a && a !== el) {
-                        if (a.nodeName === 'DETAILS' || a.nodeName === 'SUMMARY') return NodeFilter.FILTER_REJECT;
+                        const n = a.nodeName;
+                        if (n === 'STYLE' || n === 'SCRIPT' || n === 'DETAILS' || n === 'SUMMARY') return NodeFilter.FILTER_REJECT;
                         a = a.parentNode;
                     }
                 } catch (e) { /* 忽略 */ }
