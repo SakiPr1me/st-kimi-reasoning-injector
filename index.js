@@ -1763,7 +1763,22 @@ function applyDisplayReplace(id) {
             }
             if (!needsReapply) return;
         }
-        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        // v1.12.1：跳过「酒馆 RegEx 美化生成的折叠结构（<details>/<summary>）」内部的文本，
+        // 避免词汇显示替换把摘要/弹幕/布告栏/推进等美化组件的折叠标签（如 <summary>）误替换成别的词，
+        // 导致这些模块的 HTML 结构被破坏、显示挤在一起。词汇替换只应作用于「正文文本」。
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+            acceptNode(node) {
+                try {
+                    // 近祖先若是美化折叠组件（details），则跳过其内部文本（含折叠标题 summary 文本）
+                    let a = node.parentNode;
+                    while (a && a !== el) {
+                        if (a.nodeName === 'DETAILS' || a.nodeName === 'SUMMARY') return NodeFilter.FILTER_REJECT;
+                        a = a.parentNode;
+                    }
+                } catch (e) { /* 忽略 */ }
+                return NodeFilter.FILTER_ACCEPT;
+            }
+        });
         let node;
         while ((node = walker.nextNode())) {
             const replaced = applyReplacements(node.nodeValue, 'display');
@@ -2463,12 +2478,22 @@ partial
         const idx = Number($(this).attr("data-idx"));
         const n = applyRuleToHistory(idx);
         console.log(`[余温工具箱] 已应用该条规则到 ${n} 条历史消息`);
+        // v1.12.1：加界面提示，让用户知道是否生效/生效几条
+        try {
+            if (n > 0) toastr.success(`已应用该条替换到 ${n} 条历史消息`, '余温工具箱', { timeOut: 2500 });
+            else toastr.info('没有历史消息匹配该条规则（0 条被替换）', '余温工具箱', { timeOut: 3000 });
+        } catch (e) { /* toastr 不可用时静默 */ }
     });
     $("#" + extensionName + "_word_list").on("click", ".wr-undo", function () {
         const idx = Number($(this).attr("data-idx"));
         const n = undoRuleToHistory(idx);
         if (n > 0) console.log(`[余温工具箱] 已回退该条规则 ${n} 条历史消息`);
         else console.log('[余温工具箱] 该条规则没有可回退的记录');
+        // v1.12.1：加界面提示
+        try {
+            if (n > 0) toastr.success(`已回退该条规则对 ${n} 条历史消息的修改`, '余温工具箱', { timeOut: 2500 });
+            else toastr.info('没有可回退的记录（可能未应用过，或原文已无改动）', '余温工具箱', { timeOut: 3000 });
+        } catch (e) { /* toastr 不可用时静默 */ }
     });
     // 规则行事件委托（规则动态增删，用容器委托）
     $("#" + extensionName + "_word_list").on("change", ".wr-enabled, .wr-find, .wr-replace, .wr-mode, .wr-scope-display, .wr-scope-prompt", function () {
