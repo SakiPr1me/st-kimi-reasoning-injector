@@ -367,9 +367,11 @@ function applyCotByMode(seedText) {
     return seedText.replace(COT_STRIP_RE, '').replace(/<cot>\s*/i, '');
 }
 
-// 应用单条规则到文本（供「应用至以往所有」单条使用；只检查 enabled/find，不检查作用域）
-function applySingleRule(r, text) {
-    if (!r || r.enabled === false || !r.find || typeof text !== 'string' || !text) return text;
+// 应用单条规则到文本（供「应用至以往所有」单条使用；只检查 find，不检查作用域）
+// ignoreEnabled=true（应用至以往所有）：即使规则未勾选 enabled 也执行——手动一次性批量应用
+// 不受「实时替换开关」约束；enabled 只控制实时替换（display/prompt 作用域）是否激活该条规则。
+function applySingleRule(r, text, ignoreEnabled = false) {
+    if (!r || (!ignoreEnabled && r.enabled === false) || !r.find || typeof text !== 'string' || !text) return text;
     try {
         if (r.mode === 'regex') return text.replace(new RegExp(r.find, 'g'), r.replace ?? '');
         return text.split(r.find).join(r.replace ?? '');
@@ -1789,7 +1791,9 @@ function applyRuleToHistory(ruleIdx) {
     for (let i = 0; i < chat.length; i++) {
         const m = chat[i];
         if (!m || typeof m.mes !== 'string') continue;
-        const replaced = applySingleRule(rule, m.mes);
+        // v1.12.2: ignoreEnabled=true — 应用至以往所有是「手动一次性」操作，
+        // 不受规则 enabled 勾选约束（勾选只代表实时替换是否激活）。未勾选也能应用。
+        const replaced = applySingleRule(rule, m.mes, true);
         if (replaced !== m.mes) {
             undo.push({ id: i, original: m.mes });
             m.mes = replaced;
