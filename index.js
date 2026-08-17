@@ -893,8 +893,9 @@ async function reRenderMessage(id) {
         }
         if (!rendered) {
             // 最后兜底：手动重渲染（可能无 Regex 美化，但保证界面更新）
+            // v1.12.2：同样在字符串层先做显示词汇替换再渲染，保持一致、不碰美化结构
             const el = document.querySelector(`.mes[mesid="${id}"] .mes_text`);
-            if (el) el.innerHTML = messageFormatting(msg.mes, msg.name || '', msg.is_system, msg.is_user, id);
+            if (el) el.innerHTML = messageFormatting(applyReplacements(msg.mes, 'display'), msg.name || '', msg.is_system, msg.is_user, id);
         }
         if (settings.thinkingFold) applyThinkingFold(id);
     } catch (e) { console.warn('[Kimi插件] 重渲染失败:', e); }
@@ -1703,7 +1704,9 @@ function connectFoldObserver() {
             // 流式早期检测：英文思维链 / 正文超时无标记 → 截断重roll（与折叠开关独立）
             checkStreamingAbort(id);
             if (settings.thinkingFold) applyThinkingFold(id);
-            applyDisplayReplace(id); // 显示层词汇替换（在折叠处理后，对文本节点替换，保留标签结构）
+            // v1.12.2：移除这里的 DOM 层显示替换——显示词汇替换改为字符串层
+            //（见 refreshAllDisplayReplace / reRenderMessage，在 messageFormatting 前对副本替换），
+            // DOM 层补刀会碰到美化结构（<details>/<style>）导致折叠变形，故不再在此处调用 applyDisplayReplace。
         }
     });
     foldObserver.observe(chatEl, { subtree: true, childList: true, characterData: true });
@@ -1737,59 +1740,11 @@ function unfoldAllMessages() {
     displayReplaceMap.clear();
 }
 
-// 显示层词汇替换：对 .mes_text 的文本节点应用 applyReplacements(scope='display')，保留标签结构。
-// displayReplaceMap 记录「已应用替换的原始 mes」——原始文本变了才重新替换（流式/重渲染防重复）
-function applyDisplayReplace(id) {
-    if (!settings.wordReplaceEnabled) return;
-    try {
-        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-        const msg = ctx?.chat?.[id];
-        if (!msg || msg.is_user || msg.is_system) return;
-        if (typeof msg.mes !== 'string' || msg.mes.trim() === '') return;
-        const el = document.querySelector(`.mes[mesid="${id}"] .mes_text`);
-        if (!el) return;
-        const mesEl = el.closest('.mes');
-        // 编辑模式跳过（ST 点铅笔有编辑框时，不能动文本）
-        if (mesEl && (mesEl.querySelector('#curEditTextarea') || mesEl.querySelector('.reasoning_edit_textarea'))) return;
-        if (displayReplaceMap.get(id) === msg.mes) {
-            // 防重复：原始文本没变。但 ST/fold 重建会把 .mes_text 重写成原文（含待替换词），
-            // 此时必须重新替换，否则显示层回退成未替换状态（如"乳尖"没被换成"乳头"）。
-            const rules = Array.isArray(settings.wordReplacements) ? settings.wordReplacements : [];
-            const domText = el.textContent || '';
-            let needsReapply = false;
-            for (const r of rules) {
-                if (!r || r.enabled === false || !r.find || !r.scopeDisplay) continue;
-                if (domText.includes(r.find)) { needsReapply = true; break; }
-            }
-            if (!needsReapply) return;
-        }
-        // v1.12.1：跳过「美化生成内容」内部的文本，词汇替换只应作用于「正文文本」。
-        // 只处理正文，明确跳过以下美化/结构内容，避免把摘要/弹幕/布告栏/推进等美化组件的
-        // 折叠标签（<summary>）、CSS 选择器（summary/details）误替换成别的词，导致结构被破坏、显示挤在一起：
-        //  - <style> 内的 CSS（含 summary/details 等选择器，裸 `summary` 命中这里最危险）
-        //  - <details>/<summary> 折叠结构（美化折叠框本体）
-        //  - <script>（若存在）
-        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
-            acceptNode(node) {
-                try {
-                    let a = node.parentNode;
-                    while (a && a !== el) {
-                        const n = a.nodeName;
-                        if (n === 'STYLE' || n === 'SCRIPT' || n === 'DETAILS' || n === 'SUMMARY') return NodeFilter.FILTER_REJECT;
-                        a = a.parentNode;
-                    }
-                } catch (e) { /* 忽略 */ }
-                return NodeFilter.FILTER_ACCEPT;
-            }
-        });
-        let node;
-        while ((node = walker.nextNode())) {
-            const replaced = applyReplacements(node.nodeValue, 'display');
-            if (replaced !== node.nodeValue) node.nodeValue = replaced;
-        }
-        displayReplaceMap.set(id, msg.mes);
-    } catch (e) { console.warn('[余温工具箱] 显示替换失败:', e); }
-}
+// v1.12.2：显示层词汇替换不再走「渲染后 DOM 补刀」（applyDisplayReplace 已删除）。
+// 改为在字符串层做：见 refreshAllDisplayReplace / reRenderMessage，
+// 于 messageFormatting 前对 msg.mes 的副本应用 applyReplacements(scope='display') 再渲染。
+// 这样与酒馆正则 getRegexedString 同一原理（先处理字符串、后渲染），
+// 美化结构由 messageFormatting 内部正则在此之后生成，词汇替换绝不会碰到美化结构。
 
 // 全量刷新显示替换：对当前所有已渲染消息「还原为原始渲染 → 重新折叠 → 重新应用显示替换」。
 // 规则增删改 / 总开关切换时调用 → 历史消息即时生效（像 ST 正则那样，不用等新生成）。
@@ -1807,10 +1762,13 @@ function refreshAllDisplayReplace() {
             const el = mesEl.querySelector('.mes_text');
             if (!el) return;
             if (mesEl.querySelector('#curEditTextarea') || mesEl.querySelector('.reasoning_edit_textarea')) return; // 编辑模式跳过
-            // 还原为原始渲染（重新走 messageFormatting 完整管线，保留 Regex 美化）
-            el.innerHTML = messageFormatting(msg.mes, msg.name || '', msg.is_system, msg.is_user, id);
+            // v1.12.2：显示层词汇替换改为「字符串层」（跟酒馆正则 getRegexedString 同一原理）：
+            // 先在 msg.mes 的副本上做词汇替换，再交给 messageFormatting 渲染。
+            // 美化结构（<details>/<style> 等）由 messageFormatting 内部的正则在此之后生成，
+            // 词汇替换发生在字符串层、先于渲染，所以绝不会碰到美化结构 —— 无需再在 DOM 上补刀。
+            const displayMes = applyReplacements(msg.mes, 'display');
+            el.innerHTML = messageFormatting(displayMes, msg.name || '', msg.is_system, msg.is_user, id);
             if (settings.thinkingFold) applyThinkingFold(id);
-            applyDisplayReplace(id);
         });
     } catch (e) { console.warn('[余温工具箱] 刷新显示替换失败:', e); }
 }
