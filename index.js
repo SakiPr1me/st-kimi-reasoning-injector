@@ -125,7 +125,7 @@ const UI = {
         dsEffortLabel: "Deepseek思考强度：", dsEffortOff: "off（不注入，用 DeepSeek 默认 high）", dsEffortLow: "low（flash: low / pro: high）", dsEffortHigh: "high（flash: high / pro: high）", dsEffortXhigh: "xhigh（flash: high / pro: max）", dsEffortMax: "max（flash: max / pro: max）",
         k3EffortLabel: "Kimi3 思考强度：", k3EffortOff: "off（不注入，用 K3 默认 max）", k3EffortLow: "low（思考快）", k3EffortHigh: "high", k3EffortMax: "max（思考最久）",
         injectLabel: "注入破限：", injectStep1: "step 1：中破限·原生思维链夺舍（reasoning_content注入）", injectStep2: "step 2：强破限·正文输出思维链夺舍（partial注入）",
-        injectTitle: "注入", modelTitle: "模型参数", rerollTitle: "自动重roll", autoStopTitle: "自动截断", beautifyTitle: "思维链美化折叠", fixTitle: "修正", wordTitle: "替换（清理标签、烦人字）",
+        injectTitle: "注入", modelTitle: "模型参数", rerollTitle: "自动重roll", autoStopTitle: "自动截断", beautifyTitle: "思维链美化折叠", fixTitle: "不常用", wordTitle: "替换（清理标签、烦人字）",
         targetLabel: "注入模式：", targetKimi: "KIMI 注入（默认，Meta 起手，<cot> 可注入）", targetDs: "DS 注入（We need 起手，触发 DS 最大思考，无 <cot>）",
         targetCustom: "自定义", customAdd: "＋ 追加模板", customDel: "删除", customName: "自定义模板", customHint: "选中后可在 Reasoning Content 里直接编辑；切语言不会覆盖自定义内容。",
         rcLabel: "Reasoning Content：",
@@ -148,8 +148,27 @@ const UI = {
         wordEnabled: "启用（生成后自动应用）", wordAdd: "+ 添加规则",
         wordHint: "每行：查找→替换，模式可选简单/正则；勾选应用层（仅显示 / 仅后端提示词，可都勾）。规则勿碰 &lt;scene&gt;/&lt;content&gt; 等标签。",
         wrEnabled: "启用该规则", wrFind: "查找", wrReplace: "替换", wrSimple: "简单", wrRegex: "正则", wrDisplay: "仅显示", wrPrompt: "仅后端提示词", wrDelete: "删除",
-        wrApplyHist: "应用至以往所有(如奇怪绰号)", wrUndo: "回退修改", wrUndoTitle: "恢复该条规则「应用至以往所有」修改前的所有历史消息原文",
-    },
+        wrApplyHist: "修改所有铅笔内真实字", wrUndo: "回退修改", wrUndoTitle: "恢复该条规则「修改所有铅笔内真实字」修改前的所有历史消息原文",
+        tagTitle: "标签修复",
+        tagHint: "📌 缩进 = 嵌套，不缩进的互为同级。\n🔍 自动修复 AI 输出缺失的标签闭合。",
+        tagTreeLabel: "标签树（缩进 = 嵌套）",
+        tagContainerTitle: "🔻 小剧场/HTML 容器",
+        tagContainerHint1: "① 容器标签（扫描时这些标签的内部一律跳过、保留标签本身。一个一行，可多个）：",
+        tagAskOnDisputed: "扫描时询问",
+        tagScanReplace: "🔄 全量扫描",
+        tagScanAppend: "📎 补充扫描",
+        tagFixLast: "🔧 修复最后一条",
+        tagUndo: "↩️ 回退",
+        tagReset: "↺ 重置为默认标签树",
+        tagAutoFix: "每轮自动修复",
+        tagWrapMissing: "补全整对丢失",
+        tagWarnAuto: "⚠️ 每轮自动修复＝AI 回复完自动修一遍标签。出问题点「↩️ 回退」。",
+        tagWarnWrap: "⚠️ 谨慎。标签整对丢失时靠前后邻居猜着补，偶尔猜错。",
+        tagChkInline: "输入框旁",
+        tagChkFloat: "悬浮按钮",
+        tagChkMenu: "扩展菜单",
+        tagSlashHint: "也可用 /fix-tags 斜杠命令"
+        },
     en: {
         pluginName: "Yu Wen Toolkit", enabled: "Plugin Toggle",
         langLabel: "Language: ", langZh: "中文 (Default)", langEn: "English", langKo: "한국어",
@@ -158,7 +177,7 @@ const UI = {
         dsEffortLabel: "DeepSeek Effort: ", dsEffortOff: "off (no inject, DeepSeek default high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 Effort: ", k3EffortOff: "off (no inject, K3 default max)", k3EffortLow: "low (fast thinking)", k3EffortHigh: "high", k3EffortMax: "max (longest thinking)",
         injectLabel: "Injection Modes: ", injectStep1: "step 1: medium jailbreak - native CoT takeover (reasoning_content)", injectStep2: "step 2: strong jailbreak - body CoT takeover (partial)",
-        injectTitle: "Injection", modelTitle: "Model Settings", rerollTitle: "Auto Reroll", autoStopTitle: "Auto-Stop", beautifyTitle: "CoT Fold Beautify", fixTitle: "Fix", wordTitle: "Replace (Cleanup Tags & Words)",
+        injectTitle: "Injection", modelTitle: "Model Settings", rerollTitle: "Auto Reroll", autoStopTitle: "Auto-Stop", beautifyTitle: "CoT Fold Beautify", fixTitle: "Uncommon", wordTitle: "Replace (Cleanup Tags & Words)",
         targetLabel: "Injection Target: ", targetKimi: "KIMI Injection (default, Meta opener, <cot> allowed)", targetDs: "DS Injection (We need opener, triggers DS max thinking, no <cot>)",
         targetCustom: "Custom", customAdd: "+ Add Template", customDel: "Delete", customName: "Custom Template", customHint: "Edit the content in Reasoning Content once selected; language switch won't touch custom content.",
         rcLabel: "Reasoning Content: ",
@@ -181,7 +200,26 @@ const UI = {
         wordHint: "Each row: find → replace; mode simple/regex; scope checkboxes (display-only / prompt-only, both allowed). Don't touch &lt;scene&gt;/&lt;content&gt; tags.",
         wrEnabled: "Enable this rule", wrFind: "Find", wrReplace: "Replace", wrSimple: "Simple", wrRegex: "Regex", wrDisplay: "Display only", wrPrompt: "Prompt only", wrDelete: "Delete",
         wrApplyHist: "Apply to all history (e.g. weird nicknames)", wrUndo: "Undo Changes", wrUndoTitle: "Restore all historical messages to their state before this rule's Apply-to-All",
-    },
+        tagTitle: "Tag Fix",
+        tagHint: "📌 Indent = nesting, siblings at same level.\n🔍 Auto-fix missing tag closes in AI output.",
+        tagTreeLabel: "Tag Tree (indent = nesting)",
+        tagContainerTitle: "🔻 Theater/HTML Container",
+        tagContainerHint1: "① Container tags (scan skips inside these, keeps the tag itself. One per line, multiple OK):",
+        tagAskOnDisputed: "Ask when scanning",
+        tagScanReplace: "🔄 Full Scan",
+        tagScanAppend: "📎 Append Scan",
+        tagFixLast: "🔧 Fix Last",
+        tagUndo: "↩️ Undo",
+        tagReset: "↺ Reset Tags",
+        tagAutoFix: "Auto-fix each round",
+        tagWrapMissing: "Fill missing pair",
+        tagWarnAuto: "⚠️ Auto-fix = fix tags after each AI reply. If issues, click \"↩️ Undo\".",
+        tagWarnWrap: "⚠️ Use with care. When whole tag pairs are lost, guess from neighbors; occasionally wrong.",
+        tagChkInline: "Near input",
+        tagChkFloat: "Floating button",
+        tagChkMenu: "Extension menu",
+        tagSlashHint: "Also use /fix-tags command"
+        },
     ko: {
         pluginName: "위온 툴킷", enabled: "플러그인 스위치",
         langLabel: "언어 / Language: ", langZh: "中文 (기본)", langEn: "English", langKo: "한국어",
@@ -190,7 +228,7 @@ const UI = {
         dsEffortLabel: "DeepSeek 강도: ", dsEffortOff: "off (주입 안 함, DeepSeek 기본 high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 강도: ", k3EffortOff: "off (주입 안 함, K3 기본 max)", k3EffortLow: "low (빠른 사고)", k3EffortHigh: "high", k3EffortMax: "max (가장 긴 사고)",
         injectLabel: "주입 모드: ", injectStep1: "step 1: 중간 탈옥·네이티브 CoT 탈취 (reasoning_content)", injectStep2: "step 2: 강한 탈옥·본문 CoT 탈취 (partial)",
-        injectTitle: "주입", modelTitle: "모델 설정", rerollTitle: "자동 reroll", autoStopTitle: "자동 중단", beautifyTitle: "CoT 접기 미화", fixTitle: "보정", wordTitle: "치환 (태그·거슬리는 단어 정리)",
+        injectTitle: "주입", modelTitle: "모델 설정", rerollTitle: "자동 reroll", autoStopTitle: "자동 중단", beautifyTitle: "CoT 접기 미화", fixTitle: "비상용", wordTitle: "치환 (태그·거슬리는 단어 정리)",
         targetLabel: "주입 대상: ", targetKimi: "KIMI 주입 (기본, Meta 시작, <cot> 가능)", targetDs: "DS 주입 (We need 시작, DS 최대 사고 유발, <cot> 없음)",
         targetCustom: "커스텀", customAdd: "＋ 템플릿 추가", customDel: "삭제", customName: "커스텀 템플릿", customHint: "선택 후 Reasoning Content에서 직접 편집 가능. 언어 전환 시 커스텀 내용은 덮어쓰지 않습니다.",
         rcLabel: "Reasoning Content: ",
@@ -213,7 +251,26 @@ const UI = {
         wordHint: "각 행: 찾기→바꾸기; 모드 simple/정규식; 적용 범위 체크 (표시 전용 / 프롬프트 전용, 둘 다 가능). &lt;scene&gt;/&lt;content&gt; 등 태그는 건드리지 마세요.",
         wrEnabled: "이 규칙 활성화", wrFind: "찾기", wrReplace: "바꾸기", wrSimple: "단순", wrRegex: "정규식", wrDisplay: "표시 전용", wrPrompt: "프롬프트 전용", wrDelete: "삭제",
         wrApplyHist: "이전 전체에 적용 (예: 이상한 별명)", wrUndo: "변경 되돌리기", wrUndoTitle: "이 규칙의 전체 적용 전 모든 과거 메시지 원문 복원",
-    }
+        tagTitle: "태그 수정",
+        tagHint: "📌 들여쓰기 = 중첩, 들여쓰지 않으면 동급.\n🔍 AI 출력에서 누락된 태그 닫기를 자동 수정.",
+        tagTreeLabel: "태그 트리 (들여쓰기 = 중첩)",
+        tagContainerTitle: "🔻 연극/HTML 컨테이너",
+        tagContainerHint1: "① 컨테이너 태그 (스캔 시 내부 건너뜀, 태그 자체는 유지. 한 줄에 하나, 여러 개 가능):",
+        tagAskOnDisputed: "스캔 시 묻기",
+        tagScanReplace: "🔄 전체 스캔",
+        tagScanAppend: "📎 추가 스캔",
+        tagFixLast: "🔧 마지막 수정",
+        tagUndo: "↩️ 되돌리기",
+        tagReset: "↺ 태그 초기화",
+        tagAutoFix: "매 라운드 자동 수정",
+        tagWrapMissing: "누락 쌍 채우기",
+        tagWarnAuto: "⚠️ 자동 수정 = 각 AI 답변 후 태그 수정. 문제 시 \"↩️ 되돌리기\".",
+        tagWarnWrap: "⚠️ 주의. 태그 쌍이 통째로 사라졌을 때 이웃에서 추측, 가끔 틀림.",
+        tagChkInline: "입력창 옆",
+        tagChkFloat: "플로팅 버튼",
+        tagChkMenu: "확장 메뉴",
+        tagSlashHint: "/fix-tags 명령도 사용 가능"
+        }
 };
 // 按当前语言取文案；缺 key 时回退中文
 function t(key) {
@@ -700,25 +757,47 @@ function checkStreamingAbort(messageId) {
 // messageTextDom.innerHTML 重写 + reasoningHandler.finish updateDom），消息高度骤变，
 // 浏览器把滚动条 clamp 到楼层顶部。原生思维链模式下 kimi 折叠不参与，此兜底覆盖所有情况：
 // 流式每 token 记录当前滚动位置 → 生成结束后等 DOM 稳定（双 rAF）恢复。
-let lastStreamScrollTop = null;
+let lastStreamScrollTop = null;    // 流式最后记录的滚动位置
+let lastStreamScrollHeight = 0;   // 流式最后记录的 scrollHeight(生成时聊天总高)
 eventSource.on(event_types.STREAM_TOKEN_RECEIVED, () => {
     if (!settings.keepScrollOnGenerate) return;
+    // 只记录轻量数值(读一次 scrollTop/scrollHeight, 绝不做每 token DOM 遍历——那会卡死生成)
     const chatEl = document.getElementById('chat');
-    if (chatEl) lastStreamScrollTop = chatEl.scrollTop;
+    if (chatEl) { lastStreamScrollTop = chatEl.scrollTop; lastStreamScrollHeight = chatEl.scrollHeight; }
 });
-eventSource.on(event_types.GENERATION_ENDED, () => {
-    if (!settings.keepScrollOnGenerate) return;
-    if (lastStreamScrollTop === null) return;
-    const target = lastStreamScrollTop;
+eventSource.on(event_types.GENERATION_ENDED, () => { /* 恢复交给 MESSAGE_RECEIVED(finalize 重渲染落实后) */ });
+// ===== 修复"生成完跳顶"的最终方案：回到你生成时正在看的位置 =====
+// 症状根因：ST finalize 重建新消息 DOM，消息高度骤变 -> 浏览器把 scrollTop clamp 回顶部(跳顶)。
+// 关键认知：你在看新消息(生成时被钉在底部/看流式结尾)时，finalize 后要想看到"生成完的内容结尾"
+//          必须滚到【finalize 后重新算出的新底部】(旧的 scrollTop 数值是 finalize 前高度，失效会偏上)。
+//          而在看历史中段时，保持原位不动，不打扰你。
+// 判断"是否在看底部"用的是【生成时】的 scrollHeight(不是 finalize 后的——否则会误判)。
+eventSource.on(event_types.MESSAGE_RECEIVED, () => {
+    if (!settings.keepScrollOnGenerate) { lastStreamScrollTop = null; return; }
+    const chatEl = document.getElementById('chat');
+    if (!chatEl) { lastStreamScrollTop = null; return; }
+    const BEFORE = lastStreamScrollTop;
+    const GEN_H = lastStreamScrollHeight;
     lastStreamScrollTop = null;
-    requestAnimationFrame(() => requestAnimationFrame(() => {
+    lastStreamScrollHeight = 0;
+    if (BEFORE === null || BEFORE === undefined) return;
+    const restore = () => {
         try {
-            const chatEl = document.getElementById('chat');
-            if (chatEl) chatEl.scrollTop = target;
-        } catch (e) { /* 滚动恢复失败静默 */ }
-    }));
+            const el = document.getElementById('chat');
+            if (!el) return;
+            const maxScroll = el.scrollHeight - el.clientHeight;   // finalize 后最终底部
+            const genBottom = GEN_H - el.clientHeight;             // 生成时底部(视口高不变)
+            if (BEFORE >= genBottom - 150) {
+                el.scrollTop = Math.max(0, maxScroll);             // 生成时在看底部(新消息) -> 滚到最终底部看到完整结尾
+            } else {
+                el.scrollTop = Math.max(0, Math.min(BEFORE, maxScroll)); // 看历史 -> 保持原位
+            }
+        } catch (e) { /* 静默 */ }
+    };
+    // finalize 渐进重建可能延续 1-2 秒：双 rAF 一次 + 两档延迟兜底，抵抗被顶走
+    requestAnimationFrame(() => requestAnimationFrame(restore));
+    [400, 1200].forEach((d) => setTimeout(restore, d));
 });
-
 // 自动截断：流式中检测到指定标记（如 <NG_scene>）立即停止生成（省 token，不重roll）。
 // 简单方案：STREAM_TOKEN_RECEIVED 单 token 检测（用户原版方式，<NG_scene> 通常单 chunk 完整出现，零开销）。
 // ⚠️ 只检测正文流式 token：原生思维链（reasoning_content 通道）走 ST 的 state.reasoning 单独通道，
@@ -1892,7 +1971,7 @@ function initSettingsPanel() {
 <div class="kimi-sep"></div>
 
 <!-- ═══ 注入（默认展开）═══ -->
-<details open class="kimi-card">
+<details class="kimi-card">
 <summary><i class="fa-solid fa-bolt kimi-card-ico" aria-hidden="true"></i>${t('injectTitle')}</summary>
 <div class="kimi-card-body">
 
@@ -2075,6 +2154,10 @@ ${renderWordReplaceRows()}
 <p class="kimi-hint">${t('wordHint')}</p>
 </div>
 </details>
+
+
+<!-- ═══ 标签修复(原st-tag) ═══ -->
+<div id="${extensionName}_tag_slot"></div>
 
 <!-- ═══ 其他功能 ═══ -->
 <details class="kimi-card">
@@ -2519,8 +2602,1390 @@ partial
     updateRerollStatus();
     // 思维链计时常驻（interval 幂等，覆盖生成中/结束后/切聊天所有阶段）
     if (settings.reasoningTimer) startReasoningTimer();
+    // v1.13.0: 跟随余温面板重建，重新挂载「标签修复」设置卡（切语言/重渲染时保持存在，幂等）
+    if (typeof stTagMountSettings === 'function') stTagMountSettings();
 }
 
 // 全局事件只绑定一次（语言切换重渲染 initSettingsPanel 时不会重复监听）
 eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, onSettingsReady);
 jQuery(initSettingsPanel);
+
+
+// ============================================
+// ===== 合并模块：一键标签修复 (原 st-tag-auto-fixer) =====
+// ============================================
+(function () {
+
+// [tag-auto-fixer] IIFE 加载开始
+console.log('[TagAutoFixer-merged] IIFE executed, setting up');
+// eventSource / event_types：script.js 已 re-export（SillyTavern/public/script.js 第 325-326 行）
+// 供「每轮输出结束自动修」监听 MESSAGE_RECEIVED 事件
+
+
+const extensionName = "tag_auto_fixer";
+const defaultTagTree = `scene
+content
+Danmaku
+choice
+todo
+  R
+remind
+Events
+  I
+zy
+small_theater_1
+small_theater_2
+mutter`;
+
+// 仅供"自动识别容器"内部排除用：这些是 HTML 标签本身，绝不能把它们当"小剧场容器"自动填入。
+// ⚠️ 它不影响扫描——任何标签（包括 div/span/code）都能正常扫进树。
+// summary 已特意移除——它是很多 RP 格式的正式标签，不受此名单约束。
+const HTML_TAG_NAMES = [
+	'html', 'head', 'body', 'div', 'span', 'p', 'b', 'i', 'em', 'strong', 'u', 's',
+	'small', 'sub', 'sup', 'br', 'hr', 'a', 'img', 'ul', 'ol', 'li', 'table', 'tr',
+	'td', 'th', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'code',
+	'section', 'article', 'nav', 'footer', 'header', 'aside', 'form', 'input',
+	'button', 'label', 'select', 'option', 'style', 'script', 'meta', 'link',
+	'title', 'font', 'center', 'marquee', 'abbr', 'cite', 'mark', 'ins', 'del',
+	'kbd', 'samp', 'var', 'q', 'iframe', 'video', 'audio', 'caption', 'tbody',
+	'thead', 'tfoot', 'col', 'colgroup', 'fieldset', 'legend', 'textarea', 'details',
+	'dialog', 'main', 'figure', 'figcaption', 'picture', 'source', 'track',
+];
+
+const defaultSettings = {
+	tagTree: defaultTagTree,
+	showInlineBtn: true,
+	showFloatingBtn: false,
+	showMenuBtn: true,
+	autoFixEnabled: false,   // 每轮输出结束自动修（默认关，谨慎勾选）
+	wrapMissingEnabled: false, // 智能补全：标签整块丢失时推断补回（默认关，谨慎勾选）
+	htmlContainer: 'extra',   // 小剧场/HTML 容器标签：扫描时其内部一律跳过（可多个，一行一个）
+	askOnDisputed: true,      // 扫描时发现"不在树里的疑似 HTML 块" → 弹窗让用户选：进树还是进容器
+};
+if (!extension_settings[extensionName]) extension_settings[extensionName] = defaultSettings;
+const settings = extension_settings[extensionName];
+if (!settings.tagTree) settings.tagTree = defaultTagTree;
+if (settings.showInlineBtn === undefined) settings.showInlineBtn = true;
+if (settings.showFloatingBtn === undefined) settings.showFloatingBtn = false;
+if (settings.showMenuBtn === undefined) settings.showMenuBtn = true;
+if (settings.autoFixEnabled === undefined) settings.autoFixEnabled = false;
+if (settings.wrapMissingEnabled === undefined) settings.wrapMissingEnabled = false;
+if (settings.htmlContainer === undefined) settings.htmlContainer = 'extra';
+if (settings.askOnDisputed === undefined) {
+	// 迁移旧键 autoDetectContainer（旧版是"自动填入容器"，现在改成"弹窗询问"）
+	settings.askOnDisputed = settings.autoDetectContainer !== undefined ? settings.autoDetectContainer : true;
+	delete settings.autoDetectContainer;
+}
+
+// ========== 解析标签树（缩进 → 嵌套层级）==========
+
+// 缩进 → 嵌套层级：1 个 Tab = 1 层，2 个空格 = 1 层。
+// 修复：旧逻辑 Math.round(空白字符数 / 2) 对 Tab 缩进会把多级（如 \t\tR）拉平到同级，
+//       导致 R 被误判为 todo 的同级而非子级。这里按"Tab 即一层、两空格即一层"精确换算。
+function indentLevel(line) {
+	const m = line.match(/^[ \t]*/);
+	if (!m || m[0].length === 0) return 0;
+	let level = 0;
+	for (const ch of m[0]) level += (ch === '\t') ? 1 : 0.5;
+	return Math.max(1, Math.round(level));
+}
+
+function parseTagTree() {
+	const lines = settings.tagTree.split('\n').filter(l => l.trim());
+	const allTags = new Set();
+	const siblings = new Set();
+	const children = {}; // { parentName: Set of childNames }
+
+	const stack = [];
+	for (const line of lines) {
+		const rawIndent = line.search(/\S/);
+		const name = line.trim();
+		allTags.add(name);
+		if (rawIndent === 0) siblings.add(name);
+
+		const depth = indentLevel(line);
+		while (stack.length > 0 && stack[stack.length - 1].depth >= depth) stack.pop();
+		if (stack.length > 0) {
+			const parent = stack[stack.length - 1].name;
+			if (!children[parent]) children[parent] = new Set();
+			children[parent].add(name);
+		}
+		stack.push({ name, depth });
+	}
+
+	return { allTags: [...allTags], siblings, children };
+}
+
+// ========== 自动识别"小剧场/HTML 容器" ==========
+// 护栏（全部满足才算候选）：
+//   1. 顶层块（不嵌套在其它块里）
+//   2. 名字不在当前标签树里（树里的是用户自己的结构标签，绝不猜）
+//   3. 不在已配置的容器里、也不在 HTML 标签本身（excludeTags）
+//   4. 块内部有明显 HTML 特征（div/span/table 等标签，或 class=/style= 等属性）
+// 返回候选名字列表（按出现顺序，已去重）。
+function detectHtmlContainer(mes, treeNames, containerNames, excludeTags) {
+	const re = /<\/?([a-zA-Z_][a-zA-Z0-9_.-]*)\b[^>]*?>/g;
+	const events = [];
+	let m;
+	while ((m = re.exec(mes)) !== null) {
+		events.push({ name: m[1], isClose: m[0].startsWith('</'), pos: m.index, len: m[0].length });
+	}
+
+	// 栈式配对：记录每个完整块区间及其嵌套深度
+	const stack = [];
+	const ranges = [];
+	for (const ev of events) {
+		if (!ev.isClose) {
+			stack.push({ name: ev.name, startEnd: ev.pos + ev.len });
+		} else {
+			for (let i = stack.length - 1; i >= 0; i--) {
+				if (stack[i].name.toLowerCase() === ev.name.toLowerCase()) {
+					const op = stack.splice(i, 1)[0];
+					ranges.push({ name: op.name, startEnd: op.startEnd, endPos: ev.pos, depth: stack.length });
+					break;
+				}
+			}
+		}
+	}
+
+	const HTML_SIG_TAGS = /<(?:div|span|table|tr|td|th|img|a|ul|ol|li|style|script|form|input|button|label|select|option|iframe|video|audio|marquee|nav|header|footer|section|article|br|hr)\b/i;
+	const HTML_SIG_ATTRS = /\b(?:class|style|id|width|height|src|href|onclick|onload|background|color|font-family|font-size)\s*=/i;
+
+	const cands = [];
+	for (const r of ranges) {
+		if (r.depth !== 0) continue;
+		if (treeNames.has(r.name)) continue;
+		if (containerNames.has(r.name)) continue;
+		if (excludeTags.has(r.name.toLowerCase())) continue;
+		const inner = mes.slice(r.startEnd, r.endPos);
+		if (HTML_SIG_TAGS.test(inner) || HTML_SIG_ATTRS.test(inner)) cands.push(r.name);
+	}
+	return [...new Set(cands)];
+}
+
+// ========== 询问用户：争议块进树还是进容器 ==========
+// 返回 Promise<'container' | 'tree' | 'ignore'>
+function askContainerChoice(candidate) {
+	return new Promise((resolve) => {
+		const modalId = `${extensionName}_ask_modal`;
+		$(`#${modalId}`).remove();
+		const $overlay = $(`
+			<div id="${modalId}" style="position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center">
+			<div style="background:var(--secondary-surface,#fff);border-radius:8px;padding:18px 22px;max-width:440px;box-shadow:0 4px 20px rgba(0,0,0,.4)">
+			<b style="font-size:0.95em">🔍 检测到疑似小剧场/HTML 块</b>
+			<p style="font-size:0.8em;margin:8px 0;color:var(--grey_color);line-height:1.5">
+			标签 <code>&lt;${candidate}&gt;</code> 不在你的标签树里，但内部有明显 HTML 特征。<br>
+			你希望它作为？
+			</p>
+			<div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+			<button class="menu_button" data-v="tree">🌳 进树（结构标签）</button>
+			<button class="menu_button" data-v="container">📦 进容器（HTML/小剧场）</button>
+			</div>
+			</div>
+			</div>`);
+		$('body').append($overlay);
+		const done = (v) => { $overlay.remove(); resolve(v); };
+		$overlay.find('button').on('click', function() { done($(this).attr('data-v')); });
+		$overlay.on('click', function(e) { if (e.target === this) done('ignore'); });
+	});
+}
+
+// ========== 扫描消息、重建标签树 ==========
+
+async function scanAndFill(replaceMode = false) {
+	const ctx = getContext();
+	if (!ctx?.chat?.length) { toastr?.warning?.('没有聊天消息'); return; }
+
+	let lastMsg = null;
+	for (let i = ctx.chat.length - 1; i >= 0; i--) {
+		if (!ctx.chat[i].is_user) { lastMsg = ctx.chat[i]; break; }
+	}
+	if (!lastMsg) { toastr?.warning?.('未找到AI消息'); return; }
+
+	// 清理干扰块
+	let clean = lastMsg.mes.replace(/<!DOCTYPE[\s\S]*?<\/html>/gi, '');
+	clean = clean.replace(/<xs:schema[\s\S]*?<\/xs:schema>/gi, '');
+	clean = clean.replace(/<dream_plot[\s\S]*?<\/dream_plot>/gi, '');
+	clean = clean.replace(/<story_plot[\s\S]*?<\/story_plot>/gi, '');
+	clean = clean.replace(/<output_format>[\s\S]*?<\/output_format>/gi, '');
+
+	// 树内声明的名字：权威依据（已在树里的任何名字都保留，扫描/跳过都不碰它）
+	const treeNames = new Set(settings.tagTree.split('\n').map(l => l.trim()).filter(Boolean));
+
+	// 小剧场/HTML 容器：用户可配置的标签名（默认 extra）。扫描时这些标签的内部一律跳过（保留标签本身）。
+	let containerNames = new Set((settings.htmlContainer || '').split(/[\s,]+/).filter(Boolean));
+
+	// 争议块询问（可选）：发现"树外未知顶层块 + 明显 HTML 特征" → 弹窗让用户决定：进树还是进容器。
+	// HTML 标签本身（div/span 等）绝不会出现在候选里。
+	if (settings.askOnDisputed) {
+		try {
+			const cands = detectHtmlContainer(lastMsg.mes, treeNames, containerNames, new Set(HTML_TAG_NAMES));
+			if (cands.length === 1 && !containerNames.has(cands[0])) {
+				const choice = await askContainerChoice(cands[0]);
+				if (choice === 'container') {
+					containerNames.add(cands[0]);
+					settings.htmlContainer = [...containerNames].join('\n');
+					saveSettingsDebounced();
+					toastr?.info?.(`📦 <${cands[0]}> 已加入容器名单（以后扫描内部一律跳过）`);
+				} else if (choice === 'tree') {
+					toastr?.info?.(`🌳 <${cands[0]}> 将按结构标签扫描进树`);
+				}
+			} else if (cands.length > 1) {
+				toastr?.info?.(`🔍 检测到多个疑似小剧场标签（${cands.join('、')}），请在设置里手动指定`);
+			}
+		} catch (e) {
+			console.warn('[TagAutoFixer] 弹窗询问失败:', e);
+		}
+	}
+
+	// 挖空容器内部（保留容器标签本身）：容器里的 HTML/杂物标签一律不进扫描
+	for (const nm of containerNames) {
+		const esc = nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+		clean = clean.replace(new RegExp(`(<${esc}(?:\\s[^>]*)?>)[\\s\\S]*?(<\\/${esc}(?:\\s[^>]*)?>)`, 'gi'), '$1$2');
+	}
+
+	// 拆出所有标签事件——不做任何 HTML 名字过滤，任何标签都能扫进树。
+	// 噪音交给"容器挖空"兜底；重复多次的内联标签会被下面的内联过滤自动丢弃。
+	const tagRe = /<\/?([a-zA-Z_][a-zA-Z0-9_.-]*)\b[^>]*?(?<!\/)>/g;
+	const allTags = [];
+	const tagCount = {};
+
+	let m;
+	while ((m = tagRe.exec(clean)) !== null) {
+		const name = m[1];
+		allTags.push({ name, isClose: m[0].startsWith('</'), pos: m.index });
+		tagCount[name] = (tagCount[name] || 0) + 1;
+	}
+
+	if (!allTags.length) { toastr?.info?.('未检测到任何标签'); return; }
+
+	// 构建完整闭合区间
+	const ranges = [];
+	const openStack = [];
+	for (const t of allTags) {
+		if (!t.isClose) {
+			openStack.push({ name: t.name, start: t.pos });
+		} else {
+			// 最近匹配：从后往前找同名开标签
+			for (let i = openStack.length - 1; i >= 0; i--) {
+				if (openStack[i].name === t.name) {
+					ranges.push({ name: t.name, start: openStack[i].start, end: t.pos, children: new Set() });
+					openStack.splice(i, 1);
+					break;
+				}
+			}
+		}
+	}
+
+	// ===== 关键修复：当 ranges 为空时的回退逻辑 =====
+	if (!ranges.length) {
+		// AI 可能掉了闭合标签。从 allTags 直接检测嵌套关系。
+		const uniqueNames = [...new Set(allTags.map(t => t.name))];
+		console.log('[TagAutoFixer] 未找到完整闭合对，从孤儿标签推断。检测到的标签:', uniqueNames);
+
+		// 检测 enclosure：即使没有完整闭合对，也能通过栈匹配找到大多数区间
+		const enclosureMap = {}; // { name: Set of enclosed tag names }
+		for (const name of uniqueNames) enclosureMap[name] = new Set();
+
+		const tempStack = []; // [{ name, startPos }]
+		const tempPairs = []; // [{ name, start, end }]
+
+		for (const t of allTags) {
+			if (!t.isClose) {
+				tempStack.push({ name: t.name, startPos: t.pos });
+			} else {
+				for (let i = tempStack.length - 1; i >= 0; i--) {
+					if (tempStack[i].name === t.name) {
+						tempPairs.push({ name: t.name, start: tempStack[i].startPos, end: t.pos });
+						// 检查这个区间内包含的其他标签名
+						for (const other of allTags) {
+							if (other.name !== t.name && other.pos > tempStack[i].startPos && other.pos < t.pos) {
+								enclosureMap[t.name].add(other.name);
+							}
+						}
+						tempStack.splice(i, 1);
+						break;
+					}
+				}
+			}
+		}
+
+		// 孤儿标签（栈中剩余）：它们可能也包含其他标签
+		for (const orphan of tempStack) {
+			for (const other of allTags) {
+				if (other.name !== orphan.name && other.pos > orphan.startPos) {
+					enclosureMap[orphan.name].add(other.name);
+				}
+			}
+		}
+
+		// 内联标签判定：出现 >= 2 个闭合对 且 不包含任何其他标签 → 过滤
+		const isStructural = {};
+		for (const name of uniqueNames) {
+			const pairCount = (tagCount[name] || 0) / 2;
+			const hasEnclosure = enclosureMap[name] && enclosureMap[name].size > 0;
+			isStructural[name] = hasEnclosure || pairCount <= 1;
+		}
+
+		// 去除内联标签后重建 enclosure（内联被过滤后，它们的父标签可能也失去 child）
+		const structuralNames = uniqueNames.filter(n => isStructural[n]);
+		const cleanEnclosure = {};
+		for (const name of structuralNames) {
+			cleanEnclosure[name] = new Set();
+			if (enclosureMap[name]) {
+				for (const c of enclosureMap[name]) {
+					if (isStructural[c] && c !== name) cleanEnclosure[name].add(c);
+				}
+			}
+		}
+
+		// 找根级标签（不被任何其他结构标签包含的）
+		const allChildren = new Set();
+		for (const [name, children] of Object.entries(cleanEnclosure)) {
+			for (const c of children) allChildren.add(c);
+		}
+		const roots = structuralNames.filter(n => !allChildren.has(n));
+		// 如果所有都是子标签（嵌套极深），全部作为根级
+		if (!roots.length) roots.push(...structuralNames);
+
+		// 按首次出现位置排序
+		const firstPosMap = {};
+		for (const t of allTags) {
+			if (!t.isClose && structuralNames.includes(t.name) && !(t.name in firstPosMap)) {
+				firstPosMap[t.name] = t.pos;
+			}
+		}
+		roots.sort((a, b) => (firstPosMap[a] ?? 1e9) - (firstPosMap[b] ?? 1e9));
+
+		// 构建缩进树
+		const fallbackTree = [];
+		const vb = new Set(); // visited
+		function walk(name, depth) {
+			if (vb.has(name)) return;
+			vb.add(name);
+			const prefix = '  '.repeat(depth);
+			fallbackTree.push(prefix + name);
+			const kids = [...(cleanEnclosure[name] || [])].filter(c => !vb.has(c));
+			kids.sort((a, b) => (firstPosMap[a] ?? 1e9) - (firstPosMap[b] ?? 1e9));
+			for (const kid of kids) walk(kid, depth + 1);
+		}
+		for (const r of roots) walk(r, 0);
+
+		if (!fallbackTree.length) {
+			toastr?.info?.('扫描完成但未能推断标签层级。请手动调整缩进。');
+			return;
+		}
+
+		const inlineCount = uniqueNames.length - structuralNames.length;
+		settings.tagTree = fallbackTree.join('\n');
+		$(`#${extensionName}_tree`).val(settings.tagTree);
+		saveSettingsDebounced();
+		toastr?.success?.(`✅ 标签树已重建（${structuralNames.length} 个结构标签，${inlineCount} 个内联标签已过滤）`);
+		return;
+	}
+
+	// 有完整闭合对，正常推断父子关系
+	for (const parent of ranges) {
+		for (const child of ranges) {
+			if (child.name !== parent.name && child.start > parent.start && child.end < parent.end) {
+				parent.children.add(child.name);
+			}
+		}
+	}
+
+	// 过滤内联标签：多次出现且无子标签 → 视为内联
+	const hasChildren = new Set();
+	for (const r of ranges) { if (r.children.size > 0) hasChildren.add(r.name); }
+	const kept = new Set();
+	for (const r of ranges) {
+		const count = tagCount[r.name] / 2; // 闭合对数量
+		if (hasChildren.has(r.name) || count <= 1) kept.add(r.name);
+	}
+
+	// 找根级标签（不被任何结构标签包含）
+	const allChildNames = new Set();
+	for (const r of ranges) {
+		if (kept.has(r.name)) {
+			for (const c of r.children) { if (kept.has(c)) allChildNames.add(c); }
+		}
+	}
+	let rootCandidates = ranges.filter(r => kept.has(r.name) && !allChildNames.has(r.name));
+
+	// 回退：如果过滤后根级为空，保留所有标签
+	if (!rootCandidates.length) {
+		rootCandidates = ranges.filter(r => !allChildNames.has(r.name));
+		for (const r of rootCandidates) kept.add(r.name);
+	}
+
+	// ===== 去重 + 合并：同名标签只保留一个，children 取并集 =====
+	const tagMeta = {}; // { name: { firstPos, children: Set } }
+	for (const r of ranges) {
+		if (!kept.has(r.name)) continue;
+		if (!tagMeta[r.name]) {
+			tagMeta[r.name] = { firstPos: r.start, children: new Set() };
+		} else if (r.start < tagMeta[r.name].firstPos) {
+			tagMeta[r.name].firstPos = r.start;
+		}
+		for (const c of r.children) {
+			if (kept.has(c) && c !== r.name) tagMeta[r.name].children.add(c);
+		}
+	}
+
+	// 保留孤儿开标签（掉了闭合的标签）：它们可能是一级父标签
+	for (const orphan of openStack) {
+		if (!tagMeta[orphan.name]) {
+			tagMeta[orphan.name] = { firstPos: orphan.start, children: new Set() };
+		} else if (orphan.start < tagMeta[orphan.name].firstPos) {
+			tagMeta[orphan.name].firstPos = orphan.start;
+		}
+		for (const r of ranges) {
+			if (kept.has(r.name) && r.name !== orphan.name && r.start > orphan.start) {
+				tagMeta[orphan.name].children.add(r.name);
+			}
+		}
+	}
+
+	// 补充模式：合并已有配置的标签树（全量替换模式则跳过此步）
+	if (!replaceMode) {
+		const existingLines = settings.tagTree.split('\n').filter(l => l.trim());
+		const indentStack = [];
+		for (const line of existingLines) {
+			const rawIndent = line.search(/\S/);
+			const name = line.trim();
+			const depth = indentLevel(line);
+			while (indentStack.length > 0 && indentStack[indentStack.length - 1].depth >= depth) {
+				indentStack.pop();
+			}
+			if (!tagMeta[name]) {
+				tagMeta[name] = { firstPos: Infinity, children: new Set() };
+			}
+			if (indentStack.length > 0 && tagMeta[name]?.firstPos === Infinity) {
+				const parent = indentStack[indentStack.length - 1].name;
+				if (!tagMeta[parent]) {
+					tagMeta[parent] = { firstPos: Infinity, children: new Set() };
+				}
+				tagMeta[parent].children.add(name);
+			}
+			indentStack.push({ name, depth });
+		}
+	}
+
+	// 找去重后的根级标签
+	const allChildNamesDedup = new Set();
+	for (const [name, meta] of Object.entries(tagMeta)) {
+		for (const c of meta.children) allChildNamesDedup.add(c);
+	}
+	const rootNames = Object.keys(tagMeta).filter(n => !allChildNamesDedup.has(n));
+	if (!rootNames.length) {
+		rootNames.push(...Object.keys(tagMeta));
+	}
+
+	// 按最早出现位置排序（已有标签在 Infinity，排最后）
+	rootNames.sort((a, b) => (tagMeta[a]?.firstPos ?? 1e9) - (tagMeta[b]?.firstPos ?? 1e9));
+
+	// 构建缩进树（递归，visited 防止循环）
+	const builtTree = [];
+	const visited = new Set();
+	function addBranch(name, depth) {
+		if (visited.has(name)) return;
+		visited.add(name);
+		const meta = tagMeta[name];
+		if (!meta) return;
+		const prefix = '  '.repeat(depth);
+		builtTree.push(prefix + name);
+		const sortedChildren = [...meta.children]
+			.filter(c => tagMeta[c] && c !== name)
+			.sort((a, b) => (tagMeta[a]?.firstPos ?? 0) - (tagMeta[b]?.firstPos ?? 0));
+		for (const childName of sortedChildren) {
+			if (visited.has(childName)) continue;
+			addBranch(childName, depth + 1);
+		}
+	}
+	for (const rootName of rootNames) { addBranch(rootName, 0); }
+
+	if (!builtTree.length) {
+		toastr?.info?.('扫描完成但未能推断标签层级。请手动调整缩进。');
+		return;
+	}
+
+	const newTree = builtTree.join('\n');
+	settings.tagTree = newTree;
+	$(`#${extensionName}_tree`).val(settings.tagTree);
+	saveSettingsDebounced();
+
+	const structureNames = Object.keys(tagMeta).length;
+	const totalNames = new Set(ranges.map(r => r.name)).size;
+	toastr?.success?.(`✅ 标签树已重建（${structureNames} 个结构标签，${totalNames - structureNames} 个内联标签已过滤）`);
+}
+
+// ========== 智能补全：补回「连开带闭整个丢失」的标签块 ==========
+// 仅当 settings.wrapMissingEnabled 为 true 时由 fixTagsInText 调用。
+// 触发条件（全部满足才补，缺一不可）：
+//   1. 该标签在整条消息里完全没有出现（开标签和闭标签一起丢了）；
+//   2. 且满足下面两者之一：
+//      a. 祖先补全：它的某个子/孙标签出现了 → 把子标签连成的连续区域包进它；
+//      b. 夹逼补全：它的前兄弟、后兄弟都完整闭合，中间恰好只缺它一个 → 把夹逼区间包进它。
+// 安全保证：结构正确的消息（该标签还在文里）永远不会被本函数改动；
+//           只有本来就缺了整块的坏消息才会被补。
+
+function wrapMissingTags(body, tags, siblings, children) {
+	const escaped = tags.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+	const tagRe = new RegExp(`<\\/?(${escaped.join('|')})\\b[^>]*?(?<!\\/)>`, 'gi');
+
+	// 树的嵌套深度（用于"从内到外"处理，先补最里层，外层再包住里层）
+	const depthMap = {};
+	for (const root of siblings) {
+		depthMap[root] = 0;
+		(function walk(n, d) {
+			for (const k of (children[n] || [])) { depthMap[k] = d + 1; walk(k, d + 1); }
+		})(root, 0);
+	}
+
+	// 父映射：查某标签的兄弟组（顶层组 = siblings；非顶层组 = 其父的直接子集）
+	const parentMap = {};
+	for (const root of siblings) parentMap[root] = null;
+	for (const [p, kids] of Object.entries(children)) {
+		for (const k of kids) parentMap[k] = p;
+	}
+	function siblingGroup(name) {
+		const p = parentMap[name];
+		return p === null ? [...siblings] : [...(children[p] || [])];
+	}
+
+	// 某标签的全量子孙（不含自身）
+	function descendantsOf(name) {
+		const out = new Set();
+		(function collect(n) {
+			for (const k of (children[n] || [])) { out.add(k); collect(k); }
+		})(name);
+		return out;
+	}
+
+	// 扫描当前文本中的树内标签事件
+	function scanEvents(str) {
+		const evs = [];
+		let m;
+		const re = new RegExp(tagRe.source, tagRe.flags);
+		while ((m = re.exec(str)) !== null) {
+			evs.push({ name: m[1], pos: m.index, len: m[0].length, isClose: m[0].startsWith('</') });
+		}
+		return evs;
+	}
+
+	// 祖先补全：把"不被同级兄弟打断"的连续子标签区域，逐段包进缺失的父标签
+	function wrapAncestor(text, miss, descSet, blockers) {
+		const evs = scanEvents(text);
+		const segs = [];
+		let curStart = -1, curEnd = -1, curClosed = false;
+		for (const e of evs) {
+			if (descSet.has(e.name)) {
+				if (curStart < 0) {
+					// 段必须从一个"开标签"开始（孤立闭合不开启新段）
+					if (!e.isClose) { curStart = e.pos; curEnd = e.pos + e.len; curClosed = false; }
+				} else {
+					curEnd = e.pos + e.len;
+					if (e.isClose) curClosed = true;
+				}
+			} else if (curStart >= 0 && blockers.has(e.name)) {
+				if (curClosed) segs.push({ sPos: curStart, ePos: curEnd });
+				curStart = -1; curEnd = -1; curClosed = false;
+			}
+		}
+		if (curStart >= 0 && curClosed) segs.push({ sPos: curStart, ePos: curEnd });
+		if (!segs.length) return { text, added: 0 };
+
+		// 从后往前插入，保证位置偏移不串
+		segs.sort((a, b) => b.sPos - a.sPos);
+		let added = 0;
+		for (const seg of segs) {
+			// 去掉段尾多余空白，避免拼出双换行
+			const inner = text.slice(seg.sPos, seg.ePos).replace(/\s+$/, '');
+			text = text.slice(0, seg.sPos) + `<${miss}>\n` + inner + `\n</${miss}>` + text.slice(seg.ePos);
+			added += 2;
+		}
+		return { text, added };
+	}
+
+	// 判断某标签是否在文本中"恰好一对、完整闭合"
+	function isFullPair(name, evs) {
+		let open = 0, close = 0;
+		for (const e of evs) {
+			if (e.name === name) (e.isClose ? close++ : open++);
+		}
+		return open === 1 && close === 1;
+	}
+	function lastCloseEnd(name, evs) {
+		let pos = -1;
+		for (const e of evs) if (e.name === name && e.isClose) pos = e.pos + e.len;
+		return pos;
+	}
+	function firstOpenPos(name, evs) {
+		for (const e of evs) if (e.name === name && !e.isClose) return e.pos;
+		return -1;
+	}
+
+	// 夹逼补全：前兄弟闭合、后兄弟闭合、中间恰好只缺这一个标签 → 包夹逼区间
+	function wrapSandwich(text, miss, group) {
+		const evs = scanEvents(text);
+		const idx = group.indexOf(miss);
+		if (idx < 0) return { text, added: 0 };
+
+		// v1.4.1：修正首兄弟缺失补全的语义 —— 按用户期望，`<scene>` 等首兄弟缺失时，
+		// 应「只把文本开头那段普通文字（场景描述/开场白）包进 miss 标签」，后面的兄弟标签保持同级不动。
+		// 因此：文本开头是【普通文字】(非 < 开头) 才补（把这些文字包进 scene）；
+		//       开头直接是标签则没有 scene 文字可包 → 不补（避免空/错误补全）。
+		if (idx === 0) {
+		    // 找第一个出现的兄弟标签作「截止点」：只包它之前的文字
+		    const firstSibEvent = evs.find(e => group.includes(e.name) && !e.isClose);
+		    const rightStart = firstSibEvent ? firstSibEvent.pos : text.length;
+		    const leftEnd = text.search(/\S/); // 文本开头第一个非空白
+		    if (leftEnd < 0 || rightStart < 0 || leftEnd > rightStart) return { text, added: 0 };
+		    // ★ 关键守护：开头必须是【普通文字】（非标签）才补 —— 把这段文字包进 miss；
+		    //   若开头就是标签，说明没有 scene 文字可包，直接不补
+		    if (text[leftEnd] === '<') return { text, added: 0 };
+		    const region = text.slice(leftEnd, rightStart);
+		    const trimmed = region.replace(/^\s+|\s+$/g, '');
+		    if (!trimmed) return { text, added: 0 }; // 空壳不包
+		    // 这段文字区间内不能再夹任何树内标签（否则没法干净归属），跳过
+		    const regionPresent = new Set(scanEvents(region).map(e => e.name));
+		    if (regionPresent.size) return { text, added: 0 };
+		    // 只包文字，后面的兄弟保持不动
+		    text = text.slice(0, leftEnd) + `<${miss}>\n` + trimmed + `\n</${miss}>\n` + text.slice(rightStart);
+		    return { text, added: 2 };
+		}
+
+		let li = -1, ri = -1;
+		for (let i = idx - 1; i >= 0; i--) if (isFullPair(group[i], evs)) { li = i; break; }
+		for (let i = idx + 1; i < group.length; i++) if (isFullPair(group[i], evs)) { ri = i; break; }
+		if (li < 0 || ri < 0) return { text, added: 0 };
+
+		// 左右之间的兄弟，除 miss 外若还有缺失 → 无法归属，跳过
+		const present = new Set(evs.map(e => e.name));
+		for (let i = li + 1; i < ri; i++) {
+			if (i !== idx && !present.has(group[i])) return { text, added: 0 };
+		}
+
+		const leftEnd = lastCloseEnd(group[li], evs);
+		const rightStart = firstOpenPos(group[ri], evs);
+		if (leftEnd < 0 || rightStart < 0 || leftEnd > rightStart) return { text, added: 0 };
+
+		const region = text.slice(leftEnd, rightStart);
+		const trimmed = region.replace(/^\s+|\s+$/g, '');
+		if (!trimmed) return { text, added: 0 }; // 空壳不包
+
+		// 区间里若还夹着其它树内标签（非左右锚点）→ 可能吞并别的内容，跳过
+		const regionPresent = new Set(scanEvents(region).map(e => e.name));
+		for (const nm of regionPresent) {
+			if (nm !== group[li] && nm !== group[ri]) return { text, added: 0 };
+		}
+
+		text = text.slice(0, leftEnd) + `\n<${miss}>\n` + trimmed + `\n</${miss}>\n` + text.slice(rightStart);
+		return { text, added: 2 };
+	}
+
+	// ===== 主流程：处理所有缺失标签，从最深到最浅 =====
+	let text = body;
+	let added = 0;
+
+	const initialEvents = scanEvents(text);
+	const present = new Set(initialEvents.map(e => e.name));
+	const missing = tags.filter(t => !present.has(t) && t in depthMap);
+	missing.sort((a, b) => (depthMap[b] || 0) - (depthMap[a] || 0));
+
+	for (const miss of missing) {
+		const descSet = descendantsOf(miss);
+		const group = siblingGroup(miss);
+		const blockers = new Set(group.filter(n => n !== miss));
+		const hasPresentDesc = scanEvents(text).some(e => descSet.has(e.name));
+
+		let r;
+		if (hasPresentDesc) {
+			r = wrapAncestor(text, miss, descSet, blockers);
+		} else {
+			r = wrapSandwich(text, miss, group);
+		}
+		text = r.text;
+		added += r.added;
+	}
+
+	return { text, added };
+}
+
+// ========== 栈式算法修复标签（同级互斥、补开补闭 + 残缺标签补全）==========
+
+function fixTagsInText(text) {
+	// 防御：非字符串输入(如 null/undefined/数字)直接原样返回，避免后续 wrapMissingTags 崩
+	if (typeof text !== 'string' || text.length === 0) return { text, fixed: 0 };
+	const { allTags: tags, siblings, children } = parseTagTree();
+	if (!tags.length) return { text, fixed: 0 };
+
+	const escaped = tags.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+
+	// ===== 预处理：残缺标签补全（如 </Ad → </Advance>）=====
+	let body = text;
+	let prepFix = 0;
+
+	// 扫描所有 < 或 </ 后跟不完整标签名的情况
+	const partialRe = /<(\/?)([a-zA-Z_][a-zA-Z0-9_.-]*)(?=[^a-zA-Z0-9_.->]|$)/g;
+	const partialFixes = []; // [{ pos, oldLen, replacement }]
+	let pm;
+	while ((pm = partialRe.exec(body)) !== null) {
+		const isClose = pm[1] === '/';
+		const partialName = pm[2];
+		const fullStr = pm[0]; // e.g., "</Adv" or "<Adva"
+
+		// 检查后面是否跟着 >（如果是，则是完整标签，跳过）
+		const after = body.slice(pm.index + fullStr.length);
+		if (after.match(/^\s*>/)) continue;
+
+		// 检查是否本身就是完整标签名（如 </Advance 后面可能有属性）
+		const exactMatch = tags.some(t => t.toLowerCase() === partialName.toLowerCase());
+		if (exactMatch) continue; // 名字完整，只是缺了 >，不算残缺
+
+		// 前缀匹配已知标签
+		const candidates = tags.filter(t => t.toLowerCase().startsWith(partialName.toLowerCase()));
+
+		if (candidates.length === 1) {
+			// 唯一匹配 → 补全
+			const complete = isClose ? `</${candidates[0]}>` : `<${candidates[0]}>`;
+			partialFixes.push({ pos: pm.index, oldLen: fullStr.length, replacement: complete });
+		}
+		// 多个匹配 → 不处理（歧义）
+	}
+
+	// 从后往前应用补全（保持位置偏移不变）
+	partialFixes.sort((a, b) => b.pos - a.pos);
+	for (const pf of partialFixes) {
+		body = body.slice(0, pf.pos) + pf.replacement + body.slice(pf.pos + pf.oldLen);
+		prepFix++;
+	}
+	// ===== 预处理结束 =====
+
+	// 匹配所有完整标签
+	const tagRe = new RegExp(`<\\/?(${escaped.join('|')})\\b[^>]*?(?<!\\/)>`, 'gi');
+
+	const stack = [];         // [{ name }]
+	const orphanCloses = [];   // [{ name, pos }] 孤立的闭合标签（需要补开标签）
+	const fixPoints = [];      // [{ name, pos }] 需要补闭的位置
+	const seenTags = [];       // [{ name, pos, isClose, len }] 所有已匹配的标签位置
+
+	let m;
+	while ((m = tagRe.exec(body)) !== null) {
+		const full = m[0];
+		const name = m[1];
+		const pos = m.index;
+		const isClose = full.startsWith('</');
+		seenTags.push({ name, pos, isClose, len: full.length });
+
+		if (isClose) {
+			// 闭合标签：从栈中找匹配的开标签并弹出
+			let found = -1;
+			for (let i = stack.length - 1; i >= 0; i--) {
+				if (stack[i].name.toLowerCase() === name.toLowerCase()) { found = i; break; }
+			}
+			if (found >= 0) {
+				// 弹出该标签及其以上的所有子标签（子标签没闭合 = AI 掉了）
+				while (stack.length > found) {
+					const popped = stack.pop();
+					if (popped.name.toLowerCase() !== name.toLowerCase()) {
+						fixPoints.push({ name: popped.name, pos });
+					}
+				}
+			} else {
+				orphanCloses.push({ name, pos });
+			}
+		} else {
+			// 开标签：检查同级互斥
+			if (siblings.has(name)) {
+				for (let i = stack.length - 1; i >= 0; i--) {
+					if (siblings.has(stack[i].name) && stack[i].name.toLowerCase() !== name.toLowerCase()) {
+						// 从该同级位置到栈顶全部闭合（先子后父）
+						while (stack.length > i) {
+							const popped = stack.pop();
+							fixPoints.push({ name: popped.name, pos });
+						}
+						break;
+					}
+				}
+			}
+			stack.push({ name });
+		}
+	}
+
+	// ===== 应用补闭：同位置合并为一整块插入（保证内先外后）=====
+	fixPoints.sort((a, b) => b.pos - a.pos);
+	let fixed = prepFix;
+
+	// 合并同位置的 fixPoints
+	const grouped = [];
+	for (let i = 0; i < fixPoints.length; i++) {
+		if (i === 0 || fixPoints[i].pos !== fixPoints[i - 1].pos) {
+			grouped.push({ pos: fixPoints[i].pos, names: [fixPoints[i].name] });
+		} else {
+			grouped[grouped.length - 1].names.push(fixPoints[i].name);
+		}
+	}
+
+	// 补开标签（孤儿闭标签）
+	const orphanFixPoints = []; // [{ pos, name }]
+	const virtualPositions = {}; // { name: pos } 祖先的锚点传给子孙
+
+	// 辅助：nameA 是否是 nameB 的父或祖先
+	function isParentOrAncestor(a, b) {
+		const kids = children[a];
+		if (!kids) return false;
+		if (kids.has(b)) return true;
+		for (const k of kids) { if (isParentOrAncestor(k, b)) return true; }
+		return false;
+	}
+
+	// 收集全量子孙
+	function getDescendants(name) {
+		const result = new Set();
+		(function collect(n) {
+			const kids = children[n];
+			if (!kids) return;
+			for (const k of kids) { result.add(k); collect(k); }
+		})(name);
+		return result;
+	}
+
+	// 是否任意层级的兄弟（共享同一父标签）
+	function areSiblingsAnyLevel(a, b) {
+		for (const kids of Object.values(children)) {
+			if (kids.has(a) && kids.has(b)) return true;
+		}
+		return false;
+	}
+
+	// 子孙优先排序：子标签先确定位置，父标签汇总取最早锚点
+	orphanCloses.sort((a, b) => {
+		if (isParentOrAncestor(a.name, b.name)) return 1;   // a 是父 → a 后处理
+		if (isParentOrAncestor(b.name, a.name)) return -1;  // b 是父 → b 后处理
+		return 0;
+	});
+
+	for (const oc of orphanCloses) {
+		const descendants = getDescendants(oc.name);
+
+		// 策略 A：找最早出现的子孙开标签 + 子孙的虚拟锚点，取最小值
+		const childHits = seenTags.filter(t => !t.isClose && descendants.has(t.name) && t.pos < oc.pos);
+		let earliestPos = childHits.length > 0 ? Math.min(...childHits.map(t => t.pos)) : Infinity;
+
+		// 子孙标签已经被处理过（子孙优先排序），用它们的虚拟锚点作为更早的上界
+		for (const [cName, cPos] of Object.entries(virtualPositions)) {
+			if (isParentOrAncestor(oc.name, cName) && cPos < earliestPos) {
+				earliestPos = cPos;
+			}
+		}
+
+		if (earliestPos < Infinity) {
+			virtualPositions[oc.name] = earliestPos;
+			orphanFixPoints.push({ pos: earliestPos, name: oc.name });
+			continue;
+		}
+
+		// 策略 B：找父/同级开标签锚点
+		// 父标签 → 插在它后面；同级标签 → 插在它前面
+		let anchorPos = 0;
+		for (let i = seenTags.length - 1; i >= 0; i--) {
+			const st = seenTags[i];
+			if (st.pos >= oc.pos || st.isClose) continue;
+			if (isParentOrAncestor(st.name, oc.name)) {
+				anchorPos = st.pos + st.len;  // 父标签：插在它开标签后面
+				break;
+			}
+			if (areSiblingsAnyLevel(st.name, oc.name)) {
+				anchorPos = st.pos;  // 同级标签：插在它前面
+				break;
+			}
+		}
+
+		// 策略 C：anchorPos 仍为 0 → 用祖先的虚拟锚点
+		if (anchorPos === 0) {
+			for (const [pName, pPos] of Object.entries(virtualPositions)) {
+				if (isParentOrAncestor(pName, oc.name) && pPos > anchorPos) {
+					anchorPos = pPos;
+				}
+			}
+		}
+
+		// 锚点钳制：开标签绝不能落在闭标签之后
+		if (anchorPos === 0 || anchorPos > oc.pos) {
+			anchorPos = 0;
+			for (let j = seenTags.length - 1; j >= 0; j--) {
+				if (seenTags[j].pos < oc.pos) {
+					anchorPos = seenTags[j].pos + seenTags[j].len;
+					break;
+				}
+			}
+		}
+
+		virtualPositions[oc.name] = anchorPos;
+		orphanFixPoints.push({ pos: anchorPos, name: oc.name });
+	}
+
+	// 同位置合并：祖先在前（外先内后），拼成一块插入
+	orphanFixPoints.sort((a, b) => {
+		if (a.pos !== b.pos) return a.pos - b.pos;
+		if (isParentOrAncestor(a.name, b.name)) return -1;
+		if (isParentOrAncestor(b.name, a.name)) return 1;
+		return 0;
+	});
+	const mergedOrphans = [];
+	for (const o of orphanFixPoints) {
+		const last = mergedOrphans[mergedOrphans.length - 1];
+		if (last && last.pos === o.pos) { last.names.push(o.name); }
+		else { mergedOrphans.push({ pos: o.pos, names: [o.name] }); }
+	}
+
+	// 从后往前一次性插入所有修复（闭标签 + 孤儿开标签）
+	const allInserts = [...grouped.map(g => ({ pos: g.pos, text: g.names.map(n => `</${n}>\n`).join('') })),
+		...mergedOrphans.map(o => ({ pos: o.pos, text: (o.pos > 0 ? '\n' : '') + o.names.map(n => `<${n}>\n`).join('') }))];
+	allInserts.sort((a, b) => b.pos - a.pos);
+
+	for (const ins of allInserts) {
+		body = body.slice(0, ins.pos) + ins.text + body.slice(ins.pos);
+	}
+	fixed += grouped.reduce((s, g) => s + g.names.length, 0)
+		+ mergedOrphans.reduce((s, o) => s + o.names.length, 0);
+
+	// 尾部补闭合标签（栈中剩余）
+	while (stack.length > 0) {
+		body += `</${stack.pop().name}>\n`;
+		fixed++;
+	}
+
+	// ===== 智能补全（谨慎勾选）：补回"连开带闭整个丢失"的标签块 =====
+	// 只对"树里存在、但全文一次都没出现"的标签动手；结构正确的消息不受影响。
+	if (settings.wrapMissingEnabled) {
+		const wrapResult = wrapMissingTags(body, tags, siblings, children);
+		body = wrapResult.text;
+		fixed += wrapResult.added;
+	}
+
+	return { text: body, fixed };
+}
+
+// ========== 获取 ST 上下文 ==========
+
+function getContext() {
+	try {
+		// 标准扩展：从 ST 主窗口获取
+		if (window.SillyTavern?.getContext) return window.SillyTavern.getContext();
+	} catch (_) {}
+	try {
+		// 回退：iframe 场景
+		if (window.top?.SillyTavern?.getContext) return window.top.SillyTavern.getContext();
+	} catch (_) {}
+	return null;
+}
+
+// ========== 核心：修复最后一条 AI 消息 + 即时渲染 ==========
+
+// 统一的"写入 + 渲染 + 记录撤销"入口。手动修复和自动修复都走这里。
+// TavernHelper 是 Slash Runner 暴露到 window 的稳定 API；
+// setChatMessages 同时负责数据更新 + 保存 + 触发渲染（含 Regex 美化）。
+async function applyFixedMessage(ctx, messageId, text, recordUndo = true) {
+	if (recordUndo) {
+		// fixed 记录写入后的文本，供回退前校验消息是否已被再次改动（防覆盖新内容）
+		undoSlot = { chatId: ctx.chatId ?? null, messageId, original: ctx.chat[messageId]?.mes ?? null, fixed: text };
+		updateUndoBtn();
+	}
+
+	let rendered = false;
+	const TH = window.TavernHelper;
+
+	if (TH?.setChatMessages) {
+		try {
+			await TH.setChatMessages([{ message_id: messageId, message: text }]);
+			rendered = true;
+		} catch (e) {
+			console.warn('[TagAutoFixer] TavernHelper.setChatMessages 失败:', e);
+		}
+	}
+
+	if (!rendered && TH?.refreshOneMessage) {
+		// 回退：手动写数据 + 保存 + 单独触发渲染
+		try {
+			if (ctx.chat[messageId]) ctx.chat[messageId].mes = text;
+			if (ctx.saveChat) await ctx.saveChat();
+			await TH.refreshOneMessage(messageId);
+			rendered = true;
+		} catch (e) {
+			console.warn('[TagAutoFixer] refreshOneMessage 失败:', e);
+		}
+	}
+
+	if (!rendered) {
+		// 最后回退：手动保存数据（可能无法即时刷新显示）
+		if (ctx.chat[messageId]) ctx.chat[messageId].mes = text;
+		if (ctx.saveChat) await ctx.saveChat();
+	}
+
+	return rendered;
+}
+
+// ========== 撤销：回退上一次修复 ==========
+
+let undoSlot = null; // { chatId, messageId, original }（单槽，只记最近一次）
+
+const undoBtnId = `${extensionName}_undo_btn`;      // 主页面右下角浮动按钮（修过之后才出现）
+const undoPanelBtnId = `${extensionName}_undo_panel`; // 设置面板常驻按钮（有可回退内容才可点）
+function updateUndoBtn() {
+	$(`#${undoBtnId}`).remove();
+	const ctx = getContext();
+	// 用 chatId 隔离聊天：切到别的聊天就算作废
+	let valid = false;
+	if (undoSlot && ctx) {
+		const sameChat = !undoSlot.chatId || !ctx.chatId || undoSlot.chatId === ctx.chatId;
+		valid = sameChat && !!ctx.chat?.[undoSlot.messageId];
+	}
+
+	// 面板常驻按钮状态同步
+	const $panelBtn = $(`#${undoPanelBtnId}`);
+	if ($panelBtn.length) {
+		$panelBtn.prop('disabled', !valid).css('opacity', valid ? 1 : 0.4);
+	}
+
+	// 主页面右下角浮动按钮：仅在有可回退项时显示
+	if (!valid) return;
+	$('body').append(`<div id="${undoBtnId}" title="回退上一次修复" style="
+		position:fixed;bottom:130px;right:20px;z-index:9999;
+		background:var(--golden-color, #e0a800);color:#fff;
+		border-radius:16px;padding:6px 14px;font-size:13px;cursor:pointer;
+		box-shadow:0 2px 8px rgba(0,0,0,0.35);user-select:none;opacity:0.95
+	">↩️ 回退修复</div>`);
+	$(`#${undoBtnId}`).on('click', async () => { await undoLastFix(); });
+}
+
+async function undoLastFix() {
+	if (!undoSlot) { toastr?.info?.('没有可回退的修复'); return; }
+	const ctx = getContext();
+	if (!ctx) { toastr?.warning?.('无法获取聊天上下文'); return; }
+	const slot = undoSlot;
+
+	if (slot.chatId && ctx.chatId && slot.chatId !== ctx.chatId) {
+		undoSlot = null; updateUndoBtn();
+		toastr?.info?.('已切换聊天，上次修复无法回退');
+		return;
+	}
+	if (!ctx.chat[slot.messageId]) {
+		undoSlot = null; updateUndoBtn();
+		toastr?.warning?.('消息不存在或已被删除');
+		return;
+	}
+	// 防呆：消息已被重生成 / 滑动 / 手动编辑过 → 不再用旧文本覆盖
+	if (slot.fixed !== undefined && ctx.chat[slot.messageId].mes !== slot.fixed) {
+		undoSlot = null; updateUndoBtn();
+		toastr?.info?.('该消息已被改动过，无法回退（自动作废）');
+		return;
+	}
+
+	const rendered = await applyFixedMessage(ctx, slot.messageId, slot.original, false);
+	undoSlot = null;
+	updateUndoBtn();
+	toastr?.success?.(rendered ? '✅ 已回退到修复前' : '✅ 已回退（可能需要切换聊天以刷新显示）');
+}
+
+// ========== 自动修复：每轮 AI 输出结束自动修 ==========
+// 事件签名：MESSAGE_RECEIVED (message_id, type)，见 public/scripts/events.js。
+// 触发时机：AI 消息完整落盘后（流式 script.js:3740 / 非流式 script.js:6632）。
+// emit 会 await 本监听器，因此修复 + 重渲染先于 ST 自身渲染完成：无闪烁、无二次冲突。
+// setChatMessages 只触发 MESSAGE_UPDATED、不会触发 MESSAGE_RECEIVED → 不会死循环。
+
+function registerAutoFix() {
+	eventSource.on(event_types.MESSAGE_RECEIVED, async (messageId) => {
+		if (!settings.autoFixEnabled) return;
+		try {
+			const ctx = getContext();
+			if (!ctx?.chat?.length) return;
+			if (!Number.isInteger(messageId) || messageId < 0 || messageId >= ctx.chat.length) return;
+			const mes = ctx.chat[messageId];
+			if (!mes || mes.is_user) return; // 不碰用户消息（含 impersonate 生成的用户消息）
+			if (typeof mes.mes !== 'string' || !mes.mes.includes('<')) return; // 无标签快速跳过
+			const result = fixTagsInText(mes.mes);
+			if (result.fixed === 0) return;
+			const rendered = await applyFixedMessage(ctx, messageId, result.text);
+			console.log(`[TagAutoFixer] 自动修复 ${result.fixed} 个标签 (message ${messageId})`);
+			toastr?.success?.(rendered
+				? `✅ 自动修复 ${result.fixed} 个标签`
+				: `✅ 自动修复 ${result.fixed} 个标签（可能需要切换聊天以刷新显示）`);
+		} catch (e) {
+			console.error('[TagAutoFixer] 自动修复失败:', e);
+		}
+	});
+}
+
+async function fixLastMessage() {
+	try {
+		const ctx = getContext();
+		if (!ctx?.chat?.length) { toastr?.warning?.('没有聊天消息'); return; }
+
+		// 找最后一条 AI 消息
+		let lastIdx = -1;
+		for (let i = ctx.chat.length - 1; i >= 0; i--) {
+			if (!ctx.chat[i].is_user) { lastIdx = i; break; }
+		}
+		if (lastIdx < 0) { toastr?.warning?.('未找到AI消息'); return; }
+
+		const lastMsg = ctx.chat[lastIdx];
+		const result = fixTagsInText(lastMsg.mes);
+
+		if (result.fixed === 0) {
+			toastr?.success?.('✅ 所有标签均已正确闭合');
+			return;
+		}
+
+		console.log(`[TagAutoFixer] 修复了 ${result.fixed} 个标签`);
+		const rendered = await applyFixedMessage(ctx, lastIdx, result.text);
+		toastr?.success?.(rendered
+			? `✅ 已修复 ${result.fixed} 个标签`
+			: `✅ 已修复 ${result.fixed} 个标签（可能需要切换聊天以刷新显示）`);
+
+	} catch (e) {
+		console.error('[TagAutoFixer] 修复失败:', e);
+		toastr?.error?.('修复失败，请查看控制台（F12 → Console）');
+	}
+}
+
+// ========== 初始化 ==========
+
+jQuery(async () => {
+	const ctx = getContext();
+
+	// 注册斜杠命令 /fix-tags
+	if (ctx?.SlashCommandParser) {
+		try {
+			ctx.SlashCommandParser.addCommand('fix-tags', fixLastMessage,
+				['fix-tags', '修复标签'],
+				'自动修复AI输出中缺失的标签闭合', true, true);
+		} catch (e) {
+			console.warn('[TagAutoFixer] 斜杠命令注册失败（可能非 JS-Slash-Runner 环境）:', e);
+		}
+	}
+
+	// 内联按钮：发送按钮旁的小图标
+	const inlineBtnId = `${extensionName}_send_btn`;
+	function updateInlineBtn() {
+		$(`#${inlineBtnId}`).remove();
+		if (!settings.showInlineBtn) return;
+		const btnHtml = `<div id="${inlineBtnId}" class="fa-solid fa-tag interactable" title="修复标签" style="cursor:pointer;padding:0 3px;font-size:0.7em;opacity:0.5;margin-right:1px"></div>`;
+		const left = $('#leftSendForm'), right = $('#rightSendForm');
+		const target = left.length ? left : (right.length ? right : null);
+		if (target) {
+			target.prepend(btnHtml);
+			$(`#${inlineBtnId}`).on('click', async () => { await fixLastMessage(); });
+		}
+	}
+	updateInlineBtn();
+
+	// 悬浮按钮（可拖拽）
+	const floatBtnId = `${extensionName}_float_btn`;
+	function updateFloatingBtn() {
+		$(`#${floatBtnId}`).remove();
+		if (!settings.showFloatingBtn) return;
+		$('body').append(`<div id="${floatBtnId}" title="修复标签（可拖拽）" style="
+			position:fixed;bottom:80px;right:20px;z-index:9999;
+			width:36px;height:36px;border-radius:50%;background:var(--accent-color, #888);
+			color:#fff;display:flex;align-items:center;justify-content:center;
+			cursor:grab;box-shadow:0 2px 8px rgba(0,0,0,0.3);font-size:14px;
+			opacity:0.7;user-select:none;
+		">🏷️</div>`);
+
+		const $btn = $(`#${floatBtnId}`);
+		let dragging = false, dx = 0, dy = 0, startX, startY;
+
+		$btn.on('mousedown touchstart', function(e) {
+			dragging = false;
+			const ev = e.touches ? e.touches[0] : e;
+			startX = ev.clientX;
+			startY = ev.clientY;
+			const pos = $btn.position();
+			dx = startX - pos.left;
+			dy = startY - pos.top;
+			$btn.css({ cursor: 'grabbing', opacity: '1', transition: 'none' });
+		});
+
+		$(document).on('mousemove touchmove', function(e) {
+			if (!$btn[0] || dx === undefined) return;
+			const ev = e.touches ? e.touches[0] : e;
+			if (Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3) {
+				dragging = true;
+			}
+			if (dragging) {
+				e.preventDefault();
+				$btn.css({ left: (ev.clientX - dx) + 'px', top: (ev.clientY - dy) + 'px', right: 'auto', bottom: 'auto' });
+			}
+		});
+
+		$(document).on('mouseup touchend', function() {
+			if ($btn[0]) {
+				$btn.css({ cursor: 'grab', opacity: '0.7', transition: 'opacity 0.2s' });
+			}
+			dx = undefined;
+		});
+
+		$btn.on('click', async function() {
+			if (!dragging) await fixLastMessage();
+		});
+	}
+	updateFloatingBtn();
+
+	// 扩展菜单项（#extensionsMenu 内）
+	const menuItemId = `${extensionName}_menu_item`;
+	function updateMenuItem() {
+		$(`#${menuItemId}`).remove();
+		if (!settings.showMenuBtn) return;
+		const $menu = $('#extensionsMenu');
+		if (!$menu.length) return;
+		$menu.append(`<a id="${menuItemId}" class="list-group-item" href="#" title="修复标签">
+			<i class="fa-solid fa-tag"></i> 修复标签
+		</a>`);
+		$(`#${menuItemId}`).on('click', async (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			$('#extensionsMenu').fadeOut(200);
+			await fixLastMessage();
+		});
+	}
+	// 延迟注入等菜单就绪
+	setTimeout(updateMenuItem, 1000);
+
+	// 注入设置面板
+	
+	// 挂载标签修复设置卡(跟随余温面板重建)
+	stTagMountSettings();
+
+	// 监听标签树编辑
+	$(`#${extensionName}_tree`).on('input', function() {
+		settings.tagTree = $(this).val();
+		saveSettingsDebounced();
+	});
+
+	// 小剧场/HTML 容器：展开/收起 + 容器编辑 + 自动识别开关
+	$(`#${extensionName}_container`).on('input', function() {
+		settings.htmlContainer = $(this).val();
+		saveSettingsDebounced();
+	});
+	$(`#${extensionName}_chk_detect`).on('change', function() {
+		settings.askOnDisputed = this.checked;
+		saveSettingsDebounced();
+	});
+
+	// 绑定按钮
+	$(`#${extensionName}_scan_replace`).on('click', () => scanAndFill(true));
+	$(`#${extensionName}_scan_append`).on('click', () => scanAndFill(false));
+	$(`#${extensionName}_btn`).on('click', async () => { await fixLastMessage(); });
+	$(`#${extensionName}_reset`).on('click', () => {
+		settings.tagTree = defaultTagTree;
+		$(`#${extensionName}_tree`).val(defaultTagTree);
+		saveSettingsDebounced();
+		toastr?.success?.('✅ 已重置为默认标签树');
+	});
+
+	// UI 模式切换
+	$(`#${extensionName}_chk_inline`).on('change', function() {
+		settings.showInlineBtn = this.checked;
+		saveSettingsDebounced();
+		updateInlineBtn();
+	});
+	$(`#${extensionName}_chk_float`).on('change', function() {
+		settings.showFloatingBtn = this.checked;
+		saveSettingsDebounced();
+		updateFloatingBtn();
+	});
+	$(`#${extensionName}_chk_menu`).on('change', function() {
+		settings.showMenuBtn = this.checked;
+		saveSettingsDebounced();
+		updateMenuItem();
+	});
+
+	// 新功能勾选框
+	$(`#${extensionName}_chk_auto`).on('change', function() {
+		settings.autoFixEnabled = this.checked;
+		$(`#${extensionName}_warn_auto`).toggle(this.checked);
+		saveSettingsDebounced();
+	});
+	$(`#${extensionName}_chk_wrap`).on('change', function() {
+		settings.wrapMissingEnabled = this.checked;
+		$(`#${extensionName}_warn_wrap`).toggle(this.checked);
+		saveSettingsDebounced();
+	});
+	// 若之前已勾选，初始就展开对应说明
+	if (settings.autoFixEnabled) $(`#${extensionName}_warn_auto`).show();
+	if (settings.wrapMissingEnabled) $(`#${extensionName}_warn_wrap`).show();
+
+	// 常驻"回退上一次修复"按钮
+	$(`#${extensionName}_undo_panel`).on('click', async () => { await undoLastFix(); });
+
+	// 自动修复监听（每轮 AI 输出结束自动修）
+	registerAutoFix();
+	// 切换聊天时，隐藏上一个聊天的"回退修复"按钮
+	eventSource.on(event_types.CHAT_CHANGED, () => updateUndoBtn());
+});
+
+})();// 挂载「标签修复」设置卡到余温设置面板的 tag_slot（跟随余温 initSettingsPanel 重建，幂等）
+function stTagMountSettings() {
+    try {
+        const s = extension_settings['tag_auto_fixer'] || {};
+        const ext = 'tag_auto_fixer';
+        const h = `
+<details class="kimi-card">
+<summary><i class="fa-solid fa-tag kimi-card-ico" aria-hidden="true"></i>${t('tagTitle')}</summary>
+<div class="kimi-card-body">
+<p class="kimi-hint" style="margin-bottom:6px">${t('tagHint')}</p>
+
+<label class="kimi-label" for="${ext}_tree">${t('tagTreeLabel')}</label>
+<textarea id="${ext}_tree" class="text_pole" style="width:100%;height:200px;font-family:monospace">${s.tagTree}</textarea>
+
+<div class="kimi-sep"></div>
+
+<details class="kimi-inner-card">
+<summary style="cursor:pointer;font-size:0.88em;color:var(--SmartThemeBodyColor, inherit)">${t('tagContainerTitle')}</summary>
+<div id="${ext}_html_box" style="margin-top:6px">
+<p class="kimi-hint">${t('tagContainerHint1')}</p>
+<textarea id="${ext}_container" class="text_pole" style="width:100%;height:40px;font-family:monospace">${s.htmlContainer}</textarea>
+<label class="checkbox_label" style="margin-top:6px"><input type="checkbox" id="${ext}_chk_detect" ${s.askOnDisputed ? 'checked' : ''}> ${t('tagAskOnDisputed')}</label>
+</div>
+</details>
+
+<div style="display:flex;gap:6px;margin-top:8px">
+<button id="${ext}_scan_replace" class="kimi-btn" style="flex:1">${t('tagScanReplace')}</button>
+<button id="${ext}_scan_append" class="kimi-btn" style="flex:1">${t('tagScanAppend')}</button>
+</div>
+<div style="display:flex;gap:6px;margin-top:6px">
+<button id="${ext}_btn" class="kimi-btn" style="flex:1">${t('tagFixLast')}</button>
+<button id="${ext}_undo_panel" class="kimi-btn" style="flex:1" disabled>${t('tagUndo')}</button>
+</div>
+<button id="${ext}_reset" class="kimi-btn" style="width:100%;margin-top:6px">${t('tagReset')}</button>
+
+<div class="kimi-sep"></div>
+
+<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+<label class="checkbox_label"><input type="checkbox" id="${ext}_chk_auto" ${s.autoFixEnabled ? 'checked' : ''}> ${t('tagAutoFix')}</label>
+<label class="checkbox_label"><input type="checkbox" id="${ext}_chk_wrap" ${s.wrapMissingEnabled ? 'checked' : ''}> ${t('tagWrapMissing')}</label>
+</div>
+<div id="${ext}_warn_auto" style="display:none;margin-top:5px;font-size:0.72em;color:var(--golden-color,#e0a800);line-height:1.5">${t('tagWarnAuto')}</div>
+<div id="${ext}_warn_wrap" style="display:none;margin-top:5px;font-size:0.72em;color:var(--golden-color,#e0a800);line-height:1.5">${t('tagWarnWrap')}</div>
+
+<div class="kimi-sep"></div>
+
+<div style="display:flex;gap:12px;align-items:center">
+<label class="checkbox_label"><input type="checkbox" id="${ext}_chk_inline" ${s.showInlineBtn ? 'checked' : ''}> ${t('tagChkInline')}</label>
+<label class="checkbox_label"><input type="checkbox" id="${ext}_chk_float" ${s.showFloatingBtn ? 'checked' : ''}> ${t('tagChkFloat')}</label>
+<label class="checkbox_label"><input type="checkbox" id="${ext}_chk_menu" ${s.showMenuBtn ? 'checked' : ''}> ${t('tagChkMenu')}</label>
+</div>
+
+<p class="kimi-hint">${t('tagSlashHint')}</p>
+
+</div>
+</details>
+`;
+        // 幂等：先移除旧标签修复卡，再挂新的
+        jQuery('#kimi_reasoning_injector_tag_slot').children().remove();
+        jQuery('#kimi_reasoning_injector_tag_slot').replaceWith(h);
+    } catch (e) { console.warn('[TagAutoFixer] 挂载设置卡失败:', e); }
+}
+
+
