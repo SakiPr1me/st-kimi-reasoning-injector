@@ -49,6 +49,7 @@ const defaultSettings = {
 	showFloatingBtn: false,
 	showMenuBtn: true,
 	autoFixEnabled: false,   // 每轮输出结束自动修（默认关，谨慎勾选）
+	autoScanEnabled: false,  // 每轮自动扫描（只标不改，与自动修复互斥；默认关）
 	wrapMissingEnabled: false, // 智能补全：标签整块丢失时推断补回（默认关，谨慎勾选）
 	htmlContainer: 'extra',   // 小剧场/HTML 容器标签：扫描时其内部一律跳过（可多个，一行一个）
 	askOnDisputed: true,      // 扫描时发现"不在树里的疑似 HTML 块" → 弹窗让用户选：进树还是进容器
@@ -60,6 +61,7 @@ if (settings.showInlineBtn === undefined) settings.showInlineBtn = true;
 if (settings.showFloatingBtn === undefined) settings.showFloatingBtn = false;
 if (settings.showMenuBtn === undefined) settings.showMenuBtn = true;
 if (settings.autoFixEnabled === undefined) settings.autoFixEnabled = false;
+if (settings.autoScanEnabled === undefined) settings.autoScanEnabled = false;
 if (settings.wrapMissingEnabled === undefined) settings.wrapMissingEnabled = false;
 if (settings.htmlContainer === undefined) settings.htmlContainer = 'extra';
 if (settings.askOnDisputed === undefined) {
@@ -983,7 +985,9 @@ async function applyFixedMessage(ctx, messageId, text, recordUndo = true) {
 		undoSlot = { chatId: ctx.chatId ?? null, messageId, original: ctx.chat[messageId]?.mes ?? null, fixed: text };
 		updateUndoBtn();
 		// v1.13.3：眼睛+批量回退记录下沉到公共入口 —— 修复最后一条/每轮自动修复/修复全部 三条路径行为一致
-		batchUndo.push({ chatId: ctx.chatId ?? null, messageId, original: ctx.chat[messageId]?.mes ?? null, fixed: text });
+		const iPrev = batchUndo.findIndex(r => r.messageId === messageId);
+		if (iPrev >= 0) batchUndo.splice(iPrev, 1); // 重复修复同一楼只留最新记录（original 均为该楼当前原文）
+		batchUndo.push({ chatId: ctx.chatId ?? null, messageId, original: ctx.chat[messageId]?.mes ?? null, fixed: text, applied: true });
 	}
 
 	let rendered = false;
@@ -1091,9 +1095,25 @@ async function undoLastFix() {
 // emit 会 await 本监听器，因此修复 + 重渲染先于 ST 自身渲染完成：无闪烁、无二次冲突。
 // setChatMessages 只触发 MESSAGE_UPDATED、不会触发 MESSAGE_RECEIVED → 不会死循环。
 
+// 每轮自动扫描（只标不改）：不写原文，挂眼睛看拟修复 diff；与自动修复互斥（修复优先）
+function autoScanMessage(ctx, messageId, result) {
+	const mes = ctx.chat[messageId];
+	if (!mes || typeof mes.mes !== 'string') return 0;
+	const r = result || fixTagsInText(mes.mes);
+	if (r.fixed === 0) return 0;
+	const idx = batchUndo.findIndex(x => x.messageId === messageId);
+	if (idx >= 0) batchUndo.splice(idx, 1);
+	batchUndo.push({ chatId: ctx.chatId ?? null, messageId, original: mes.mes, fixed: r.text, applied: false });
+	addEyeToMessage(messageId);
+	updateUndoAllBtn();
+	toastr?.info?.(String(t('tagScanFound')).replace('{n}', r.fixed));
+	console.log(`[TagAutoFixer] 扫描发现 ${r.fixed} 处标签问题（未修复） message ${messageId}`);
+	return r.fixed;
+}
+
 function registerAutoFix() {
 	eventSource.on(event_types.MESSAGE_RECEIVED, async (messageId) => {
-		if (!settings.autoFixEnabled) return;
+		if (!settings.autoFixEnabled && !settings.autoScanEnabled) return;
 		try {
 			const ctx = getContext();
 			if (!ctx?.chat?.length) return;
@@ -1103,6 +1123,7 @@ function registerAutoFix() {
 			if (typeof mes.mes !== 'string' || !mes.mes.includes('<')) return; // 无标签快速跳过
 			const result = fixTagsInText(mes.mes);
 			if (result.fixed === 0) return;
+			if (!settings.autoFixEnabled) { autoScanMessage(ctx, messageId, result); return; }
 			const rendered = await applyFixedMessage(ctx, messageId, result.text);
 			console.log(`[TagAutoFixer] 自动修复 ${result.fixed} 个标签 (message ${messageId})`);
 			toastr?.success?.(rendered
@@ -1179,8 +1200,8 @@ function lineDiff(a, b) {
 // true 折叠长段未改动行（每侧留 2 行上下文），头部按钮切换
 function buildDiffHtml(diffRows, collapseLabel, collapse = false) {
 	const rowHtml = (r) => {
-		if (r.t === '-') return `<div style="background:rgba(255,80,80,.13);border-radius:3px;padding:1px 6px;white-space:pre-wrap;word-break:break-word"><span style="color:#e57373;font-weight:700">\u2212 </span>${esc(r.s) || '&nbsp;'}</div>`;
-		if (r.t === '+') return `<div style="background:rgba(80,220,120,.12);border-radius:3px;padding:1px 6px;white-space:pre-wrap;word-break:break-word"><span style="color:#7cd992;font-weight:700">+ </span>${esc(r.s) || '&nbsp;'}</div>`;
+		if (r.t === '-') return `<div class="kimi-diff-chg" style="background:rgba(255,80,80,.13);border-radius:3px;padding:1px 6px;white-space:pre-wrap;word-break:break-word"><span style="color:#e57373;font-weight:700">\u2212 </span>${esc(r.s) || '&nbsp;'}</div>`;
+		if (r.t === '+') return `<div class="kimi-diff-chg" style="background:rgba(80,220,120,.12);border-radius:3px;padding:1px 6px;white-space:pre-wrap;word-break:break-word"><span style="color:#7cd992;font-weight:700">+ </span>${esc(r.s) || '&nbsp;'}</div>`;
 		return `<div style="opacity:.55;padding:1px 6px;white-space:pre-wrap;word-break:break-word">${esc(r.s) || '&nbsp;'}</div>`;
 	};
 	const out = [];
@@ -1238,15 +1259,24 @@ function toggleTagDiff(id) {
 const diffCollapsed = new Map();
 
 function renderTagDiff(id, el, msg, rec, collapsed) {
-	const diffRows = lineDiff(String(rec.original).split('\n'), String(msg.mes).split('\n'));
+	// 对比基准：已修复记录比 原文vs当前(已修好)；仅扫描记录比 原文vs拟修复文本（原文还没动）
+	const after = rec.applied === false ? rec.fixed : msg.mes;
+	const diffRows = lineDiff(String(rec.original).split('\n'), String(after).split('\n'));
 	el.innerHTML = `
 	<div class="kimi-tag-diff" style="border:1px dashed var(--SmartThemeBorderColor,grey);border-radius:8px;padding:8px 10px;font-size:.85em;line-height:1.6">
 		<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
 			<b>${t('tagDiffTitle')}</b>
 			<span style="opacity:.6;font-size:.85em">${t('tagDiffHint')}</span>
 			<button class="kimi-tag-diff-collapse menu_button" style="display:inline-block;width:auto;padding:2px 10px;font-size:.9em">${collapsed ? t('tagExpandAll') : t('tagCollapse')}</button>
+			<span style="display:inline-flex;gap:4px;align-items:center">
+				<button class="kimi-tag-diff-prev menu_button" style="display:inline-block;width:auto;padding:2px 8px;font-size:.9em">↑${t('tagPrevChange')}</button>
+				<span class="kimi-diff-count" style="opacity:.7;font-size:.85em"></span>
+				<button class="kimi-tag-diff-next menu_button" style="display:inline-block;width:auto;padding:2px 8px;font-size:.9em">↓${t('tagNextChange')}</button>
+			</span>
 			<button class="kimi-tag-diff-close menu_button" style="display:inline-block;width:auto;padding:2px 10px;font-size:.9em">✕</button>
-			<button class="kimi-tag-undo-one menu_button" style="margin-left:auto;display:inline-block;width:auto;padding:2px 10px;font-size:.9em">${t('tagUndoThis')}</button>
+			${rec.applied === false
+				? `<span class="kimi-tag-scanonly" style="margin-left:auto;opacity:.75;font-size:.85em">${t('tagScanOnly')}</span>`
+				: `<button class="kimi-tag-undo-one menu_button" style="margin-left:auto;display:inline-block;width:auto;padding:2px 10px;font-size:.9em">${t('tagUndoThis')}</button>`}
 		</div>
 		${buildDiffHtml(diffRows, t('tagUnchanged'), collapsed)}
 	</div>`;
@@ -1256,6 +1286,24 @@ function renderTagDiff(id, el, msg, rec, collapsed) {
 		diffCollapsed.set(id, !collapsed);
 		renderTagDiff(id, el, msg, rec, !collapsed);
 	});
+	// 上一处/下一处改动跳转：红/绿行循环定位 + 高亮闪一下 + 计数
+	const chgEls = [...el.querySelectorAll('.kimi-diff-chg')];
+	const countEl = el.querySelector('.kimi-diff-count');
+	let navIdx = -1;
+	const showCount = () => { if (countEl) countEl.textContent = chgEls.length ? `${navIdx + 1}/${chgEls.length}` : '0'; };
+	showCount();
+	const go = (delta) => {
+		if (!chgEls.length) return;
+		navIdx = (navIdx + delta + chgEls.length) % chgEls.length;
+		const target = chgEls[navIdx];
+		target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		target.style.outline = '2px solid var(--golden-color,#e0a800)';
+		target.style.outlineOffset = '1px';
+		setTimeout(() => { target.style.outline = ''; }, 900);
+		showCount();
+	};
+	el.querySelector('.kimi-tag-diff-prev')?.addEventListener('click', () => go(-1));
+	el.querySelector('.kimi-tag-diff-next')?.addEventListener('click', () => go(1));
 }
 
 // 回退单条：恢复修复前原文（消息若已被再次改动则作废该记录）
@@ -1265,6 +1313,13 @@ async function undoFloorFix(id) {
 	const idx = batchUndo.findIndex(r => r.messageId === id);
 	if (idx < 0) { toastr?.info?.('\u6ca1\u6709\u53ef\u56de\u9000\u7684\u4fee\u590d'); return; }
 	const rec = batchUndo[idx];
+	if (!rec.applied) { // 仅扫描记录：本来就没写入，摘掉眼睛清掉记录即可
+		batchUndo.splice(idx, 1);
+		document.querySelector(`.mes[mesid="${id}"] > .kimi-tag-eye`)?.remove();
+		updateUndoAllBtn();
+		toastr?.info?.('已清除该楼的扫描标记（原文未被修改过）');
+		return;
+	}
 	const msg = ctx.chat?.[id];
 	if (!msg) { batchUndo.splice(idx, 1); updateUndoAllBtn(); return; }
 	if (msg.mes !== rec.fixed) {
@@ -1304,6 +1359,11 @@ async function undoAllFixes() {
 	if (!batchUndo.length) { toastr?.info?.('\u6ca1\u6709\u53ef\u56de\u9000\u7684\u4fee\u590d'); return; }
 	let n = 0, skip = 0;
 	for (const rec of [...batchUndo]) {
+		if (!rec.applied) { // 仅扫描记录：只清眼睛，无原文可回退
+			document.querySelector(`.mes[mesid="${rec.messageId}"] > .kimi-tag-eye`)?.remove();
+			batchUndo.splice(batchUndo.indexOf(rec), 1);
+			continue;
+		}
 		const msg = ctx.chat?.[rec.messageId];
 		if (!msg || msg.mes !== rec.fixed) { skip++; batchUndo.splice(batchUndo.indexOf(rec), 1); continue; }
 		await applyFixedMessage(ctx, rec.messageId, rec.original, false);
@@ -1316,7 +1376,7 @@ async function undoAllFixes() {
 }
 
 // CDP/控制台调试出口（仿 st-chat-sync 的 __stChatSyncDebug 模式）
-window.__stTagDebug = { fixAllMessages, undoAllFixes, undoFloorFix, toggleTagDiff, addEyeToMessage, lineDiff, buildDiffHtml, fixTagsInText, batchUndo };
+window.__stTagDebug = { fixAllMessages, undoAllFixes, undoFloorFix, toggleTagDiff, addEyeToMessage, lineDiff, buildDiffHtml, fixTagsInText, autoScanMessage, batchUndo };
 
 function updateUndoAllBtn() {
 	const btn = document.getElementById(`${extensionName}_undo_all`);
@@ -1482,6 +1542,19 @@ jQuery(async () => {
 	$(`#${extensionName}_chk_auto`).on('change', function() {
 		settings.autoFixEnabled = this.checked;
 		$(`#${extensionName}_warn_auto`).toggle(this.checked);
+		if (this.checked && settings.autoScanEnabled) { // 与自动扫描互斥：修复包含扫描
+			settings.autoScanEnabled = false;
+			$(`#${extensionName}_chk_scan`).prop('checked', false);
+		}
+		saveSettingsDebounced();
+	});
+	$(`#${extensionName}_chk_scan`).on('change', function() {
+		settings.autoScanEnabled = this.checked;
+		if (this.checked && settings.autoFixEnabled) { // 与自动修复互斥
+			settings.autoFixEnabled = false;
+			$(`#${extensionName}_chk_auto`).prop('checked', false);
+			$(`#${extensionName}_warn_auto`).hide();
+		}
 		saveSettingsDebounced();
 	});
 	$(`#${extensionName}_chk_wrap`).on('change', function() {
@@ -1555,6 +1628,7 @@ export function stTagMountSettings() {
 
 <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
 <label class="checkbox_label"><input type="checkbox" id="${ext}_chk_auto" ${s.autoFixEnabled ? 'checked' : ''}> ${t('tagAutoFix')}</label>
+<label class="checkbox_label"><input type="checkbox" id="${ext}_chk_scan" ${s.autoScanEnabled ? 'checked' : ''}> ${t('tagAutoScan')}</label>
 <label class="checkbox_label"><input type="checkbox" id="${ext}_chk_wrap" ${s.wrapMissingEnabled ? 'checked' : ''}> ${t('tagWrapMissing')}</label>
 </div>
 <div id="${ext}_warn_auto" style="display:none;margin-top:5px;font-size:0.72em;color:var(--golden-color,#e0a800);line-height:1.5">${t('tagWarnAuto')}</div>

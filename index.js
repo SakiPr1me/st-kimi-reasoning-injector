@@ -33,7 +33,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.13.4 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.14.0 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -162,7 +162,7 @@ const UI = {
         tagFixLast: "🔧 修复最后一条",
         tagUndo: "↩️ 回退",
         tagReset: "↺ 重置为默认标签树",
-        tagAutoFix: "每轮自动修复",
+        tagAutoFix: "每轮自动修复", tagAutoScan: "每轮自动扫描（只标不改）", tagScanFound: "🔍 检测到 {n} 处标签问题（未修复），点楼层 👁 查看拟修复内容", tagScanOnly: "仅扫描 · 未写入", tagPrevChange: "上一处", tagNextChange: "下一处",
         tagWrapMissing: "补全整对丢失",
         tagWarnAuto: "⚠️ 每轮自动修复＝AI 回复完自动修一遍标签。出问题点「↩️ 回退」。",
         tagWarnWrap: "⚠️ 谨慎。标签整对丢失时靠前后邻居猜着补，偶尔猜错。",
@@ -214,7 +214,7 @@ const UI = {
         tagFixLast: "🔧 Fix Last",
         tagUndo: "↩️ Undo",
         tagReset: "↺ Reset Tags",
-        tagAutoFix: "Auto-fix each round",
+        tagAutoFix: "Auto-fix each round", tagAutoScan: "Auto-scan each round (mark only)", tagScanFound: "🔍 Found {n} tag issues (not fixed). Click 👁 on the message to preview", tagScanOnly: "Scan only · not applied", tagPrevChange: "Prev", tagNextChange: "Next",
         tagWrapMissing: "Fill missing pair",
         tagWarnAuto: "⚠️ Auto-fix = fix tags after each AI reply. If issues, click \"↩️ Undo\".",
         tagWarnWrap: "⚠️ Use with care. When whole tag pairs are lost, guess from neighbors; occasionally wrong.",
@@ -266,7 +266,7 @@ const UI = {
         tagFixLast: "🔧 마지막 수정",
         tagUndo: "↩️ 되돌리기",
         tagReset: "↺ 태그 초기화",
-        tagAutoFix: "매 라운드 자동 수정",
+        tagAutoFix: "매 라운드 자동 수정", tagAutoScan: "매 라운드 자동 스캔 (표시만)", tagScanFound: "🔍 태그 문제 {n}곳 발견 (수정 안 함). 메시지의 👁으로 미리보기", tagScanOnly: "스캔 전용 · 미적용", tagPrevChange: "이전", tagNextChange: "다음",
         tagWrapMissing: "누락 쌍 채우기",
         tagWarnAuto: "⚠️ 자동 수정 = 각 AI 답변 후 태그 수정. 문제 시 \"↩️ 되돌리기\".",
         tagWarnWrap: "⚠️ 주의. 태그 쌍이 통째로 사라졌을 때 이웃에서 추측, 가끔 틀림.",
