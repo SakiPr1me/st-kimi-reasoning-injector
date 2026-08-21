@@ -33,7 +33,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.13.1 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.13.2 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -166,7 +166,8 @@ const UI = {
         tagWrapMissing: "补全整对丢失",
         tagWarnAuto: "⚠️ 每轮自动修复＝AI 回复完自动修一遍标签。出问题点「↩️ 回退」。",
         tagWarnWrap: "⚠️ 谨慎。标签整对丢失时靠前后邻居猜着补，偶尔猜错。",
-        tagChkInline: "输入框旁",
+        tagChkInline: "输入框旁", tagFixAll: "🏗 修复全部楼层", tagUndoAll: "↩ 回退全部修复", tagUndoThis: "↩ 回退这条修复",
+        tagDiffTitle: "🏷 标签修复改动（幻影预览）", tagDiffHint: "红 − = 修复前被改掉的行，绿 + = 修复后补入的行；点 👁 关闭预览", tagUnchanged: "行未改动",
         tagChkFloat: "悬浮按钮",
         tagChkMenu: "扩展菜单",
         tagSlashHint: "也可用 /fix-tags 斜杠命令"
@@ -217,7 +218,8 @@ const UI = {
         tagWrapMissing: "Fill missing pair",
         tagWarnAuto: "⚠️ Auto-fix = fix tags after each AI reply. If issues, click \"↩️ Undo\".",
         tagWarnWrap: "⚠️ Use with care. When whole tag pairs are lost, guess from neighbors; occasionally wrong.",
-        tagChkInline: "Near input",
+        tagChkInline: "Near input", tagFixAll: "🏗 Fix All Messages", tagUndoAll: "↩ Undo All Fixes", tagUndoThis: "↩ Undo This Fix",
+        tagDiffTitle: "🏷 Tag Fix Changes (phantom preview)", tagDiffHint: "Red − = changed from before, green + = inserted by fix; click the eye again to close", tagUnchanged: "lines unchanged",
         tagChkFloat: "Floating button",
         tagChkMenu: "Extension menu",
         tagSlashHint: "Also use /fix-tags command"
@@ -268,7 +270,8 @@ const UI = {
         tagWrapMissing: "누락 쌍 채우기",
         tagWarnAuto: "⚠️ 자동 수정 = 각 AI 답변 후 태그 수정. 문제 시 \"↩️ 되돌리기\".",
         tagWarnWrap: "⚠️ 주의. 태그 쌍이 통째로 사라졌을 때 이웃에서 추측, 가끔 틀림.",
-        tagChkInline: "입력창 옆",
+        tagChkInline: "입력창 옆", tagFixAll: "🏗 전체 층 수정", tagUndoAll: "↩ 전체 되돌리기", tagUndoThis: "↩ 이 층 되돌리기",
+        tagDiffTitle: "🏷 태그 수정 변경사항 (팬텀 미리보기)", tagDiffHint: "빨강 − = 수정 전 변경된 줄, 초록 + = 수정 후 추가된 줄; 👁 다시 누르면 닫힘", tagUnchanged: "줄 변경 없음",
         tagChkFloat: "플로팅 버튼",
         tagChkMenu: "확장 메뉴",
         tagSlashHint: "/fix-tags 명령도 사용 가능"
@@ -1384,7 +1387,7 @@ function applyThinkingFoldInner(messageId) {
         // 编辑模式：ST 点铅笔（messageEdit，script.js:8180）后会在 .mes_text 放 #curEditTextarea（正文编辑框）、
         // 在 .mes_reasoning 放 .reasoning_edit_textarea（思维链编辑框）。此时不能折叠，否则 observer 会把编辑框覆盖掉。
         const mesEl = element.closest('.mes');
-        if (mesEl && (mesEl.querySelector('#curEditTextarea') || mesEl.querySelector('.reasoning_edit_textarea'))) return;
+        if (mesEl && (mesEl.querySelector('#curEditTextarea') || mesEl.querySelector('.reasoning_edit_textarea') || mesEl.querySelector('.kimi-tag-diff'))) return; // 编辑模式/标签修复幻影预览中，不折叠
         const mes = msg.mes;
         const marker = settings.foldMarker || '<scene>';
         const idx = mes.lastIndexOf(marker); // v1.11.19：折叠边界吃最后一个 <scene>（有多个 scene 时折叠框覆盖到最后一个）
@@ -1852,7 +1855,7 @@ function refreshAllDisplayReplace() {
             if (!msg || typeof msg.mes !== 'string') return;
             const el = mesEl.querySelector('.mes_text');
             if (!el) return;
-            if (mesEl.querySelector('#curEditTextarea') || mesEl.querySelector('.reasoning_edit_textarea')) return; // 编辑模式跳过
+            if (mesEl.querySelector('#curEditTextarea') || mesEl.querySelector('.reasoning_edit_textarea') || mesEl.querySelector('.kimi-tag-diff')) return; // 编辑模式/标签修复幻影预览跳过
             // v1.12.2：显示层词汇替换改为「字符串层」（跟酒馆正则 getRegexedString 同一原理）：
             // 先在 msg.mes 的副本上做词汇替换，再交给 messageFormatting 渲染。
             // 美化结构（<details>/<style> 等）由 messageFormatting 内部的正则在此之后生成，

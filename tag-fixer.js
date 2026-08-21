@@ -1,5 +1,5 @@
 import { extension_settings } from "../../../extensions.js";
-import { saveSettingsDebounced, eventSource, event_types } from "../../../../script.js";
+import { saveSettingsDebounced, messageFormatting, eventSource, event_types } from "../../../../script.js";
 import { t } from "./index.js"; // 三语文案（index.js 导出；函数声明循环引用安全）
 
 // ============================================
@@ -1140,6 +1140,172 @@ async function fixLastMessage() {
 	}
 }
 
+
+// ========== 批量修复全部楼层 + 幻影 diff 预览（小眼睛） ==========
+// 设计：修复全部 = 直接写入原文（不搞确认）；楼层内 👁 只读查看
+// "改了哪里"（红 − = 修复前被改掉的行，绿 + = 修复后补入的行），
+// 预览纯 DOM 幻影不碰数据，后悔用「回退这条 / 回退全部」。
+
+const batchUndo = []; // [{chatId, messageId, original, fixed}]（内存态，刷新后失效）
+
+function esc(s) {
+	return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// 行级 LCS diff：返回 [{t:'-'|'+'|' ', s:行文本}]（楼层数百行内 DP 足够快）
+function lineDiff(a, b) {
+	const n = a.length, m = b.length;
+	const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+	for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+		dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+	const out = []; let i = 0, j = 0;
+	while (i < n && j < m) {
+		if (a[i] === b[j]) { out.push({ t: ' ', s: a[i] }); i++; j++; }
+		else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push({ t: '-', s: a[i] }); i++; }
+		else { out.push({ t: '+', s: b[j] }); j++; }
+	}
+	while (i < n) out.push({ t: '-', s: a[i++] });
+	while (j < m) out.push({ t: '+', s: b[j++] });
+	return out;
+}
+
+// 渲染 diff HTML：长段未改动行折叠（每侧留 2 行上下文）
+function buildDiffHtml(diffRows, collapseLabel) {
+	const rowHtml = (r) => {
+		if (r.t === '-') return `<div style="background:rgba(255,80,80,.13);border-radius:3px;padding:1px 6px;white-space:pre-wrap;word-break:break-word"><span style="color:#e57373;font-weight:700">\u2212 </span>${esc(r.s) || '&nbsp;'}</div>`;
+		if (r.t === '+') return `<div style="background:rgba(80,220,120,.12);border-radius:3px;padding:1px 6px;white-space:pre-wrap;word-break:break-word"><span style="color:#7cd992;font-weight:700">+ </span>${esc(r.s) || '&nbsp;'}</div>`;
+		return `<div style="opacity:.55;padding:1px 6px;white-space:pre-wrap;word-break:break-word">${esc(r.s) || '&nbsp;'}</div>`;
+	};
+	const out = [];
+	let run = [];
+	const flush = () => {
+		if (!run.length) return;
+		if (run.length <= 6) { run.forEach(r => out.push(rowHtml(r))); }
+		else {
+			out.push(rowHtml(run[0])); out.push(rowHtml(run[1]));
+			out.push(`<div style="opacity:.4;padding:1px 6px;font-size:.85em">\u22ef ${run.length - 4} ${collapseLabel}</div>`);
+			out.push(rowHtml(run[run.length - 2])); out.push(rowHtml(run[run.length - 1]));
+		}
+		run = [];
+	};
+	for (const r of diffRows) {
+		if (r.t === ' ') run.push(r); else { flush(); out.push(rowHtml(r)); }
+	}
+	flush();
+	return out.join('');
+}
+
+// 楼层正文前挂 👁（已挂则跳过）
+function addEyeToMessage(id) {
+	// 挂在 .mes 容器（绝对定位右上角）：放 .mes_text 里会被折叠/预览的 innerHTML 重写抹掉
+	const mesEl = document.querySelector(`.mes[mesid="${id}"]`);
+	if (!mesEl || mesEl.querySelector('.kimi-tag-eye')) return;
+	mesEl.style.position = 'relative';
+	const eye = document.createElement('div');
+	eye.className = 'kimi-tag-eye';
+	eye.title = '查看标签修复改动';
+	eye.style.cssText = 'position:absolute;top:6px;right:10px;z-index:5;cursor:pointer;opacity:.6;font-size:1em;user-select:none';
+	eye.textContent = '👁';
+	eye.addEventListener('click', (e) => { e.stopPropagation(); toggleTagDiff(id); });
+	mesEl.appendChild(eye);
+}
+
+// \ud83d\udc41 开关幻影预览：开 = .mes_text 换 diff 视图（数据不动）；关 = messageFormatting 还原渲染
+// （kimi 折叠 observer 会自动补折叠；index.js 侧已对 .kimi-tag-diff 跳过折叠/显示替换）
+function toggleTagDiff(id) {
+	const ctx = getContext();
+	const msg = ctx?.chat?.[id];
+	const el = document.querySelector(`.mes[mesid="${id}"] .mes_text`);
+	if (!el || !msg) return;
+	if (el.querySelector('.kimi-tag-diff')) {
+		// 关闭预览：还原正常渲染
+		el.innerHTML = messageFormatting(msg.mes, msg.name || '', msg.is_system, msg.is_user, id);
+		return;
+	}
+	const rec = batchUndo.find(r => r.messageId === id);
+	if (!rec) { el.querySelector('.kimi-tag-eye')?.remove(); return; }
+	const diffRows = lineDiff(String(rec.original).split('\n'), String(msg.mes).split('\n'));
+	el.innerHTML = `
+	<div class="kimi-tag-diff" style="border:1px dashed var(--SmartThemeBorderColor,grey);border-radius:8px;padding:8px 10px;font-size:.85em;line-height:1.6">
+		<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+			<b>${t('tagDiffTitle')}</b>
+			<button class="kimi-tag-diff-close menu_button" style="display:inline-block;width:auto;padding:2px 10px;font-size:.9em">✕</button>
+			<span style="opacity:.6;font-size:.85em">${t('tagDiffHint')}</span>
+			<button class="kimi-tag-undo-one menu_button" style="margin-left:auto;display:inline-block;width:auto;padding:2px 10px;font-size:.9em">${t('tagUndoThis')}</button>
+		</div>
+		${buildDiffHtml(diffRows, t('tagUnchanged'))}
+	</div>`;
+	el.querySelector('.kimi-tag-undo-one')?.addEventListener('click', async () => { await undoFloorFix(id); });
+	el.querySelector('.kimi-tag-diff-close')?.addEventListener('click', () => toggleTagDiff(id));
+}
+
+// 回退单条：恢复修复前原文（消息若已被再次改动则作废该记录）
+async function undoFloorFix(id) {
+	const ctx = getContext();
+	if (!ctx) return;
+	const idx = batchUndo.findIndex(r => r.messageId === id);
+	if (idx < 0) { toastr?.info?.('\u6ca1\u6709\u53ef\u56de\u9000\u7684\u4fee\u590d'); return; }
+	const rec = batchUndo[idx];
+	const msg = ctx.chat?.[id];
+	if (!msg) { batchUndo.splice(idx, 1); updateUndoAllBtn(); return; }
+	if (msg.mes !== rec.fixed) {
+		batchUndo.splice(idx, 1); updateUndoAllBtn();
+		toastr?.info?.('\u8be5\u6d88\u606f\u5df2\u88ab\u6539\u52a8\u8fc7\uff0c\u65e0\u6cd5\u56de\u9000\uff08\u81ea\u52a8\u4f5c\u5e9f\uff09');
+		return;
+	}
+	await applyFixedMessage(ctx, id, rec.original, false);
+	batchUndo.splice(idx, 1);
+	updateUndoAllBtn();
+	toastr?.success?.('\u2705 \u5df2\u56de\u9000\u8be5\u697c\u5c42\u5230\u4fee\u590d\u524d');
+}
+
+// 修复全部楼层：直接写入原文；有改动的楼层挂 \ud83d\udc41；记录可回退快照
+async function fixAllMessages() {
+	const ctx = getContext();
+	if (!ctx?.chat?.length) { toastr?.warning?.('\u6ca1\u6709\u804a\u5929\u6d88\u606f'); return; }
+	let fixedFloors = 0, fixedTags = 0;
+	for (let i = 0; i < ctx.chat.length; i++) {
+		const mes = ctx.chat[i];
+		if (!mes || mes.is_user) continue;
+		if (typeof mes.mes !== 'string' || !mes.mes.includes('<')) continue;
+		const result = fixTagsInText(mes.mes);
+		if (result.fixed === 0) continue;
+		batchUndo.push({ chatId: ctx.chatId ?? null, messageId: i, original: mes.mes, fixed: result.text });
+		await applyFixedMessage(ctx, i, result.text, false);
+		addEyeToMessage(i);
+		fixedFloors++; fixedTags += result.fixed;
+	}
+	updateUndoAllBtn();
+	if (fixedFloors === 0) toastr?.success?.('\u2705 \u5168\u90e8\u697c\u5c42\u6807\u7b7e\u5747\u6b63\u786e\uff0c\u65e0\u9700\u4fee\u590d');
+	else toastr?.success?.(`\u2705 \u5df2\u4fee\u590d ${fixedFloors} \u4e2a\u697c\u5c42\uff08\u5171 ${fixedTags} \u5904\u6807\u7b7e\uff09\u3002\u70b9\u697c\u5c42\u5185 \ud83d\udc41 \u67e5\u770b\u6539\u52a8\uff0c\u53ef\u5355\u6761/\u5168\u90e8\u56de\u9000`);
+}
+
+// 回退全部：逐条恢复（跳过已被再次改动的）
+async function undoAllFixes() {
+	const ctx = getContext();
+	if (!ctx) return;
+	if (!batchUndo.length) { toastr?.info?.('\u6ca1\u6709\u53ef\u56de\u9000\u7684\u4fee\u590d'); return; }
+	let n = 0, skip = 0;
+	for (const rec of [...batchUndo]) {
+		const msg = ctx.chat?.[rec.messageId];
+		if (!msg || msg.mes !== rec.fixed) { skip++; batchUndo.splice(batchUndo.indexOf(rec), 1); continue; }
+		await applyFixedMessage(ctx, rec.messageId, rec.original, false);
+		batchUndo.splice(batchUndo.indexOf(rec), 1);
+		n++;
+	}
+	document.querySelectorAll('.kimi-tag-eye').forEach(e => e.remove());
+	updateUndoAllBtn();
+	toastr?.success?.(`\u2705 \u5df2\u56de\u9000 ${n} \u4e2a\u697c\u5c42${skip ? `\uff08${skip} \u6761\u5df2\u88ab\u6539\u52a8\u81ea\u52a8\u8df3\u8fc7\uff09` : ''}`);
+}
+
+// CDP/控制台调试出口（仿 st-chat-sync 的 __stChatSyncDebug 模式）
+window.__stTagDebug = { fixAllMessages, undoAllFixes, undoFloorFix, toggleTagDiff, addEyeToMessage, lineDiff, buildDiffHtml, fixTagsInText, batchUndo };
+
+function updateUndoAllBtn() {
+	const btn = document.getElementById(`${extensionName}_undo_all`);
+	if (btn) { btn.disabled = !batchUndo.length; btn.style.opacity = batchUndo.length ? 1 : 0.4; }
+}
+
 // ========== 初始化 ==========
 
 jQuery(async () => {
@@ -1312,6 +1478,10 @@ jQuery(async () => {
 
 	// 常驻"回退上一次修复"按钮
 	$(`#${extensionName}_undo_panel`).on('click', async () => { await undoLastFix(); });
+	// 批量修复全部楼层 + 幻影 diff 预览
+	$(`#${extensionName}_fixall`).on('click', async () => { await fixAllMessages(); });
+	$(`#${extensionName}_undo_all`).on('click', async () => { await undoAllFixes(); });
+	updateUndoAllBtn();
 	// 重挂后按当前 undoSlot 恢复面板按钮可用态（新挂的按钮默认 disabled）
 	updateUndoBtn();
 	}
@@ -1321,8 +1491,8 @@ jQuery(async () => {
 
 	// 自动修复监听（每轮 AI 输出结束自动修）
 	registerAutoFix();
-	// 切换聊天时，隐藏上一个聊天的"回退修复"按钮
-	eventSource.on(event_types.CHAT_CHANGED, () => updateUndoBtn());
+	// 切换聊天时，隐藏上一个聊天的"回退修复"按钮；批量修复回退记录跨聊天作废
+	eventSource.on(event_types.CHAT_CHANGED, () => { updateUndoBtn(); batchUndo.length = 0; updateUndoAllBtn(); });
 });
 
 })();// 挂载「标签修复」设置卡到余温设置面板的 tag_slot（跟随余温 initSettingsPanel 重建，幂等）
@@ -1357,6 +1527,10 @@ export function stTagMountSettings() {
 <div style="display:flex;gap:6px;margin-top:6px">
 <button id="${ext}_btn" class="kimi-btn" style="flex:1">${t('tagFixLast')}</button>
 <button id="${ext}_undo_panel" class="kimi-btn" style="flex:1" disabled>${t('tagUndo')}</button>
+</div>
+<div style="display:flex;gap:6px;margin-top:6px">
+<button id="${ext}_fixall" class="kimi-btn" style="flex:1">${t('tagFixAll')}</button>
+<button id="${ext}_undo_all" class="kimi-btn" style="flex:1" disabled>${t('tagUndoAll')}</button>
 </div>
 <button id="${ext}_reset" class="kimi-btn" style="width:100%;margin-top:6px">${t('tagReset')}</button>
 
