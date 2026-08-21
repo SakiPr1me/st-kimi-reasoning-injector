@@ -982,6 +982,8 @@ async function applyFixedMessage(ctx, messageId, text, recordUndo = true) {
 		// fixed 记录写入后的文本，供回退前校验消息是否已被再次改动（防覆盖新内容）
 		undoSlot = { chatId: ctx.chatId ?? null, messageId, original: ctx.chat[messageId]?.mes ?? null, fixed: text };
 		updateUndoBtn();
+		// v1.13.3：眼睛+批量回退记录下沉到公共入口 —— 修复最后一条/每轮自动修复/修复全部 三条路径行为一致
+		batchUndo.push({ chatId: ctx.chatId ?? null, messageId, original: ctx.chat[messageId]?.mes ?? null, fixed: text });
 	}
 
 	let rendered = false;
@@ -1014,6 +1016,10 @@ async function applyFixedMessage(ctx, messageId, text, recordUndo = true) {
 		if (ctx.saveChat) await ctx.saveChat();
 	}
 
+	if (recordUndo) {
+		addEyeToMessage(messageId);
+		updateUndoAllBtn();
+	}
 	return rendered;
 }
 
@@ -1270,9 +1276,7 @@ async function fixAllMessages() {
 		if (typeof mes.mes !== 'string' || !mes.mes.includes('<')) continue;
 		const result = fixTagsInText(mes.mes);
 		if (result.fixed === 0) continue;
-		batchUndo.push({ chatId: ctx.chatId ?? null, messageId: i, original: mes.mes, fixed: result.text });
-		await applyFixedMessage(ctx, i, result.text, false);
-		addEyeToMessage(i);
+		await applyFixedMessage(ctx, i, result.text); // recordUndo=true：统一记录 batchUndo + 挂眼睛
 		fixedFloors++; fixedTags += result.fixed;
 	}
 	updateUndoAllBtn();
