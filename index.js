@@ -3857,6 +3857,9 @@ jQuery(async () => {
 	// 挂载标签修复设置卡(跟随余温面板重建)
 	stTagMountSettings();
 
+	// 事件绑定抽成函数：设置卡会随余温面板重渲染而重挂（如语言切换），
+	// 旧元素销毁后监听随之丢失 → stTagMountSettings 每次挂载后重新调用本函数补绑定。
+	function stTagBindEvents() {
 	// 监听标签树编辑
 	$(`#${extensionName}_tree`).on('input', function() {
 		settings.tagTree = $(this).val();
@@ -3918,6 +3921,12 @@ jQuery(async () => {
 
 	// 常驻"回退上一次修复"按钮
 	$(`#${extensionName}_undo_panel`).on('click', async () => { await undoLastFix(); });
+	// 重挂后按当前 undoSlot 恢复面板按钮可用态（新挂的按钮默认 disabled）
+	updateUndoBtn();
+	}
+	stTagBindEvents();
+	// 暴露给外层 stTagMountSettings：重挂设置卡后重新绑定（外层拿不到 IIFE 内函数）
+	window.stTagBindEvents = stTagBindEvents;
 
 	// 自动修复监听（每轮 AI 输出结束自动修）
 	registerAutoFix();
@@ -3985,6 +3994,8 @@ function stTagMountSettings() {
         // 幂等：先移除旧标签修复卡，再挂新的
         jQuery('#kimi_reasoning_injector_tag_slot').children().remove();
         jQuery('#kimi_reasoning_injector_tag_slot').replaceWith(h);
+        // 重挂后补事件绑定 + 撤销按钮状态（IIFE 只在首载绑一次，重挂的新元素没监听）
+        if (typeof window.stTagBindEvents === 'function') window.stTagBindEvents();
     } catch (e) { console.warn('[TagAutoFixer] 挂载设置卡失败:', e); }
 }
 
