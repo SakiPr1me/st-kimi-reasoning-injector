@@ -1,8 +1,8 @@
 {
     "name": "Kimi Reasoning Content Injector",
     "display_name": "余温工具箱",
-    "description": "余温工具箱：注入 + 折叠 + 自动重roll + 换行修正 + Deepseek适配",
-    "version": "1.11.58",
+    "description": "余温工具箱：思维链注入夺舍 + 折叠美化 + 自动重roll + 自动截断 + 词汇替换 + 换行修正 + DeepSeek适配 + 标签修复",
+    "version": "1.13.1",
     "author": "Local",
     "js": [
         "index.js"
