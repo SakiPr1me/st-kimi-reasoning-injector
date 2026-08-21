@@ -368,7 +368,7 @@ function resolveTemplate(text) {
             });
         return substituteParams(out);
     } catch (e) {
-        console.warn("[Kimi注入] resolveTemplate 解析失败:", e);
+        console.warn("[余温工具箱] resolveTemplate 解析失败:", e);
         return text;
     }
 }
@@ -390,7 +390,7 @@ function captureRenderedThinking(generateData) {
             }
         }
     } catch (e) {
-        console.warn('[Kimi注入] 截获 thinking 失败:', e);
+        console.warn('[余温工具箱] 截获 thinking 失败:', e);
     }
 }
 
@@ -464,7 +464,7 @@ function refreshSeed() {
         }
         seedResolved = applyCotByMode(buildSeed(t.trim()));
     } catch (e) {
-        console.warn('[Kimi注入] refreshSeed 失败:', e);
+        console.warn('[余温工具箱] refreshSeed 失败:', e);
         seedResolved = settings.reasoningContent; // 退回原文
     }
 }
@@ -475,7 +475,7 @@ function onSettingsReady(generateData) {
     try {
         captureRenderedThinking(generateData);
     } catch (e) {
-        console.warn('[Kimi注入] captureRenderedThinking 失败:', e);
+        console.warn('[余温工具箱] captureRenderedThinking 失败:', e);
     } finally {
         refreshSeed();
     }
@@ -632,12 +632,12 @@ window.fetch = async function(...args) {
                 config.body = JSON.stringify(bodyObj);
                 const last = msgs[msgs.length - 1];
                 const rc = last && last.reasoning_content;
-                console.log('[Kimi注入] 改写后最后一条:', 'role=' + (last && last.role), '| partial=' + (last && last.partial ? 'true' : 'false'), '| reasoning_content=' + (rc ? '已注入(' + rc.slice(0, 80).replace(/\n/g, '\\n') + '...)' : '无'));
+                console.log('[余温工具箱] 改写后最后一条:', 'role=' + (last && last.role), '| partial=' + (last && last.partial ? 'true' : 'false'), '| reasoning_content=' + (rc ? '已注入(' + rc.slice(0, 80).replace(/\n/g, '\\n') + '...)' : '无'));
             } else {
-                console.log('[Kimi注入] 未改写', 'enabled=' + settings.enabled, '| reasoningContent非空=' + (settings.reasoningContent.trim() !== ''), '| injectModes=' + JSON.stringify(settings.injectModes));
+                console.log('[余温工具箱] 未改写', 'enabled=' + settings.enabled, '| reasoningContent非空=' + (settings.reasoningContent.trim() !== ''), '| injectModes=' + JSON.stringify(settings.injectModes));
             }
         } catch (e) {
-            console.error("[Kimi注入] 失败:", e);
+            console.error("[余温工具箱] 失败:", e);
         }
     }
     return originalFetch.apply(this, args);
@@ -750,18 +750,18 @@ function checkStreamingAbort(messageId) {
 
         if (stopReason) {
             let stopped = false;
-            try { stopped = stopGeneration(); } catch (e) { console.warn('[Kimi插件] 截断失败:', e); }
+            try { stopped = stopGeneration(); } catch (e) { console.warn('[余温工具箱] 截断失败:', e); }
             if (stopped) {
                 earlyStopTriggered = true;
                 earlyRerollMessageId = messageId;
                 earlyRerollHandled = false;
-                console.log(`[Kimi插件] 流式中${stopReason} → 截断生成`);
+                console.log(`[余温工具箱] 流式中${stopReason} → 截断生成`);
                 // 保险：若截断后 MESSAGE_RECEIVED 没触发（异常情况），10 秒后清标记
                 setTimeout(() => { earlyStopTriggered = false; earlyRerollMessageId = -1; }, 10000);
             }
         }
     } catch (e) {
-        console.warn('[Kimi插件] 流式检测失败:', e);
+        console.warn('[余温工具箱] 流式检测失败:', e);
     }
 }
 
@@ -823,8 +823,8 @@ function checkAutoStop(text) {
     const marker = String(settings.autoStopMarker || '<NG_scene>');
     if (marker && text.includes(marker)) {
         autoStopTriggered = true;
-        console.log(`[Kimi工具箱] 检测到截断标记 ${marker} → 停止生成（省token）`);
-        try { stopGeneration(); } catch (e) { console.warn('[Kimi工具箱] autoStop stopGeneration 失败:', e); }
+        console.log(`[余温工具箱] 检测到截断标记 ${marker} → 停止生成（省token）`);
+        try { stopGeneration(); } catch (e) { console.warn('[余温工具箱] autoStop stopGeneration 失败:', e); }
     }
 }
 
@@ -868,13 +868,13 @@ function checkNativeReroll(messageId) {
                 autoRerollCount++;
                 lastAutoRerollMessageId = messageId;
                 lastAutoRerollTime = now;
-                console.log(`[Kimi插件] 检测到${reason}，自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${messageId}`);
+                console.log(`[余温工具箱] 检测到${reason}，自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${messageId}`);
                 notifyReroll(`🔄 自动重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}（${reason}）`);
                 updateRerollStatus();
                 triggerAutoSwipe(messageId);
             } else {
                 // 达到连续上限：暂停（不重置计数，避免反复刷）；等一条通过检测的消息把计数归零
-                console.log(`[Kimi插件] 检测到${reason}，已达连续上限（${settings.autoRerollLimit}），暂停自动重roll`);
+                console.log(`[余温工具箱] 检测到${reason}，已达连续上限（${settings.autoRerollLimit}），暂停自动重roll`);
                 if (!rerollBlockedNotified) { rerollBlockedNotified = true; notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll`, 'error'); }
                 updateRerollStatus();
             }
@@ -884,7 +884,7 @@ function checkNativeReroll(messageId) {
             updateRerollStatus();
         }
     } catch (e) {
-        console.warn('[Kimi插件] 夺舍检测失败:', e);
+        console.warn('[余温工具箱] 夺舍检测失败:', e);
     }
 }
 
@@ -903,21 +903,21 @@ async function triggerAutoSwipe(messageId) {
         const lastMsg = chat[lastId];
         // 最后一条是用户消息：AI 没生成出来（用户消息后空回 / regenerate 删了 AI 消息）→ 重新生成
         if (lastMsg && lastMsg.is_user) {
-            console.log(`[Kimi插件] 最后一条是用户消息 → 改用 regenerate 重新生成`);
-            try { await Generate('regenerate'); } catch (e) { console.warn('[Kimi插件] regenerate 重新生成失败:', e); }
+            console.log(`[余温工具箱] 最后一条是用户消息 → 改用 regenerate 重新生成`);
+            try { await Generate('regenerate'); } catch (e) { console.warn('[余温工具箱] regenerate 重新生成失败:', e); }
             return;
         }
         // 否则 swipe 开新分支（目标实时取 chat.length-1）
         let targetId = messageId;
         if (!chat[messageId] || messageId !== lastId) {
             targetId = lastId;
-            console.log(`[Kimi插件] 重roll目标修正：消息#${messageId} → #${lastId}（regenerate 删建后索引变化）`);
+            console.log(`[余温工具箱] 重roll目标修正：消息#${messageId} → #${lastId}（regenerate 删建后索引变化）`);
         }
-        console.log(`[Kimi插件] 触发自动重roll：消息#${targetId} 开新分支`);
+        console.log(`[余温工具箱] 触发自动重roll：消息#${targetId} 开新分支`);
         await doSwipe(targetId);
-        console.log(`[Kimi插件] 自动重roll swipe 完成`);
+        console.log(`[余温工具箱] 自动重roll swipe 完成`);
     } catch (e) {
-        console.warn('[Kimi插件] 自动重roll失败:', e);
+        console.warn('[余温工具箱] 自动重roll失败:', e);
     }
 }
 
@@ -931,20 +931,20 @@ function isEmptyMes(mes) {
 // 空回重roll：零 token 回复（断流/服务器不稳）→ 对这条空消息开新 swipe 分支。
 // 用 swipe 而不是 /trigger——/trigger 在连续生成时可能 roll 成新一楼（参考插件「自动PVP」的 bug）。
 function handleEmptyReroll(messageId) {
-    if (settings.rerollPaused) { console.log('[Kimi工具箱] 自动重roll已暂停，跳过空回重roll'); return; }
+    if (settings.rerollPaused) { console.log('[余温工具箱] 自动重roll已暂停，跳过空回重roll'); return; }
     if (!settings.enabled || !settings.rerollOnEmpty) {
-        console.log(`[Kimi插件] 空回但跳过：enabled=${settings.enabled}, rerollOnEmpty=${settings.rerollOnEmpty}`);
+        console.log(`[余温工具箱] 空回但跳过：enabled=${settings.enabled}, rerollOnEmpty=${settings.rerollOnEmpty}`);
         return;
     }
     if (autoRerollCount >= settings.autoRerollLimit) {
-        console.log(`[Kimi插件] 空回，但已达连续上限（${settings.autoRerollLimit}），暂停自动重roll`);
+        console.log(`[余温工具箱] 空回，但已达连续上限（${settings.autoRerollLimit}），暂停自动重roll`);
         if (!rerollBlockedNotified) { rerollBlockedNotified = true; notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll`, 'error'); }
         return;
     }
     autoRerollCount++;
     lastAutoRerollMessageId = messageId;
     lastAutoRerollTime = Date.now();
-    console.log(`[Kimi插件] 空回（零token）→ 自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${messageId}`);
+    console.log(`[余温工具箱] 空回（零token）→ 自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${messageId}`);
     notifyReroll(`🔄 空回自动重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
     updateRerollStatus();
     triggerAutoSwipe(messageId);
@@ -975,7 +975,7 @@ async function reRenderMessage(id) {
             try {
                 await TH.setChatMessages([{ message_id: id, message: msg.mes }]);
                 rendered = true;
-            } catch (e) { console.warn('[Kimi插件] setChatMessages 失败:', e); }
+            } catch (e) { console.warn('[余温工具箱] setChatMessages 失败:', e); }
         }
         if (!rendered && TH?.refreshOneMessage) {
             try {
@@ -983,7 +983,7 @@ async function reRenderMessage(id) {
                 if (ctx.saveChat) await ctx.saveChat();
                 await TH.refreshOneMessage(id);
                 rendered = true;
-            } catch (e) { console.warn('[Kimi插件] refreshOneMessage 失败:', e); }
+            } catch (e) { console.warn('[余温工具箱] refreshOneMessage 失败:', e); }
         }
         if (!rendered) {
             // 最后兜底：手动重渲染（可能无 Regex 美化，但保证界面更新）
@@ -992,7 +992,7 @@ async function reRenderMessage(id) {
             if (el) el.innerHTML = messageFormatting(applyReplacements(msg.mes, 'display'), msg.name || '', msg.is_system, msg.is_user, id);
         }
         if (settings.thinkingFold) applyThinkingFold(id);
-    } catch (e) { console.warn('[Kimi插件] 重渲染失败:', e); }
+    } catch (e) { console.warn('[余温工具箱] 重渲染失败:', e); }
 }
 
 // 修正单条消息原文：<content> 内单换行补成双换行，写回 chat[id].mes；首次修正前存原文（供回退）
@@ -1007,9 +1007,9 @@ function fixMesForMessage(id) {
         if (!origMesMap.has(id)) origMesMap.set(id, msg.mes); // 只存一次真正的原文
         msg.mes = fixed;
         reRenderMessage(id);
-        console.log(`[Kimi插件] 已修正消息#${id} 正文换行（原文已暂存可回退）`);
+        console.log(`[余温工具箱] 已修正消息#${id} 正文换行（原文已暂存可回退）`);
         return true;
-    } catch (e) { console.warn('[Kimi插件] 修正失败:', e); return false; }
+    } catch (e) { console.warn('[余温工具箱] 修正失败:', e); return false; }
 }
 
 // 回退单条消息：恢复修正前的原始 mes
@@ -1018,14 +1018,14 @@ function revertMesForMessage(id) {
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const msg = ctx?.chat?.[id];
         if (!msg || !origMesMap.has(id)) {
-            console.log(`[Kimi插件] 消息#${id} 无修正记录，无法回退`);
+            console.log(`[余温工具箱] 消息#${id} 无修正记录，无法回退`);
             return;
         }
         msg.mes = origMesMap.get(id);
         origMesMap.delete(id);
         reRenderMessage(id);
-        console.log(`[Kimi插件] 已回退消息#${id} 为修正前原文`);
-    } catch (e) { console.warn('[Kimi插件] 回退失败:', e); }
+        console.log(`[余温工具箱] 已回退消息#${id} 为修正前原文`);
+    } catch (e) { console.warn('[余温工具箱] 回退失败:', e); }
 }
 
 // 取最后一条 assistant 消息 id（「修正当前楼层」的目标）
@@ -1058,7 +1058,7 @@ window.__kimiStopReroll = () => {
     settings.rerollPaused = true;
     saveSettingsDebounced();
     // v1.11.49：立即停止当前生成（复用 ST 停止逻辑，和手动点 ST 自带停止按钮一致）
-    try { stopGeneration(); } catch (e) { console.warn('[Kimi工具箱] 停止当前生成失败:', e); }
+    try { stopGeneration(); } catch (e) { console.warn('[余温工具箱] 停止当前生成失败:', e); }
     try { toastr.info('⏹ 已停止自动重roll（手动 swipe/重新生成可恢复）', 'Kimi工具箱', { timeOut: 2000 }); } catch (e) {}
 };
 
@@ -1082,7 +1082,7 @@ function applyReasoningHeightCss(on) {
         } else {
             $('#kimi-reasoning-height-style').remove();
         }
-    } catch (e) { console.warn('[Kimi工具箱] 高度CSS注入失败:', e); }
+    } catch (e) { console.warn('[余温工具箱] 高度CSS注入失败:', e); }
 }
 // 启动时按设置同步（刷新/重载后保持）
 if (settings.reasoningHeightCss) applyReasoningHeightCss(true);
@@ -1502,17 +1502,17 @@ function applyThinkingFoldInner(messageId) {
             }
         }
     } catch (e) {
-        console.warn('[Kimi折叠] 失败:', e);
+        console.warn('[余温工具箱] 失败:', e);
     }
 }
 
 eventSource.on(event_types.MESSAGE_RECEIVED, (id) => {
-    if (isDryRun) { console.log('[Kimi插件] MESSAGE_RECEIVED (dry-run，跳过重roll检测)'); return; }
+    if (isDryRun) { console.log('[余温工具箱] MESSAGE_RECEIVED (dry-run，跳过重roll检测)'); return; }
     const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
     const msg = ctx?.chat?.[id];
     const isAssistant = msg && !msg.is_user && !msg.is_system;
     const isEmpty = isAssistant && isEmptyMes(msg.mes);
-    console.log('[Kimi插件] MESSAGE_RECEIVED id=' + id + ' earlyId=' + earlyRerollMessageId + ' earlyStop=' + earlyStopTriggered + ' isGen=' + isGenerating + ' token=' + streamGotToken);
+    console.log('[余温工具箱] MESSAGE_RECEIVED id=' + id + ' earlyId=' + earlyRerollMessageId + ' earlyStop=' + earlyStopTriggered + ' isGen=' + isGenerating + ' token=' + streamGotToken);
 
     // ② 流式截断后的强制重roll（v1.11.25 放宽：不再依赖 earlyRerollMessageId === id 精确匹配，
     //    只要本次生成被 earlyStop 截断就对当前消息重roll——swipe 场景 id 可能错位导致漏 roll）
@@ -1524,12 +1524,12 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id) => {
         earlyStopTriggered = false;
         if (settings.enabled && autoRerollCount < settings.autoRerollLimit) {
             autoRerollCount++;
-            console.log(`[Kimi插件] 流式截断后自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${rerollId}`);
+            console.log(`[余温工具箱] 流式截断后自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${rerollId}`);
             notifyReroll(`🔄 流式截断重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
             updateRerollStatus();
             triggerAutoSwipe(rerollId);
         } else {
-            console.log(`[Kimi插件] 流式截断后自动重roll被限制（连续${autoRerollCount}/${settings.autoRerollLimit}）`);
+            console.log(`[余温工具箱] 流式截断后自动重roll被限制（连续${autoRerollCount}/${settings.autoRerollLimit}）`);
         }
         return;
     }
@@ -1538,7 +1538,7 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id) => {
     //    手动停止时序：stopGeneration → GENERATION_ENDED → GENERATION_STOPPED（streamGotToken=true）→ MESSAGE_RECEIVED，
     //    所以手动停止时 streamGotToken 已是 true，不会走到这里 → 不误判。
     if (settings.enabled && settings.rerollOnEmpty && isGenerating && !streamGotToken && isEmpty) {
-        console.log(`[Kimi插件] 空回主路径：消息#${id} 零token且为空 → 自动重roll`);
+        console.log(`[余温工具箱] 空回主路径：消息#${id} 零token且为空 → 自动重roll`);
         handleEmptyReroll(id);
         emptyRerollHandled = true;
         return;
@@ -1575,10 +1575,10 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     isDryRun = !!dryRun; // ST 提示词查看器 dry-run（Generate 第三个参数）
     if (isDryRun) {
         isGenerating = false; // dry-run 不是真实生成，清除生成中状态（防残留导致后续 MESSAGE_RECEIVED 误判空回）
-        console.log('[Kimi插件] GENERATION_STARTED (dry-run，跳过状态管理)');
+        console.log('[余温工具箱] GENERATION_STARTED (dry-run，跳过状态管理)');
         return;
     }
-    console.log('[Kimi插件] GENERATION_STARTED');
+    console.log('[余温工具箱] GENERATION_STARTED');
     earlyStopTriggered = false;
     earlyRerollMessageId = -1;
     streamGotToken = false;    // 本次生成是否收到过 token（空回检测）
@@ -1610,7 +1610,7 @@ eventSource.on(event_types.GENERATION_AFTER_COMMANDS, () => {
         // 仅 KIMI 模式要求模型输出 <cot> 块（DS/自定义模板不要求）
         const wantCot = modes.includes('partial') && settings.injectTarget === 'kimi';
         setLocalVariable('cot_require', wantCot ? '<cot> ... </cot>' : '');
-    } catch (e) { console.warn('[Kimi工具箱] 设置 cot_require 失败:', e); }
+    } catch (e) { console.warn('[余温工具箱] 设置 cot_require 失败:', e); }
 });
 
 // 流式每个 token → 标记本次生成有内容（空回检测）
@@ -1622,7 +1622,7 @@ eventSource.on(event_types.STREAM_TOKEN_RECEIVED, checkAutoStop);
 // 生成结束：本次零 token → 空回（断流/服务器不稳）→ 自动重roll
 eventSource.on(event_types.GENERATION_ENDED, () => {
     if (isDryRun) { isDryRun = false; return; } // 提示词查看器 dry-run 结束：不判空回
-    console.log(`[Kimi插件] ENDED 触发: manualStop=${manualStopClicked} token=${streamGotToken} emptyHandled=${emptyRerollHandled} early=${earlyStopTriggered}`);
+    console.log(`[余温工具箱] ENDED 触发: manualStop=${manualStopClicked} token=${streamGotToken} emptyHandled=${emptyRerollHandled} early=${earlyStopTriggered}`);
     isGenerating = false; // 生成结束无论何种路径都退出"生成中"，防残留导致历史加载误判空回
     // v1.11.39：流式截断（英文/无思考/思考太短）若 MESSAGE_RECEIVED 没触发（如 swipe 场景 onErrorStreaming 吞掉），在此兜底重roll
     if (earlyStopTriggered) {
@@ -1632,12 +1632,12 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
             const targetId = earlyRerollMessageId >= 0 ? earlyRerollMessageId : lastObservedMesId;
             if (settings.enabled && autoRerollCount < settings.autoRerollLimit) {
                 autoRerollCount++;
-                console.log(`[Kimi插件] 流式截断后自动重roll（GENERATION_ENDED 兜底，连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${targetId}`);
+                console.log(`[余温工具箱] 流式截断后自动重roll（GENERATION_ENDED 兜底，连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${targetId}`);
                 notifyReroll(`🔄 流式截断重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
                 updateRerollStatus();
                 if (targetId >= 0) triggerAutoSwipe(targetId);
             } else {
-                console.log(`[Kimi插件] 流式截断后自动重roll被限制（连续${autoRerollCount}/${settings.autoRerollLimit}）`);
+                console.log(`[余温工具箱] 流式截断后自动重roll被限制（连续${autoRerollCount}/${settings.autoRerollLimit}）`);
             }
         }
         earlyRerollMessageId = -1;
@@ -1645,18 +1645,18 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
         return; // 流式截断场景不走空回检测
     }
     if (emptyRerollHandled) { emptyRerollHandled = false; return; }
-    console.log('[Kimi插件] ENDED 守卫: enabled/rerollOnEmpty 挡住');
+    console.log('[余温工具箱] ENDED 守卫: enabled/rerollOnEmpty 挡住');
     if (!settings.enabled || !settings.rerollOnEmpty) return;
-    console.log('[Kimi插件] ENDED 守卫: 手动停止，跳过');
+    console.log('[余温工具箱] ENDED 守卫: 手动停止，跳过');
     if (manualStopClicked) return; // 用户手动停止：不当作空回
-    console.log('[Kimi插件] ENDED 守卫: 已收到token，非空回');
+    console.log('[余温工具箱] ENDED 守卫: 已收到token，非空回');
     if (streamGotToken) return;
-    console.log('[Kimi插件] ENDED 守卫: 已流式截断');
+    console.log('[余温工具箱] ENDED 守卫: 已流式截断');
     if (earlyStopTriggered) return;
     // v1.11.9：不再检查 chat 消息内容（swipe 500 回滚后消息非空会误判为"非空回"）。
     // 空回判定只看零 token；非流式成功由 MESSAGE_RECEIVED ④ 置 streamGotToken=true 兜底。
     // v1.11.11：定位目标消息——优先 observer 记录的最近变化消息；无效则取最后一条 assistant（swipe 通常作用于最新消息）
-    console.log('[Kimi插件] ENDED 判定空回通过，lastObservedMesId=' + lastObservedMesId);
+    console.log('[余温工具箱] ENDED 判定空回通过，lastObservedMesId=' + lastObservedMesId);
     emptyRerollTargetId = lastObservedMesId;
     if (emptyRerollTargetId < 0) {
         const ctxEnded = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
@@ -1687,11 +1687,11 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
     const lastUnchanged = (generationStartLastMes !== null && lastMesNow !== null && lastMesNow === generationStartLastMes);
     generationStartLastMes = null;
     if (lastUnchanged) {
-        console.log('[Kimi插件] 空回但最后一条消息未变化（提示词查看器/无新消息）→ 跳过自动重roll');
+        console.log('[余温工具箱] 空回但最后一条消息未变化（提示词查看器/无新消息）→ 跳过自动重roll');
         return;
     }
 
-    console.log(`[Kimi插件] 空回 → 自动重roll target=${rerollTargetId}`);
+    console.log(`[余温工具箱] 空回 → 自动重roll target=${rerollTargetId}`);
     if (rerollTargetId >= 0) handleEmptyReroll(rerollTargetId);
 });
 
@@ -1702,7 +1702,7 @@ eventSource.on(event_types.GENERATION_STOPPED, () => {
     streamGotToken = true;
     isGenerating = false;
     if (manualStopClicked) {
-        console.log('[Kimi] manual stop');
+        console.log('[余温工具箱] manual stop');
         manualStopClicked = false;
     }
 });
@@ -1724,7 +1724,7 @@ document.addEventListener('click', (e) => {
             autoRerollCount = 0;
             rerollBlockedNotified = false;
             updateRerollStatus();
-            console.log('[Kimi插件] 用户手动 swipe → 重置连续失败计数');
+            console.log('[余温工具箱] 用户手动 swipe → 重置连续失败计数');
         }
     }
 }, true);
@@ -2316,7 +2316,7 @@ partial
                     if (mesid !== null) showTpsForMessage(Number(mesid));
                 });
             }
-        } catch (e) { console.warn('[Kimi工具箱] tps 刷新失败:', e); }
+        } catch (e) { console.warn('[余温工具箱] tps 刷新失败:', e); }
     });
     $("#" + extensionName + "_keep_scroll").on("change", function () {
         settings.keepScrollOnGenerate = $(this).is(":checked");
@@ -2431,7 +2431,7 @@ partial
         }
         // 立即刷新预解析种子缓存：切模式后 seedResolved 与 settings.reasoningContent 同步，
         // 防止下次生成走「非标准路径」时注入旧种子（如 KIMI 种子残留）
-        try { refreshSeed(); } catch (e) { console.warn('[Kimi工具箱] refreshSeed 失败:', e); }
+        try { refreshSeed(); } catch (e) { console.warn('[余温工具箱] refreshSeed 失败:', e); }
         saveSettingsDebounced();
         console.log("[余温工具箱] 注入模式切换为:", target, "| Reasoning Content 已更新");
     }
@@ -2459,7 +2459,7 @@ partial
         saveSettingsDebounced();
         try { toastr.success('已追加空白模板，请在 Reasoning Content 中填写', '余温工具箱', { timeOut: 3000 }); } catch (e) {}
         // 追加后 content 为空：立即清掉种子缓存，避免注入旧种子
-        try { refreshSeed(); } catch (e) { console.warn('[Kimi工具箱] refreshSeed 失败:', e); }
+        try { refreshSeed(); } catch (e) { console.warn('[余温工具箱] refreshSeed 失败:', e); }
     });
 
     // ===== 删除自定义模板（事件委托，命名空间防重复绑定）=====
@@ -2482,7 +2482,7 @@ partial
         }
         saveSettingsDebounced();
         // 删除模板后立即刷新种子缓存（若删的是当前选中模板，内容已回退 KIMI）
-        try { refreshSeed(); } catch (e) { console.warn('[Kimi工具箱] refreshSeed 失败:', e); }
+        try { refreshSeed(); } catch (e) { console.warn('[余温工具箱] refreshSeed 失败:', e); }
     });
 
     $("#" + extensionName + "_name_enabled").on("change", function () {
