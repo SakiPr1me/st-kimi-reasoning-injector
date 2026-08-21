@@ -1175,8 +1175,9 @@ function lineDiff(a, b) {
 	return out;
 }
 
-// 渲染 diff HTML：长段未改动行折叠（每侧留 2 行上下文）
-function buildDiffHtml(diffRows, collapseLabel) {
+// 渲染 diff HTML：collapse=false 全展开（显示所有行，默认，所有标签一目了然）；
+// true 折叠长段未改动行（每侧留 2 行上下文），头部按钮切换
+function buildDiffHtml(diffRows, collapseLabel, collapse = false) {
 	const rowHtml = (r) => {
 		if (r.t === '-') return `<div style="background:rgba(255,80,80,.13);border-radius:3px;padding:1px 6px;white-space:pre-wrap;word-break:break-word"><span style="color:#e57373;font-weight:700">\u2212 </span>${esc(r.s) || '&nbsp;'}</div>`;
 		if (r.t === '+') return `<div style="background:rgba(80,220,120,.12);border-radius:3px;padding:1px 6px;white-space:pre-wrap;word-break:break-word"><span style="color:#7cd992;font-weight:700">+ </span>${esc(r.s) || '&nbsp;'}</div>`;
@@ -1186,7 +1187,7 @@ function buildDiffHtml(diffRows, collapseLabel) {
 	let run = [];
 	const flush = () => {
 		if (!run.length) return;
-		if (run.length <= 6) { run.forEach(r => out.push(rowHtml(r))); }
+		if (!collapse || run.length <= 6) { run.forEach(r => out.push(rowHtml(r))); }
 		else {
 			out.push(rowHtml(run[0])); out.push(rowHtml(run[1]));
 			out.push(`<div style="opacity:.4;padding:1px 6px;font-size:.85em">\u22ef ${run.length - 4} ${collapseLabel}</div>`);
@@ -1216,7 +1217,7 @@ function addEyeToMessage(id) {
 	mesEl.appendChild(eye);
 }
 
-// \ud83d\udc41 开关幻影预览：开 = .mes_text 换 diff 视图（数据不动）；关 = messageFormatting 还原渲染
+// 👁 开关幻影预览：开 = .mes_text 换 diff 视图（数据不动）；关 = messageFormatting 还原渲染
 // （kimi 折叠 observer 会自动补折叠；index.js 侧已对 .kimi-tag-diff 跳过折叠/显示替换）
 function toggleTagDiff(id) {
 	const ctx = getContext();
@@ -1230,19 +1231,31 @@ function toggleTagDiff(id) {
 	}
 	const rec = batchUndo.find(r => r.messageId === id);
 	if (!rec) { el.querySelector('.kimi-tag-eye')?.remove(); return; }
+	renderTagDiff(id, el, msg, rec, diffCollapsed.get(id) === true);
+}
+
+// diff 折叠状态（messageId -> 是否折叠未改动行；默认全展开，显示所有标签行更清晰）
+const diffCollapsed = new Map();
+
+function renderTagDiff(id, el, msg, rec, collapsed) {
 	const diffRows = lineDiff(String(rec.original).split('\n'), String(msg.mes).split('\n'));
 	el.innerHTML = `
 	<div class="kimi-tag-diff" style="border:1px dashed var(--SmartThemeBorderColor,grey);border-radius:8px;padding:8px 10px;font-size:.85em;line-height:1.6">
 		<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
 			<b>${t('tagDiffTitle')}</b>
-			<button class="kimi-tag-diff-close menu_button" style="display:inline-block;width:auto;padding:2px 10px;font-size:.9em">✕</button>
 			<span style="opacity:.6;font-size:.85em">${t('tagDiffHint')}</span>
+			<button class="kimi-tag-diff-collapse menu_button" style="display:inline-block;width:auto;padding:2px 10px;font-size:.9em">${collapsed ? t('tagExpandAll') : t('tagCollapse')}</button>
+			<button class="kimi-tag-diff-close menu_button" style="display:inline-block;width:auto;padding:2px 10px;font-size:.9em">✕</button>
 			<button class="kimi-tag-undo-one menu_button" style="margin-left:auto;display:inline-block;width:auto;padding:2px 10px;font-size:.9em">${t('tagUndoThis')}</button>
 		</div>
-		${buildDiffHtml(diffRows, t('tagUnchanged'))}
+		${buildDiffHtml(diffRows, t('tagUnchanged'), collapsed)}
 	</div>`;
 	el.querySelector('.kimi-tag-undo-one')?.addEventListener('click', async () => { await undoFloorFix(id); });
-	el.querySelector('.kimi-tag-diff-close')?.addEventListener('click', () => toggleTagDiff(id));
+	el.querySelector('.kimi-tag-diff-close')?.addEventListener('click', () => { diffCollapsed.delete(id); toggleTagDiff(id); });
+	el.querySelector('.kimi-tag-diff-collapse')?.addEventListener('click', () => {
+		diffCollapsed.set(id, !collapsed);
+		renderTagDiff(id, el, msg, rec, !collapsed);
+	});
 }
 
 // 回退单条：恢复修复前原文（消息若已被再次改动则作废该记录）

@@ -33,7 +33,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.13.3 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.13.4 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -167,7 +167,7 @@ const UI = {
         tagWarnAuto: "⚠️ 每轮自动修复＝AI 回复完自动修一遍标签。出问题点「↩️ 回退」。",
         tagWarnWrap: "⚠️ 谨慎。标签整对丢失时靠前后邻居猜着补，偶尔猜错。",
         tagChkInline: "输入框旁", tagFixAll: "🏗 修复全部楼层", tagUndoAll: "↩ 回退全部修复", tagUndoThis: "↩ 回退这条修复",
-        tagDiffTitle: "🏷 标签修复改动（幻影预览）", tagDiffHint: "红 − = 修复前被改掉的行，绿 + = 修复后补入的行；点 👁 关闭预览", tagUnchanged: "行未改动",
+        tagDiffTitle: "🏷 标签修复改动（幻影预览）", tagDiffHint: "红 − = 修复前被改掉的行，绿 + = 修复后补入的行；点 👁 关闭预览", tagUnchanged: "行未改动", tagCollapse: "折叠未改动", tagExpandAll: "展开全部",
         tagChkFloat: "悬浮按钮",
         tagChkMenu: "扩展菜单",
         tagSlashHint: "也可用 /fix-tags 斜杠命令"
@@ -219,7 +219,7 @@ const UI = {
         tagWarnAuto: "⚠️ Auto-fix = fix tags after each AI reply. If issues, click \"↩️ Undo\".",
         tagWarnWrap: "⚠️ Use with care. When whole tag pairs are lost, guess from neighbors; occasionally wrong.",
         tagChkInline: "Near input", tagFixAll: "🏗 Fix All Messages", tagUndoAll: "↩ Undo All Fixes", tagUndoThis: "↩ Undo This Fix",
-        tagDiffTitle: "🏷 Tag Fix Changes (phantom preview)", tagDiffHint: "Red − = changed from before, green + = inserted by fix; click the eye again to close", tagUnchanged: "lines unchanged",
+        tagDiffTitle: "🏷 Tag Fix Changes (phantom preview)", tagDiffHint: "Red − = changed from before, green + = inserted by fix; click the eye again to close", tagUnchanged: "lines unchanged", tagCollapse: "Collapse unchanged", tagExpandAll: "Expand all",
         tagChkFloat: "Floating button",
         tagChkMenu: "Extension menu",
         tagSlashHint: "Also use /fix-tags command"
@@ -271,7 +271,7 @@ const UI = {
         tagWarnAuto: "⚠️ 자동 수정 = 각 AI 답변 후 태그 수정. 문제 시 \"↩️ 되돌리기\".",
         tagWarnWrap: "⚠️ 주의. 태그 쌍이 통째로 사라졌을 때 이웃에서 추측, 가끔 틀림.",
         tagChkInline: "입력창 옆", tagFixAll: "🏗 전체 층 수정", tagUndoAll: "↩ 전체 되돌리기", tagUndoThis: "↩ 이 층 되돌리기",
-        tagDiffTitle: "🏷 태그 수정 변경사항 (팬텀 미리보기)", tagDiffHint: "빨강 − = 수정 전 변경된 줄, 초록 + = 수정 후 추가된 줄; 👁 다시 누르면 닫힘", tagUnchanged: "줄 변경 없음",
+        tagDiffTitle: "🏷 태그 수정 변경사항 (팬텀 미리보기)", tagDiffHint: "빨강 − = 수정 전 변경된 줄, 초록 + = 수정 후 추가된 줄; 👁 다시 누르면 닫힘", tagUnchanged: "줄 변경 없음", tagCollapse: "변경 없는 줄 접기", tagExpandAll: "전체 펼치기",
         tagChkFloat: "플로팅 버튼",
         tagChkMenu: "확장 메뉴",
         tagSlashHint: "/fix-tags 명령도 사용 가능"
