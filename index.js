@@ -34,7 +34,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.18.6 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.18.7 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -387,6 +387,23 @@ if (!Array.isArray(settings.injectModes)) {
     }
 }
 delete settings.injectMode;
+
+// 截断自愈：settings 里存的内置预设可能因各种意外被截断（手机误编辑/旧配置恢复等）。
+// 判定：当前值是「当前模式+语言」完整预设的严格前缀 → 视为截断，自动恢复完整版。
+// 自定义模板与真正的自定义内容不受影响（只有完整预设的前缀才触发，概率可忽略）。
+(function healTruncatedPreset() {
+    try {
+        if (typeof settings.injectTarget === 'string' && settings.injectTarget.startsWith('custom:')) return;
+        const cur = String(settings.reasoningContent ?? '');
+        if (!cur.trim()) return;
+        const full = (settings.injectTarget === 'ds' ? DS_PRESETS : KIMI_PRESETS)[settings.language]
+            || KIMI_PRESETS[Object.keys(KIMI_PRESETS)[0]];
+        if (full !== cur && full.startsWith(cur)) {
+            console.warn('[余温工具箱] 检测到 Reasoning Content 被截断（仅剩完整预设前缀），已自动恢复完整版');
+            settings.reasoningContent = full;
+        }
+    } catch (e) { /* 静默 */ }
+})();
 
 // 无附加指令句：partial 模式下种子直接作为 assistant 前缀，模型从它续写
 
