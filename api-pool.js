@@ -45,9 +45,14 @@ function currentIndex() {
     return idx;
 }
 
+function validEntries() {
+    return settings.pool.filter(e => e.url && norm(e.url));
+}
+
+// "下一条"仅在池里有 ≥2 条有效接口时才存在（只有1条时切自己毫无意义）
 function findNext() {
-    const ents = settings.pool.filter(e => e.url && norm(e.url));
-    if (!ents.length) return null;
+    const ents = validEntries();
+    if (ents.length < 2) return null;
     const idx = currentIndex();
     return ents[(idx + 1) % ents.length];
 }
@@ -111,7 +116,8 @@ function handleLimitHit(reason) {
     }
     const next = findNext();
     if (!next) {
-        try { toastr.warning(String(t('apiNoPool')), 'API \u989d\u5ea6', { timeOut: 3000 }); } catch (e) { }
+        const msg = validEntries().length ? t('apiOnlyOne') : t('apiNoPool');
+        try { toastr.warning(String(msg), 'API \u989d\u5ea6', { timeOut: 3000 }); } catch (e) { }
         return;
     }
     console.log('[API池] 检测到 limit 类错误 → ' + (settings.autoSwitch ? '自动切换' : '询问') + '：' + reason);
@@ -154,7 +160,7 @@ function updateApiMenuItem() {
     if (!$menu.length) { setTimeout(updateApiMenuItem, 1500); return; } // 菜单未就绪则稍后重试
     const next = findNext();
     const label = next ? (next.model || norm(next.url)) : '';
-    const text = String(t('apiMenuSwitch')) + (label ? ` → ${label}` : '');
+    const text = String(t('apiMenuSwitch')) + (label ? ` → ${label}` : ''); // 图标已由 <i> 提供，文字不再带 ⇄
     $menu.append(`<a id="kimi_api_menu_item" class="list-group-item" href="#" title="${t('apiMenuSwitch')}">
         <i class="fa-solid fa-right-left"></i> ${text}
     </a>`);
@@ -163,7 +169,11 @@ function updateApiMenuItem() {
         e.stopPropagation();
         $('#extensionsMenu').fadeOut(200);
         const nx = findNext();
-        if (!nx) { try { toastr.warning(String(t('apiNoPool')), 'API \u989d\u5ea6', { timeOut: 3000 }); } catch (err) { } return; }
+        if (!nx) {
+            const msg = validEntries().length ? t('apiOnlyOne') : t('apiNoPool');
+            try { toastr.warning(String(msg), 'API \u989d\u5ea6', { timeOut: 3000 }); } catch (err) { }
+            return;
+        }
         await doSwitch(nx);
     });
 }
@@ -198,12 +208,12 @@ function poolHTML() {
         <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
             <label class="checkbox_label" style="margin:0"><input type="checkbox" id="kimi_api_enabled" ${settings.enabled ? 'checked' : ''}/> ${t('apiEnabled')}</label>
             <label class="checkbox_label" style="margin:0"><input type="checkbox" id="kimi_api_auto" ${settings.autoSwitch ? 'checked' : ''}/> ${t('apiAuto')}</label>
+            <label class="checkbox_label" style="margin:0"><input type="checkbox" id="kimi_api_menu_entry" ${settings.showMenuBtn ? 'checked' : ''}/> ${t('apiMenuEntry')}</label>
         </div>
         <div style="margin-top:5px">
             <label class="kimi-label" for="kimi_api_keywords">${t('apiKeywords')}</label>
             <input id="kimi_api_keywords" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${escHtml(settings.keywords)}"/>
         </div>
-        <label class="checkbox_label" style="display:block;margin-top:5px"><input type="checkbox" id="kimi_api_menu_entry" ${settings.showMenuBtn ? 'checked' : ''}/> ${t('apiMenuEntry')}</label>
         <div id="kimi_api_list" style="margin-top:5px">${rows || '<span style="opacity:.5;font-size:.85em">' + t('apiNoPool') + '</span>'}</div>
         <div style="margin-top:5px"><button id="kimi_api_add" class="menu_button" style="display:inline-block;width:auto">${t('apiAdd')}</button></div>
         <p class="kimi-hint">${t('apiHint')}</p>
