@@ -34,7 +34,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.18.2 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.18.3 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -72,7 +72,7 @@ const defaultSettings = {
     showTps: true,                   // 楼层 token 数旁显示生成速度（t/s）
     keepScrollOnGenerate: true,      // 生成完成保持聊天滚动位置（防 ST finalize 重排跳顶）
     reasoningTimer: true,            // 原生思维链实时计时：思考中显示秒数，结束定格精确秒
-    mutterVibrate: true,            // 完整生成时同时震动提醒（Android 有效，桌面/iOS 自动跳过）
+    mutterVibrate: false,           // 完整生成时同时震动提醒（Android 有效，桌面/iOS 自动跳过；默认关）
     clineProviderEnabled: false,     // Cline 提供商指定：请求注入 providerOptions.gateway.only
     clineProvider: 'modal',          // 当前选中的 Cline 提供商（默认 modal，据称质量最好）
     clineShowMenuBtn: true,          // 扩展菜单显示「切换Cline提供商」入口
@@ -338,7 +338,7 @@ if (settings.rerollOnEmpty === undefined) settings.rerollOnEmpty = defaultSettin
 if (settings.rerollOnNoMutter === undefined) settings.rerollOnNoMutter = true;
 if (settings.mutterSoundEnabled === undefined) settings.mutterSoundEnabled = true;
 if (!settings.mutterSoundType) settings.mutterSoundType = 'ding';
-if (settings.mutterVibrate === undefined) settings.mutterVibrate = true;
+if (settings.mutterVibrate === undefined) settings.mutterVibrate = false;
 if (settings.clineProviderEnabled === undefined) settings.clineProviderEnabled = false;
 if (!settings.clineProvider) settings.clineProvider = 'modal';
 if (settings.clineShowMenuBtn === undefined) settings.clineShowMenuBtn = true;
@@ -1221,7 +1221,7 @@ function updateClineMenuItem() {
     if (!settings.clineShowMenuBtn) return;
     const $menu = $('#extensionsMenu');
     if (!$menu.length) { setTimeout(updateClineMenuItem, 1500); return; }
-    const text = String(t('clineMenuSwitch')) + ' → ' + String(settings.clineProvider || 'modal'); // 图标由 <i> 提供
+    const text = String(t('clineMenuSwitch')); // 图标由 <i> 提供
     $menu.append(`<a id="kimi_cline_menu_item" class="list-group-item" href="#" title="${t('clineTitle')}">
         <i class="fa-solid fa-shuffle"></i> ${text}
     </a>`);

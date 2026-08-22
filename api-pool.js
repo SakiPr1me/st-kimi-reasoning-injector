@@ -162,7 +162,7 @@ function updateApiMenuItem() {
     const label = next ? (next.model || norm(next.url)) : '';
     const text = String(t('apiMenuSwitch')) + (label ? ` → ${label}` : ''); // 图标已由 <i> 提供，文字不再带 ⇄
     $menu.append(`<a id="kimi_api_menu_item" class="list-group-item" href="#" title="${t('apiMenuSwitch')}">
-        <i class="fa-solid fa-right-left"></i> ${text}
+        <i class="fa-solid fa-key"></i> ${text}
     </a>`);
     $('#kimi_api_menu_item').on('click', async (e) => {
         e.preventDefault();
