@@ -34,7 +34,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.18.7 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.18.8 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -143,7 +143,7 @@ const UI = {
         rcLabel: "Reasoning Content：",
         usageTitle: "使用方法：", usage1: "· 只打开step 1：原生思维链不进正文，正文质量理论最高。有概率极端内容夺舍失败（AI 道歉），好在出现英文可手动截停，重roll可破，主要看渠道。", usage2: "· 同时打开step 1和step2：思维链放进正文，破限较强，稳定夺舍。有概率在思考完就截断。这种截断在使用无限能源时会扣费！", usage3: "⚠️注意：两种破限方式都需要搭配专用预设，渠道仅测试opencode，其它自测。",
         rerollSectionTitle: "自动重ROLL：", alertSectionTitle: "完成提醒：",
-        rerollNoMutter: "结束仍无截断标记（半截楼/截断）", mutterSound: "完整生成 → 播放提示音", mutterVibrate: "同时震动提醒（Android；iOS不支持）", mutterTrigMarker: "检测到截断标记（K3/余温预设适用）", mutterTrigDone: "输出完成即提醒（不用截断标记的模型适用）", mutterSndDing: "柔和叮咚（推荐）", mutterSndCrisp: "清脆两声", mutterSndChord: "治愈和弦", mutterSndSoft: "低柔单音", mutterSndMelody: "八音盒旋律（约2秒）", mutterSndLongbell: "长铃余音（约2秒）", mutterSndLullaby: "摇篮琶音（约5秒）", mutterSndHarp: "竖琴流水（约5秒）", mutterSndTest: "试听", mutterHint: "两项均以「自动截断」卡的截断标记（默认 <mutter>）为准：有标记＝完整→响两声beep；无标记＝半截楼→swipe进新分支继续roll（受连续上限约束；手动停止的楼不会被判半截）。提示音为内置音，不依赖酒馆音效设置。", rerollLabel: "自动重roll：", rerollEnglish: "思维链是英文（触审易道歉）", rerollNoThink: "无思维链直接出正文（没思考 or 少思考）", rerollEmpty: "空回复（PVP）",
+        rerollNoMutter: "结束仍无截断标记（半截楼/截断）", mutterSound: "完整生成 → 播放提示音", mutterVibrate: "同时震动提醒（Android；iOS不支持）", rcReset: "↺ 复原默认预设", rcResetDone: "已复原为当前模式的默认预设", rcResetCustom: "自定义模板没有内置默认可复原", mutterTrigMarker: "检测到截断标记（K3/余温预设适用）", mutterTrigDone: "输出完成即提醒（不用截断标记的模型适用）", mutterSndDing: "柔和叮咚（推荐）", mutterSndCrisp: "清脆两声", mutterSndChord: "治愈和弦", mutterSndSoft: "低柔单音", mutterSndMelody: "八音盒旋律（约2秒）", mutterSndLongbell: "长铃余音（约2秒）", mutterSndLullaby: "摇篮琶音（约5秒）", mutterSndHarp: "竖琴流水（约5秒）", mutterSndTest: "试听", mutterHint: "两项均以「自动截断」卡的截断标记（默认 <mutter>）为准：有标记＝完整→响两声beep；无标记＝半截楼→swipe进新分支继续roll（受连续上限约束；手动停止的楼不会被判半截）。提示音为内置音，不依赖酒馆音效设置。", rerollLabel: "自动重roll：", rerollEnglish: "思维链是英文（触审易道歉）", rerollNoThink: "无思维链直接出正文（没思考 or 少思考）", rerollEmpty: "空回复（PVP）",
         rerollLimitLabel: "连续自动重roll上限：", rerollTimes: " 次", rerollMinTokensLabel: "思考太短截断阈值：",
         rerollWarning: "注意：玩极端的内容时，容易出现英文思维链，重roll虽然可以避免大概率道歉的英文思维链，但是中文思维链也有道歉几率，只是比较低！你要多关注下手动截断。",
         foldLabel: "思维链美化折叠", foldHint: "当选择正文思维链，爆出的思维链放正文不好看，用美化把它折叠起来。不想要美化也可以关掉，打开不显示&lt;scene&gt;之前内容的<b>正则</b>。",
@@ -204,7 +204,7 @@ const UI = {
         rcLabel: "Reasoning Content: ",
         usageTitle: "Usage: ", usage1: "· Step 1 only: native CoT stays out of the body - theoretically best body quality. Extreme content may fail takeover (AI apologizes); stop manually if English thinking appears, reroll usually fixes it (depends on the channel).", usage2: "· Step 1 + Step 2: CoT goes into the body - stronger jailbreak, stable takeover. May stop right after thinking. That stop still costs tokens on unlimited-energy plans!", usage3: "⚠️ Both modes need the matching preset. Only tested on opencode channel.",
         rerollSectionTitle: "AUTO REROLL:", alertSectionTitle: "COMPLETION ALERT:",
-        rerollNoMutter: "No stop marker at end (truncated reply)", mutterSound: "Complete reply → play beep", mutterVibrate: "Also vibrate (Android; not on iOS)", mutterTrigMarker: "On stop marker detected (K3 / YuWen presets)", mutterTrigDone: "When output finishes (models without stop marker)", mutterSndDing: "Soft ding-dong (recommended)", mutterSndCrisp: "Crisp double", mutterSndChord: "Healing chord", mutterSndSoft: "Low soft tone", mutterSndMelody: "Music-box melody (~2s)", mutterSndLongbell: "Long bell (~2s)", mutterSndLullaby: "Lullaby arpeggio (~5s)", mutterSndHarp: "Harp cascade (~5s)", mutterSndTest: "Test", mutterHint: "Both use the Auto-Stop marker (default <mutter>): marker found = complete → two beeps; missing = truncated → swipe to a new branch (bounded by the reroll limit; manually stopped replies are exempt). Beep is built-in, independent of ST sound settings.", rerollLabel: "Auto Reroll: ", rerollEnglish: "English thinking (easily triggers moderation apology)", rerollNoThink: "No thinking, straight to body (no/little thinking)", rerollEmpty: "Empty reply (PVP)",
+        rerollNoMutter: "No stop marker at end (truncated reply)", mutterSound: "Complete reply → play beep", rcReset: "↺ Reset to default preset", rcResetDone: "Restored the default preset for this mode", rcResetCustom: "Custom templates have no built-in default to restore", mutterVibrate: "Also vibrate (Android; not on iOS)", mutterTrigMarker: "On stop marker detected (K3 / YuWen presets)", mutterTrigDone: "When output finishes (models without stop marker)", mutterSndDing: "Soft ding-dong (recommended)", mutterSndCrisp: "Crisp double", mutterSndChord: "Healing chord", mutterSndSoft: "Low soft tone", mutterSndMelody: "Music-box melody (~2s)", mutterSndLongbell: "Long bell (~2s)", mutterSndLullaby: "Lullaby arpeggio (~5s)", mutterSndHarp: "Harp cascade (~5s)", mutterSndTest: "Test", mutterHint: "Both use the Auto-Stop marker (default <mutter>): marker found = complete → two beeps; missing = truncated → swipe to a new branch (bounded by the reroll limit; manually stopped replies are exempt). Beep is built-in, independent of ST sound settings.", rerollLabel: "Auto Reroll: ", rerollEnglish: "English thinking (easily triggers moderation apology)", rerollNoThink: "No thinking, straight to body (no/little thinking)", rerollEmpty: "Empty reply (PVP)",
         rerollLimitLabel: "Max consecutive auto rerolls: ", rerollTimes: " times", rerollMinTokensLabel: "Short-thinking cutoff threshold: ",
         rerollWarning: "Note: extreme content often produces English thinking. Reroll avoids the high-risk English thinking, but Chinese thinking can still trigger apologies (lower chance). Watch for manual stops.",
         foldLabel: "CoT Fold Beautify", foldHint: "With body CoT, leaked thinking looks ugly in the body - fold it with beautify. Can disable and use a <b>regex</b> that hides everything before &lt;scene&gt; instead.",
@@ -264,7 +264,7 @@ const UI = {
         rcLabel: "Reasoning Content: ",
         usageTitle: "사용법: ", usage1: "· step 1만: 네이티브 CoT가 본문에 안 들어가서 본문 품질이 이론상 최고. 극단적 내용은 탈취 실패(AI 사과) 가능성이 있고, 영어 사고가 나오면 수동 중단 + reroll로 해결(채널에 따라 다름).", usage2: "· step 1+2 동시: CoT가 본문에 들어가 탈옥이 강하고 안정적. 사고 직후 끊길 수 있음. 무제한 에너지 요금제에서는 이 끊김이 과금될 수 있음!", usage3: "⚠️ 두 방식 모두 전용 프리셋 필요. opencode 채널에서만 테스트됨.",
         rerollSectionTitle: "자동 REROLL:", alertSectionTitle: "완료 알림:",
-        rerollNoMutter: "끝에 중단 마커 없음(잘린 응답)", mutterSound: "완전한 응답 → 비프음 재생", mutterVibrate: "진동 알림 함께(Android; iOS 미지원)", mutterTrigMarker: "중단 마커 감지 시 (K3/여온 프리셋)", mutterTrigDone: "출력 완료 시 (마커 없는 모델)", mutterSndDing: "부드러운 딩동(추천)", mutterSndCrisp: "맑은 두 소리", mutterSndChord: "힐링 코드", mutterSndSoft: "낮은 부드러운 소리", mutterSndMelody: "오르골 멜로디(약 2초)", mutterSndLongbell: "긴 종소리(약 2초)", mutterSndLullaby: "자장가 아르페지오(약 5초)", mutterSndHarp: "하프 흐름(약 5초)", mutterSndTest: "시청", mutterHint: "두 항목 모두 자동 중단 마커(기본 <mutter>) 기준: 마커 있음=완전→비프 2회; 없음=잘림→새 분기로 swipe(상한 제한 있음, 수동 정지 응답 제외). 비프음은 내장, ST 사운드 설정과 무관.", rerollLabel: "자동 reroll: ", rerollEnglish: "영어 사고(심사 사과 유발 쉬움)", rerollNoThink: "사고 없이 바로 본문 (사고 없음/적음)", rerollEmpty: "빈 응답 (PVP)",
+        rerollNoMutter: "끝에 중단 마커 없음(잘린 응답)", mutterSound: "완전한 응답 → 비프음 재생", rcReset: "↺ 기본 프리셋으로 복원", rcResetDone: "현재 모드의 기본 프리셋으로 복원됨", rcResetCustom: "커스텀 템플릿은 복원할 내장 기본값이 없습니다", mutterVibrate: "진동 알림 함께(Android; iOS 미지원)", mutterTrigMarker: "중단 마커 감지 시 (K3/여온 프리셋)", mutterTrigDone: "출력 완료 시 (마커 없는 모델)", mutterSndDing: "부드러운 딩동(추천)", mutterSndCrisp: "맑은 두 소리", mutterSndChord: "힐링 코드", mutterSndSoft: "낮은 부드러운 소리", mutterSndMelody: "오르골 멜로디(약 2초)", mutterSndLongbell: "긴 종소리(약 2초)", mutterSndLullaby: "자장가 아르페지오(약 5초)", mutterSndHarp: "하프 흐름(약 5초)", mutterSndTest: "시청", mutterHint: "두 항목 모두 자동 중단 마커(기본 <mutter>) 기준: 마커 있음=완전→비프 2회; 없음=잘림→새 분기로 swipe(상한 제한 있음, 수동 정지 응답 제외). 비프음은 내장, ST 사운드 설정과 무관.", rerollLabel: "자동 reroll: ", rerollEnglish: "영어 사고(심사 사과 유발 쉬움)", rerollNoThink: "사고 없이 바로 본문 (사고 없음/적음)", rerollEmpty: "빈 응답 (PVP)",
         rerollLimitLabel: "연속 자동 reroll 상한: ", rerollTimes: " 회", rerollMinTokensLabel: "사고 너무 짧음 절단 기준: ",
         rerollWarning: "주의: 극단적 콘텐츠에서는 영어 사고가 자주 나옵니다. reroll로 사과 확률 높은 영어 사고를 피할 수 있지만, 한국어 사고도 사과 확률이 낮지만 있습니다! 수동 중단에 신경 쓰세요.",
         foldLabel: "CoT 접기 미화", foldHint: "본문 CoT 선택 시 본문에 새어나온 사고가 보기 안 좋으니 미화로 접습니다. 미화를 끄고 &lt;scene&gt; 이전 내용을 숨기는 <b>정규식</b>을 켜도 됩니다.",
@@ -402,8 +402,34 @@ delete settings.injectMode;
             console.warn('[余温工具箱] 检测到 Reasoning Content 被截断（仅剩完整预设前缀），已自动恢复完整版');
             settings.reasoningContent = full;
         }
+        // 自愈后同步 cot 与 step2 开关的一致性（截断常把 <cot> 行一起吞掉）
+        normalizeCotInPreset();
     } catch (e) { /* 静默 */ }
 })();
+
+// cot 规范化：让文本框内容与 step2 开关保持一致（数据异常自愈后尤其需要）
+function normalizeCotInPreset() {
+    if (settings.injectTarget !== 'kimi') return;
+    const modes = Array.isArray(settings.injectModes) ? settings.injectModes : [];
+    const cur = String(settings.reasoningContent || '');
+    const wantCot = modes.includes('partial');
+    if (wantCot && !/<cot>/i.test(cur) && COT_INSERT_RE.test(cur)) {
+        settings.reasoningContent = cur.replace(COT_INSERT_RE, '<cot>\n$1$2');
+    } else if (!wantCot && /<cot>/i.test(cur)) {
+        settings.reasoningContent = cur.replace(COT_STRIP_RE, '').replace(/<cot>\s*/i, '');
+    }
+}
+
+// 复原默认：恢复当前模式+语言的出厂预设（KIMI/DS 内容不同），并按 step2 规范 cot
+function resetReasoningToDefault() {
+    if (typeof settings.injectTarget === 'string' && settings.injectTarget.startsWith('custom:')) return false;
+    const presets = currentPresets();
+    settings.reasoningContent = presets[settings.language] || presets.zh;
+    normalizeCotInPreset();
+    try { $("#" + extensionName + "_reasoning_value").val(settings.reasoningContent); } catch (e) { }
+    saveSettingsDebounced();
+    return true;
+}
 
 // 无附加指令句：partial 模式下种子直接作为 assistant 前缀，模型从它续写
 
@@ -1343,6 +1369,7 @@ window.__ywDebug = {
     t,
     // Cline 提供商
     buildClineIncludeBody, applyClineProvider, CLINE_PROVIDERS, getClineProviders, updateClineMenuItem,
+    normalizeCotInPreset, resetReasoningToDefault,
 };
 
 // ===== 思维链折叠美化（流式实时版：同步折叠，未折叠态永不绘制 → 不闪烁）=====
@@ -2325,6 +2352,7 @@ ${t('injectStep2')}
 <div style="margin-top:8px">
 <label class="kimi-label" for="${extensionName}_reasoning_value">${t('rcLabel')}</label>
 <textarea id="${extensionName}_reasoning_value" class="text_pole" style="width: 100%; box-sizing: border-box; height: 120px;">${settings.reasoningContent}</textarea>
+<div style="margin-top:4px"><button id="${extensionName}_rc_reset" type="button" class="kimi-btn">↺ ${t('rcReset')}</button></div>
 </div>
 
 <div class="kimi-sep"></div>
@@ -2784,6 +2812,14 @@ partial
     $("#" + extensionName + "_fix_revert").on("click", function () {
         const id = lastAssistantMessageId();
         if (id >= 0) revertMesForMessage(id);
+    });
+
+    $("#" + extensionName + "_rc_reset").on("click", function () {
+        if (resetReasoningToDefault()) {
+            try { toastr.success(String(t('rcResetDone')), '余温工具箱', { timeOut: 2500 }); } catch (e) { }
+        } else {
+            try { toastr.info(String(t('rcResetCustom')), '余温工具箱', { timeOut: 3000 }); } catch (e) { }
+        }
     });
 
     $("#" + extensionName + "_reasoning_value").on("input", function () {
