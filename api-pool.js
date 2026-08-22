@@ -72,6 +72,11 @@ async function doSwitch(entry, { auto = false } = {}) {
         if (entry.key) {
             await writeSecret('api_key_custom', entry.key, 'Custom API');
         }
+        // 等效用户手点一次「连接」按钮（ST 自己切源也是这么触发的）：
+        // 让新的 URL/密钥/模型立刻生效并测试连通，不改兼容 OpenAI/聊天补全等任何其它设置
+        if (isCustomSource()) {
+            setTimeout(() => { try { $('#api_button_openai').trigger('click'); } catch (e) { } }, 300);
+        }
         refreshCurrentIndicator();
         updateApiMenuItem(); // 菜单标签显示“下一条是谁”，切换后刷新
         const n = settings.pool.findIndex(e => e === entry);
