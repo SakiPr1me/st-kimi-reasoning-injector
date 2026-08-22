@@ -16,6 +16,7 @@ if (!Array.isArray(settings.pool)) settings.pool = [];
 if (settings.enabled === undefined) settings.enabled = false;
 if (settings.autoSwitch === undefined) settings.autoSwitch = false;
 if (!settings.keywords || !String(settings.keywords).trim()) settings.keywords = 'limit,quota,rate';
+if (settings.showMenuBtn === undefined) settings.showMenuBtn = true;
 
 // 生成中才检测（防误触其他请求/非生成报错）
 let generating = false;
@@ -67,6 +68,7 @@ async function doSwitch(entry, { auto = false } = {}) {
             await writeSecret('api_key_custom', entry.key, 'Custom API');
         }
         refreshCurrentIndicator();
+        updateApiMenuItem(); // 菜单标签显示“下一条是谁”，切换后刷新
         const n = settings.pool.findIndex(e => e === entry);
         const total = settings.pool.filter(e => e.url && norm(e.url)).length;
         const label = entry.model || norm(entry.url);
@@ -144,6 +146,28 @@ window.__apiPoolOnResponse = onResponse;
     };
 })();
 
+// ---- 扩展菜单「⇄ 切换API」入口（可选，与标签修复入口同款模式） ----
+function updateApiMenuItem() {
+    $('#kimi_api_menu_item').remove();
+    if (!settings.showMenuBtn) return;
+    const $menu = $('#extensionsMenu');
+    if (!$menu.length) { setTimeout(updateApiMenuItem, 1500); return; } // 菜单未就绪则稍后重试
+    const next = findNext();
+    const label = next ? (next.model || norm(next.url)) : '';
+    const text = String(t('apiMenuSwitch')) + (label ? ` → ${label}` : '');
+    $menu.append(`<a id="kimi_api_menu_item" class="list-group-item" href="#" title="${t('apiMenuSwitch')}">
+        <i class="fa-solid fa-right-left"></i> ${text}
+    </a>`);
+    $('#kimi_api_menu_item').on('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        $('#extensionsMenu').fadeOut(200);
+        const nx = findNext();
+        if (!nx) { try { toastr.warning(String(t('apiNoPool')), 'API \u989d\u5ea6', { timeOut: 3000 }); } catch (err) { } return; }
+        await doSwitch(nx);
+    });
+}
+
 // ---- 设置卡 UI ----
 let mountedSlot = ''; // 重渲染列表时恢复当前行高亮需知道挂载点
 
@@ -179,6 +203,7 @@ function poolHTML() {
             <label class="kimi-label" for="kimi_api_keywords">${t('apiKeywords')}</label>
             <input id="kimi_api_keywords" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${escHtml(settings.keywords)}"/>
         </div>
+        <label class="checkbox_label" style="display:block;margin-top:5px"><input type="checkbox" id="kimi_api_menu_entry" ${settings.showMenuBtn ? 'checked' : ''}/> ${t('apiMenuEntry')}</label>
         <div id="kimi_api_list" style="margin-top:5px">${rows || '<span style="opacity:.5;font-size:.85em">' + t('apiNoPool') + '</span>'}</div>
         <div style="margin-top:5px"><button id="kimi_api_add" class="menu_button" style="display:inline-block;width:auto">${t('apiAdd')}</button></div>
         <p class="kimi-hint">${t('apiHint')}</p>
@@ -222,10 +247,18 @@ export function mountApiPoolCard(slotSel) {
     $('#kimi_api_auto').on('change', function () { settings.autoSwitch = this.checked; saveSettingsDebounced(); });
     $('#kimi_api_keywords').on('input', function () { settings.keywords = $(this).val(); saveSettingsDebounced(); });
 
+    $('#kimi_api_menu_entry').on('change', function () {
+        settings.showMenuBtn = this.checked;
+        saveSettingsDebounced();
+        updateApiMenuItem();
+    });
+    updateApiMenuItem();
+
     $('#kimi_api_add').on('click', function () {
         settings.pool.push({ id: Date.now(), model: '', url: '', key: '', addedAt: Date.now() });
         saveSettingsDebounced();
         renderList(slotSel);
+        updateApiMenuItem();
     });
 
     // 列表事件委托（增删改都走这里，重渲染后依然有效）
@@ -246,12 +279,13 @@ export function mountApiPoolCard(slotSel) {
         const i = Number($(this).attr('data-i'));
         settings.pool.splice(i, 1);
         saveSettingsDebounced();
+        updateApiMenuItem();
         mountApiPoolCard(slotSel); // 整卡重挂保持简单可靠
     });
 }
 
 // 调试出口（CDP 测试用）
-window.__apiPoolDebug = {
+window.__apiPoolDebug = { updateApiMenuItem,
   doSwitch, findNext, handleLimitHit, matchKeywords, settings, ageText, renderList,
   setGenerating: (v) => { generating = !!v; },
   simulateLimit: (reason) => { generating = true; handleLimitHit(reason || 'limit reached'); generating = false; },

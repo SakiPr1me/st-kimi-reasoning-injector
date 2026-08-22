@@ -34,7 +34,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.16.4 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.16.5 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -180,6 +180,7 @@ const UI = {
         apiModel: "模型名", apiKey: "密钥", apiAge: "{d} 天 {h} 小时",
         apiNoPool: "池为空：先添加接口", apiNotCustom: "当前不是 Custom(OpenAI兼容) 连接，API 池不生效",
         apiBannerMsg: "检测到额度用尽（limit）。", apiBannerSwitch: "⇄ 切换到 {name}（{n}/{total}）", apiSwitched: "已切换到 {name}（{n}/{total}）",
+        apiMenuEntry: "在扩展菜单显示「⇄ 切换API」入口", apiMenuSwitch: "⇄ 切换API（下一条）",
         apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效。切换会同步改写 URL、密钥、模型名 三项，预置/采样等其它参数一概不动；命中 limit/quota/rate 即触发。"
         },
     en: {
@@ -238,6 +239,7 @@ const UI = {
         apiModel: "Model", apiKey: "Key", apiAge: "{d}d {h}h",
         apiNoPool: "Pool is empty: add an endpoint first", apiNotCustom: "Not a Custom (OpenAI-compatible) connection - pool inactive",
         apiBannerMsg: "Quota limit hit.", apiBannerSwitch: "⇄ Switch to {name} ({n}/{total})", apiSwitched: "Switched to {name} ({n}/{total})",
+        apiMenuEntry: "Show Switch-API entry in extensions menu", apiMenuSwitch: "⇄ Switch API (next)",
         apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections. Switching syncs three fields: URL, key and model name - presets/sampling untouched. Triggers on limit/quota/rate."
         },
     ko: {
@@ -296,6 +298,7 @@ const UI = {
         apiModel: "모델명", apiKey: "키", apiAge: "{d}일 {h}시간",
         apiNoPool: "풀이 비어 있음: 먼저 엔드포인트 추가", apiNotCustom: "Custom(OpenAI 호환) 연결이 아님 - 풀 동작 안 함",
         apiBannerMsg: "할당량 초과 감지.", apiBannerSwitch: "⇄ {name}(으)로 전환 ({n}/{total})", apiSwitched: "{name}(으)로 전환됨 ({n}/{total})",
+        apiMenuEntry: "확장 메뉴에 API 전환 항목 표시", apiMenuSwitch: "⇄ API 전환 (다음)",
         apiHint: "키는 로컬 settings.json에 평문 저장됨 - 파일 공유 금지. Custom(OpenAI 호환) 연결에서만 동작. 전환 시 URL·키·모델명 세 항목을 함께 변경, 프리셋/샘플링은 불변. limit/quota/rate 에서 트리거."
         }
 };
