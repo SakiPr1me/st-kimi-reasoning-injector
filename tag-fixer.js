@@ -709,6 +709,9 @@ function wrapMissingTags(body, tags, siblings, children) {
 function fixTagsInText(text) {
 	// 防御：非字符串输入(如 null/undefined/数字)直接原样返回，避免后续 wrapMissingTags 崩
 	if (typeof text !== 'string' || text.length === 0) return { text, fixed: 0 };
+	// 无任何 '<' 的纯文本楼：没有标签可修。必须在此返回——
+	// 否则开启「补全整对丢失」时，wrapMissingTags 会把整段普通文字强包进 <scene>（真bug，自检抓出）
+	if (!text.includes('<')) return { text, fixed: 0 };
 	const { allTags: tags, siblings, children } = parseTagTree();
 	if (!tags.length) return { text, fixed: 0 };
 
@@ -1376,7 +1379,7 @@ async function undoAllFixes() {
 }
 
 // CDP/控制台调试出口（仿 st-chat-sync 的 __stChatSyncDebug 模式）
-window.__stTagDebug = { fixAllMessages, undoAllFixes, undoFloorFix, toggleTagDiff, addEyeToMessage, lineDiff, buildDiffHtml, fixTagsInText, autoScanMessage, batchUndo };
+window.__stTagDebug = { fixAllMessages, undoAllFixes, undoFloorFix, toggleTagDiff, addEyeToMessage, lineDiff, buildDiffHtml, fixTagsInText, autoScanMessage, batchUndo, wrapMissingTags, parseTagTree, settings: () => settings };
 
 function updateUndoAllBtn() {
 	const btn = document.getElementById(`${extensionName}_undo_all`);

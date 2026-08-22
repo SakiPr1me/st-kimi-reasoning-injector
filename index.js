@@ -34,7 +34,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.16.6 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.16.7 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -202,7 +202,7 @@ const UI = {
         foldLabel: "CoT Fold Beautify", foldHint: "With body CoT, leaked thinking looks ugly in the body - fold it with beautify. Can disable and use a <b>regex</b> that hides everything before &lt;scene&gt; instead.",
         foldHeightLabel: "Fixed-height scroll for reasoning", foldHeightHint: "Give the reasoning area a max-height + scrollbar (long CoT won't blow up the message; same as injecting custom CSS)",
         showTpsLabel: "Show generation speed (t/s) on messages", showTpsHint: "Shows tokens per second next to the token counter (tokens ÷ generation time), same data source as the AI reply timer",
-        thinkingLive: "Thinking {s}", thinkingDone: "Thought for {s}",
+        thinkingLive: "Thinking {s}", thinkingDone: "Thought for {s}", reasoningTimerLabel: "Live reasoning timer (seconds while thinking)", reasoningTimerHint: "Shows \"Thinking Xs\" live during native reasoning, then freezes at exact seconds (ST only shows minutes)",
         miscLabel: "Other", keepScrollLabel: "Keep scroll position after generation", keepScrollHint: "ST rebuilds message DOM on finish which snaps the scrollbar to the top; enable to keep your current reading position (restored when streaming ends)",
         foldModeLabel: "Fold Detection: ", foldStrict: "strict (separator + keyword)", foldLoose: "loose (fold everything without marker, may catch normal replies)",
         foldMarkerLabel: "Body Separator Marker: ", foldMarkerHint: "Split thinking/body at this marker; thinking is rendered as beautified fold",
@@ -261,7 +261,7 @@ const UI = {
         foldLabel: "CoT 접기 미화", foldHint: "본문 CoT 선택 시 본문에 새어나온 사고가 보기 안 좋으니 미화로 접습니다. 미화를 끄고 &lt;scene&gt; 이전 내용을 숨기는 <b>정규식</b>을 켜도 됩니다.",
         foldHeightLabel: "사고 영역 고정 높이 스크롤", foldHeightHint: "사고 영역에 최대 높이 + 스크롤바 추가 (긴 CoT가 메시지를 부풀리지 않음; 커스텀 CSS 주입과 동일)",
         showTpsLabel: "메시지에 생성 속도 표시 (t/s)", showTpsHint: "token 수 옆에 초당 token 수 표시 (token 수 ÷ 생성 시간), AI 응답 타이머와 같은 데이터 소스",
-        thinkingLive: "사고 중 {s}", thinkingDone: "사고 {s}",
+        thinkingLive: "사고 중 {s}", thinkingDone: "사고 {s}", reasoningTimerLabel: "사고 실시간 타이머(초 표시)", reasoningTimerHint: "네이티브 사고 중 \"사고 중 Xs\"를 실시간 표시, 끝나면 정확한 초로 고정(ST는 분 단위만)",
         miscLabel: "기타 기능", keepScrollLabel: "생성 완료 후 스크롤 위치 유지", keepScrollHint: "ST는 완료 시 메시지 DOM을 재구성해 스크롤바가 맨 위로 튑니다. 켜면 보고 있던 위치를 유지합니다 (스트리밍 종료 시 복원)",
         foldModeLabel: "접기 인식: ", foldStrict: "엄격 (구분 마커 + 특징 단어)", foldLoose: "느슨 (마커 없으면 전부 접기, 일반 응답 오접기 가능)",
         foldMarkerLabel: "본문 구분 마커: ", foldMarkerHint: "이 마커를 기준으로 사고/본문 분리, 사고는 미화로 렌더링",
@@ -1163,8 +1163,24 @@ window.__kimiStopReroll = () => {
     try { toastr.info('⏹ 已停止自动重roll（手动 swipe/重新生成可恢复）', 'Kimi工具箱', { timeOut: 2000 }); } catch (e) {}
 };
 
-// 调试出口（CDP/控制台用）
-window.__ywDebug = { playMutterBeep, checkNativeReroll, settings, getRerollCount: () => autoRerollCount };
+// 调试出口（CDP/控制台/自检脚本用：纯函数直测，不发真实请求）
+window.__ywDebug = {
+    playMutterBeep, checkNativeReroll, settings,
+    getRerollCount: () => autoRerollCount,
+    // 注入链纯函数
+    injectSeed, applyCotByMode, buildSeed, resolveTemplate, upsertYamlTopKey,
+    // 词汇替换纯函数
+    applyReplacements, applySingleRule,
+    // 换行修正纯函数
+    normalizeParagraphs,
+    // 英文判定
+    startsWithEnglish, seedIsEnglish,
+    // 空回判定
+    isEmptyMes,
+    // i18n 字典（自检用：三语键完整性）
+    uiDict: () => UI,
+    t,
+};
 
 // ===== 思维链折叠美化（流式实时版：同步折叠，未折叠态永不绘制 → 不闪烁）=====
 const foldState = new Map(); // messageId -> { open, scrollTop, atBottom }
