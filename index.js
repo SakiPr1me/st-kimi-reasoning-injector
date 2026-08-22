@@ -34,7 +34,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.19.2 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.19.4 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -391,21 +391,34 @@ delete settings.injectMode;
 // 截断自愈：settings 里存的内置预设可能因各种意外被截断（手机误编辑/旧配置恢复等）。
 // 判定：当前值是「当前模式+语言」完整预设的严格前缀 → 视为截断，自动恢复完整版。
 // 自定义模板与真正的自定义内容不受影响（只有完整预设的前缀才触发，概率可忽略）。
-(function healTruncatedPreset() {
+function healTruncatedPreset() {
     try {
         if (typeof settings.injectTarget === 'string' && settings.injectTarget.startsWith('custom:')) return;
         const cur = String(settings.reasoningContent ?? '');
         if (!cur.trim()) return;
-        const full = (settings.injectTarget === 'ds' ? DS_PRESETS : KIMI_PRESETS)[settings.language]
-            || KIMI_PRESETS[Object.keys(KIMI_PRESETS)[0]];
-        if (full !== cur && full.startsWith(cur)) {
-            console.warn('[余温工具箱] 检测到 Reasoning Content 被截断（仅剩完整预设前缀），已自动恢复完整版');
-            settings.reasoningContent = full;
+        // 对全部六套完整预设做前缀匹配：数据被截断时 injectTarget 可能已不在对应模式上
+        // （实测案例：target=ds 但 RC 是 KIMI 残缺两行）→ 只按内容归属恢复，不动用户所选模式
+        let restored = false;
+        for (const presets of [KIMI_PRESETS, DS_PRESETS]) {
+            for (const lang of Object.keys(presets)) {
+                const full = presets[lang];
+                if (full !== cur && full.startsWith(cur)) {
+                    console.warn('[余温工具箱] 检测到 Reasoning Content 被截断（仅剩完整预设前缀），已自动恢复完整版（' + (presets === KIMI_PRESETS ? 'KIMI' : 'DS') + '/' + lang + '）');
+                    settings.reasoningContent = full;
+                    restored = true;
+                    break;
+                }
+            }
+            if (restored) break;
         }
-        // 自愈后同步 cot 与 step2 开关的一致性（截断常把 <cot> 行一起吞掉）
-        normalizeCotInPreset();
+        // 恢复后同步 cot 与 step2 开关的一致性（截断常把 <cot> 行一起吞掉）
+        if (restored) normalizeCotInPreset();
     } catch (e) { /* 静默 */ }
-})();
+}
+// 启动时修一次 + 每次生成前再修一次（多端同开时，旧版客户端可能把坏数据覆盖回来；
+// 生成前兜底保证发出去的种子永远是完整的）
+healTruncatedPreset();
+eventSource.on(event_types.GENERATION_STARTED, () => { try { healTruncatedPreset(); } catch (e) { } });
 
 // cot 规范化：让文本框内容与 step2 开关保持一致（数据异常自愈后尤其需要）
 function normalizeCotInPreset() {
@@ -1378,7 +1391,7 @@ window.__ywDebug = {
     t,
     // Cline 提供商
     buildClineIncludeBody, applyClineProvider, CLINE_PROVIDERS, getClineProviders, updateClineMenuItem,
-    normalizeCotInPreset, resetReasoningToDefault,
+    normalizeCotInPreset, resetReasoningToDefault, healTruncatedPreset,
 };
 
 // ===== 思维链折叠美化（流式实时版：同步折叠，未折叠态永不绘制 → 不闪烁）=====
