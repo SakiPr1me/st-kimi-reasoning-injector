@@ -3,6 +3,7 @@ import { saveSettingsDebounced, substituteParams, eventSource, event_types, mess
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
 import { toggleDrawer } from "../../../utils.js";
 import { stTagMountSettings } from "./tag-fixer.js";
+import { mountApiPoolCard } from "./api-pool.js";
 
 
 // SWIPE 常量本地兜底：ST 1.15.0 才引入（1.13 无 SWIPE_DIRECTION/SWIPE_SOURCE），
@@ -33,7 +34,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.14.0 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.15.0 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -170,7 +171,13 @@ const UI = {
         tagDiffTitle: "🏷 标签修复改动（幻影预览）", tagDiffHint: "红 − = 修复前被改掉的行，绿 + = 修复后补入的行；点 👁 关闭预览", tagUnchanged: "行未改动", tagCollapse: "折叠未改动", tagExpandAll: "展开全部",
         tagChkFloat: "悬浮按钮",
         tagChkMenu: "扩展菜单",
-        tagSlashHint: "也可用 /fix-tags 斜杠命令"
+        tagSlashHint: "也可用 /fix-tags 斜杠命令",
+        apiTitle: "API 池（额度轮换）", apiEnabled: "启用 limit 检测", apiAuto: "命中后自动切换下一条（不询问）",
+        apiKeywords: "触发关键词（逗号分隔）", apiAdd: "＋ 添加接口", apiDel: "删除", apiSwitchTo: "⇄ 切到此条", apiCurrent: "当前",
+        apiName: "名称", apiKey: "密钥", apiAge: "{d} 天 {h} 小时",
+        apiNoPool: "池为空：先添加接口", apiNotCustom: "当前不是 Custom(OpenAI兼容) 连接，API 池不生效",
+        apiBannerMsg: "检测到额度用尽（limit）。", apiBannerSwitch: "⇄ 切换到 {name}（{n}/{total}）", apiSwitched: "已切换到 {name}（{n}/{total}）",
+        apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效；切换只改 URL+密钥，模型/预设/其它参数不动；命中 limit/quota/rate 即触发。"
         },
     en: {
         pluginName: "Yu Wen Toolkit", enabled: "Plugin Toggle",
@@ -222,7 +229,13 @@ const UI = {
         tagDiffTitle: "🏷 Tag Fix Changes (phantom preview)", tagDiffHint: "Red − = changed from before, green + = inserted by fix; click the eye again to close", tagUnchanged: "lines unchanged", tagCollapse: "Collapse unchanged", tagExpandAll: "Expand all",
         tagChkFloat: "Floating button",
         tagChkMenu: "Extension menu",
-        tagSlashHint: "Also use /fix-tags command"
+        tagSlashHint: "Also use /fix-tags command",
+        apiTitle: "API Pool (quota rotation)", apiEnabled: "Enable limit detection", apiAuto: "Auto-switch on hit",
+        apiKeywords: "Trigger keywords (comma-separated)", apiAdd: "+ Add Endpoint", apiDel: "Delete", apiSwitchTo: "⇄ Switch here", apiCurrent: "current",
+        apiName: "Name", apiKey: "Key", apiAge: "{d}d {h}h",
+        apiNoPool: "Pool is empty: add an endpoint first", apiNotCustom: "Not a Custom (OpenAI-compatible) connection - pool inactive",
+        apiBannerMsg: "Quota limit hit.", apiBannerSwitch: "⇄ Switch to {name} ({n}/{total})", apiSwitched: "Switched to {name} ({n}/{total})",
+        apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections; switching changes URL+key only - model/presets/params untouched. Triggers on limit/quota/rate."
         },
     ko: {
         pluginName: "위온 툴킷", enabled: "플러그인 스위치",
@@ -274,7 +287,13 @@ const UI = {
         tagDiffTitle: "🏷 태그 수정 변경사항 (팬텀 미리보기)", tagDiffHint: "빨강 − = 수정 전 변경된 줄, 초록 + = 수정 후 추가된 줄; 👁 다시 누르면 닫힘", tagUnchanged: "줄 변경 없음", tagCollapse: "변경 없는 줄 접기", tagExpandAll: "전체 펼치기",
         tagChkFloat: "플로팅 버튼",
         tagChkMenu: "확장 메뉴",
-        tagSlashHint: "/fix-tags 명령도 사용 가능"
+        tagSlashHint: "/fix-tags 명령도 사용 가능",
+        apiTitle: "API 풀 (한도 교체)", apiEnabled: "limit 감지 활성화", apiAuto: "감지 시 자동으로 다음으로 교체",
+        apiKeywords: "트리거 키워드 (쉼표 구분)", apiAdd: "＋ 엔드포인트 추가", apiDel: "삭제", apiSwitchTo: "⇄ 여기로 전환", apiCurrent: "현재",
+        apiName: "이름", apiKey: "키", apiAge: "{d}일 {h}시간",
+        apiNoPool: "풀이 비어 있음: 먼저 엔드포인트 추가", apiNotCustom: "Custom(OpenAI 호환) 연결이 아님 - 풀 동작 안 함",
+        apiBannerMsg: "할당량 초과 감지.", apiBannerSwitch: "⇄ {name}(으)로 전환 ({n}/{total})", apiSwitched: "{name}(으)로 전환됨 ({n}/{total})",
+        apiHint: "키는 로컬 settings.json에 평문 저장됨 - 파일 공유 금지. Custom(OpenAI 호환) 연결에서만 동작; URL+키만 변경, 모델/프리셋/파라미터는 불변. limit/quota/rate 에서 트리거."
         }
 };
 // 按当前语言取文案；缺 key 时回退中文
@@ -640,7 +659,12 @@ window.fetch = async function(...args) {
             console.error("[余温工具箱] 失败:", e);
         }
     }
-    return originalFetch.apply(this, args);
+    const res = await originalFetch.apply(this, args);
+    // API 池响应侧钩子：非 2xx 且含 limit 类关键词 → 触发切换流程（api-pool.js 注册）
+    if (typeof window.__apiPoolOnResponse === 'function') {
+        try { window.__apiPoolOnResponse(res); } catch (e) { /* 静默 */ }
+    }
+    return res;
 };
 }
 
@@ -2172,6 +2196,9 @@ ${renderWordReplaceRows()}
 <!-- ═══ 标签修复(原st-tag) ═══ -->
 <div id="${extensionName}_tag_slot"></div>
 
+<!-- ═══ API 池（额度轮换）═══ -->
+<div id="${extensionName}_api_slot"></div>
+
 <!-- ═══ 其他功能 ═══ -->
 <details class="kimi-card">
 <summary><i class="fa-solid fa-screwdriver-wrench kimi-card-ico" aria-hidden="true"></i>${t('miscLabel')}</summary>
@@ -2617,6 +2644,8 @@ partial
     if (settings.reasoningTimer) startReasoningTimer();
     // v1.13.0: 跟随余温面板重建，重新挂载「标签修复」设置卡（切语言/重渲染时保持存在，幂等）
     if (typeof stTagMountSettings === 'function') stTagMountSettings();
+    // API 池（额度轮换）卡（独立模块，随面板重建重挂）
+    try { mountApiPoolCard('#kimi_reasoning_injector_api_slot'); } catch (e) { console.warn('[余温工具箱] API池卡挂载失败:', e); }
 }
 
 // 全局事件只绑定一次（语言切换重渲染 initSettingsPanel 时不会重复监听）
