@@ -1092,6 +1092,27 @@ async function undoLastFix() {
 	toastr?.success?.(rendered ? '✅ 已回退到修复前' : '✅ 已回退（可能需要切换聊天以刷新显示）');
 }
 
+// 眼睛防抹除：ST 在 swipe/编辑/删除后会重建楼层 DOM，👁 随之消失但修复记录还在——
+// 这些事件后把 batchUndo 里各楼的眼睛补挂回来（幂等；防抖合并连续触发）
+function reattachEyes() {
+	try {
+		const ctx = getContext();
+		if (!ctx?.chat || !batchUndo.length) return;
+		for (const rec of batchUndo) {
+			const m = ctx.chat[rec.messageId];
+			if (m && !m.is_user) addEyeToMessage(rec.messageId);
+		}
+	} catch (e) { /* 静默 */ }
+}
+let eyeReattachTimer = null;
+function scheduleReattach() {
+	if (eyeReattachTimer) clearTimeout(eyeReattachTimer);
+	eyeReattachTimer = setTimeout(() => { eyeReattachTimer = null; reattachEyes(); }, 600);
+}
+eventSource.on(event_types.MESSAGE_SWIPED, scheduleReattach);
+eventSource.on(event_types.MESSAGE_EDITED, scheduleReattach);
+eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, scheduleReattach);
+
 // ========== 自动修复：每轮 AI 输出结束自动修 ==========
 // 事件签名：MESSAGE_RECEIVED (message_id, type)，见 public/scripts/events.js。
 // 触发时机：AI 消息完整落盘后（流式 script.js:3740 / 非流式 script.js:6632）。
@@ -1249,8 +1270,9 @@ function toggleTagDiff(id) {
 	const el = document.querySelector(`.mes[mesid="${id}"] .mes_text`);
 	if (!el || !msg) return;
 	if (el.querySelector('.kimi-tag-diff')) {
-		// 关闭预览：还原正常渲染
-		el.innerHTML = messageFormatting(msg.mes, msg.name || '', msg.is_system, msg.is_user, id);
+		// 关闭预览：还原正常渲染（先过显示层词汇替换，保证「仅显示」规则不因预览开关丢失）
+		const dispMes = typeof window.__ywApplyDisplayReplace === 'function' ? window.__ywApplyDisplayReplace(msg.mes) : msg.mes;
+		el.innerHTML = messageFormatting(dispMes, msg.name || '', msg.is_system, msg.is_user, id);
 		return;
 	}
 	const rec = batchUndo.find(r => r.messageId === id);

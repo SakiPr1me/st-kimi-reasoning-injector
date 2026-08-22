@@ -824,8 +824,12 @@ function startsWithEnglish(reasoning) {
 }
 
 // 流式早期检测：①原生思维链开头是英文（夺舍失败）②正文超过 N token 还没出现正文标记（<scene>）→ 立即截断生成，等 MESSAGE_RECEIVED 强制重roll
+const abortCheckAt = new Map(); // 同楼检测节流：observer 每帧都触发，英文统计不必每帧做
 function checkStreamingAbort(messageId) {
     if (!settings.enabled) return;
+    const _now = Date.now();
+    if (_now - (abortCheckAt.get(messageId) || 0) < 120) return;
+    abortCheckAt.set(messageId, _now);
     if (settings.rerollPaused) return; // 暂停时不检测不截断
     if (!isGenerating) return; // 流式截断检测只在生成中有效（修正消息触发 observer 时避免误判）
     if (earlyStopTriggered) return;
@@ -906,11 +910,16 @@ function checkStreamingAbort(messageId) {
 // 流式每 token 记录当前滚动位置 → 生成结束后等 DOM 稳定（双 rAF）恢复。
 let lastStreamScrollTop = null;    // 流式最后记录的滚动位置
 let lastStreamScrollHeight = 0;   // 流式最后记录的 scrollHeight(生成时聊天总高)
+let scrollRecPending = false;      // rAF 合帧标记：读 scrollTop 会强制整页排版(页越高越贵)，必须合帧
 eventSource.on(event_types.STREAM_TOKEN_RECEIVED, () => {
     if (!settings.keepScrollOnGenerate) return;
-    // 只记录轻量数值(读一次 scrollTop/scrollHeight, 绝不做每 token DOM 遍历——那会卡死生成)
-    const chatEl = document.getElementById('chat');
-    if (chatEl) { lastStreamScrollTop = chatEl.scrollTop; lastStreamScrollHeight = chatEl.scrollHeight; }
+    if (scrollRecPending) return;  // 本帧已安排记录
+    scrollRecPending = true;
+    requestAnimationFrame(() => {
+        scrollRecPending = false;
+        const chatEl = document.getElementById('chat');
+        if (chatEl) { lastStreamScrollTop = chatEl.scrollTop; lastStreamScrollHeight = chatEl.scrollHeight; }
+    });
 });
 eventSource.on(event_types.GENERATION_ENDED, () => { /* 恢复交给 MESSAGE_RECEIVED(finalize 重渲染落实后) */ });
 // ===== 修复"生成完跳顶"的最终方案：回到你生成时正在看的位置 =====
@@ -1562,8 +1571,12 @@ function reasoningTimerTick() {
     if (!settings.reasoningTimer) return;
     try {
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-        // span 完全接管：ST 标题被 CSS 隐藏（kimi-timer-active），我们的 span 显示完整文案
-        document.querySelectorAll('#chat .mes_reasoning_details').forEach(details => {
+        // 性能关键：生成中只精修最后一楼（正在思考的那个）——全量遍历所有楼会随楼层数线性变卡；
+        // 历史楼的定格 span 平时无需更新，空闲低频档(1500ms)再全量维护以对抗 ST 偶发重写
+        const detailsAll = document.querySelectorAll('#chat .mes_reasoning_details');
+        const startIdx = isGenerating ? Math.max(0, detailsAll.length - 1) : 0;
+        const detailsList = Array.prototype.slice.call(detailsAll, startIdx);
+        detailsList.forEach(details => {
             const mesEl = details.closest('.mes');
             const mesid = mesEl?.getAttribute('mesid');
             if (mesid === null || mesid === undefined) return;
@@ -2097,6 +2110,7 @@ eventSource.on(event_types.CHAT_CHANGED, () => {
     emptyRerollTargetId = -1;
     autoStopTriggered = false;
     earlyRerollHandled = false;
+    abortCheckAt.clear();
     // 切换聊天后 ST 重渲染全部消息：折叠由 MutationObserver 覆盖，tps 需要手动补（等渲染完成）
     setTimeout(() => {
         if (!settings.showTps && !settings.reasoningTimer) return;
