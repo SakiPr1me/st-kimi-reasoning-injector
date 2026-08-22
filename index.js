@@ -34,7 +34,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.15.3 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.16.0 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -49,6 +49,8 @@ const defaultSettings = {
     rerollOnEnglishThinking: true,   // 原生思维链开头一段是英文（夺舍失败）→ 自动重roll（开新分支）
     rerollOnNoThinking: true,        // 无原生思维链直接出正文 → 自动重roll
     rerollOnEmpty: true,             // 空回复（断流/零token）→ 自动重roll
+    rerollOnNoMutter: true,         // 生成结束全文没有截断标记（半截楼）→ 自动重roll（swipe新分支）
+    mutterSoundEnabled: true,       // 完整生成（含截断标记）→ 播放提示音（内置beep）
     autoRerollLimit: 30,             // 连续自动重roll次数（无上限）
     fixMesOnGenerate: false,            // 生成后自动修正正文换行（写回原文，小铅笔可见）
     fixMarker: 'content',               // 正文修正标记（自动修正/显示层补段针对的包裹标签名）
@@ -133,7 +135,7 @@ const UI = {
         targetCustom: "自定义", customAdd: "＋ 追加模板", customDel: "删除", customName: "自定义模板", customHint: "选中后可在 Reasoning Content 里直接编辑；切语言不会覆盖自定义内容。",
         rcLabel: "Reasoning Content：",
         usageTitle: "使用方法：", usage1: "· 只打开step 1：原生思维链不进正文，正文质量理论最高。有概率极端内容夺舍失败（AI 道歉），好在出现英文可手动截停，重roll可破，主要看渠道。", usage2: "· 同时打开step 1和step2：思维链放进正文，破限较强，稳定夺舍。有概率在思考完就截断。这种截断在使用无限能源时会扣费！", usage3: "⚠️注意：两种破限方式都需要搭配专用预设，渠道仅测试opencode，其它自测。",
-        rerollLabel: "自动重roll：", rerollEnglish: "思维链是英文（触审易道歉） → 自动重roll", rerollNoThink: "无思维链直接出正文（没思考or少思考） → 自动重roll", rerollEmpty: "空回复（PVP）→ 自动重roll",
+        rerollNoMutter: "结束仍无截断标记（半截楼/截断）→ 自动重roll（swipe新分支）", mutterSound: "完整生成（含截断标记）→ 播放提示音", mutterHint: "两项均以「自动截断」卡的截断标记（默认 <mutter>）为准：有标记＝完整→响两声beep；无标记＝半截楼→swipe进新分支继续roll（受连续上限约束；手动停止的楼不会被判半截）。提示音为内置音，不依赖酒馆音效设置。", rerollLabel: "自动重roll：", rerollEnglish: "思维链是英文（触审易道歉） → 自动重roll", rerollNoThink: "无思维链直接出正文（没思考or少思考） → 自动重roll", rerollEmpty: "空回复（PVP）→ 自动重roll",
         rerollLimitLabel: "连续自动重roll上限：", rerollTimes: " 次", rerollMinTokensLabel: "思考太短截断阈值：",
         rerollWarning: "注意：玩极端的内容时，容易出现英文思维链，重roll虽然可以避免大概率道歉的英文思维链，但是中文思维链也有道歉几率，只是比较低！你要多关注下手动截断。",
         foldLabel: "思维链美化折叠", foldHint: "当选择正文思维链，爆出的思维链放正文不好看，用美化把它折叠起来。不想要美化也可以关掉，打开不显示&lt;scene&gt;之前内容的<b>正则</b>。",
@@ -192,7 +194,7 @@ const UI = {
         targetCustom: "Custom", customAdd: "+ Add Template", customDel: "Delete", customName: "Custom Template", customHint: "Edit the content in Reasoning Content once selected; language switch won't touch custom content.",
         rcLabel: "Reasoning Content: ",
         usageTitle: "Usage: ", usage1: "· Step 1 only: native CoT stays out of the body - theoretically best body quality. Extreme content may fail takeover (AI apologizes); stop manually if English thinking appears, reroll usually fixes it (depends on the channel).", usage2: "· Step 1 + Step 2: CoT goes into the body - stronger jailbreak, stable takeover. May stop right after thinking. That stop still costs tokens on unlimited-energy plans!", usage3: "⚠️ Both modes need the matching preset. Only tested on opencode channel.",
-        rerollLabel: "Auto Reroll: ", rerollEnglish: "English thinking (easily triggers moderation apology) → auto reroll", rerollNoThink: "No thinking, straight to body (no/little thinking) → auto reroll", rerollEmpty: "Empty reply (PVP) → auto reroll",
+        rerollNoMutter: "No stop marker at end (truncated reply) → auto reroll (swipe new branch)", mutterSound: "Complete reply (has stop marker) → play beep", mutterHint: "Both use the Auto-Stop marker (default <mutter>): marker found = complete → two beeps; missing = truncated → swipe to a new branch (bounded by the reroll limit; manually stopped replies are exempt). Beep is built-in, independent of ST sound settings.", rerollLabel: "Auto Reroll: ", rerollEnglish: "English thinking (easily triggers moderation apology) → auto reroll", rerollNoThink: "No thinking, straight to body (no/little thinking) → auto reroll", rerollEmpty: "Empty reply (PVP) → auto reroll",
         rerollLimitLabel: "Max consecutive auto rerolls: ", rerollTimes: " times", rerollMinTokensLabel: "Short-thinking cutoff threshold: ",
         rerollWarning: "Note: extreme content often produces English thinking. Reroll avoids the high-risk English thinking, but Chinese thinking can still trigger apologies (lower chance). Watch for manual stops.",
         foldLabel: "CoT Fold Beautify", foldHint: "With body CoT, leaked thinking looks ugly in the body - fold it with beautify. Can disable and use a <b>regex</b> that hides everything before &lt;scene&gt; instead.",
@@ -250,7 +252,7 @@ const UI = {
         targetCustom: "커스텀", customAdd: "＋ 템플릿 추가", customDel: "삭제", customName: "커스텀 템플릿", customHint: "선택 후 Reasoning Content에서 직접 편집 가능. 언어 전환 시 커스텀 내용은 덮어쓰지 않습니다.",
         rcLabel: "Reasoning Content: ",
         usageTitle: "사용법: ", usage1: "· step 1만: 네이티브 CoT가 본문에 안 들어가서 본문 품질이 이론상 최고. 극단적 내용은 탈취 실패(AI 사과) 가능성이 있고, 영어 사고가 나오면 수동 중단 + reroll로 해결(채널에 따라 다름).", usage2: "· step 1+2 동시: CoT가 본문에 들어가 탈옥이 강하고 안정적. 사고 직후 끊길 수 있음. 무제한 에너지 요금제에서는 이 끊김이 과금될 수 있음!", usage3: "⚠️ 두 방식 모두 전용 프리셋 필요. opencode 채널에서만 테스트됨.",
-        rerollLabel: "자동 reroll: ", rerollEnglish: "영어 사고(심사 사과 유발 쉬움) → 자동 reroll", rerollNoThink: "사고 없이 바로 본문 (사고 없음/적음) → 자동 reroll", rerollEmpty: "빈 응답 (PVP) → 자동 reroll",
+        rerollNoMutter: "끝에 중단 마커 없음(잘린 응답) → 자동 reroll (swipe 새 분기)", mutterSound: "완전한 응답(중단 마커 있음) → 비프음 재생", mutterHint: "두 항목 모두 자동 중단 마커(기본 <mutter>) 기준: 마커 있음=완전→비프 2회; 없음=잘림→새 분기로 swipe(상한 제한 있음, 수동 정지 응답 제외). 비프음은 내장, ST 사운드 설정과 무관.", rerollLabel: "자동 reroll: ", rerollEnglish: "영어 사고(심사 사과 유발 쉬움) → 자동 reroll", rerollNoThink: "사고 없이 바로 본문 (사고 없음/적음) → 자동 reroll", rerollEmpty: "빈 응답 (PVP) → 자동 reroll",
         rerollLimitLabel: "연속 자동 reroll 상한: ", rerollTimes: " 회", rerollMinTokensLabel: "사고 너무 짧음 절단 기준: ",
         rerollWarning: "주의: 극단적 콘텐츠에서는 영어 사고가 자주 나옵니다. reroll로 사과 확률 높은 영어 사고를 피할 수 있지만, 한국어 사고도 사과 확률이 낮지만 있습니다! 수동 중단에 신경 쓰세요.",
         foldLabel: "CoT 접기 미화", foldHint: "본문 CoT 선택 시 본문에 새어나온 사고가 보기 안 좋으니 미화로 접습니다. 미화를 끄고 &lt;scene&gt; 이전 내용을 숨기는 <b>정규식</b>을 켜도 됩니다.",
@@ -324,6 +326,8 @@ if (settings.foldMarker === undefined) settings.foldMarker = defaultSettings.fol
 if (settings.rerollOnEnglishThinking === undefined) settings.rerollOnEnglishThinking = defaultSettings.rerollOnEnglishThinking;
 if (settings.rerollOnNoThinking === undefined) settings.rerollOnNoThinking = defaultSettings.rerollOnNoThinking;
 if (settings.rerollOnEmpty === undefined) settings.rerollOnEmpty = defaultSettings.rerollOnEmpty;
+if (settings.rerollOnNoMutter === undefined) settings.rerollOnNoMutter = true;
+if (settings.mutterSoundEnabled === undefined) settings.mutterSoundEnabled = true;
 if (settings.autoRerollLimit === undefined) settings.autoRerollLimit = defaultSettings.autoRerollLimit;
 if (settings.fixMesOnGenerate === undefined) settings.fixMesOnGenerate = false;
 if (settings.fixMarker === undefined) settings.fixMarker = 'content';
@@ -685,6 +689,7 @@ let isDryRun = false;                  // 提示词查看器 dry-run 模式（�
 let generationStartLastMes = null;     // GENERATION_STARTED 时最后一条消息的 mes（空回重roll判别：最后一条没变=查看器/无新消息→跳过）
 const origMesMap = new Map(); // messageId -> 修正前的原始 mes（「修正回退」用）
 let autoStopTriggered = false;             // 本次生成是否已触发自动截断（防重复 stopGeneration）
+let lastGenManuallyStopped = false;   // 上一次生成是否为用户手动停止（手动停的半截楼不做“无标记重roll”）
 let earlyRerollHandled = false;            // 流式截断重roll 是否已处理（GENERATION_ENDED 兜底防 MESSAGE_RECEIVED 缺失时双重重roll）
 
 // 注入种子本身是否英文开头（用户手动贴英文模板时，模型跟随英文思考不算夺舍失败）
@@ -855,29 +860,37 @@ function checkAutoStop(text) {
 // 在生成完成时检测夺舍是否失败，按设置自动重roll（触发新的 swipe 分支）
 function checkNativeReroll(messageId) {
     if (!settings.enabled) return;
-    if (!settings.rerollOnEnglishThinking && !settings.rerollOnNoThinking) return;
+    if (!settings.rerollOnEnglishThinking && !settings.rerollOnNoThinking && !settings.rerollOnNoMutter) return;
     try {
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const msg = ctx?.chat?.[messageId];
         if (!msg || msg.is_user || msg.is_system) return;
-        // 只在原生 reasoning_content 模式参与时检测
+        // 英文思维链/无思维链两项只在 reasoning_content 模式参与时检测；
+        // “无截断标记”完整性判定不限模式（任何注入方式都可能被截断）
         const modes = Array.isArray(settings.injectModes) ? settings.injectModes : [];
-        if (!modes.includes('reasoning_content')) return;
+        const canNativeDetect = modes.includes('reasoning_content');
 
         const reasoning = String(msg.extra?.reasoning ?? '').trim();
         const mes = String(msg.mes ?? '');
         const marker = settings.foldMarker || '<scene>';
+        const stopMarker = String(settings.autoStopMarker || '').trim();
         let shouldReroll = false;
         let reason = '';
 
-        if (settings.rerollOnEnglishThinking && reasoning.length > 0 && startsWithEnglish(reasoning)) {
+        if (canNativeDetect && settings.rerollOnEnglishThinking && reasoning.length > 0 && startsWithEnglish(reasoning)) {
             shouldReroll = true;
             reason = '思维链开头是英文（夺舍失败）';
-        } else if (settings.rerollOnNoThinking && reasoning.length === 0 && mes.length > 0 && mes.lastIndexOf(marker) === 0) {
+        } else if (canNativeDetect && settings.rerollOnNoThinking && reasoning.length === 0 && mes.length > 0 && mes.lastIndexOf(marker) === 0) {
             // 无原生思维链 + 正文直接从 <scene> 开始（真·直接出正文）；
             // 被迫partial（思考在 content 里，idx>0）不算——用户接受那种
             shouldReroll = true;
             reason = '无思维链直接出正文';
+        } else if (settings.rerollOnNoMutter && stopMarker && !mes.includes(stopMarker) && !lastGenManuallyStopped) {
+            // 完整性判定：生成结束但全文没有截断标记（<mutter>）＝半截楼
+            // （思维链截断：mes 空/占位；正文截断：有 <scene> 但没收尾标记。均命中）
+            // 手动停止的楼不roll（lastGenManuallyStopped，用户自己停的可能想留着看）
+            shouldReroll = true;
+            reason = '生成结束仍无截断标记（半截楼/疑似截断）';
         }
 
         if (shouldReroll) {
@@ -943,6 +956,32 @@ async function triggerAutoSwipe(messageId) {
     } catch (e) {
         console.warn('[余温工具箱] 自动重roll失败:', e);
     }
+}
+
+// 完整生成提示音：两声短 beep（880Hz→1175Hz），Web Audio 直发，不依赖酒馆音效设置/资源文件
+function playMutterBeep() {
+    try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return false;
+        const ac = new AC();
+        if (ac.state === 'suspended') ac.resume();
+        const playTone = (freq, start, dur) => {
+            const o = ac.createOscillator();
+            const g = ac.createGain();
+            o.type = 'sine';
+            o.frequency.value = freq;
+            g.gain.setValueAtTime(0.0001, ac.currentTime + start);
+            g.gain.exponentialRampToValueAtTime(0.22, ac.currentTime + start + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + start + dur);
+            o.connect(g).connect(ac.destination);
+            o.start(ac.currentTime + start);
+            o.stop(ac.currentTime + start + dur + 0.05);
+        };
+        playTone(880, 0, 0.18);       // 第一声 A5
+        playTone(1174.7, 0.22, 0.28); // 第二声 D6
+        setTimeout(() => ac.close().catch(() => {}), 900);
+        return true;
+    } catch (e) { console.warn('[余温工具箱] 提示音播放失败:', e); return false; }
 }
 
 // 空消息判定：对齐 ST 自己的标准（script.js:5354 `['', '...'].includes(mes)`）。
@@ -1085,6 +1124,9 @@ window.__kimiStopReroll = () => {
     try { stopGeneration(); } catch (e) { console.warn('[余温工具箱] 停止当前生成失败:', e); }
     try { toastr.info('⏹ 已停止自动重roll（手动 swipe/重新生成可恢复）', 'Kimi工具箱', { timeOut: 2000 }); } catch (e) {}
 };
+
+// 调试出口（CDP/控制台用）
+window.__ywDebug = { playMutterBeep, checkNativeReroll, settings, getRerollCount: () => autoRerollCount };
 
 // ===== 思维链折叠美化（流式实时版：同步折叠，未折叠态永不绘制 → 不闪烁）=====
 const foldState = new Map(); // messageId -> { open, scrollTop, atBottom }
@@ -1575,6 +1617,11 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id) => {
         rerollBlockedNotified = false;
         updateRerollStatus();
     }
+    // 完整生成（含截断标记）→ 提示音；标记为空则不判（includes('' ) 恒真会乱响）
+    if (isAssistant && !isEmpty && settings.mutterSoundEnabled) {
+        const sm = String(settings.autoStopMarker || '').trim();
+        if (sm && String(msg.mes || '').includes(sm)) playMutterBeep();
+    }
     if (settings.fixMesOnGenerate !== false && isAssistant && !isEmpty) fixMesForMessage(id);
     checkNativeReroll(id);
     applyThinkingFold(id);
@@ -1603,6 +1650,7 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
         return;
     }
     console.log('[余温工具箱] GENERATION_STARTED');
+    lastGenManuallyStopped = false;
     earlyStopTriggered = false;
     earlyRerollMessageId = -1;
     streamGotToken = false;    // 本次生成是否收到过 token（空回检测）
@@ -1645,6 +1693,7 @@ eventSource.on(event_types.STREAM_TOKEN_RECEIVED, checkAutoStop);
 
 // 生成结束：本次零 token → 空回（断流/服务器不稳）→ 自动重roll
 eventSource.on(event_types.GENERATION_ENDED, () => {
+    lastGenManuallyStopped = false; // 一轮生成彻底结束，清手动停止标记
     if (isDryRun) { isDryRun = false; return; } // 提示词查看器 dry-run 结束：不判空回
     console.log(`[余温工具箱] ENDED 触发: manualStop=${manualStopClicked} token=${streamGotToken} emptyHandled=${emptyRerollHandled} early=${earlyStopTriggered}`);
     isGenerating = false; // 生成结束无论何种路径都退出"生成中"，防残留导致历史加载误判空回
@@ -1727,6 +1776,7 @@ eventSource.on(event_types.GENERATION_STOPPED, () => {
     isGenerating = false;
     if (manualStopClicked) {
         console.log('[余温工具箱] manual stop');
+        lastGenManuallyStopped = true; // 手动停的半截楼不做“无标记重roll”
         manualStopClicked = false;
     }
 });
@@ -2103,6 +2153,15 @@ ${t('rerollNoThink')}
 <input id="${extensionName}_reroll_empty" type="checkbox" ${settings.rerollOnEmpty ? 'checked' : ''}/>
 ${t('rerollEmpty')}
 </label>
+<label class="checkbox_label">
+<input id="${extensionName}_reroll_nomutter" type="checkbox" ${settings.rerollOnNoMutter ? 'checked' : ''}/>
+${t('rerollNoMutter')}
+</label>
+<label class="checkbox_label">
+<input id="${extensionName}_mutter_sound" type="checkbox" ${settings.mutterSoundEnabled ? 'checked' : ''}/>
+${t('mutterSound')}
+</label>
+<p class="kimi-hint">${t('mutterHint')}</p>
 <div style="margin-top:5px">
 <label class="kimi-label" for="${extensionName}_reroll_limit">${t('rerollLimitLabel')}</label>
 <input id="${extensionName}_reroll_limit" type="number" min="1" max="999" step="1" class="text_pole kimi-num" value="${settings.autoRerollLimit}"/>
@@ -2294,6 +2353,15 @@ partial
 
     $("#" + extensionName + "_reroll_empty").on("change", function () {
         settings.rerollOnEmpty = $(this).is(":checked");
+        saveSettingsDebounced();
+    });
+
+    $("#" + extensionName + "_reroll_nomutter").on("change", function () {
+        settings.rerollOnNoMutter = $(this).is(":checked");
+        saveSettingsDebounced();
+    });
+    $("#" + extensionName + "_mutter_sound").on("change", function () {
+        settings.mutterSoundEnabled = $(this).is(":checked");
         saveSettingsDebounced();
     });
 
