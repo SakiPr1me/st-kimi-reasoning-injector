@@ -1639,6 +1639,7 @@ export function stTagMountSettings() {
 
 <div class="kimi-sep"></div>
 
+<label class="kimi-label">${t('tagEntryTitle')}</label>
 <div style="display:flex;gap:12px;align-items:center">
 <label class="checkbox_label"><input type="checkbox" id="${ext}_chk_inline" ${s.showInlineBtn ? 'checked' : ''}> ${t('tagChkInline')}</label>
 <label class="checkbox_label"><input type="checkbox" id="${ext}_chk_float" ${s.showFloatingBtn ? 'checked' : ''}> ${t('tagChkFloat')}</label>

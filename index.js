@@ -34,7 +34,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.18.9 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.18.10 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -177,7 +177,7 @@ const UI = {
         tagWrapMissing: "补全整对丢失",
         tagWarnAuto: "⚠️ 每轮自动修复＝AI 回复完自动修一遍标签。出问题点「↩️ 回退」。",
         tagWarnWrap: "⚠️ 谨慎。标签整对丢失时靠前后邻居猜着补，偶尔猜错。",
-        tagChkInline: "输入框旁", tagFixAll: "🏗 修复全部楼层", tagUndoAll: "↩ 回退全部修复", tagUndoThis: "↩ 回退这条修复",
+        tagEntryTitle: "修复入口：", tagChkInline: "输入框旁", tagFixAll: "🏗 修复全部楼层", tagUndoAll: "↩ 回退全部修复", tagUndoThis: "↩ 回退这条修复",
         tagDiffTitle: "🏷 标签修复改动（幻影预览）", tagDiffHint: "红 − = 修复前被改掉的行，绿 + = 修复后补入的行；点 👁 关闭预览", tagUnchanged: "行未改动", tagCollapse: "折叠未改动", tagExpandAll: "展开全部",
         tagChkFloat: "悬浮按钮",
         tagChkMenu: "扩展菜单",
@@ -187,7 +187,7 @@ const UI = {
         apiModel: "模型名", apiKey: "密钥", apiAge: "{d} 天 {h} 小时",
         apiNoPool: "池为空：先添加接口", apiNotCustom: "当前不是 Custom(OpenAI兼容) 连接，API 池不生效",
         apiBannerMsg: "检测到额度用尽（limit）。", apiBannerSwitch: "⇄ 切换到 {name}（{n}/{total}）", apiSwitched: "已切换到 {name}（{n}/{total}）",
-        apiMenuEntry: "菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（providerOptions.gateway.only）", clineProvLabel: "提供商：", clineMenuEntry: "菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「模型参数」里勾选 使用 Cline 提供商指定", clineHint: "开启后每次请求自动注入指定提供商（等效在 ST 附加参数手填，无需再手填）。仅 cline 渠道需要，其它渠道请关闭。字段里已有的 providerOptions 会被本设置接管。不同渠道K3风味不同，自行测试。",
+        apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（providerOptions.gateway.only）", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「模型参数」里勾选 使用 Cline 提供商指定", clineHint: "开启后每次请求自动注入指定提供商（等效在 ST 附加参数手填，无需再手填）。仅 cline 渠道需要，其它渠道请关闭。字段里已有的 providerOptions 会被本设置接管。不同渠道K3风味不同，自行测试。",
         apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效。切换会同步改写 URL、密钥、模型名 三项，预置/采样等其它参数一概不动；命中 limit/quota/rate 即触发。"
         },
     en: {
@@ -237,7 +237,7 @@ const UI = {
         tagWrapMissing: "Fill missing pair",
         tagWarnAuto: "⚠️ Auto-fix = fix tags after each AI reply. If issues, click \"↩️ Undo\".",
         tagWarnWrap: "⚠️ Use with care. When whole tag pairs are lost, guess from neighbors; occasionally wrong.",
-        tagChkInline: "Near input", tagFixAll: "🏗 Fix All Messages", tagUndoAll: "↩ Undo All Fixes", tagUndoThis: "↩ Undo This Fix",
+        tagEntryTitle: "Entry buttons:", tagChkInline: "Near input", tagFixAll: "🏗 Fix All Messages", tagUndoAll: "↩ Undo All Fixes", tagUndoThis: "↩ Undo This Fix",
         tagDiffTitle: "🏷 Tag Fix Changes (phantom preview)", tagDiffHint: "Red − = changed from before, green + = inserted by fix; click the eye again to close", tagUnchanged: "lines unchanged", tagCollapse: "Collapse unchanged", tagExpandAll: "Expand all",
         tagChkFloat: "Floating button",
         tagChkMenu: "Extension menu",
@@ -247,7 +247,7 @@ const UI = {
         apiModel: "Model", apiKey: "Key", apiAge: "{d}d {h}h",
         apiNoPool: "Pool is empty: add an endpoint first", apiNotCustom: "Not a Custom (OpenAI-compatible) connection - pool inactive",
         apiBannerMsg: "Quota limit hit.", apiBannerSwitch: "⇄ Switch to {name} ({n}/{total})", apiSwitched: "Switched to {name} ({n}/{total})",
-        apiMenuEntry: "Menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (providerOptions.gateway.only)", clineProvLabel: "Provider:", clineMenuEntry: "Menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Model Settings first", clineHint: "Injects the selected provider into every request (same as filling Extra Parameters manually). Only needed for the cline channel; turn off elsewhere. Existing providerOptions in the field will be taken over by this setting. Different providers give K3 different flavors - test them yourself.",
+        apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (providerOptions.gateway.only)", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Model Settings first", clineHint: "Injects the selected provider into every request (same as filling Extra Parameters manually). Only needed for the cline channel; turn off elsewhere. Existing providerOptions in the field will be taken over by this setting. Different providers give K3 different flavors - test them yourself.",
         apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections. Switching syncs three fields: URL, key and model name - presets/sampling untouched. Triggers on limit/quota/rate."
         },
     ko: {
@@ -297,7 +297,7 @@ const UI = {
         tagWrapMissing: "누락 쌍 채우기",
         tagWarnAuto: "⚠️ 자동 수정 = 각 AI 답변 후 태그 수정. 문제 시 \"↩️ 되돌리기\".",
         tagWarnWrap: "⚠️ 주의. 태그 쌍이 통째로 사라졌을 때 이웃에서 추측, 가끔 틀림.",
-        tagChkInline: "입력창 옆", tagFixAll: "🏗 전체 층 수정", tagUndoAll: "↩ 전체 되돌리기", tagUndoThis: "↩ 이 층 되돌리기",
+        tagEntryTitle: "입구 버튼:", tagChkInline: "입력창 옆", tagFixAll: "🏗 전체 층 수정", tagUndoAll: "↩ 전체 되돌리기", tagUndoThis: "↩ 이 층 되돌리기",
         tagDiffTitle: "🏷 태그 수정 변경사항 (팬텀 미리보기)", tagDiffHint: "빨강 − = 수정 전 변경된 줄, 초록 + = 수정 후 추가된 줄; 👁 다시 누르면 닫힘", tagUnchanged: "줄 변경 없음", tagCollapse: "변경 없는 줄 접기", tagExpandAll: "전체 펼치기",
         tagChkFloat: "플로팅 버튼",
         tagChkMenu: "확장 메뉴",
@@ -307,7 +307,7 @@ const UI = {
         apiModel: "모델명", apiKey: "키", apiAge: "{d}일 {h}시간",
         apiNoPool: "풀이 비어 있음: 먼저 엔드포인트 추가", apiNotCustom: "Custom(OpenAI 호환) 연결이 아님 - 풀 동작 안 함",
         apiBannerMsg: "할당량 초과 감지.", apiBannerSwitch: "⇄ {name}(으)로 전환 ({n}/{total})", apiSwitched: "{name}(으)로 전환됨 ({n}/{total})",
-        apiMenuEntry: "메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (providerOptions.gateway.only)", clineProvLabel: "공급자:", clineMenuEntry: "메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 모델 설정에서 Cline 공급자 지정을 체크하세요", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입 (수동 작성과 동일). cline 채널에서만 필요, 다른 곳에서는 끄세요. 기존 providerOptions는 이 설정이 관리합니다. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.",
+        apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (providerOptions.gateway.only)", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 모델 설정에서 Cline 공급자 지정을 체크하세요", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입 (수동 작성과 동일). cline 채널에서만 필요, 다른 곳에서는 끄세요. 기존 providerOptions는 이 설정이 관리합니다. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.",
         apiHint: "키는 로컬 settings.json에 평문 저장됨 - 파일 공유 금지. Custom(OpenAI 호환) 연결에서만 동작. 전환 시 URL·키·모델명 세 항목을 함께 변경, 프리셋/샘플링은 불변. limit/quota/rate 에서 트리거."
         }
 };
@@ -2441,6 +2441,17 @@ ${t('rerollEmpty')}
 <input id="${extensionName}_reroll_nomutter" type="checkbox" ${settings.rerollOnNoMutter ? 'checked' : ''}/>
 ${t('rerollNoMutter')}
 </label>
+<div style="margin-top:5px">
+<label class="kimi-label" for="${extensionName}_reroll_limit">${t('rerollLimitLabel')}</label>
+<input id="${extensionName}_reroll_limit" type="number" min="1" max="999" step="1" class="text_pole kimi-num" value="${settings.autoRerollLimit}"/>
+<span class="kimi-hint" style="display:inline">${t('rerollTimes')}</span>
+</div>
+<div style="margin-top:5px">
+<label class="kimi-label" for="${extensionName}_reroll_mintokens">${t('rerollMinTokensLabel')}</label>
+<input id="${extensionName}_reroll_mintokens" type="number" min="0" max="5000" step="10" class="text_pole kimi-num" style="width:100px" value="${settings.rerollMinThinkingTokens}"/>
+<span class="kimi-hint" style="display:inline"> token</span>
+</div>
+<p class="kimi-hint">${t('rerollWarning')}</p>
 <div class="kimi-sep"></div>
 <label class="kimi-label">${t('alertSectionTitle')}</label>
 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -2472,17 +2483,6 @@ ${t('mutterSound')}
 <input id="${extensionName}_mutter_vibrate" type="checkbox" ${settings.mutterVibrate ? 'checked' : ''}/> ${t('mutterVibrate')}
 </label>
 <p class="kimi-hint">${t('mutterHint')}</p>
-<div style="margin-top:5px">
-<label class="kimi-label" for="${extensionName}_reroll_limit">${t('rerollLimitLabel')}</label>
-<input id="${extensionName}_reroll_limit" type="number" min="1" max="999" step="1" class="text_pole kimi-num" value="${settings.autoRerollLimit}"/>
-<span class="kimi-hint" style="display:inline">${t('rerollTimes')}</span>
-</div>
-<div style="margin-top:5px">
-<label class="kimi-label" for="${extensionName}_reroll_mintokens">${t('rerollMinTokensLabel')}</label>
-<input id="${extensionName}_reroll_mintokens" type="number" min="0" max="5000" step="10" class="text_pole kimi-num" style="width:100px" value="${settings.rerollMinThinkingTokens}"/>
-<span class="kimi-hint" style="display:inline"> token</span>
-</div>
-<p class="kimi-hint">${t('rerollWarning')}</p>
 </div>
 </details>
 
@@ -2507,6 +2507,7 @@ ${t('mutterSound')}
 <input id="${extensionName}_foldmarker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${foldMarkerHtml}"/>
 <p class="kimi-hint">${t('foldMarkerHint')}</p>
 </div>
+<div class="kimi-sep"></div>
 <div style="margin-top:6px">
 <label class="checkbox_label" style="display:inline-flex;align-items:center;gap:6px">
 <input id="${extensionName}_reasoning_height" type="checkbox" ${settings.reasoningHeightCss ? 'checked' : ''}/>
