@@ -34,7 +34,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.16.7 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.17.0 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -1148,9 +1148,9 @@ function notifyReroll(msg, level = 'warning') {
         // 已停止时不弹按钮（用户手动 swipe/regenerate 会恢复）；未停止时显示「⏹ 停止」
         const btn = settings.rerollPaused ? '' : `<button class="kimi-reroll-btn" onclick="window.__kimiStopReroll()">⏹ 停止</button>`;
         const opts = { timeOut: 4000, extendedTimeOut: 2000, escapeHtml: false };
-        if (level === 'error') toastr.error(msg + btn, 'Kimi重roll', opts);
-        else if (level === 'success') toastr.success(msg + btn, 'Kimi重roll', opts);
-        else toastr.warning(msg + btn, 'Kimi重roll', opts);
+        if (level === 'error') toastr.error(msg + btn, '重roll', opts);
+        else if (level === 'success') toastr.success(msg + btn, '重roll', opts);
+        else toastr.warning(msg + btn, '重roll', opts);
     } catch (e) { /* toastr 不可用时静默 */ }
 }
 
@@ -1162,6 +1162,9 @@ window.__kimiStopReroll = () => {
     try { stopGeneration(); } catch (e) { console.warn('[余温工具箱] 停止当前生成失败:', e); }
     try { toastr.info('⏹ 已停止自动重roll（手动 swipe/重新生成可恢复）', 'Kimi工具箱', { timeOut: 2000 }); } catch (e) {}
 };
+
+// 显示层词汇替换钩子（tag-fixer.js 关闭幻影预览还原渲染时调用，保证「仅显示」替换不丢）
+window.__ywApplyDisplayReplace = (text) => applyReplacements(text, 'display');
 
 // 调试出口（CDP/控制台/自检脚本用：纯函数直测，不发真实请求）
 window.__ywDebug = {
@@ -1414,10 +1417,13 @@ function reasoningTimerTick() {
     } catch (e) { /* 静默 */ }
 }
 
-function startReasoningTimer() {
-    if (reasoningTimerInterval) return;
+let reasoningTimerRate = 0;
+function startReasoningTimer(rate = 300) {
     if (!settings.reasoningTimer) return;
-    reasoningTimerInterval = setInterval(reasoningTimerTick, 300);
+    if (reasoningTimerInterval && reasoningTimerRate === rate) return;
+    if (reasoningTimerInterval) { clearInterval(reasoningTimerInterval); reasoningTimerInterval = null; }
+    reasoningTimerInterval = setInterval(reasoningTimerTick, rate);
+    reasoningTimerRate = rate;
 }
 function stopReasoningTimer() {
     if (reasoningTimerInterval) {
@@ -1712,7 +1718,7 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     // 新生成开始：清掉所有残留计时 span（重roll/swipe 换分支后旧计时归零）
     document.querySelectorAll('.kimi-thinking-timer').forEach(n => n.remove());
     reasoningStartMap.clear();
-    startReasoningTimer();     // 原生思维链实时计时：思考中显示秒数
+    startReasoningTimer(300);  // 生成中高频 tick：思考中显示秒数
     // 记录生成开始时的最后一条消息内容（空回重roll判别：JS-Slash-Runner 提示词查看器会触发真实生成
     // 但在发出 API 请求前 stopGeneration → 零token 且不新增消息 → 最后一条没变 → 不该重roll）
     try {
@@ -1751,6 +1757,7 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
     if (isDryRun) { isDryRun = false; return; } // 提示词查看器 dry-run 结束：不判空回
     console.log(`[余温工具箱] ENDED 触发: manualStop=${manualStopClicked} token=${streamGotToken} emptyHandled=${emptyRerollHandled} early=${earlyStopTriggered}`);
     isGenerating = false; // 生成结束无论何种路径都退出"生成中"，防残留导致历史加载误判空回
+    startReasoningTimer(1500); // 空闲低频保活（定格秒数仍对抗 ST 重写，开销降 80%）
     // v1.11.39：流式截断（英文/无思考/思考太短）若 MESSAGE_RECEIVED 没触发（如 swipe 场景 onErrorStreaming 吞掉），在此兜底重roll
     if (earlyStopTriggered) {
         if (settings.rerollPaused) { earlyRerollMessageId = -1; earlyStopTriggered = false; return; }
@@ -1828,6 +1835,7 @@ eventSource.on(event_types.GENERATION_STOPPED, () => {
     isDryRun = false;
     streamGotToken = true;
     isGenerating = false;
+    startReasoningTimer(1500); // 空闲低频保活
     if (manualStopClicked) {
         console.log('[余温工具箱] manual stop');
         lastGenManuallyStopped = true; // 手动停的半截楼不做“无标记重roll”
@@ -2392,6 +2400,20 @@ partial
     `;
 
     $("#extensions_settings").append(settingsHtml);
+
+    // 卡片展开状态记忆（localStorage 按卡片序号存，跨刷新/语言切换保持）
+    const bindCardMemory = () => {
+        try {
+            document.querySelectorAll('#' + extensionName + '_settings .kimi-card').forEach((card, idx) => {
+                if (card.dataset.kimiMemBound) return;
+                card.dataset.kimiMemBound = '1';
+                const key = 'kimi_card_open_' + idx;
+                if (localStorage.getItem(key) === '1') card.open = true;
+                card.addEventListener('toggle', () => { try { localStorage.setItem(key, card.open ? '1' : '0'); } catch (e) { } });
+            });
+        } catch (e) { /* localStorage 不可用则静默 */ }
+    };
+    window.__kimiBindCardMemory = bindCardMemory;
     connectFoldObserver();
     if (!$('#kimi-fold-style').length) $('<style id="kimi-fold-style">' + foldCSS + '</style>').appendTo('head');
     if (!$('#kimi-settings-style').length) $('<style id="kimi-settings-style">' + KIMI_SETTINGS_CSS + '</style>').appendTo('head');
@@ -2784,11 +2806,13 @@ partial
     // 监听 ST 构建完 prompt 的事件：截获已渲染 thinking 块 + 预解析种子（提示词查看器同款机制）
     updateRerollStatus();
     // 思维链计时常驻（interval 幂等，覆盖生成中/结束后/切聊天所有阶段）
-    if (settings.reasoningTimer) startReasoningTimer();
+    if (settings.reasoningTimer) startReasoningTimer(1500);
     // v1.13.0: 跟随余温面板重建，重新挂载「标签修复」设置卡（切语言/重渲染时保持存在，幂等）
     if (typeof stTagMountSettings === 'function') stTagMountSettings();
     // API 池（额度轮换）卡（独立模块，随面板重建重挂）
     try { mountApiPoolCard('#kimi_reasoning_injector_api_slot'); } catch (e) { console.warn('[余温工具箱] API池卡挂载失败:', e); }
+    // 所有卡挂载完毕后统一恢复展开记忆（含标签卡/API卡）
+    if (typeof bindCardMemory === 'function') bindCardMemory();
 }
 
 // 全局事件只绑定一次（语言切换重渲染 initSettingsPanel 时不会重复监听）

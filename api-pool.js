@@ -185,15 +185,35 @@ function rowHTML(e, i, cur) {
     const curStyle = (currentIndex() === i)
         ? 'border:1px solid var(--golden-color,#e0a800)!important;background:rgba(224,168,0,.07)'
         : 'border:1px solid rgba(128,128,128,.2)';
+    // 两段式行：l1=模型名+URL（主信息），l2=密钥+天数+操作。
+    // 桌面一行排开；≤700px 媒体查询把 l1/l2 各占整行 → 手机上整齐两行不参差
     return `
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px;${curStyle};border-radius:4px;padding:5px">
-        <input type="text" class="kimi-api-model" data-i="${i}" value="${escHtml(e.model || '')}" placeholder="${t('apiModel')}" style="width:130px"/>
-        <input type="text" class="kimi-api-url" data-i="${i}" value="${escHtml(e.url || '')}" placeholder="https://.../v1" style="width:200px;flex:1;min-width:140px"/>
-        <input type="password" class="kimi-api-key" data-i="${i}" value="${escHtml(e.key || '')}" placeholder="${t('apiKey')}" style="width:140px"/>
-        <span style="opacity:.6;font-size:.8em;white-space:nowrap">${ageText(e.addedAt)}</span>${cur}
-        <button class="kimi-api-switch kimi-btn" data-i="${i}">${t('apiSwitchTo')}</button>
-        <button class="kimi-api-del kimi-btn" data-i="${i}">${t('apiDel')}</button>
+    <div class="kimi-api-row" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px;${curStyle};border-radius:4px;padding:5px">
+        <span class="kimi-api-l1" style="display:inline-flex;gap:6px;align-items:center;flex:2;min-width:0">
+            <input type="text" class="kimi-api-model" data-i="${i}" value="${escHtml(e.model || '')}" placeholder="${t('apiModel')}" style="width:130px"/>
+            <input type="text" class="kimi-api-url" data-i="${i}" value="${escHtml(e.url || '')}" placeholder="https://.../v1" style="flex:1;min-width:120px"/>
+        </span>
+        <span class="kimi-api-l2" style="display:inline-flex;gap:6px;align-items:center;flex:1;min-width:0">
+            <input type="password" class="kimi-api-key" data-i="${i}" value="${escHtml(e.key || '')}" placeholder="${t('apiKey')}" style="width:130px"/>
+            <span style="opacity:.6;font-size:.8em;white-space:nowrap">${ageText(e.addedAt)}</span>${cur}
+            <button class="kimi-api-switch kimi-btn" data-i="${i}">${t('apiSwitchTo')}</button>
+            <button class="kimi-api-del kimi-btn" data-i="${i}">${t('apiDel')}</button>
+        </span>
     </div>`;
+}
+
+// 手机自适应样式（挂一次）
+function ensureApiRespStyle() {
+    if (document.getElementById('kimi-api-resp-style')) return;
+    const st = document.createElement('style');
+    st.id = 'kimi-api-resp-style';
+    st.textContent = '@media(max-width:700px){' +
+        '.kimi-api-l1,.kimi-api-l2{display:flex!important;width:100%}' +
+        '.kimi-api-l1 .kimi-api-model{flex:0 0 40%;width:auto}' +
+        '.kimi-api-l1 .kimi-api-url{flex:1}' +
+        '.kimi-api-l2 .kimi-api-key{flex:1;width:auto;min-width:90px}' +
+        '}';
+    document.head.appendChild(st);
 }
 
 function poolHTML() {
@@ -249,6 +269,7 @@ function renderList(slotSel) {
 
 export function mountApiPoolCard(slotSel) {
     mountedSlot = slotSel;
+    ensureApiRespStyle();
     const slot = document.querySelector(slotSel);
     if (!slot) return;
     slot.innerHTML = poolHTML();
