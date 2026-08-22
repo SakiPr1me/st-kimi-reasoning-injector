@@ -1,6 +1,6 @@
 // ===== API 池（额度轮换）=====
 // 多号党场景：Custom(OpenAI兼容) 连接列表，命中 limit 类错误时横幅询问/自动切换到下一条，
-// 只换 custom_url + api_key_custom 两个值，模型/预设/其它采样参数一概不动。
+// 切换 = 只改 custom_url + api_key_custom + custom_model 三个值，预置/采样/其它参数一概不动。
 // ⚠️ 密钥以明文存 settings.json（酒馆 secret 是全局单值，无法存多份，只能在池里各存一份）。
 
 import { extension_settings } from "../../../extensions.js";
@@ -53,17 +53,24 @@ function findNext() {
 
 async function doSwitch(entry, { auto = false } = {}) {
     try {
+        // 1) URL
         oai_settings.custom_url = norm(entry.url);
-        // 同步 UI 输入框（ST 自己的 input 处理器会把值写回 oai_settings + 触发连接刷新）
         try { $('#custom_api_url_text').val(norm(entry.url)).trigger('input'); } catch (e) { /* 输入框可能不存在 */ }
+        // 2) 模型名（Custom 连接的手动模型输入框）
+        if (entry.model) {
+            oai_settings.custom_model = entry.model;
+            try { $('#custom_model_id').val(entry.model).trigger('input'); } catch (e) { /* 输入框可能不存在 */ }
+        }
         saveSettingsDebounced();
+        // 3) 密钥（该条没填则不碰现有 secret）
         if (entry.key) {
             await writeSecret('api_key_custom', entry.key, 'Custom API');
         }
         refreshCurrentIndicator();
         const n = settings.pool.findIndex(e => e === entry);
         const total = settings.pool.filter(e => e.url && norm(e.url)).length;
-        const msg = String(t('apiSwitched')).replace('{name}', entry.name || norm(entry.url)).replace('{n}', n + 1).replace('{total}', total);
+        const label = entry.model || norm(entry.url);
+        const msg = String(t('apiSwitched')).replace('{name}', label).replace('{n}', n + 1).replace('{total}', total);
         try { toastr.success(msg, 'API \u989d\u5ea6', { timeOut: 3000 }); } catch (e) { }
         console.log('[API池] ' + msg + (auto ? '（自动切换）' : ''));
     } catch (e) {
@@ -78,10 +85,10 @@ function showBanner(next) {
         if (bannerRef) toastr.clear(bannerRef, true);
         const total = settings.pool.filter(e => e.url && norm(e.url)).length;
         const n = settings.pool.indexOf(next) + 1;
-        const label = next.name || norm(next.url);
+        const label = next.model || norm(next.url);
         const switchBtn = `<button class="kimi-api-banner-btn menu_button" style="margin-left:8px;display:inline-block;width:auto">${String(t('apiBannerSwitch')).replace('{name}', label).replace('{n}', n).replace('{total}', total)}</button>`;
         const msg = String(t('apiBannerMsg')).replace('{name}', label) + ' ' + switchBtn;
-bannerRef = toastr.error(msg, 'API \u989d\u5ea6', {
+        bannerRef = toastr.error(msg, 'API \u989d\u5ea6', {
             timeOut: 0, extendedTimeOut: 0, closeButton: true, escapeHtml: false,
             onHidden: () => { bannerRef = null; },
         });
@@ -138,26 +145,31 @@ window.__apiPoolOnResponse = onResponse;
 })();
 
 // ---- 设置卡 UI ----
+function rowHTML(e, i, cur) {
+    return `
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px;border:1px solid rgba(128,128,128,.2);border-radius:4px;padding:5px">
+        <input type="text" class="kimi-api-model" data-i="${i}" value="${escHtml(e.model || '')}" placeholder="${t('apiModel')}" style="width:130px"/>
+        <input type="text" class="kimi-api-url" data-i="${i}" value="${escHtml(e.url || '')}" placeholder="https://.../v1" style="width:200px;flex:1;min-width:140px"/>
+        <input type="password" class="kimi-api-key" data-i="${i}" value="${escHtml(e.key || '')}" placeholder="${t('apiKey')}" style="width:140px"/>
+        <span style="opacity:.6;font-size:.8em;white-space:nowrap">${ageText(e.addedAt)}</span>${cur}
+        <button class="kimi-api-switch kimi-btn" data-i="${i}">${t('apiSwitchTo')}</button>
+        <button class="kimi-api-del kimi-btn" data-i="${i}">${t('apiDel')}</button>
+    </div>`;
+}
+
 function poolHTML() {
     const rows = settings.pool.map((e, i) => {
         const cur = currentIndex() === i ? ` <span class="kimi-api-cur" style="color:var(--golden-color,#e0a800)">*${t('apiCurrent')}</span>` : '';
-        const age = ageText(e.addedAt);
-        return `
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px;border:1px solid rgba(128,128,128,.2);border-radius:4px;padding:5px">
-            <input type="text" class="kimi-api-name" data-i="${i}" value="${escHtml(e.name || '')}" placeholder="${t('apiName')}" style="width:90px"/>
-            <input type="text" class="kimi-api-url" data-i="${i}" value="${escHtml(e.url || '')}" placeholder="https://.../v1" style="width:220px;flex:1"/>
-            <input type="password" class="kimi-api-key" data-i="${i}" value="${escHtml(e.key || '')}" placeholder="${t('apiKey')}" style="width:150px"/>
-            <span style="opacity:.6;font-size:.8em;white-space:nowrap">${age}</span>${cur}
-            <button class="kimi-api-switch kimi-btn" data-i="${i}">${t('apiSwitchTo')}</button>
-            <button class="kimi-api-del kimi-btn" data-i="${i}">${t('apiDel')}</button>
-        </div>`;
+        return rowHTML(e, i, cur);
     }).join('');
     return `
     <details class="kimi-card">
     <summary><i class="fa-solid fa-plug kimi-card-ico" aria-hidden="true"></i>${t('apiTitle')}</summary>
     <div class="kimi-card-body">
-        <label class="checkbox_label" style="display:block;margin-bottom:4px"><input type="checkbox" id="kimi_api_enabled" ${settings.enabled ? 'checked' : ''}/> ${t('apiEnabled')}</label>
-        <label class="checkbox_label" style="display:block;margin-bottom:4px"><input type="checkbox" id="kimi_api_auto" ${settings.autoSwitch ? 'checked' : ''}/> ${t('apiAuto')}</label>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+            <label class="checkbox_label" style="margin:0"><input type="checkbox" id="kimi_api_enabled" ${settings.enabled ? 'checked' : ''}/> ${t('apiEnabled')}</label>
+            <label class="checkbox_label" style="margin:0"><input type="checkbox" id="kimi_api_auto" ${settings.autoSwitch ? 'checked' : ''}/> ${t('apiAuto')}</label>
+        </div>
         <div style="margin-top:5px">
             <label class="kimi-label" for="kimi_api_keywords">${t('apiKeywords')}</label>
             <input id="kimi_api_keywords" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${escHtml(settings.keywords)}"/>
@@ -187,9 +199,9 @@ function refreshCurrentIndicator() {
     document.querySelectorAll('.kimi-api-cur').forEach(n => n.remove());
     const idx = currentIndex();
     if (idx >= 0) {
-        const row = document.querySelector(`#kimi_api_list div[class] [data-i="${idx}"]`)?.closest('div');
-        // 简化：直接重渲染列表部分
         const list = document.getElementById('kimi_api_list');
+        const input = list?.querySelector(`[data-i="${idx}"].kimi-api-model`);
+        const row = input?.closest('div');
         if (list && row) {
             const span = document.createElement('span');
             span.className = 'kimi-api-cur';
@@ -198,6 +210,12 @@ function refreshCurrentIndicator() {
             row.appendChild(span);
         }
     }
+}
+
+function renderList(slotSel) {
+    const list = document.getElementById('kimi_api_list');
+    if (list) list.innerHTML = settings.pool.map((e, i) => rowHTML(e, i, '')).join('') || '<span style="opacity:.5;font-size:.85em">' + t('apiNoPool') + '</span>';
+    refreshCurrentIndicator();
 }
 
 export function mountApiPoolCard(slotSel) {
@@ -210,31 +228,17 @@ export function mountApiPoolCard(slotSel) {
     $('#kimi_api_keywords').on('input', function () { settings.keywords = $(this).val(); saveSettingsDebounced(); });
 
     $('#kimi_api_add').on('click', function () {
-        settings.pool.push({ id: Date.now(), name: '', url: '', key: '', addedAt: Date.now() });
+        settings.pool.push({ id: Date.now(), model: '', url: '', key: '', addedAt: Date.now() });
         saveSettingsDebounced();
-        // 重渲染列表（当前编辑中的输入会被重置——添加新行场景可接受）
-        const list = document.getElementById('kimi_api_list');
-        if (list) list.innerHTML = settings.pool.map((e, i) => {
-            const age = ageText(e.addedAt);
-            return `
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px;border:1px solid rgba(128,128,128,.2);border-radius:4px;padding:5px">
-            <input type="text" class="kimi-api-name" data-i="${i}" value="${escHtml(e.name || '')}" placeholder="${t('apiName')}" style="width:90px"/>
-            <input type="text" class="kimi-api-url" data-i="${i}" value="${escHtml(e.url || '')}" placeholder="https://.../v1" style="width:220px;flex:1"/>
-            <input type="password" class="kimi-api-key" data-i="${i}" value="${escHtml(e.key || '')}" placeholder="${t('apiKey')}" style="width:150px"/>
-            <span style="opacity:.6;font-size:.8em;white-space:nowrap">${age}</span>
-            <button class="kimi-api-switch kimi-btn" data-i="${i}">${t('apiSwitchTo')}</button>
-            <button class="kimi-api-del kimi-btn" data-i="${i}">${t('apiDel')}</button>
-        </div>`;
-        }).join('') || '<span style="opacity:.5;font-size:.85em">' + t('apiNoPool') + '</span>';
-        refreshCurrentIndicator();
+        renderList(slotSel);
     });
 
     // 列表事件委托（增删改都走这里，重渲染后依然有效）
-    $('#kimi_api_list').on('input', '.kimi-api-name, .kimi-api-url, .kimi-api-key', function () {
+    $('#kimi_api_list').on('input', '.kimi-api-model, .kimi-api-url, .kimi-api-key', function () {
         const i = Number($(this).attr('data-i'));
         const e = settings.pool[i];
         if (!e) return;
-        if ($(this).hasClass('kimi-api-name')) e.name = $(this).val();
+        if ($(this).hasClass('kimi-api-model')) e.model = $(this).val();
         else if ($(this).hasClass('kimi-api-url')) e.url = $(this).val();
         else e.key = $(this).val();
         saveSettingsDebounced();
