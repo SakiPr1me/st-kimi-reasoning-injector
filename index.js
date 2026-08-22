@@ -34,7 +34,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.18.0 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.18.1 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -75,6 +75,7 @@ const defaultSettings = {
     clineProviderEnabled: false,     // Cline 提供商指定：请求注入 providerOptions.gateway.only
     clineProvider: 'modal',          // 当前选中的 Cline 提供商（默认 modal，据称质量最好）
     clineShowMenuBtn: true,          // 扩展菜单显示「切换Cline提供商」入口
+    clineCustomProviders: [],        // 用户自定义追加的提供商名（与内置8个合并出现在下拉/弹窗）
 };
 
 // ===== 双模式三语预设 =====
@@ -183,7 +184,7 @@ const UI = {
         apiModel: "模型名", apiKey: "密钥", apiAge: "{d} 天 {h} 小时",
         apiNoPool: "池为空：先添加接口", apiNotCustom: "当前不是 Custom(OpenAI兼容) 连接，API 池不生效",
         apiBannerMsg: "检测到额度用尽（limit）。", apiBannerSwitch: "⇄ 切换到 {name}（{n}/{total}）", apiSwitched: "已切换到 {name}（{n}/{total}）",
-        apiMenuEntry: "菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（providerOptions.gateway.only）", clineProvLabel: "提供商：", clineMenuEntry: "菜单入口", clineTitle: "⇄ 切换 Cline 提供商", clineMenuSwitch: "⇄ 切换Cline提供商", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「模型参数」里勾选 使用 Cline 提供商指定", clineHint: "开启后每次请求自动注入指定提供商（等效在 ST 附加参数手填，无需再手填）。仅 cline 渠道需要，其它渠道请关闭。字段里已有的 providerOptions 会被本设置接管。",
+        apiMenuEntry: "菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（providerOptions.gateway.only）", clineProvLabel: "提供商：", clineMenuEntry: "菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「模型参数」里勾选 使用 Cline 提供商指定", clineHint: "开启后每次请求自动注入指定提供商（等效在 ST 附加参数手填，无需再手填）。仅 cline 渠道需要，其它渠道请关闭。字段里已有的 providerOptions 会被本设置接管。不同渠道K3风味不同，自行测试。",
         apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效。切换会同步改写 URL、密钥、模型名 三项，预置/采样等其它参数一概不动；命中 limit/quota/rate 即触发。"
         },
     en: {
@@ -242,7 +243,7 @@ const UI = {
         apiModel: "Model", apiKey: "Key", apiAge: "{d}d {h}h",
         apiNoPool: "Pool is empty: add an endpoint first", apiNotCustom: "Not a Custom (OpenAI-compatible) connection - pool inactive",
         apiBannerMsg: "Quota limit hit.", apiBannerSwitch: "⇄ Switch to {name} ({n}/{total})", apiSwitched: "Switched to {name} ({n}/{total})",
-        apiMenuEntry: "Menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineEnabled: "Use Cline provider routing (providerOptions.gateway.only)", clineProvLabel: "Provider:", clineMenuEntry: "Menu entry", clineTitle: "⇄ Switch Cline Provider", clineMenuSwitch: "⇄ Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Model Settings first", clineHint: "Injects the selected provider into every request (same as filling Extra Parameters manually). Only needed for the cline channel; turn off elsewhere. Existing providerOptions in the field will be taken over by this setting.",
+        apiMenuEntry: "Menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (providerOptions.gateway.only)", clineProvLabel: "Provider:", clineMenuEntry: "Menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Model Settings first", clineHint: "Injects the selected provider into every request (same as filling Extra Parameters manually). Only needed for the cline channel; turn off elsewhere. Existing providerOptions in the field will be taken over by this setting. Different providers give K3 different flavors - test them yourself.",
         apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections. Switching syncs three fields: URL, key and model name - presets/sampling untouched. Triggers on limit/quota/rate."
         },
     ko: {
@@ -301,7 +302,7 @@ const UI = {
         apiModel: "모델명", apiKey: "키", apiAge: "{d}일 {h}시간",
         apiNoPool: "풀이 비어 있음: 먼저 엔드포인트 추가", apiNotCustom: "Custom(OpenAI 호환) 연결이 아님 - 풀 동작 안 함",
         apiBannerMsg: "할당량 초과 감지.", apiBannerSwitch: "⇄ {name}(으)로 전환 ({n}/{total})", apiSwitched: "{name}(으)로 전환됨 ({n}/{total})",
-        apiMenuEntry: "메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (providerOptions.gateway.only)", clineProvLabel: "공급자:", clineMenuEntry: "메뉴 항목", clineTitle: "⇄ Cline 공급자 전환", clineMenuSwitch: "⇄ Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 모델 설정에서 Cline 공급자 지정을 체크하세요", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입 (수동 작성과 동일). cline 채널에서만 필요, 다른 곳에서는 끄세요. 기존 providerOptions는 이 설정이 관리합니다.",
+        apiMenuEntry: "메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (providerOptions.gateway.only)", clineProvLabel: "공급자:", clineMenuEntry: "메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 모델 설정에서 Cline 공급자 지정을 체크하세요", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입 (수동 작성과 동일). cline 채널에서만 필요, 다른 곳에서는 끄세요. 기존 providerOptions는 이 설정이 관리합니다. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.",
         apiHint: "키는 로컬 settings.json에 평문 저장됨 - 파일 공유 금지. Custom(OpenAI 호환) 연결에서만 동작. 전환 시 URL·키·모델명 세 항목을 함께 변경, 프리셋/샘플링은 불변. limit/quota/rate 에서 트리거."
         }
 };
@@ -339,6 +340,7 @@ if (!settings.mutterSoundType) settings.mutterSoundType = 'ding';
 if (settings.clineProviderEnabled === undefined) settings.clineProviderEnabled = false;
 if (!settings.clineProvider) settings.clineProvider = 'modal';
 if (settings.clineShowMenuBtn === undefined) settings.clineShowMenuBtn = true;
+if (!Array.isArray(settings.clineCustomProviders)) settings.clineCustomProviders = [];
 if (settings.autoRerollLimit === undefined) settings.autoRerollLimit = defaultSettings.autoRerollLimit;
 if (settings.fixMesOnGenerate === undefined) settings.fixMesOnGenerate = false;
 if (settings.fixMarker === undefined) settings.fixMarker = 'content';
@@ -591,6 +593,10 @@ function upsertYamlTopKey(yaml, topKey, blockText) {
 // originalFetch 经 window.__kimiOrigFetch 传递，任何一层拿到的都是最初的原生 fetch。
 // ===== Cline 提供商指定（providerOptions.gateway.only）=====
 const CLINE_PROVIDERS = ['modal', 'fireworks', 'togetherai', 'baseten', 'nebius', 'digitalocean', 'moonshotai', 'morph'];
+function getClineProviders() {
+    const custom = (settings.clineCustomProviders || []).filter(x => x && String(x).trim());
+    return CLINE_PROVIDERS.concat(custom.map(x => String(x).trim()));
+}
 
 // 构造 custom_include_body 新内容：注入原样 JSON 结构 {"providerOptions":{"gateway":{"only":[...]}}}，
 // 并保留字段里的其它键（JSON 输入→整体重写为 JSON；非 JSON 的手写 YAML→行式追加键不破坏原文）。
@@ -1213,7 +1219,7 @@ function updateClineMenuItem() {
     if (!settings.clineShowMenuBtn) return;
     const $menu = $('#extensionsMenu');
     if (!$menu.length) { setTimeout(updateClineMenuItem, 1500); return; }
-    const text = String(t('clineMenuSwitch')) + ' → ' + String(settings.clineProvider || 'modal');
+    const text = String(t('clineMenuSwitch')) + ' → ' + String(settings.clineProvider || 'modal'); // 图标由 <i> 提供
     $menu.append(`<a id="kimi_cline_menu_item" class="list-group-item" href="#" title="${t('clineTitle')}">
         <i class="fa-solid fa-shuffle"></i> ${text}
     </a>`);
@@ -1231,16 +1237,14 @@ function openClineModal() {
         return;
     }
     $('#kimi_cline_modal').remove();
-    const btns = CLINE_PROVIDERS.map(p => {
+    const btns = getClineProviders().map(p => {
         const cur = p === settings.clineProvider;
-        const st = cur
-            ? 'border:1.5px solid var(--golden-color,#e0a800);background:rgba(224,168,0,.14);font-weight:700'
-            : 'border:1px solid var(--SmartThemeBorderColor,grey)';
-        return `<button class="kimi-cline-p menu_button" data-p="${p}" style="${st};border-radius:8px;padding:8px 6px;text-align:center">${p}${cur ? ' ✓' : ''}</button>`;
+        return `<button class="kimi-cline-p${cur ? ' kimi-cline-cur' : ''}" data-p="${p}">${p}${cur ? ' ✓' : ''}</button>`;
     }).join('');
+    ensureClineModalStyle();
     const $ov = $(`
-    <div id="kimi_cline_modal" style="position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center">
-    <div style="background:var(--secondary-surface,#fff);border-radius:10px;padding:18px 20px;width:min(430px,92vw);box-shadow:0 4px 20px rgba(0,0,0,.4)">
+    <div id="kimi_cline_modal" class="kimi-cline-overlay">
+    <div class="kimi-cline-modal-card">
     <b style="font-size:.95em">${t('clineTitle')}</b>
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px">${btns}</div>
     <p class="kimi-hint" style="margin-top:10px">${t('clineHint')}</p>
@@ -1260,6 +1264,37 @@ function openClineModal() {
         $ov.remove();
     });
     $ov.on('click', function (e) { if (e.target === this) $ov.remove(); });
+}
+
+// Cline 弹窗样式（余温主界面同款视觉语言：主题变量 + 卡片化 + 金色选中；只挂一次）
+let __clineStyleDone = false;
+function ensureClineModalStyle() {
+    if (__clineStyleDone) return;
+    __clineStyleDone = true;
+    const css = `
+.kimi-cline-overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center}
+.kimi-cline-modal-card{background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;padding:16px;width:min(430px,92vw);box-shadow:0 4px 24px rgba(0,0,0,.45);color:var(--SmartThemeBodyColor)}
+.kimi-cline-p{border:1px solid var(--SmartThemeBorderColor);border-radius:10px;padding:9px 6px;background:rgba(255,255,255,.04);color:var(--SmartThemeBodyColor);cursor:pointer;font-size:.92em;text-align:center;transition:filter .15s ease,border-color .15s ease}
+.kimi-cline-p:hover{filter:brightness(1.3)}
+.kimi-cline-p.kimi-cline-cur{border:1.5px solid var(--golden-color,#e0a800)!important;background:rgba(224,168,0,.14);font-weight:700}
+`;
+    $('<style id="kimi-cline-style">' + css + '</style>').appendTo('head');
+}
+
+// Cline 下拉与自定义 chips 重渲染（追加/删除后调用；菜单同步由 updateClineMenuItem 负责）
+function renderClineProviderOptions() {
+    const sel = document.getElementById(extensionName + '_cline_provider');
+    if (!sel) return;
+    const cur = settings.clineProvider;
+    sel.innerHTML = getClineProviders().map(p => `<option value="${p}" ${p === cur ? 'selected' : ''}>${p}</option>`).join('');
+}
+function renderClineChips() {
+    const box = document.getElementById(extensionName + '_cline_chips');
+    if (!box) return;
+    const custom = Array.isArray(settings.clineCustomProviders) ? settings.clineCustomProviders : [];
+    box.innerHTML = custom.map(n =>
+        `<span class="kimi-cline-chip" style="display:inline-flex;align-items:center;gap:4px;border:1px solid var(--SmartThemeBorderColor);border-radius:10px;padding:1px 6px;font-size:.8em">${String(n).replace(/</g, '&lt;')}<span class="kimi-cline-chip-del" data-name="${String(n).replace(/"/g, '&quot;')}" title="${t('apiDel')}" style="cursor:pointer;opacity:.7">✕</span></span>`
+    ).join('');
 }
 
 // 显示层词汇替换钩子（tag-fixer.js 关闭幻影预览还原渲染时调用，保证「仅显示」替换不丢）
@@ -1283,7 +1318,7 @@ window.__ywDebug = {
     uiDict: () => UI,
     t,
     // Cline 提供商
-    buildClineIncludeBody, applyClineProvider, CLINE_PROVIDERS, updateClineMenuItem,
+    buildClineIncludeBody, applyClineProvider, CLINE_PROVIDERS, getClineProviders, updateClineMenuItem,
 };
 
 // ===== 思维链折叠美化（流式实时版：同步折叠，未折叠态永不绘制 → 不闪烁）=====
@@ -2305,8 +2340,13 @@ ${t('usage3')}
 <div style="margin-top:5px">
 <label class="kimi-label" for="${extensionName}_cline_provider">${t('clineProvLabel')}</label>
 <select id="${extensionName}_cline_provider" class="text_pole" style="width:100%">
-${CLINE_PROVIDERS.map(p => `<option value="${p}" ${settings.clineProvider === p ? 'selected' : ''}>${p}</option>`).join('')}
+${getClineProviders().map(p => `<option value="${p}" ${settings.clineProvider === p ? 'selected' : ''}>${p}</option>`).join('')}
 </select>
+<div style="display:flex;gap:6px;margin-top:5px;align-items:center">
+<input id="${extensionName}_cline_custom_input" type="text" class="text_pole" style="flex:1;min-width:0" placeholder="${t('clineCustomPlaceholder')}"/>
+<button id="${extensionName}_cline_add" type="button" class="kimi-btn">${t('clineCustomAdd')}</button>
+</div>
+<div id="${extensionName}_cline_chips" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px"></div>
 <label class="checkbox_label" style="margin-top:5px">
 <input id="${extensionName}_cline_menu_entry" type="checkbox" ${settings.clineShowMenuBtn ? 'checked' : ''}/> ${t('clineMenuEntry')}
 </label>
@@ -2845,6 +2885,39 @@ partial
     $("#" + extensionName + "_cline_menu_entry").on("change", function () {
         settings.clineShowMenuBtn = $(this).is(":checked");
         saveSettingsDebounced();
+        updateClineMenuItem();
+    });
+
+    // 自定义提供商：追加（去重、非空）
+    $("#" + extensionName + "_cline_add").on("click", function () {
+        const input = document.getElementById(extensionName + "_cline_custom_input");
+        const name = String(input?.value || '').trim();
+        if (!name) { try { toastr.warning(String(t('clineCustomEmpty')), 'Cline', { timeOut: 2500 }); } catch (e) { } return; }
+        if (!Array.isArray(settings.clineCustomProviders)) settings.clineCustomProviders = [];
+        if (getClineProviders().some(p => p.toLowerCase() === name.toLowerCase())) {
+            try { toastr.info(String(t('clineCustomDup')).replace('{p}', name), 'Cline', { timeOut: 2500 }); } catch (e) { }
+            return;
+        }
+        settings.clineCustomProviders.push(name);
+        saveSettingsDebounced();
+        if (input) input.value = '';
+        renderClineProviderOptions();
+        renderClineChips();
+        updateClineMenuItem();
+        try { toastr.success(String(t('clineCustomAdded')).replace('{p}', name), 'Cline', { timeOut: 2500 }); } catch (e) { }
+    });
+
+    // 自定义项删除（事件委托）：删的是当前选中则回退 modal
+    $("#" + extensionName + "_cline_chips").on("click", ".kimi-cline-chip-del", function () {
+        const name = $(this).attr('data-name');
+        settings.clineCustomProviders = (settings.clineCustomProviders || []).filter(x => x !== name);
+        if (settings.clineProvider === name) {
+            settings.clineProvider = 'modal';
+            $("#" + extensionName + "_cline_provider").val('modal');
+        }
+        saveSettingsDebounced();
+        renderClineProviderOptions();
+        renderClineChips();
         updateClineMenuItem();
     });
     updateClineMenuItem();
