@@ -34,7 +34,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.19.0 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.19.1 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -2420,6 +2420,9 @@ ${getClineProviders().map(p => `<option value="${p}" ${settings.clineProvider ==
 </div>
 </details>
 
+<!-- ═══ API 池（额度轮换）═══ -->
+<div id="${extensionName}_api_slot"></div>
+
 <!-- ═══ 自动重roll ═══ -->
 <details class="kimi-card">
 <summary><i class="fa-solid fa-arrows-rotate kimi-card-ico" aria-hidden="true"></i>${t('rerollTitle')}</summary>
@@ -2565,9 +2568,6 @@ ${renderWordReplaceRows()}
 
 <!-- ═══ 标签修复(原st-tag) ═══ -->
 <div id="${extensionName}_tag_slot"></div>
-
-<!-- ═══ API 池（额度轮换）═══ -->
-<div id="${extensionName}_api_slot"></div>
 
 <!-- ═══ 其他功能 ═══ -->
 <details class="kimi-card">

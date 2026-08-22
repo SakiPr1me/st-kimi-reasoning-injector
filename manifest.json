@@ -2,7 +2,7 @@
     "name": "Kimi Reasoning Content Injector",
     "display_name": "🔥 余温工具箱（注入/重roll/替换/轮询/修标签）",
     "description": "余温工具箱：思维链注入夺舍 + 折叠美化 + 自动重roll + 自动截断 + 词汇替换 + 换行修正 + DeepSeek适配 + 标签修复",
-    "version": "1.19.0",
+    "version": "1.19.1",
     "author": "Local",
     "js": [
         "index.js"
