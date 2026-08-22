@@ -34,7 +34,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.15.1 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.15.2 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -121,7 +121,7 @@ const COT_STRIP_RE = /<cot>\s*\n\s*/i;
 // ===== 三语 UI 文案（设置面板所有文字；key 见 t() 引用） =====
 const UI = {
     zh: {
-        pluginName: "余温工具箱", enabled: "插件开关",
+        pluginName: "🔥 余温工具箱", enabled: "插件开关",
         langLabel: "语言 / Language：", langZh: "中文（默认）", langEn: "English", langKo: "한국어",
         langHint: "切换语言会自动替换 Reasoning Content 为对应语言版本（可再手动编辑）；「&lt;cot&gt; 注入」「partial 身份锚」「默认角色名」也会跟随语言。",
         dsModeLabel: "Deepseek思维链开关：", dsNative: "原生思维链", dsDisabled: "正文思维链(thinking disabled)",
@@ -180,7 +180,7 @@ const UI = {
         apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效。切换会同步改写 URL、密钥、模型名 三项，预置/采样等其它参数一概不动；命中 limit/quota/rate 即触发。"
         },
     en: {
-        pluginName: "Yu Wen Toolkit", enabled: "Plugin Toggle",
+        pluginName: "🔥 Yu Wen Toolkit", enabled: "Plugin Toggle",
         langLabel: "Language: ", langZh: "中文 (Default)", langEn: "English", langKo: "한국어",
         langHint: "Switching language auto-replaces Reasoning Content (editable afterwards); <cot> injection, partial anchor, default name also follow the language.",
         dsModeLabel: "DeepSeek Thinking Mode: ", dsNative: "Native thinking", dsDisabled: "Body CoT (thinking disabled)",
@@ -238,7 +238,7 @@ const UI = {
         apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections. Switching syncs three fields: URL, key and model name - presets/sampling untouched. Triggers on limit/quota/rate."
         },
     ko: {
-        pluginName: "위온 툴킷", enabled: "플러그인 스위치",
+        pluginName: "🔥 위온 툴킷", enabled: "플러그인 스위치",
         langLabel: "언어 / Language: ", langZh: "中文 (기본)", langEn: "English", langKo: "한국어",
         langHint: "언어 전환 시 Reasoning Content가 해당 언어 버전으로 자동 교체됩니다(수동 편집 가능). &lt;cot&gt; 주입·partial 앵커·기본 캐릭터명도 언어를 따릅니다.",
         dsModeLabel: "DeepSeek 사고 모드: ", dsNative: "네이티브 사고", dsDisabled: "본문 CoT (thinking disabled)",

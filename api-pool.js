@@ -145,9 +145,14 @@ window.__apiPoolOnResponse = onResponse;
 })();
 
 // ---- 设置卡 UI ----
+let mountedSlot = ''; // 重渲染列表时恢复当前行高亮需知道挂载点
+
 function rowHTML(e, i, cur) {
+    const curStyle = (currentIndex() === i)
+        ? 'border:1px solid var(--golden-color,#e0a800)!important;background:rgba(224,168,0,.07)'
+        : 'border:1px solid rgba(128,128,128,.2)';
     return `
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px;border:1px solid rgba(128,128,128,.2);border-radius:4px;padding:5px">
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px;${curStyle};border-radius:4px;padding:5px">
         <input type="text" class="kimi-api-model" data-i="${i}" value="${escHtml(e.model || '')}" placeholder="${t('apiModel')}" style="width:130px"/>
         <input type="text" class="kimi-api-url" data-i="${i}" value="${escHtml(e.url || '')}" placeholder="https://.../v1" style="width:200px;flex:1;min-width:140px"/>
         <input type="password" class="kimi-api-key" data-i="${i}" value="${escHtml(e.key || '')}" placeholder="${t('apiKey')}" style="width:140px"/>
@@ -195,30 +200,20 @@ function escHtml(s) {
 }
 
 function refreshCurrentIndicator() {
-    // 轻量刷新“当前”标记（不整卡重渲染，避免打断输入）
-    document.querySelectorAll('.kimi-api-cur').forEach(n => n.remove());
-    const idx = currentIndex();
-    if (idx >= 0) {
-        const list = document.getElementById('kimi_api_list');
-        const input = list?.querySelector(`[data-i="${idx}"].kimi-api-model`);
-        const row = input?.closest('div');
-        if (list && row) {
-            const span = document.createElement('span');
-            span.className = 'kimi-api-cur';
-            span.style.cssText = 'color:var(--golden-color,#e0a800)';
-            span.textContent = '*' + t('apiCurrent');
-            row.appendChild(span);
-        }
-    }
+    // 当前行重渲染（金色边框 + *当前 标记与切换联动；renderList 内部自带边框判定）
+    renderList(mountedSlot);
 }
 
 function renderList(slotSel) {
     const list = document.getElementById('kimi_api_list');
-    if (list) list.innerHTML = settings.pool.map((e, i) => rowHTML(e, i, '')).join('') || '<span style="opacity:.5;font-size:.85em">' + t('apiNoPool') + '</span>';
-    refreshCurrentIndicator();
+    if (list) list.innerHTML = settings.pool.map((e, i) => {
+        const cur = currentIndex() === i ? ` <span class="kimi-api-cur" style="color:var(--golden-color,#e0a800)">*${t('apiCurrent')}</span>` : '';
+        return rowHTML(e, i, cur);
+    }).join('') || '<span style="opacity:.5;font-size:.85em">' + t('apiNoPool') + '</span>';
 }
 
 export function mountApiPoolCard(slotSel) {
+    mountedSlot = slotSel;
     const slot = document.querySelector(slotSel);
     if (!slot) return;
     slot.innerHTML = poolHTML();
@@ -257,7 +252,7 @@ export function mountApiPoolCard(slotSel) {
 
 // 调试出口（CDP 测试用）
 window.__apiPoolDebug = {
-  doSwitch, findNext, handleLimitHit, matchKeywords, settings, ageText,
+  doSwitch, findNext, handleLimitHit, matchKeywords, settings, ageText, renderList,
   setGenerating: (v) => { generating = !!v; },
   simulateLimit: (reason) => { generating = true; handleLimitHit(reason || 'limit reached'); generating = false; },
   currentIndex, isCustomSource,
