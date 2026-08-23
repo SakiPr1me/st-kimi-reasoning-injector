@@ -660,7 +660,7 @@ function upsertYamlTopKey(yaml, topKey, blockText) {
 // （TavernHelper 重注入/调试器重跑），避免叠多层拦截器导致 partial 身份锚重复前置、词汇替换重复应用。
 // originalFetch 经 window.__kimiOrigFetch 传递，任何一层拿到的都是最初的原生 fetch。
 // ===== Cline 提供商指定（providerOptions.gateway.only）=====
-const CLINE_PROVIDERS = ['modal', 'fireworks', 'togetherai', 'baseten', 'nebius', 'digitalocean', 'moonshotai', 'morph'];
+const CLINE_PROVIDERS = ['modal', 'fireworks', 'togetherai', 'baseten', 'nebius', 'digitalocean', 'moonshotai', 'morph', 'deepseek']; // deepseek：用Cline吃DS——指定deepseek上游（带缓存），注入 {provider:{order:["deepseek"],allow_fallbacks:false}}
 function getClineProviders() {
     const custom = (settings.clineCustomProviders || []).filter(x => x && String(x).trim());
     return CLINE_PROVIDERS.concat(custom.map(x => String(x).trim()));
