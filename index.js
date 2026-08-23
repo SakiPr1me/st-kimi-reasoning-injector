@@ -76,6 +76,7 @@ const defaultSettings = {
     mutterVibrate: false,           // 完整生成时同时震动提醒（Android 有效，桌面/iOS 自动跳过；默认关）
     mutterTrigger: 'marker',        // 提醒时机：marker=检测到截断标记才提醒（K3/余温预设）| done=输出完成即提醒（不用截断标记的模型）
     clineProviderEnabled: false,     // Cline 提供商指定：请求注入 providerOptions.gateway.only
+    clineModelOverride: false,       // 模型名前缀覆写：请求层把 model 改写为 指定提供商/基础模型名（⚠️脱离cline-pass前缀=按积分计费）
     clineProvider: 'modal',          // 当前选中的 Cline 提供商（默认 modal，据称质量最好）
     clineShowMenuBtn: true,          // 扩展菜单显示「切换Cline提供商」入口
     clineCustomProviders: [],        // 用户自定义追加的提供商名（与内置8个合并出现在下拉/弹窗）
@@ -188,7 +189,7 @@ const UI = {
         apiModel: "模型名", apiKey: "密钥", apiAge: "{d} 天 {h} 小时",
         apiNoPool: "池为空：先添加接口", apiNotCustom: "当前不是 Custom(OpenAI兼容) 连接，API 池不生效",
         apiBannerMsg: "检测到额度用尽（limit）。", apiBannerSwitch: "⇄ 切换到 {name}（{n}/{total}）", apiSwitched: "已切换到 {name}（{n}/{total}）",
-        apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（providerOptions.gateway.only）", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「模型参数」里勾选 使用 Cline 提供商指定", clinePassWarn: "⚠️ 检测到模型名带 cline-pass/ 前缀：提供商指定不会生效（实测全部被忽略），请改用 moonshotai/kimi-k3 等厂商前缀", clineHint: "开启后每次请求自动注入指定提供商。请删掉附加参数里的任何内容！仅 cline 渠道需要，其它渠道请关闭。不同渠道K3风味不同，自行测试。⚠️ 实测：模型名带 cline-pass/ 前缀时提供商指定不生效（被 cline-pass 通道自主路由），请用 moonshotai/kimi-k3 等厂商前缀。",
+        apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（providerOptions.gateway.only）", clineModelOverride: "模型名前缀覆写（⚠️按积分计费，不耗订阅额度）", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「模型参数」里勾选 使用 Cline 提供商指定", clinePassWarn: "⚠️ 检测到模型名带 cline-pass/ 前缀：提供商指定不会生效（实测全部被忽略），请改用 moonshotai/kimi-k3 等厂商前缀", clineHint: "开启后每次请求自动注入指定提供商。请删掉附加参数里的任何内容！仅 cline 渠道需要，其它渠道请关闭。不同渠道K3风味不同，自行测试。⚠️ 实测：模型名带 cline-pass/ 前缀时提供商指定不生效（被 cline-pass 通道自主路由），请用 moonshotai/kimi-k3 等厂商前缀。",
         apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效。切换会同步改写 URL、密钥、模型名 三项，预置/采样等其它参数一概不动；命中 limit/quota/rate 即触发。"
         },
     en: {
@@ -248,7 +249,7 @@ const UI = {
         apiModel: "Model", apiKey: "Key", apiAge: "{d}d {h}h",
         apiNoPool: "Pool is empty: add an endpoint first", apiNotCustom: "Not a Custom (OpenAI-compatible) connection - pool inactive",
         apiBannerMsg: "Quota limit hit.", apiBannerSwitch: "⇄ Switch to {name} ({n}/{total})", apiSwitched: "Switched to {name} ({n}/{total})",
-        apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (providerOptions.gateway.only)", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Model Settings first", clinePassWarn: "Model has cline-pass/ prefix: provider routing will NOT work (tested). Use a vendor prefix like moonshotai/kimi-k3", clineHint: "Injects the selected provider into every request. Delete anything in Extra Parameters! Only needed for the cline channel; turn off elsewhere. Different providers give K3 different flavors - test them yourself. NOTE (tested): routing does NOT work with cline-pass/ model prefix - use a vendor prefix like moonshotai/kimi-k3.",
+        apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (providerOptions.gateway.only)", clineModelOverride: "Override model prefix (WARNING: billed to credits, not subscription)", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Model Settings first", clinePassWarn: "Model has cline-pass/ prefix: provider routing will NOT work (tested). Use a vendor prefix like moonshotai/kimi-k3", clineHint: "Injects the selected provider into every request. Delete anything in Extra Parameters! Only needed for the cline channel; turn off elsewhere. Different providers give K3 different flavors - test them yourself. NOTE (tested): routing does NOT work with cline-pass/ model prefix - use a vendor prefix like moonshotai/kimi-k3.",
         apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections. Switching syncs three fields: URL, key and model name - presets/sampling untouched. Triggers on limit/quota/rate."
         },
     ko: {
@@ -308,7 +309,7 @@ const UI = {
         apiModel: "모델명", apiKey: "키", apiAge: "{d}일 {h}시간",
         apiNoPool: "풀이 비어 있음: 먼저 엔드포인트 추가", apiNotCustom: "Custom(OpenAI 호환) 연결이 아님 - 풀 동작 안 함",
         apiBannerMsg: "할당량 초과 감지.", apiBannerSwitch: "⇄ {name}(으)로 전환 ({n}/{total})", apiSwitched: "{name}(으)로 전환됨 ({n}/{total})",
-        apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (providerOptions.gateway.only)", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 모델 설정에서 Cline 공급자 지정을 체크하세요", clinePassWarn: "모델명에 cline-pass/ 접두사 감지: 공급자 지정 무효(실측). moonshotai/kimi-k3 같은 벤더 접두사 사용", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입합니다. 추가 매개변수의 모든 내용을 삭제하세요! cline 채널에서만 필요, 다른 곳에서는 끄세요. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요. 주의(실측): cline-pass/ 모델 접두사에서는 라우팅 무효 — moonshotai/kimi-k3 같은 벤더 접두사 사용.",
+        apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (providerOptions.gateway.only)", clineModelOverride: "모델 접두사 덮어쓰기(주의: 크레딧 결제, 구독 아님)", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 모델 설정에서 Cline 공급자 지정을 체크하세요", clinePassWarn: "모델명에 cline-pass/ 접두사 감지: 공급자 지정 무효(실측). moonshotai/kimi-k3 같은 벤더 접두사 사용", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입합니다. 추가 매개변수의 모든 내용을 삭제하세요! cline 채널에서만 필요, 다른 곳에서는 끄세요. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요. 주의(실측): cline-pass/ 모델 접두사에서는 라우팅 무효 — moonshotai/kimi-k3 같은 벤더 접두사 사용.",
         apiHint: "키는 로컬 settings.json에 평문 저장됨 - 파일 공유 금지. Custom(OpenAI 호환) 연결에서만 동작. 전환 시 URL·키·모델명 세 항목을 함께 변경, 프리셋/샘플링은 불변. limit/quota/rate 에서 트리거."
         }
 };
@@ -346,6 +347,7 @@ if (!settings.mutterSoundType) settings.mutterSoundType = 'ding';
 if (settings.mutterVibrate === undefined) settings.mutterVibrate = false;
 if (settings.mutterTrigger !== 'marker' && settings.mutterTrigger !== 'done') settings.mutterTrigger = 'marker';
 if (settings.clineProviderEnabled === undefined) settings.clineProviderEnabled = false;
+if (settings.clineModelOverride === undefined) settings.clineModelOverride = false;
 if (!settings.clineProvider) settings.clineProvider = 'modal';
 if (settings.clineShowMenuBtn === undefined) settings.clineShowMenuBtn = true;
 if (!Array.isArray(settings.clineCustomProviders)) settings.clineCustomProviders = [];
@@ -720,6 +722,17 @@ function applyClineProvider(bodyObj) {
         }
         bodyObj.providerOptions = { gateway: { only: [p] } };
         bodyObj.custom_include_body = buildClineIncludeBody(inc, p);
+        // 模型名前缀覆写（可选，⚠️会脱离 cline-pass/ 前缀=按 API 积分计费而非订阅额度）：
+        // 把请求中的 model 改写为 指定提供商/基础模型名（如 modal/kimi-k3）——
+        // 实测 providerOptions 在 cline-pass 前缀下会被忽略，模型前缀才是硬路由；此覆写让前缀生效
+        if (settings.clineModelOverride && typeof bodyObj.model === 'string' && bodyObj.model) {
+            const base = bodyObj.model.includes('/') ? bodyObj.model.split('/').slice(1).join('/') : bodyObj.model;
+            const overridden = p + '/' + base;
+            if (overridden !== bodyObj.model) {
+                bodyObj.model = overridden;
+                console.log('[余温工具箱] 模型名覆写: ' + overridden + '（前缀路由，按积分计费）');
+            }
+        }
         return true;
     }
     // 关闭：清除一切来源的 providerOptions（插件注入/手填存量），无则不动
@@ -2491,6 +2504,9 @@ ${getClineProviders().map(p => `<option value="${p}" ${settings.clineProvider ==
 <label class="checkbox_label" style="margin-top:5px">
 <input id="${extensionName}_cline_menu_entry" type="checkbox" ${settings.clineShowMenuBtn ? 'checked' : ''}/> ${t('clineMenuEntry')}
 </label>
+<label class="checkbox_label" style="margin-top:5px">
+<input id="${extensionName}_cline_model_override" type="checkbox" ${settings.clineModelOverride ? 'checked' : ''}/> ${t('clineModelOverride')}
+</label>
 <p class="kimi-hint">${t('clineHint')}</p>
 </div>
 </div>
@@ -3068,6 +3084,10 @@ partial
         settings.clineProvider = $(this).val();
         saveSettingsDebounced();
         updateClineMenuItem();
+    });
+    $("#" + extensionName + "_cline_model_override").on("change", function () {
+        settings.clineModelOverride = $(this).is(":checked");
+        saveSettingsDebounced();
     });
     $("#" + extensionName + "_cline_menu_entry").on("change", function () {
         settings.clineShowMenuBtn = $(this).is(":checked");
