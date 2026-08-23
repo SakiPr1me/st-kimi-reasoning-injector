@@ -35,7 +35,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.26.2 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.26.3 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -50,7 +50,7 @@ const defaultSettings = {
     rerollOnEnglishThinking: true,   // 原生思维链开头一段是英文（夺舍失败）→ 自动重roll（开新分支）
     rerollOnNoThinking: true,        // 无原生思维链直接出正文 → 自动重roll
     rerollOnEmpty: true,             // 空回复（断流/零token）→ 自动重roll
-    rerollOnNoMutter: true,         // 生成结束全文没有截断标记（半截楼）→ 自动重roll（swipe新分支）
+    rerollOnNoMutter: false,        // 生成结束全文没有截断标记（半截楼）→ 自动重roll（swipe新分支；默认关：手动停止易误判，知情后再开）
     mutterSoundEnabled: true,       // 完整生成（含截断标记）→ 播放提示音（内置beep）
     mutterSoundType: 'ding',        // 提示音色：ding=柔和叮咚(默认) | crisp=清脆 | chord=治愈和弦 | soft=低柔单音
     autoRerollLimit: 30,             // 连续自动重roll次数（无上限）
@@ -342,7 +342,7 @@ if (settings.foldMarker === undefined) settings.foldMarker = defaultSettings.fol
 if (settings.rerollOnEnglishThinking === undefined) settings.rerollOnEnglishThinking = defaultSettings.rerollOnEnglishThinking;
 if (settings.rerollOnNoThinking === undefined) settings.rerollOnNoThinking = defaultSettings.rerollOnNoThinking;
 if (settings.rerollOnEmpty === undefined) settings.rerollOnEmpty = defaultSettings.rerollOnEmpty;
-if (settings.rerollOnNoMutter === undefined) settings.rerollOnNoMutter = true;
+if (settings.rerollOnNoMutter === undefined) settings.rerollOnNoMutter = false;
 if (settings.mutterSoundEnabled === undefined) settings.mutterSoundEnabled = true;
 if (!settings.mutterSoundType) settings.mutterSoundType = 'ding';
 if (settings.mutterVibrate === undefined) settings.mutterVibrate = false;
@@ -1098,7 +1098,9 @@ function checkNativeReroll(messageId) {
             // 被迫partial（思考在 content 里，idx>0）不算——用户接受那种
             shouldReroll = true;
             reason = '无思维链直接出正文';
-        } else if (settings.rerollOnNoMutter && stopMarker && !mes.includes(stopMarker) && !lastGenManuallyStopped) {
+        } else if (settings.rerollOnNoMutter && stopMarker && !mes.includes(stopMarker) && !lastGenManuallyStopped && !manualStopClicked) {
+            // 手动停止双保险：点击#mes_stop瞬间(manualStopClicked)与STOPPED转存(lastGenManuallyStopped)
+            // 任一为真都豁免——MESSAGE_RECEIVED 与 STOPPED 的先后顺序在不同路径下不定，双信号才稳
             // 完整性判定：生成结束但全文没有截断标记（<mutter>）＝半截楼
             // （思维链截断：mes 空/占位；正文截断：有 <scene> 但没收尾标记。均命中）
             // 手动停止的楼不roll（lastGenManuallyStopped，用户自己停的可能想留着看）
@@ -1593,6 +1595,7 @@ window.__ywDebug = {
     // Cline 提供商
     buildClineIncludeBody, applyClineProvider, CLINE_PROVIDERS, getClineProviders, updateClineMenuItem,
     normalizeCotInPreset, resetReasoningToDefault, healTruncatedPreset,
+    setManualStopClicked: (v) => { manualStopClicked = !!v; },
 };
 
 // ===== 思维链折叠美化（流式实时版：同步折叠，未折叠态永不绘制 → 不闪烁）=====
