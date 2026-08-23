@@ -670,6 +670,11 @@ function getClineProviders() {
 function buildClineIncludeBody(existing, provider) {
     const str = String(existing || '').trim();
     const only = { only: [String(provider)] };
+    // 双格式注入（兼容期）：
+    //   新格式 provider.order + allow_fallbacks:false —— OpenRouter 风格路由参数（cline 新后端）
+    //   旧格式 providerOptions.gateway.only —— AI SDK 网关生态标准（cline 旧后端 / Vercel 同款）
+    // 未知字段会被网关忽略，两格式共存无害；单一提供商 = order:[选中] + 禁止回退
+    const provBlock = { order: [String(provider)], allow_fallbacks: false };
     let obj = null;
     if (str) {
         try {
@@ -678,13 +683,17 @@ function buildClineIncludeBody(existing, provider) {
         } catch (e) { /* 非 JSON */ }
     }
     if (obj) {
-        const prev = (obj.providerOptions && typeof obj.providerOptions === 'object') ? obj.providerOptions : {};
-        obj.providerOptions = Object.assign({}, prev, { gateway: Object.assign({}, prev.gateway, only) });
+        const prevGw = (obj.providerOptions && typeof obj.providerOptions === 'object') ? obj.providerOptions : {};
+        obj.providerOptions = Object.assign({}, prevGw, { gateway: Object.assign({}, prevGw.gateway, only) });
+        const prevProv = (obj.provider && typeof obj.provider === 'object' && !Array.isArray(obj.provider)) ? obj.provider : {};
+        obj.provider = Object.assign({}, prevProv, provBlock);
         return JSON.stringify(obj, null, 2);
     }
-    if (!str) return JSON.stringify({ providerOptions: { gateway: only } }, null, 2);
-    // 非 JSON（手写 YAML 等）：行式追加 providerOptions 键，原文不动
-    return upsertYamlTopKey(str, 'providerOptions', 'providerOptions:\n  gateway:\n    only:\n      - ' + String(provider));
+    if (!str) return JSON.stringify({ provider: provBlock, providerOptions: { gateway: only } }, null, 2);
+    // 非 JSON（手写 YAML 等）：行式追加两个顶层键，原文不动
+    const NL = String.fromCharCode(10);
+    return upsertYamlTopKey(upsertYamlTopKey(str, 'providerOptions', 'providerOptions:' + NL + '  gateway:' + NL + '    only:' + NL + '      - ' + String(provider)),
+        'provider', 'provider:' + NL + '  order:' + NL + '    - ' + String(provider) + NL + '  allow_fallbacks: false');
 }
 
 // 行式删除 YAML 顶层键及其缩进块（关闭 Cline 指定时清除存量手填用）
@@ -721,6 +730,7 @@ function applyClineProvider(bodyObj) {
             console.warn('[余温工具箱] 模型名含 cline-pass/ 前缀：提供商指定不会生效，请改用 moonshotai/kimi-k3 等厂商前缀');
         }
         bodyObj.providerOptions = { gateway: { only: [p] } };
+        bodyObj.provider = { order: [p], allow_fallbacks: false };
         bodyObj.custom_include_body = buildClineIncludeBody(inc, p);
         // 模型名前缀覆写（可选，⚠️会脱离 cline-pass/ 前缀=按 API 积分计费而非订阅额度）：
         // 把请求中的 model 改写为 指定提供商/基础模型名（如 modal/kimi-k3）——
@@ -738,11 +748,15 @@ function applyClineProvider(bodyObj) {
     // 关闭：清除一切来源的 providerOptions（插件注入/手填存量），无则不动
     let changed = false;
     if (bodyObj.providerOptions !== undefined) { delete bodyObj.providerOptions; changed = true; }
+    if (bodyObj.provider !== undefined && bodyObj.provider !== null && typeof bodyObj.provider === 'object' && 'order' in bodyObj.provider) {
+        delete bodyObj.provider; changed = true; // 只清带 order 的路由型 provider 键，不误伤其它
+    }
     if (inc) {
         let obj = null;
         try { const parsed = JSON.parse(inc); if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) obj = parsed; } catch (e) { }
         if (obj) {
             if ('providerOptions' in obj) { delete obj.providerOptions; changed = true; }
+            if (obj.provider && typeof obj.provider === 'object' && 'order' in obj.provider) { delete obj.provider; changed = true; }
             if (changed) {
                 const rest = JSON.stringify(obj, null, 2);
                 bodyObj.custom_include_body = (rest === '{}' || rest === '[]') ? '' : rest;
