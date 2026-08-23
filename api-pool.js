@@ -68,6 +68,8 @@ async function doSwitch(entry, { auto = false } = {}) {
             try { $('#custom_model_id').val(entry.model).trigger('input'); } catch (e) { /* 输入框可能不存在 */ }
         }
         saveSettingsDebounced();
+        // 先刷新界面（金框跟到新当前行），再做较慢的密钥写入与连接触发——密钥慢/失败也不影响界面状态
+        refreshCurrentIndicator();
         // 3) 密钥（该条没填则不碰现有 secret）
         if (entry.key) {
             await writeSecret('api_key_custom', entry.key, 'Custom API');
@@ -190,20 +192,21 @@ function rowHTML(e, i) {
     const curStyle = (currentIndex() === i)
         ? 'border:1.5px solid var(--golden-color,#e0a800)!important;background:rgba(224,168,0,.07)'
         : 'border:1px solid rgba(128,128,128,.2)';
-    // 两段式行：l1=模型名+URL（主信息），l2=密钥+天数+操作。
-    // 桌面一行排开；≤700px 媒体查询把 l1/l2 各占整行 → 手机上整齐两行不参差
+    // 固定两行布局（电脑手机同构，任何宽度都不会溢出）：
+    //   第一行 = 模型名 + URL；第二行 = 密钥 + 天数 + 切换 + 删除
+    // 弹性项全部 min-width:0 允许收缩；按钮固定不缩；天数超长省略号
     return `
-    <div class="kimi-api-row" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px;${curStyle};border-radius:4px;padding:4px 6px">
-        <span class="kimi-api-l1" style="display:inline-flex;gap:6px;align-items:center;flex:2;min-width:0">
-            <input type="text" class="kimi-api-model" data-i="${i}" value="${escHtml(e.model || '')}" placeholder="${t('apiModel')}" style="width:110px"/>
-            <input type="text" class="kimi-api-url" data-i="${i}" value="${escHtml(e.url || '')}" placeholder="https://.../v1" style="flex:1;min-width:100px"/>
-        </span>
-        <span class="kimi-api-l2" style="display:inline-flex;gap:6px;align-items:center;flex:1;min-width:0">
-            <input type="password" class="kimi-api-key" data-i="${i}" value="${escHtml(e.key || '')}" placeholder="${t('apiKey')}" style="width:110px"/>
-            <span class="kimi-api-age" style="opacity:.6;font-size:.75em;white-space:nowrap">${ageText(e.addedAt)}</span>
-            <button class="kimi-api-switch kimi-btn kimi-api-btn-sm" data-i="${i}">${t('apiSwitchTo')}</button>
+    <div class="kimi-api-row" style="display:block;${curStyle};border-radius:6px;padding:5px 6px;margin-top:5px">
+        <div class="kimi-api-l1" style="display:flex;gap:6px;align-items:center;width:100%;min-width:0">
+            <input type="text" class="kimi-api-model" data-i="${i}" value="${escHtml(e.model || '')}" placeholder="${t('apiModel')}" style="width:32%;min-width:60px"/>
+            <input type="text" class="kimi-api-url" data-i="${i}" value="${escHtml(e.url || '')}" placeholder="https://.../v1" style="flex:1;min-width:0"/>
+        </div>
+        <div class="kimi-api-l2" style="display:flex;gap:6px;align-items:center;width:100%;min-width:0;margin-top:4px">
+            <input type="password" class="kimi-api-key" data-i="${i}" value="${escHtml(e.key || '')}" placeholder="${t('apiKey')}" style="width:34%;min-width:64px"/>
+            <span class="kimi-api-age" title="${ageText(e.addedAt)}" style="font-size:.72em;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:26%">${ageText(e.addedAt)}</span>
+            <button class="kimi-api-switch kimi-btn kimi-api-btn-sm" data-i="${i}" title="${t('apiSwitchTo')}" style="margin-left:auto">⇄</button>
             <button class="kimi-api-del kimi-btn kimi-api-btn-sm" data-i="${i}" title="${t('apiDel')}">✕</button>
-        </span>
+        </div>
     </div>`;
 }
 
@@ -212,15 +215,8 @@ function ensureApiRespStyle() {
     if (document.getElementById('kimi-api-resp-style')) return;
     const st = document.createElement('style');
     st.id = 'kimi-api-resp-style';
-    st.textContent = '@media(max-width:700px){' +
-        '.kimi-api-l1,.kimi-api-l2{display:flex!important;width:100%}' +
-        '.kimi-api-l1 .kimi-api-model{flex:0 0 38%;width:auto}' +
-        '.kimi-api-l1 .kimi-api-url{flex:1;min-width:0}' +
-        '.kimi-api-l2 .kimi-api-key{flex:1;width:auto;min-width:80px}' +
-        '.kimi-api-age{max-width:36%;overflow:hidden;text-overflow:ellipsis}' +
-        '.kimi-api-btn-sm{padding:3px 8px!important;font-size:.82em!important;white-space:nowrap;flex:none}' +
-        '.kimi-api-row input{padding:4px 6px!important;height:auto;font-size:.9em}' +
-        '}';
+    st.textContent = '.kimi-api-row input{padding:4px 6px!important;height:auto;font-size:.9em}' +
+        '.kimi-api-btn-sm{padding:3px 9px!important;font-size:.85em!important;white-space:nowrap;flex:none}';
     document.head.appendChild(st);
 }
 
