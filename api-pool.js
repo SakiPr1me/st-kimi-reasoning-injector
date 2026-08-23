@@ -79,10 +79,9 @@ async function doSwitch(entry, { auto = false } = {}) {
         if (isCustomSource()) {
             setTimeout(() => { try { $('#api_button_openai').trigger('click'); } catch (e) { } }, 300);
         }
-        refreshCurrentIndicator();
-        updateApiMenuItem(); // 菜单标签显示“下一条是谁”，切换后刷新
-        const n = settings.pool.findIndex(e => e === entry);
-        const total = settings.pool.filter(e => e.url && norm(e.url)).length;
+        updateApiMenuItem(); // 菜单标签显示“下一条是谁”，切换后刷新（界面金框已在上方刷新过，不重复渲）
+        const n = validEntries().indexOf(entry); // 编号与 total 同口径（只数有效条目，池中混空条目不错位）
+        const total = validEntries().length;
         const label = entry.model || norm(entry.url);
         const msg = String(t('apiSwitched')).replace('{name}', label).replace('{n}', n + 1).replace('{total}', total);
         try { toastr.success(msg, 'API \u989d\u5ea6', { timeOut: 3000 }); } catch (e) { }
@@ -97,8 +96,8 @@ async function doSwitch(entry, { auto = false } = {}) {
 function showBanner(next) {
     try {
         if (bannerRef) toastr.clear(bannerRef, true);
-        const total = settings.pool.filter(e => e.url && norm(e.url)).length;
-        const n = settings.pool.indexOf(next) + 1;
+        const total = validEntries().length;
+        const n = validEntries().indexOf(next) + 1;
         const label = next.model || norm(next.url);
         const switchBtn = `<button class="kimi-api-banner-btn menu_button" style="margin-left:8px;display:inline-block;width:auto">${String(t('apiBannerSwitch')).replace('{name}', label).replace('{n}', n).replace('{total}', total)}</button>`;
         const msg = String(t('apiBannerMsg')).replace('{name}', label) + ' ' + switchBtn;
@@ -164,7 +163,7 @@ function updateApiMenuItem() {
     $('#kimi_api_menu_item').remove();
     if (!settings.showMenuBtn) return;
     const $menu = $('#extensionsMenu');
-    if (!$menu.length) { setTimeout(updateApiMenuItem, 1500); return; } // 菜单未就绪则稍后重试
+    if (!$menu.length) { const tries = (updateApiMenuItem._r || 0) + 1; if (tries <= 5) { updateApiMenuItem._r = tries; setTimeout(updateApiMenuItem, 1500); } return; } // 菜单未就绪稍后重试（上限5次防堆积）
     const next = findNext();
     const label = next ? (next.model || norm(next.url)) : '';
     const text = String(t('apiMenuSwitch')) + (label ? ` → ${label}` : ''); // 图标已由 <i> 提供，文字不再带 ⇄
