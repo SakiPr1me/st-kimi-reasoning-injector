@@ -684,13 +684,53 @@ function buildClineIncludeBody(existing, provider) {
     return upsertYamlTopKey(str, 'providerOptions', 'providerOptions:\n  gateway:\n    only:\n      - ' + String(provider));
 }
 
-// 应用到请求体：顶层双写（bodyObj.providerOptions 便于直测断言；custom_include_body 是后端真正合并的通道）
+// 行式删除 YAML 顶层键及其缩进块（关闭 Cline 指定时清除存量手填用）
+function stripYamlTopKey(yaml, topKey) {
+    const NL = String.fromCharCode(10);
+    const lines = String(yaml || '').split(NL);
+    const out = [];
+    let skipping = false;
+    for (const line of lines) {
+        const m = line.match(/^([A-Za-z_][A-Za-z0-9_-]*)\s*:/);
+        if (m && m[1] === topKey) { skipping = true; continue; }
+        if (skipping) {
+            if (/^[ \t]/.test(line) || line.trim() === '') continue; // 跳过该键的缩进子块/空行
+            skipping = false;
+        }
+        out.push(line);
+    }
+    return out.join(NL).replace(new RegExp('^' + NL + '+'), '');
+}
+
+// 应用到请求体。开=注入指定提供商；关=彻底清除请求中的 providerOptions
+// （含用户早先手填进 ST 附加参数的存量——这个键由本插件管辖，开关语义完全可预测：
+//   开=只有插件的注入，关=请求里绝无 providerOptions）
 function applyClineProvider(bodyObj) {
-    if (!settings.clineProviderEnabled) return false;
-    const p = String(settings.clineProvider || 'modal');
-    bodyObj.providerOptions = { gateway: { only: [p] } };
-    bodyObj.custom_include_body = buildClineIncludeBody(String(bodyObj.custom_include_body || ''), p);
-    return true;
+    const inc = String(bodyObj.custom_include_body || '').trim();
+    if (settings.clineProviderEnabled) {
+        const p = String(settings.clineProvider || 'modal');
+        bodyObj.providerOptions = { gateway: { only: [p] } };
+        bodyObj.custom_include_body = buildClineIncludeBody(inc, p);
+        return true;
+    }
+    // 关闭：清除一切来源的 providerOptions（插件注入/手填存量），无则不动
+    let changed = false;
+    if (bodyObj.providerOptions !== undefined) { delete bodyObj.providerOptions; changed = true; }
+    if (inc) {
+        let obj = null;
+        try { const parsed = JSON.parse(inc); if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) obj = parsed; } catch (e) { }
+        if (obj) {
+            if ('providerOptions' in obj) { delete obj.providerOptions; changed = true; }
+            if (changed) {
+                const rest = JSON.stringify(obj, null, 2);
+                bodyObj.custom_include_body = (rest === '{}' || rest === '[]') ? '' : rest;
+            }
+        } else if (/^providerOptions\s*:/m.test(inc)) {
+            bodyObj.custom_include_body = stripYamlTopKey(inc, 'providerOptions');
+            changed = true;
+        }
+    }
+    return changed;
 }
 
 const originalFetch = window.__kimiOrigFetch || window.fetch;
