@@ -193,16 +193,16 @@ function rowHTML(e, i, cur) {
     // 两段式行：l1=模型名+URL（主信息），l2=密钥+天数+操作。
     // 桌面一行排开；≤700px 媒体查询把 l1/l2 各占整行 → 手机上整齐两行不参差
     return `
-    <div class="kimi-api-row" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px;${curStyle};border-radius:4px;padding:5px">
+    <div class="kimi-api-row" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px;${curStyle};border-radius:4px;padding:4px 6px">
         <span class="kimi-api-l1" style="display:inline-flex;gap:6px;align-items:center;flex:2;min-width:0">
-            <input type="text" class="kimi-api-model" data-i="${i}" value="${escHtml(e.model || '')}" placeholder="${t('apiModel')}" style="width:130px"/>
-            <input type="text" class="kimi-api-url" data-i="${i}" value="${escHtml(e.url || '')}" placeholder="https://.../v1" style="flex:1;min-width:120px"/>
+            <input type="text" class="kimi-api-model" data-i="${i}" value="${escHtml(e.model || '')}" placeholder="${t('apiModel')}" style="width:110px"/>
+            <input type="text" class="kimi-api-url" data-i="${i}" value="${escHtml(e.url || '')}" placeholder="https://.../v1" style="flex:1;min-width:100px"/>
         </span>
         <span class="kimi-api-l2" style="display:inline-flex;gap:6px;align-items:center;flex:1;min-width:0">
-            <input type="password" class="kimi-api-key" data-i="${i}" value="${escHtml(e.key || '')}" placeholder="${t('apiKey')}" style="width:130px"/>
-            <span style="opacity:.6;font-size:.8em;white-space:nowrap">${ageText(e.addedAt)}</span>${cur}
-            <button class="kimi-api-switch kimi-btn" data-i="${i}">${t('apiSwitchTo')}</button>
-            <button class="kimi-api-del kimi-btn" data-i="${i}">${t('apiDel')}</button>
+            <input type="password" class="kimi-api-key" data-i="${i}" value="${escHtml(e.key || '')}" placeholder="${t('apiKey')}" style="width:110px"/>
+            <span class="kimi-api-age" style="opacity:.6;font-size:.75em;white-space:nowrap">${ageText(e.addedAt)}</span>${cur}
+            <button class="kimi-api-switch kimi-btn kimi-api-btn-sm" data-i="${i}">${t('apiSwitchTo')}</button>
+            <button class="kimi-api-del kimi-btn kimi-api-btn-sm" data-i="${i}" title="${t('apiDel')}">✕</button>
         </span>
     </div>`;
 }
@@ -214,9 +214,12 @@ function ensureApiRespStyle() {
     st.id = 'kimi-api-resp-style';
     st.textContent = '@media(max-width:700px){' +
         '.kimi-api-l1,.kimi-api-l2{display:flex!important;width:100%}' +
-        '.kimi-api-l1 .kimi-api-model{flex:0 0 40%;width:auto}' +
-        '.kimi-api-l1 .kimi-api-url{flex:1}' +
-        '.kimi-api-l2 .kimi-api-key{flex:1;width:auto;min-width:90px}' +
+        '.kimi-api-l1 .kimi-api-model{flex:0 0 38%;width:auto}' +
+        '.kimi-api-l1 .kimi-api-url{flex:1;min-width:0}' +
+        '.kimi-api-l2 .kimi-api-key{flex:1;width:auto;min-width:80px}' +
+        '.kimi-api-age{max-width:36%;overflow:hidden;text-overflow:ellipsis}' +
+        '.kimi-api-btn-sm{padding:3px 8px!important;font-size:.82em!important;white-space:nowrap;flex:none}' +
+        '.kimi-api-row input{padding:4px 6px!important;height:auto;font-size:.9em}' +
         '}';
     document.head.appendChild(st);
 }
@@ -297,27 +300,33 @@ export function mountApiPoolCard(slotSel) {
         updateApiMenuItem();
     });
 
-    // 列表事件委托（增删改都走这里，重渲染后依然有效）
-    $('#kimi_api_list').on('input', '.kimi-api-model, .kimi-api-url, .kimi-api-key', function () {
-        const i = Number($(this).attr('data-i'));
-        const e = settings.pool[i];
-        if (!e) return;
-        if ($(this).hasClass('kimi-api-model')) e.model = $(this).val();
-        else if ($(this).hasClass('kimi-api-url')) e.url = $(this).val();
-        else e.key = $(this).val();
-        saveSettingsDebounced();
-    });
-    $('#kimi_api_list').on('click', '.kimi-api-switch', function () {
-        const e = settings.pool[Number($(this).attr('data-i'))];
-        if (e) doSwitch(e);
-    });
-    $('#kimi_api_list').on('click', '.kimi-api-del', function () {
-        const i = Number($(this).attr('data-i'));
-        settings.pool.splice(i, 1);
-        saveSettingsDebounced();
-        updateApiMenuItem();
-        mountApiPoolCard(slotSel); // 整卡重挂保持简单可靠
-    });
+    // 列表事件委托（增删改都走这里，重渲染后依然有效）。
+    // ⚠️ 必须防重复绑定：语言切换/删除重挂会多次调用本挂载函数，jQuery .on 会叠加监听器，
+    //    叠加后点一次 ✕ 会触发多个 handler 各删一条（真 bug：一次删除误删多条）
+    const $list = $('#kimi_api_list');
+    if (!$list.data('kimiDelegated')) {
+        $list.data('kimiDelegated', true);
+        $list.on('input', '.kimi-api-model, .kimi-api-url, .kimi-api-key', function () {
+            const i = Number($(this).attr('data-i'));
+            const e = settings.pool[i];
+            if (!e) return;
+            if ($(this).hasClass('kimi-api-model')) e.model = $(this).val();
+            else if ($(this).hasClass('kimi-api-url')) e.url = $(this).val();
+            else e.key = $(this).val();
+            saveSettingsDebounced();
+        });
+        $list.on('click', '.kimi-api-switch', function () {
+            const e = settings.pool[Number($(this).attr('data-i'))];
+            if (e) doSwitch(e);
+        });
+        $list.on('click', '.kimi-api-del', function () {
+            const i = Number($(this).attr('data-i'));
+            settings.pool.splice(i, 1);
+            saveSettingsDebounced();
+            updateApiMenuItem();
+            renderList(slotSel); // 只重渲染列表；整卡重挂是重复绑定的源头，不再使用
+        });
+    }
 }
 
 // 调试出口（CDP 测试用）
