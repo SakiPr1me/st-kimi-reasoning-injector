@@ -1489,7 +1489,8 @@ function ensureUpstreamStyle() {
     if (document.getElementById('kimi-upstream-style')) return;
     const st = document.createElement('style');
     st.id = 'kimi-upstream-style';
-    st.textContent = '.kimi-up-card{border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));color:var(--SmartThemeBodyColor);width:min(720px,94vw);max-height:82vh;overflow-y:auto;padding:14px 16px;box-shadow:0 4px 24px rgba(0,0,0,.45)}'
+    st.textContent = '.kimi-cline-overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center}'
+        + '.kimi-up-card{border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));color:var(--SmartThemeBodyColor);width:min(720px,94vw);max-height:82vh;overflow-y:auto;padding:14px 16px;box-shadow:0 4px 24px rgba(0,0,0,.45)}'
         + '.kimi-up-card table{width:100%;border-collapse:collapse;font-size:.82em}'
         + '.kimi-up-card th,.kimi-up-card td{padding:4px 6px;text-align:left;border-bottom:1px solid var(--SmartThemeBorderColor);white-space:nowrap}'
         + '.kimi-up-card th{opacity:.65;font-weight:600}'
