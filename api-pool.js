@@ -198,11 +198,11 @@ function rowHTML(e, i) {
     return `
     <div class="kimi-api-row" style="display:block;${curStyle};border-radius:6px;padding:5px 6px;margin-top:5px">
         <div class="kimi-api-l1" style="display:flex;gap:6px;align-items:center;width:100%;min-width:0">
-            <input type="text" class="kimi-api-model" data-i="${i}" value="${escHtml(e.model || '')}" placeholder="${t('apiModel')}" style="width:32%;min-width:60px"/>
-            <input type="text" class="kimi-api-url" data-i="${i}" value="${escHtml(e.url || '')}" placeholder="https://.../v1" style="flex:1;min-width:0"/>
+            <input type="text" class="kimi-api-model text_pole" data-i="${i}" value="${escHtml(e.model || '')}" placeholder="${t('apiModel')}" style="width:32%;min-width:60px"/>
+            <input type="text" class="kimi-api-url text_pole" data-i="${i}" value="${escHtml(e.url || '')}" placeholder="https://.../v1" style="flex:1;min-width:0"/>
         </div>
         <div class="kimi-api-l2" style="display:flex;gap:6px;align-items:center;width:100%;min-width:0;margin-top:4px">
-            <input type="password" class="kimi-api-key" data-i="${i}" value="${escHtml(e.key || '')}" placeholder="${t('apiKey')}" style="width:34%;min-width:64px"/>
+            <input type="password" class="kimi-api-key text_pole" data-i="${i}" value="${escHtml(e.key || '')}" placeholder="${t('apiKey')}" style="width:34%;min-width:64px"/>
             <span class="kimi-api-age" title="${ageText(e.addedAt)}" style="font-size:.72em;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:26%">${ageText(e.addedAt)}</span>
             <button class="kimi-api-switch kimi-btn kimi-api-btn-sm" data-i="${i}" title="${t('apiSwitchTo')}" style="margin-left:auto">⇄</button>
             <button class="kimi-api-del kimi-btn kimi-api-btn-sm" data-i="${i}" title="${t('apiDel')}">✕</button>
