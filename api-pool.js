@@ -186,9 +186,9 @@ function updateApiMenuItem() {
 // ---- 设置卡 UI ----
 let mountedSlot = ''; // 重渲染列表时恢复当前行高亮需知道挂载点
 
-function rowHTML(e, i, cur) {
+function rowHTML(e, i) {
     const curStyle = (currentIndex() === i)
-        ? 'border:1px solid var(--golden-color,#e0a800)!important;background:rgba(224,168,0,.07)'
+        ? 'border:1.5px solid var(--golden-color,#e0a800)!important;background:rgba(224,168,0,.07)'
         : 'border:1px solid rgba(128,128,128,.2)';
     // 两段式行：l1=模型名+URL（主信息），l2=密钥+天数+操作。
     // 桌面一行排开；≤700px 媒体查询把 l1/l2 各占整行 → 手机上整齐两行不参差
@@ -200,7 +200,7 @@ function rowHTML(e, i, cur) {
         </span>
         <span class="kimi-api-l2" style="display:inline-flex;gap:6px;align-items:center;flex:1;min-width:0">
             <input type="password" class="kimi-api-key" data-i="${i}" value="${escHtml(e.key || '')}" placeholder="${t('apiKey')}" style="width:110px"/>
-            <span class="kimi-api-age" style="opacity:.6;font-size:.75em;white-space:nowrap">${ageText(e.addedAt)}</span>${cur}
+            <span class="kimi-api-age" style="opacity:.6;font-size:.75em;white-space:nowrap">${ageText(e.addedAt)}</span>
             <button class="kimi-api-switch kimi-btn kimi-api-btn-sm" data-i="${i}">${t('apiSwitchTo')}</button>
             <button class="kimi-api-del kimi-btn kimi-api-btn-sm" data-i="${i}" title="${t('apiDel')}">✕</button>
         </span>
@@ -225,10 +225,7 @@ function ensureApiRespStyle() {
 }
 
 function poolHTML() {
-    const rows = settings.pool.map((e, i) => {
-        const cur = currentIndex() === i ? ` <span class="kimi-api-cur" style="color:var(--golden-color,#e0a800)">*${t('apiCurrent')}</span>` : '';
-        return rowHTML(e, i, cur);
-    }).join('');
+    const rows = settings.pool.map((e, i) => rowHTML(e, i)).join('');
     return `
     <details class="kimi-card">
     <summary><i class="fa-solid fa-plug kimi-card-ico" aria-hidden="true"></i>${t('apiTitle')}</summary>
@@ -269,10 +266,7 @@ function refreshCurrentIndicator() {
 
 function renderList(slotSel) {
     const list = document.getElementById('kimi_api_list');
-    if (list) list.innerHTML = settings.pool.map((e, i) => {
-        const cur = currentIndex() === i ? ` <span class="kimi-api-cur" style="color:var(--golden-color,#e0a800)">*${t('apiCurrent')}</span>` : '';
-        return rowHTML(e, i, cur);
-    }).join('') || '<span style="opacity:.5;font-size:.85em">' + t('apiNoPool') + '</span>';
+    if (list) list.innerHTML = settings.pool.map((e, i) => rowHTML(e, i)).join('') || '<span style="opacity:.5;font-size:.85em">' + t('apiNoPool') + '</span>';
 }
 
 export function mountApiPoolCard(slotSel) {
