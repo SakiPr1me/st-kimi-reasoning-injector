@@ -35,7 +35,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.27.0 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.27.1 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -736,9 +736,8 @@ function applyClineProvider(bodyObj) {
             console.warn('[余温工具箱] 模型名含 cline-pass/ 前缀：提供商指定不会生效，请改用 moonshotai/kimi-k3 等厂商前缀');
         }
         ensureClinePriority();
-        // 单选语义：order 只含当前选中的提供商
-        bodyObj.provider = { order: [p], allow_fallbacks: false };
-        delete bodyObj.providerOptions;
+        // 注入只发生在 custom_include_body（「包括主体参数」）——ST 后端只把它合并进最终请求，
+        // 顶层 bodyObj.provider 不会透传（白名单外字段被丢弃），故不再双写顶层，避免抓包看到两份
         bodyObj.custom_include_body = buildClineIncludeBody(inc, p);
         // 模型名前缀覆写（可选，⚠️会脱离 cline-pass/ 前缀=按 API 积分计费而非订阅额度）：
         // 把请求中的 model 改写为 指定提供商/基础模型名（如 modal/kimi-k3）——
