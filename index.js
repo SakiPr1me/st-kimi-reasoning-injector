@@ -35,7 +35,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.27.1 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.27.2 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -693,9 +693,9 @@ function buildClineIncludeBody(existing, provider) {
         delete obj.providerOptions;
         const prevProv = (obj.provider && typeof obj.provider === 'object' && !Array.isArray(obj.provider)) ? obj.provider : {};
         obj.provider = Object.assign({}, prevProv, provBlock);
-        return JSON.stringify(obj, null, 2);
+        return JSON.stringify(obj); // 压缩单行，与用户示例逐字符一致
     }
-    if (!str) return JSON.stringify({ provider: provBlock }, null, 2);
+    if (!str) return JSON.stringify({ provider: provBlock });
     // 非 JSON（手写 YAML 等）：清掉两种路由键后行式追加（单选 order）
     const NL = String.fromCharCode(10);
     let out = stripYamlTopKey(stripYamlTopKey(str, 'providerOptions'), 'provider');
