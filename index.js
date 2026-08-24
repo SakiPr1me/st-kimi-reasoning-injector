@@ -35,7 +35,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.26.3 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.27.0 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -673,16 +673,15 @@ function getClineProviders() {
     return CLINE_PROVIDERS.concat(custom.map(x => String(x).trim()));
 }
 
-// 构造 custom_include_body 新内容：注入原样 JSON 结构 {"providerOptions":{"gateway":{"only":[...]}}}，
+// 构造 custom_include_body 新内容：注入 {"provider":{"order":[单选],"allow_fallbacks":false}}
+// （单选！选中哪个就只发哪个——用户明确：每个都是单选，不走优先序列）
 // 并保留字段里的其它键（JSON 输入→整体重写为 JSON；非 JSON 的手写 YAML→行式追加键不破坏原文）。
 // 后端 mergeObjectWithYaml 用 yaml.parse 合并，而 JSON 是 YAML 子集——两种输出都正确解析。
 function buildClineIncludeBody(existing, provider) {
     const str = String(existing || '').trim();
     ensureClinePriority();
-    // 唯一格式：provider.order = 完整优先序列（首选挂了自动落下一个），allow_fallbacks=false 只用列表内
-    const order = settings.clinePriority.slice();
-    if (provider && !order.includes(provider)) order.unshift(provider);
-    const provBlock = { order: order, allow_fallbacks: false };
+    // 单选语义：order 只含当前选中的提供商
+    const provBlock = { order: [String(provider)], allow_fallbacks: false };
     let obj = null;
     if (str) {
         try {
@@ -697,10 +696,10 @@ function buildClineIncludeBody(existing, provider) {
         return JSON.stringify(obj, null, 2);
     }
     if (!str) return JSON.stringify({ provider: provBlock }, null, 2);
-    // 非 JSON（手写 YAML 等）：清掉两种路由键后行式追加
+    // 非 JSON（手写 YAML 等）：清掉两种路由键后行式追加（单选 order）
     const NL = String.fromCharCode(10);
     let out = stripYamlTopKey(stripYamlTopKey(str, 'providerOptions'), 'provider');
-    return upsertYamlTopKey(out, 'provider', 'provider:' + NL + '  order:' + NL + order.map(x => '    - ' + x).join(NL) + NL + '  allow_fallbacks: false');
+    return upsertYamlTopKey(out, 'provider', 'provider:' + NL + '  order:' + NL + '    - ' + String(provider) + NL + '  allow_fallbacks: false');
 }
 
 // 行式删除 YAML 顶层键及其缩进块（关闭 Cline 指定时清除存量手填用）
@@ -737,9 +736,8 @@ function applyClineProvider(bodyObj) {
             console.warn('[余温工具箱] 模型名含 cline-pass/ 前缀：提供商指定不会生效，请改用 moonshotai/kimi-k3 等厂商前缀');
         }
         ensureClinePriority();
-        const order = settings.clinePriority.slice();
-        if (p && !order.includes(p)) order.unshift(p);
-        bodyObj.provider = { order: order, allow_fallbacks: false };
+        // 单选语义：order 只含当前选中的提供商
+        bodyObj.provider = { order: [p], allow_fallbacks: false };
         delete bodyObj.providerOptions;
         bodyObj.custom_include_body = buildClineIncludeBody(inc, p);
         // 模型名前缀覆写（可选，⚠️会脱离 cline-pass/ 前缀=按 API 积分计费而非订阅额度）：
