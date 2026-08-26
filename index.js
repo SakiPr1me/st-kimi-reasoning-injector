@@ -35,7 +35,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.28.1 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.29.1 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -1590,14 +1590,31 @@ const SNAPSHOT_KEYS = [
     'clineProviderEnabled', 'clineProvider', 'clineModelOverride',
     'reasoningHeightCss', 'reasoningHeightCssValue', 'showTps', 'keepScrollOnGenerate', 'reasoningTimer',
 ];
+// ST 预设面板的生成参数（oai_settings）——快照同时保存/恢复这些
+const OAI_SNAPSHOT_KEYS = [
+    'temperature', 'frequency_penalty', 'presence_penalty', 'top_p', 'top_k',
+    'typical_p', 'seed', 'openai_max_tokens', 'stream',
+];
 function serializeCurrentConfig() {
     const o = {};
     for (const k of SNAPSHOT_KEYS) o[k] = JSON.parse(JSON.stringify(settings[k]));
+    for (const k of OAI_SNAPSHOT_KEYS) if (oai_settings[k] !== undefined) o['oai_' + k] = JSON.parse(JSON.stringify(oai_settings[k]));
     return o;
 }
 function applySnapshotData(data) {
     if (!data || typeof data !== 'object') return;
     for (const k of SNAPSHOT_KEYS) if (k in data) settings[k] = JSON.parse(JSON.stringify(data[k]));
+    for (const k of OAI_SNAPSHOT_KEYS) {
+        const ok = 'oai_' + k;
+        if (ok in data) oai_settings[k] = JSON.parse(JSON.stringify(data[ok]));
+    }
+    saveSettingsDebounced(); // oai_settings 的变更也要持久化
+    // UI 同步：让左面板的滑块/输入框立即反映新值（不然用户看不到变化）
+    const uiSync = { temperature: '#temp', top_p: '#top_p', top_k: '#top_k', typical_p: '#typical_p', openai_max_tokens: '#openai_max_tokens' };
+    for (const [k, sel] of Object.entries(uiSync)) {
+        try { $(sel).val(oai_settings[k]).trigger('input'); } catch (e) { }
+    }
+    try { $('#stream_toggle').prop('checked', !!oai_settings.stream).trigger('change'); } catch (e) { }
     ensureClinePriority();
     normalizeCotInPreset();
     saveSettingsDebounced();
@@ -1649,6 +1666,7 @@ window.__ywApplyDisplayReplace = (text) => applyReplacements(text, 'display');
 window.__ywDebug = {
     saveSnapshot, applySnapshotByName, deleteSnapshot, serializeCurrentConfig, maybeSaveRecovery,
     renderSnapshotsUI,
+    applySnapshotData,
     ensureClinePriority,
     openUpstreamModal, renderUpstream, fetchUpstream, clineProviderKey,
     playMutterBeep, checkNativeReroll, settings,
