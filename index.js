@@ -892,6 +892,7 @@ const origMesMap = new Map(); // messageId -> 修正前的原始 mes（「修正
 let autoStopTriggered = false;             // 本次生成是否已触发自动截断（防重复 stopGeneration）
 let lastGenManuallyStopped = false;   // 上一次生成是否为用户手动停止（手动停的半截楼不做“无标记重roll”）
 let earlyRerollHandled = false;            // 流式截断重roll 是否已处理（GENERATION_ENDED 兜底防 MESSAGE_RECEIVED 缺失时双重重roll）
+let rerollFiredThisGen = false;      // 总闸：本次生成是否已触发过自动重roll（一次生成最多一次，封死双触发/连续两楼）
 
 // 注入种子本身是否英文开头（用户手动贴英文模板时，模型跟随英文思考不算夺舍失败）
 function seedIsEnglish() {
@@ -1106,6 +1107,7 @@ function checkNativeReroll(messageId) {
         }
 
         if (shouldReroll) {
+            if (rerollFiredThisGen) return; // 总闸：本次生成已触发过重roll
             if (settings.rerollPaused) return;
             // 防重复：同一消息刚触发过重roll（如 MESSAGE_RECEIVED 连发）→ 冷却 3 秒内跳过；
             // 新 swipe 分支生成需要数秒，完成后已过冷却 → 新分支再失败会继续重roll（受连续上限约束）
@@ -1118,6 +1120,7 @@ function checkNativeReroll(messageId) {
                 lastAutoRerollMessageId = messageId;
                 lastAutoRerollTime = now;
                 console.log(`[余温工具箱] 检测到${reason}，自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${messageId}`);
+                rerollFiredThisGen = true;
                 notifyReroll(`🔄 自动重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}（${reason}）`);
                 updateRerollStatus();
                 triggerAutoSwipe(messageId);
@@ -1239,6 +1242,7 @@ function isEmptyMes(mes) {
 // 空回重roll：零 token 回复（断流/服务器不稳）→ 对这条空消息开新 swipe 分支。
 // 用 swipe 而不是 /trigger——/trigger 在连续生成时可能 roll 成新一楼（参考插件「自动PVP」的 bug）。
 function handleEmptyReroll(messageId) {
+    if (rerollFiredThisGen) return; // 总闸
     if (settings.rerollPaused) { console.log('[余温工具箱] 自动重roll已暂停，跳过空回重roll'); return; }
     if (!settings.enabled || !settings.rerollOnEmpty) {
         console.log(`[余温工具箱] 空回但跳过：enabled=${settings.enabled}, rerollOnEmpty=${settings.rerollOnEmpty}`);
@@ -1249,6 +1253,7 @@ function handleEmptyReroll(messageId) {
         if (!rerollBlockedNotified) { rerollBlockedNotified = true; notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll`, 'error'); }
         return;
     }
+    rerollFiredThisGen = true;
     autoRerollCount++;
     lastAutoRerollMessageId = messageId;
     lastAutoRerollTime = Date.now();
@@ -2062,7 +2067,8 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id) => {
         earlyRerollHandled = true;
         earlyRerollMessageId = -1;
         earlyStopTriggered = false;
-        if (settings.enabled && autoRerollCount < settings.autoRerollLimit) {
+        if (settings.enabled && autoRerollCount < settings.autoRerollLimit && !rerollFiredThisGen) {
+            rerollFiredThisGen = true;
             autoRerollCount++;
             console.log(`[余温工具箱] 流式截断后自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${rerollId}`);
             notifyReroll(`🔄 流式截断重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
@@ -2138,6 +2144,7 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     }
     console.log('[余温工具箱] GENERATION_STARTED');
     lastGenManuallyStopped = false;
+    rerollFiredThisGen = false;
     earlyStopTriggered = false;
     earlyRerollMessageId = -1;
     streamGotToken = false;    // 本次生成是否收到过 token（空回检测）
@@ -2191,7 +2198,8 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
         if (!earlyRerollHandled) {
             earlyRerollHandled = true;
             const targetId = earlyRerollMessageId >= 0 ? earlyRerollMessageId : lastObservedMesId;
-            if (settings.enabled && autoRerollCount < settings.autoRerollLimit) {
+            if (settings.enabled && autoRerollCount < settings.autoRerollLimit && !rerollFiredThisGen) {
+                rerollFiredThisGen = true;
                 autoRerollCount++;
                 console.log(`[余温工具箱] 流式截断后自动重roll（GENERATION_ENDED 兜底，连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${targetId}`);
                 notifyReroll(`🔄 流式截断重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
