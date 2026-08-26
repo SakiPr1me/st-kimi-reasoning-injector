@@ -35,7 +35,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.28.0 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.28.1 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -1427,8 +1427,7 @@ function openClineModal() {
         saveSettingsDebounced();
         try { toastr.success(String(t('clineSwitched')).replace('{p}', p), 'Cline', { timeOut: 2500 }); } catch (e) { }
         console.log('[余温工具箱] Cline 提供商切换为:', p);
-        renderSnapshotsUI();
-    updateClineMenuItem();
+        updateClineMenuItem();
         // 面板下拉同步
         try { $('#' + extensionName + '_cline_provider').val(p); } catch (e) { }
         $ov.remove();
@@ -1602,11 +1601,12 @@ function applySnapshotData(data) {
     ensureClinePriority();
     normalizeCotInPreset();
     saveSettingsDebounced();
-    // 面板整体重渲染反映新状态（语言切换同款机制），并保持抽屉展开
-    const panelEl = document.getElementById(extensionName + '_settings');
-    const wasOpen = panelEl && panelEl.querySelector('.inline-drawer-content')?.style.display === 'block';
-    try { toggleDrawer(panelEl, true); } catch (e) { }
+    // 面板整体重渲染反映新状态——必须先删旧面板再重建（append 会堆叠重复面板）
+    $("#" + extensionName + "_settings").remove();
     initSettingsPanel();
+    const panelEl = document.getElementById(extensionName + '_settings');
+    const contentEl = panelEl?.querySelector('.inline-drawer-content');
+    if (contentEl) contentEl.style.display = 'block';
     updateClineMenuItem();
 }
 function saveSnapshot(name) {
