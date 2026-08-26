@@ -1639,6 +1639,7 @@ function applyPromptSnapshot(name) {
         }
     }
     writePromptToggles(snap.toggles);
+    renderPsnapUI();
 }
 function deletePromptSnapshot(name) {
     settings.promptSnapshots = settings.promptSnapshots.filter(x => x.name !== name);
