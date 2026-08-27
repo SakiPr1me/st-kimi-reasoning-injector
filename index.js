@@ -1587,7 +1587,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.29.9'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.30.0'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1607,11 +1607,33 @@ function b64ToText(s) {
     return new TextDecoder().decode(bytes);
 }
 async function fetchRemoteVersion() {
-    const r = await fetch(PLUGIN_REPO_MANIFEST + '?t=' + Date.now(), { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const j = await r.json();
-    const inner = JSON.parse(b64ToText(j.content));
-    return String(inner.version || '').trim();
+    // 多源兜底：同内容多路抓取，GitHub API 403 限流时自动换路（raw / CDN / 镜像），全部超时 6s
+    const sources = [
+        'https://raw.githubusercontent.com/SakiPr1me/st-kimi-reasoning-injector/main/manifest.json',
+        'https://cdn.jsdelivr.net/gh/SakiPr1me/st-kimi-reasoning-injector@main/manifest.json',
+        'https://gitee.com/satosaki/st-kimi-reasoning-injector/raw/main/manifest.json',
+        PLUGIN_REPO_MANIFEST + '?t=' + Date.now(),
+    ];
+    let lastErr = null;
+    for (const url of sources) {
+        try {
+            const r = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(6000) });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const text = await r.text();
+            let v = '';
+            try {
+                const j = JSON.parse(text);
+                if (j && typeof j.content === 'string') {
+                    v = JSON.parse(b64ToText(j.content)).version; // GitHub API contents 格式（base64 包裹）
+                } else {
+                    v = j.version; // raw/CDN/Gitee：manifest.json 直接可读
+                }
+            } catch (e) { throw new Error('parse'); }
+            v = String(v || '').trim();
+            if (v) return v;
+        } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error('all sources failed');
 }
 async function doSelfUpdate(btn, remoteVer, auto) {
     if (btn) { btn.disabled = true; btn.textContent = '⏳ 更新中…'; }
