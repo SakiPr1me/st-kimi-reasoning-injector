@@ -1584,7 +1584,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.29.1'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.29.2'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1902,6 +1902,7 @@ function openCardFloat(key) {
     // 浮窗头已显示标题，原卡 summary 隐藏（避免双标题）；移回时恢复
     const sum = card.querySelector('summary');
     if (sum) sum.style.display = 'none';
+    card.classList.add('kimi-in-float'); // 去卡自身边框，防浮窗双重边框
     card.open = true;
     w.style.display = 'block';
 }
@@ -1914,6 +1915,7 @@ function closeCardFloat() {
         if (card && _kimiCardOrigin && _kimiCardOrigin.parent) {
             const sum = card.querySelector('summary');
             if (sum) sum.style.display = '';
+            card.classList.remove('kimi-in-float'); // 恢复原卡自身边框（主页样式）
             if (_kimiCardOrigin.next && _kimiCardOrigin.next.parentNode === _kimiCardOrigin.parent) {
                 _kimiCardOrigin.parent.insertBefore(card, _kimiCardOrigin.next);
             } else {
@@ -2374,6 +2376,14 @@ const KIMI_SETTINGS_CSS = `
     overflow: hidden;
     background: rgba(0, 0, 0, 0.08);
     margin-top: 0;
+}
+/* 卡移入浮窗后去掉自身边框：浮窗容器已提供外框，避免双重边框 */
+#kimi_reasoning_injector_card_float .kimi-card.kimi-in-float {
+    border: none;
+    border-left: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 }
 #kimi_reasoning_injector_card_float .kimi-card > summary {
     cursor: pointer;
