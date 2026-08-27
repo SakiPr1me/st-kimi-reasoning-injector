@@ -1582,7 +1582,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.28.5'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.28.6'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1647,7 +1647,7 @@ async function checkUpdate() {
 // 手动检查：⏳ → ✓可更新/✅已最新/⚠本地更高/❌失败；再点还原（st-chat-sync 同款状态机）
 async function manualCheckUpdate(btn) {
     if (btn.dataset.busy) return;
-    if (btn.dataset.done) { btn.textContent = '检查更新'; delete btn.dataset.done; delete btn.dataset.result; return; }
+    if (btn.dataset.done) { btn.textContent = '检查更新'; btn.style.color = ''; delete btn.dataset.done; delete btn.dataset.result; return; }
     btn.dataset.busy = '1';
     btn.textContent = '⏳'; btn.title = '正在检测…';
     let txt = '', title2 = '', cls = '';
@@ -1663,9 +1663,6 @@ async function manualCheckUpdate(btn) {
     }
     btn.textContent = txt; btn.title = title2;
     btn.dataset.result = cls; btn.dataset.done = '1';
-    if (cls === 'newer') btn.style.color = '#7cd992';
-    else if (cls === 'fail') btn.style.color = '#e57373';
-    else btn.style.color = '';
     delete btn.dataset.busy;
 }
 window.__ywManualCheck = manualCheckUpdate;
@@ -2091,6 +2088,61 @@ const KIMI_SETTINGS_CSS = `
 }
 #kimi_reasoning_injector_settings .kimi-btn:hover {
     filter: brightness(1.15);
+}
+/* 顶部版本小卡片 + 检查更新（蓝）呼吸灯 / 可更新（绿）呼吸灯（参考 st-chat-sync cs-chk-btn/cs-upd-btn） */
+#kimi_reasoning_injector_settings .kimi-ver-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    margin-bottom: 8px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-left: 3px solid var(--SmartThemeQuoteColor);
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.06);
+}
+#kimi_reasoning_injector_settings .kimi-ver-card .kimi-ver-txt {
+    font-size: .85em;
+    font-weight: 700;
+    color: var(--SmartThemeQuoteColor, #f0a35e);
+    white-space: nowrap;
+}
+#kimi_reasoning_injector_settings .kimi-chk-btn {
+    flex: none;
+    padding: 2px 10px;
+    font-size: .8em;
+    font-weight: 700;
+    border-radius: 999px;
+    border: 1px solid rgba(111, 183, 240, .6);
+    background: rgba(111, 183, 240, .1);
+    color: var(--SmartThemeBodyColor, #ddd);
+    cursor: pointer;
+    animation: kimi_chk_pulse 2.6s ease-in-out infinite;
+}
+#kimi_reasoning_injector_settings .kimi-chk-btn:hover { filter: brightness(1.35); }
+@keyframes kimi_chk_pulse {
+    0%, 100% { box-shadow: 0 0 0 rgba(111, 183, 240, .15); }
+    50% { box-shadow: 0 0 9px rgba(111, 183, 240, .5); }
+}
+#kimi_reasoning_injector_settings .kimi-chk-btn[data-result="newer"] { color: #7cd992 !important; border-color: rgba(111, 206, 111, .6) !important; }
+#kimi_reasoning_injector_settings .kimi-chk-btn[data-result="fail"] { color: #e57373 !important; border-color: rgba(230, 102, 102, .6) !important; }
+#kimi_reasoning_injector_settings .kimi-chk-btn[data-result="higher"] { color: #c9b458 !important; border-color: rgba(201, 180, 88, .6) !important; }
+.kimi-upd-btn {
+    flex: none;
+    padding: 2px 8px;
+    font-size: .75em;
+    font-weight: 700;
+    border-radius: 999px;
+    border: 1px solid rgba(111, 206, 111, .6);
+    background: rgba(111, 206, 111, .08);
+    color: #6fce6f !important;
+    cursor: pointer;
+    animation: kimi_upd_pulse 2.4s ease-in-out infinite;
+}
+.kimi-upd-btn:hover { filter: brightness(1.35); }
+@keyframes kimi_upd_pulse {
+    0%, 100% { box-shadow: 0 0 0 rgba(111, 206, 111, .3); }
+    50% { box-shadow: 0 0 10px rgba(111, 206, 111, .4); }
 }
 /* 悬浮窗作用域（挂在 body 下，不进设置卡 CSS 作用域）：按钮/输入框/分隔线沿用卡片同款配色 */
 .kimi-psnap-panel .kimi-btn {
@@ -2920,10 +2972,10 @@ function initSettingsPanel() {
                 </div>
                 <div class="inline-drawer-content" style="display: none;">
 
-                    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:6px;font-size:.85em;opacity:.9">
-                        <span style="color:var(--SmartThemeQuoteColor,#f0a35e)">🟢 插件版本 v${PLUGIN_VERSION}</span>
+                    <div class="kimi-ver-card">
+                        <span class="kimi-ver-txt">🟢 插件版本 v${PLUGIN_VERSION}</span>
                         <span id="${extensionName}_upd_slot"></span>
-                        <button id="${extensionName}_chk_upd" type="button" class="kimi-btn" style="padding:2px 8px">检查更新</button>
+                        <button id="${extensionName}_chk_upd" type="button" class="kimi-chk-btn">检查更新</button>
                     </div>
                     <label class="checkbox_label">
                         <input id="${extensionName}_enabled" type="checkbox" ${settings.enabled ? 'checked' : ''}/>
