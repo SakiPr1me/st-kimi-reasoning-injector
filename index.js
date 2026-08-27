@@ -1582,7 +1582,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.27.8'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.28.3'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1644,6 +1644,31 @@ async function checkUpdate() {
         }
     } catch (e) { /* 网络失败静默 */ }
 }
+// 手动检查：⏳ → ✓可更新/✅已最新/⚠本地更高/❌失败；再点还原（st-chat-sync 同款状态机）
+async function manualCheckUpdate(btn) {
+    if (btn.dataset.busy) return;
+    if (btn.dataset.done) { btn.textContent = '检查更新'; delete btn.dataset.done; delete btn.dataset.result; return; }
+    btn.dataset.busy = '1';
+    btn.textContent = '⏳'; btn.title = '正在检测…';
+    let txt = '', title2 = '', cls = '';
+    try {
+        const remoteVer = await fetchRemoteVersion();
+        const cmp = compareVer(remoteVer, PLUGIN_VERSION);
+        if (cmp > 0) { txt = '✓ 可更新至 v' + remoteVer; cls = 'newer'; }
+        else if (cmp === 0) { txt = '✅ 已是最新'; cls = 'same'; }
+        else { txt = '⚠ 本地更高'; cls = 'higher'; }
+        title2 = '本机 v' + PLUGIN_VERSION + ' / GitHub v' + remoteVer;
+    } catch (e) {
+        txt = '❌ 检测失败'; title2 = String(e).slice(0, 80); cls = 'fail';
+    }
+    btn.textContent = txt; btn.title = title2;
+    btn.dataset.result = cls; btn.dataset.done = '1';
+    if (cls === 'newer') btn.style.color = '#7cd992';
+    else if (cls === 'fail') btn.style.color = '#e57373';
+    else btn.style.color = '';
+    delete btn.dataset.busy;
+}
+window.__ywManualCheck = manualCheckUpdate;
 // 启动时检查 + 手动检查按钮
 window.__ywCheckUpdate = checkUpdate;
 
@@ -1721,54 +1746,78 @@ function restorePromptRecovery() {
 }
 
 // ===== 预设条目开关 独立面板 + 入口 =====
-// 入口点击动作：展开扩展设置抽屉 → 余温面板 → 滚动并展开「预设条目开关」卡
+// ===== 预设条目开关 快捷悬浮窗（可拖动）=====
+function ensurePsnapPanel() {
+    if (document.getElementById(extensionName + '_psnap_panel')) return;
+    const win = document.createElement('div');
+    win.id = extensionName + '_psnap_panel';
+    win.style.cssText = 'position:fixed;top:70px;right:20px;z-index:9600;width:min(320px,90vw);display:none;' +
+        'border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;' +
+        'background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));color:var(--SmartThemeBodyColor);' +
+        'box-shadow:0 8px 30px rgba(0,0,0,.55);padding:10px 12px;user-select:none';
+    win.innerHTML = `
+    <div class="kimi-psnap-head" style="display:flex;align-items:center;gap:6px;cursor:grab;user-select:none">
+        <span style="opacity:.6;cursor:grab">⠿</span><b style="font-size:.92em">📇 ${t('psnapTitle')}</b>
+        <button id="${extensionName}_psnap_close" class="kimi-btn" style="margin-left:auto;padding:0 8px;font-size:.85em">✕</button>
+    </div>
+    <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:6px">
+        <input id="${extensionName}_psnap_name" type="text" class="text_pole" placeholder="${t('psnapNamePh')}" style="flex:1;min-width:80px"/>
+        <button id="${extensionName}_psnap_save" type="button" class="kimi-btn" style="flex:none;padding:2px 8px">💾 ${t('psnapSaveBtn')}</button>
+    </div>
+    <div id="${extensionName}_psnap_body" style="margin-top:5px"></div>`;
+    document.body.appendChild(win);
+    // 拖动
+    const head = win.querySelector('.kimi-psnap-head');
+    let dragging = false, ox = 0, oy = 0;
+    head.addEventListener('mousedown', (e) => { dragging = true; ox = e.clientX - win.offsetLeft; oy = e.clientY - win.offsetTop; e.preventDefault(); });
+    window.addEventListener('mousemove', (e) => { if (!dragging) return; win.style.left = (e.clientX - ox) + 'px'; win.style.top = (e.clientY - oy) + 'px'; win.style.right = 'auto'; });
+    window.addEventListener('mouseup', () => { dragging = false; });
+    document.getElementById(extensionName + '_psnap_close').addEventListener('click', () => { win.style.display = 'none'; });
+    document.getElementById(extensionName + '_psnap_save').addEventListener('click', () => {
+        const ni = document.getElementById(extensionName + '_psnap_name');
+        const r = savePromptSnapshot(ni ? ni.value : '');
+        try { toastr[r.ok ? 'success' : 'warning'](r.msg, '余温工具箱', { timeOut: 2500 }); } catch (e) { }
+        if (r.ok && ni) ni.value = '';
+        renderPsnapUI();
+    });
+    renderPsnapUI();
+}
 function togglePsnapPanel() {
-    try {
-        const cubes = [...document.querySelectorAll('.drawer-icon')].find(e => (e.className || '').includes('fa-cubes'));
-        if (cubes) cubes.click();
-    } catch (e) { }
-    setTimeout(() => {
-        const panel = document.getElementById(extensionName + '_settings');
-        if (!panel) return;
-        const content = panel.querySelector('.inline-drawer-content');
-        if (content) content.style.display = 'block';
-        const card = [...panel.querySelectorAll('.kimi-card')].find(c => c.querySelector('summary')?.textContent.includes(String(t('psnapTitle')).slice(0, 6)));
-        if (card) { card.open = true; card.scrollIntoView({ block: 'start' }); }
-    }, 400);
+    ensurePsnapPanel();
+    const win = document.getElementById(extensionName + '_psnap_panel');
+    if (!win) return;
+    const show = win.style.display !== 'block';
+    win.style.display = show ? 'block' : 'none';
+    if (show) renderPsnapUI();
 }
 
-function ensurePsnapPanel() { /* 旧浮层面板已移除：入口现在展开设置面板对应卡 */ }
+// 入口管理：扩展菜单项 + 右下悬浮球（幂等，切换入口开关时调用重建）
 function updatePsnapEntries() {
-    // 扩展菜单项
     $('#kimi_psnap_menu_item').remove();
     if (settings.psnapShowMenu) {
         const $menu = $('#extensionsMenu');
-        if ($menu.length) {
-            $menu.append(`<a id="kimi_psnap_menu_item" class="list-group-item" href="#" title="${t('psnapTitle')}">
-                <i class="fa-solid fa-list-check"></i> ${t('psnapTitle')}
-            </a>`);
-            $('#kimi_psnap_menu_item').on('click', (e) => { e.preventDefault(); e.stopPropagation(); $('#extensionsMenu').fadeOut(200); togglePsnapPanel(); });
-        }
+        if (!$menu.length) { setTimeout(updatePsnapEntries, 1500); return; }
+        $menu.append(`<a id="kimi_psnap_menu_item" class="list-group-item" href="#" title="${t('psnapTitle')}">
+            <i class="fa-solid fa-list-check"></i> ${t('psnapTitle')}
+        </a>`);
+        $('#kimi_psnap_menu_item').on('click', (e) => { e.preventDefault(); e.stopPropagation(); $('#extensionsMenu').fadeOut(200); togglePsnapPanel(); });
     }
-    // 悬浮按钮
-    $('#kimi_psnap_float').remove();
+    const fb = $('#kimi_psnap_float');
     if (settings.psnapShowFloat) {
-        const btn = document.createElement('div');
-        btn.id = 'kimi_psnap_float';
-        btn.title = t('psnapTitle');
-        btn.style.cssText = 'position:fixed;right:14px;bottom:140px;z-index:9000;width:38px;height:38px;border-radius:50%;' +
-            'background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(40 40 40)));border:1px solid var(--SmartThemeBorderColor);' +
-            'color:var(--SmartThemeBodyColor);display:flex;align-items:center;justify-content:center;cursor:pointer;' +
-            'box-shadow:0 3px 10px rgba(0,0,0,.4);font-size:16px;user-select:none;opacity:.85';
-        btn.textContent = '📇';
-        btn.addEventListener('click', () => togglePsnapPanel());
-        document.body.appendChild(btn);
+        if (!fb.length) {
+            $('body').append(`<div id="kimi_psnap_float" title="${t('psnapTitle')}" style="position:fixed;right:18px;bottom:150px;z-index:9500;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;line-height:1;background:var(--SmartThemeQuoteColor,#f0a35e);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.45);user-select:none">📇</div>`);
+            $('#kimi_psnap_float').on('click', () => togglePsnapPanel());
+        }
+    } else {
+        fb.remove();
     }
 }
 
+
 // ===== 预设条目开关快照 UI =====
 function renderPsnapUI() {
-    const box = document.getElementById(extensionName + '_psnap_list');
+    const box = document.getElementById(extensionName + '_psnap_list') || document.getElementById(extensionName + '_psnap_body');
+    const boxFloat = document.getElementById(extensionName + '_psnap_body');
     if (!box) return;
     const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     let html = '';
@@ -1792,16 +1841,17 @@ function renderPsnapUI() {
     if (!settings.promptSnapshots.length && !settings.promptRecovery) {
         html = '<span style="opacity:.5;font-size:.82em">' + t('psnapEmpty') + '</span>';
     }
-    box.innerHTML = html;
-    box.querySelectorAll('.kimi-psnap-apply').forEach(btn =>
-        btn.addEventListener('click', () => applyPromptSnapshot(btn.getAttribute('data-n'))));
-    box.querySelectorAll('.kimi-psnap-rec').forEach(btn =>
-        btn.addEventListener('click', () => { restorePromptRecovery(); renderPsnapUI(); }));
-    box.querySelectorAll('.kimi-psnap-del').forEach(btn =>
-        btn.addEventListener('click', () => {
-            settings.promptSnapshots = settings.promptSnapshots.filter(x => x.name !== btn.getAttribute('data-n'));
-            saveSettingsDebounced(); renderPsnapUI();
-        }));
+    [box, boxFloat].forEach(t => {
+        if (!t || t === box) { /* 卡为主渲染 */ }
+    });
+    if (box) box.innerHTML = html;
+    if (boxFloat && boxFloat !== box) boxFloat.innerHTML = html;
+    const wire = (t) => { if (!t) return;
+        t.querySelectorAll('.kimi-psnap-apply').forEach(btn => btn.addEventListener('click', () => applyPromptSnapshot(btn.getAttribute('data-n'))));
+        t.querySelectorAll('.kimi-psnap-rec').forEach(btn => btn.addEventListener('click', () => { restorePromptRecovery(); renderPsnapUI(); }));
+        t.querySelectorAll('.kimi-psnap-del').forEach(btn => btn.addEventListener('click', () => { settings.promptSnapshots = settings.promptSnapshots.filter(x => x.name !== btn.getAttribute('data-n')); saveSettingsDebounced(); renderPsnapUI(); }));
+    };
+    wire(box); wire(boxFloat);
 }
 
 // 显示层词汇替换钩子（tag-fixer.js 关闭幻影预览还原渲染时调用，保证「仅显示」替换不丢）
@@ -2785,7 +2835,7 @@ function initSettingsPanel() {
                 <div class="inline-drawer-content" style="display: none;">
 
                     <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:6px;font-size:.85em;opacity:.9">
-                        <span style="color:var(--SmartThemeQuoteColor,#f0a35e)">🧰 v${PLUGIN_VERSION}</span>
+                        <span style="color:var(--SmartThemeQuoteColor,#f0a35e)">🟢 插件版本 v${PLUGIN_VERSION}</span>
                         <span id="${extensionName}_upd_slot"></span>
                         <button id="${extensionName}_chk_upd" type="button" class="kimi-btn" style="padding:2px 8px">检查更新</button>
                     </div>
@@ -3175,11 +3225,8 @@ partial
     if (!$('#kimi-settings-style').length) $('<style id="kimi-settings-style">' + KIMI_SETTINGS_CSS + '</style>').appendTo('head');
     if (!$('#kimi-reroll-btn-style').length) $('<style id="kimi-reroll-btn-style">' + rerollBtnCSS + '</style>').appendTo('head');
 
-    $("#" + extensionName + "_chk_upd").on("click", function () {
-        const b = this; b.textContent = '⏳';
-        checkUpdate().finally(() => { b.textContent = '检查更新'; });
-    });
-    checkUpdate(); // 启动自动检查
+    $("#" + extensionName + "_chk_upd").on("click", function () { manualCheckUpdate(this); });
+    checkUpdate(); // 启动自动检查（有新版本自动在版本行右侧出现更新按钮）
 
     $("#" + extensionName + "_enabled").on("change", function () {
         settings.enabled = $(this).is(":checked");
