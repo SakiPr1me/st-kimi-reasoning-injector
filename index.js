@@ -1585,7 +1585,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.29.6'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.29.7'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1981,7 +1981,7 @@ function updateComboFloat() {
 
     // 头部：拖拽把手 + 展开/收起
     $box.append(`<div class="kcf-head" style="height:${HEAD}px;display:flex;align-items:center;justify-content:center;gap:2px;cursor:grab;font-size:15px;color:var(--SmartThemeBodyColor,#eee);border-bottom:1px solid rgba(255,255,255,.08)">
-        <span style="font-size:12px;opacity:.6">⠿</span>
+        <span style="font-size:17px;line-height:1">🔥</span>
     </div>`);
 
     // 条目区 = 功能（直接操作，绿色 fa 图标，分隔在上）+ 面板（打开设置卡，橙色 fa 图标）
