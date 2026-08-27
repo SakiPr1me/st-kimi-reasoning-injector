@@ -1582,7 +1582,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.28.3'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.28.4'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1745,16 +1745,16 @@ function restorePromptRecovery() {
     writePromptToggles(settings.promptRecovery.toggles);
 }
 
-// ===== 预设条目开关 独立面板 + 入口 =====
 // ===== 预设条目开关 快捷悬浮窗（可拖动）=====
 function ensurePsnapPanel() {
     if (document.getElementById(extensionName + '_psnap_panel')) return;
     const win = document.createElement('div');
     win.id = extensionName + '_psnap_panel';
+    win.className = 'kimi-psnap-panel';
     win.style.cssText = 'position:fixed;top:70px;right:20px;z-index:9600;width:min(320px,90vw);display:none;' +
         'border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;' +
-        'background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));color:var(--SmartThemeBodyColor);' +
-        'box-shadow:0 8px 30px rgba(0,0,0,.55);padding:10px 12px;user-select:none';
+        'background:rgba(0,0,0,0.10);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);' +
+        'color:var(--SmartThemeBodyColor);box-shadow:0 8px 30px rgba(0,0,0,.35);padding:10px 12px;user-select:none';
     win.innerHTML = `
     <div class="kimi-psnap-head" style="display:flex;align-items:center;gap:6px;cursor:grab;user-select:none">
         <span style="opacity:.6;cursor:grab">⠿</span><b style="font-size:.92em">📇 ${t('psnapTitle')}</b>
@@ -1766,12 +1766,32 @@ function ensurePsnapPanel() {
     </div>
     <div id="${extensionName}_psnap_body" style="margin-top:5px"></div>`;
     document.body.appendChild(win);
-    // 拖动
-    const head = win.querySelector('.kimi-psnap-head');
-    let dragging = false, ox = 0, oy = 0;
-    head.addEventListener('mousedown', (e) => { dragging = true; ox = e.clientX - win.offsetLeft; oy = e.clientY - win.offsetTop; e.preventDefault(); });
-    window.addEventListener('mousemove', (e) => { if (!dragging) return; win.style.left = (e.clientX - ox) + 'px'; win.style.top = (e.clientY - oy) + 'px'; win.style.right = 'auto'; });
-    window.addEventListener('mouseup', () => { dragging = false; });
+    // 拖拽（标签修复同款：3px 阈值判定 + document 级移动 + touch 支持；✕ 等按钮上按下不启动拖拽）
+    const $win = $(win);
+    const $head = $win.find('.kimi-psnap-head');
+    let dragging = false, dx, dy, startX, startY;
+    $head.on('mousedown touchstart', function (e) {
+        if (e.target && e.target.closest && e.target.closest('button')) return;
+        const ev = e.touches ? e.touches[0] : e;
+        startX = ev.clientX;
+        startY = ev.clientY;
+        const pos = $win.position();
+        dx = startX - pos.left;
+        dy = startY - pos.top;
+        $head.css({ cursor: 'grabbing', transition: 'none' });
+        e.preventDefault();
+    });
+    $(document).on('mousemove touchmove', function (e) {
+        if (dx === undefined || !$win[0]) return;
+        const ev = e.touches ? e.touches[0] : e;
+        if (Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3) dragging = true;
+        if (dragging) { e.preventDefault(); $win.css({ left: (ev.clientX - dx) + 'px', top: (ev.clientY - dy) + 'px', right: 'auto' }); }
+    });
+    $(document).on('mouseup touchend', function () {
+        if (!$head[0]) return;
+        $head.css({ cursor: 'grab' });
+        dx = undefined;
+    });
     document.getElementById(extensionName + '_psnap_close').addEventListener('click', () => { win.style.display = 'none'; });
     document.getElementById(extensionName + '_psnap_save').addEventListener('click', () => {
         const ni = document.getElementById(extensionName + '_psnap_name');
@@ -2034,6 +2054,35 @@ const KIMI_SETTINGS_CSS = `
 }
 #kimi_reasoning_injector_settings .kimi-btn:hover {
     filter: brightness(1.15);
+}
+/* 悬浮窗作用域（挂在 body 下，不进设置卡 CSS 作用域）：按钮/输入框/分隔线沿用卡片同款配色 */
+.kimi-psnap-panel .kimi-btn {
+    padding: 3px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--SmartThemeBodyColor, inherit);
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: filter 0.15s ease;
+}
+.kimi-psnap-panel .kimi-btn:hover {
+    filter: brightness(1.15);
+}
+.kimi-psnap-panel .kimi-psnap-btn {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid var(--SmartThemeBorderColor) !important;
+    color: var(--SmartThemeBodyColor, inherit) !important;
+}
+.kimi-psnap-panel .text_pole {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--SmartThemeBodyColor, inherit);
+    border: 1px solid var(--SmartThemeBorderColor);
+}
+.kimi-psnap-panel .kimi-sep {
+    border-top: 1px solid var(--SmartThemeBorderColor);
+    margin: 10px 0;
+    opacity: 0.6;
 }
 `;
 
