@@ -1585,7 +1585,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.29.5'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.29.6'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -3303,13 +3303,10 @@ ${t('enabled')}
 </select>
 <p class="kimi-hint">${t('langHint')}</p>
 </div>
-</div>
-</details>
 
-<!-- ═══ 悬浮条设置（功能型 + 面板型两组，面板各自勾选）═══ -->
-<details class="kimi-card">
-<summary><i class="fa-solid fa-magic-wand-sparkles kimi-card-ico" aria-hidden="true"></i>${t('floatCardTitle')}</summary>
-<div class="kimi-card-body">
+<div class="kimi-sep"></div>
+
+<!-- 悬浮条设置（并入基础设置，横线分隔） -->
 <label class="kimi-label">${t('floatFuncLabel')}</label>
 <label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
 <input type="checkbox" id="${extensionName}_float_tagfix" ${settings.floatShowTagFix ? 'checked' : ''}/>
