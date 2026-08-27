@@ -1582,7 +1582,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.28.4'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.28.5'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1822,14 +1822,51 @@ function updatePsnapEntries() {
         </a>`);
         $('#kimi_psnap_menu_item').on('click', (e) => { e.preventDefault(); e.stopPropagation(); $('#extensionsMenu').fadeOut(200); togglePsnapPanel(); });
     }
-    const fb = $('#kimi_psnap_float');
+    $('#kimi_psnap_float').remove();
     if (settings.psnapShowFloat) {
-        if (!fb.length) {
-            $('body').append(`<div id="kimi_psnap_float" title="${t('psnapTitle')}" style="position:fixed;right:18px;bottom:150px;z-index:9500;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;line-height:1;background:var(--SmartThemeQuoteColor,#f0a35e);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.45);user-select:none">📇</div>`);
-            $('#kimi_psnap_float').on('click', () => togglePsnapPanel());
-        }
-    } else {
-        fb.remove();
+        // 悬浮球（可拖拽，标签修复同款：中性半透明底，不用主题引用色=橙）
+        $('body').append(`<div id="kimi_psnap_float" title="${t('psnapTitle')}（可拖拽）" style="
+            position:fixed;right:18px;bottom:150px;z-index:9500;
+            width:44px;height:44px;border-radius:50%;background:rgba(128,128,128,0.35);
+            color:#fff;display:flex;align-items:center;justify-content:center;
+            cursor:grab;box-shadow:0 2px 8px rgba(0,0,0,0.3);font-size:20px;line-height:1;
+            opacity:0.8;user-select:none;
+        ">📇</div>`);
+        const $btn = $('#kimi_psnap_float');
+        let dragging = false, dx, dy, startX, startY;
+
+        $btn.on('mousedown touchstart', function (e) {
+            dragging = false;
+            const ev = e.touches ? e.touches[0] : e;
+            startX = ev.clientX;
+            startY = ev.clientY;
+            const pos = $btn.position();
+            dx = startX - pos.left;
+            dy = startY - pos.top;
+            $btn.css({ cursor: 'grabbing', opacity: '1', transition: 'none' });
+        });
+
+        $(document).on('mousemove touchmove', function (e) {
+            if (!$btn[0] || dx === undefined) return;
+            const ev = e.touches ? e.touches[0] : e;
+            if (Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3) {
+                dragging = true;
+            }
+            if (dragging) {
+                e.preventDefault();
+                $btn.css({ left: (ev.clientX - dx) + 'px', top: (ev.clientY - dy) + 'px', right: 'auto', bottom: 'auto' });
+            }
+        });
+
+        $(document).on('mouseup touchend', function () {
+            if (!$btn[0]) return;
+            $btn.css({ cursor: 'grab', opacity: '0.8', transition: 'opacity 0.2s' });
+            dx = undefined;
+        });
+
+        $btn.on('click', function () {
+            if (!dragging) togglePsnapPanel();
+        });
     }
 }
 
