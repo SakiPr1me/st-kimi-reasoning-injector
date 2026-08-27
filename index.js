@@ -79,8 +79,7 @@ const defaultSettings = {
     clinePriority: [],               // 提供商优先序列
     promptSnapshots: [],             // 预设条目开关快照：[{name,time,toggles:{id:enabled,...}}]
     promptRecovery: null,            // 固定恢复槽：切换前自动保存的条目开关状态（单槽覆盖制）
-    psnapShowMenu: true,             // 扩展菜单入口
-    psnapShowFloat: true,            // 悬浮按钮入口（order 注入顺序=首选失败自动落下一个；↑↓调整）
+    psnapShowFloat: true,            // 整合悬浮条入口（悬浮条设置卡控制内部显隐）
     floatShowTagFix: true,           // 悬浮条功能区：一键修复标签（直接执行）
     floatPanelKeys: ['inject', 'model', 'reroll', 'beautify', 'autoStop', 'word', 'psnap', 'tag', 'api', 'misc', 'fix'], // 悬浮条面板区显示哪些卡
     floatPanelAllKey: 'all',
@@ -357,7 +356,6 @@ if (settings.mutterTrigger !== 'marker' && settings.mutterTrigger !== 'done') se
 if (settings.clineProviderEnabled === undefined) settings.clineProviderEnabled = false;
 if (!Array.isArray(settings.promptSnapshots)) settings.promptSnapshots = [];
 if (settings.promptRecovery === undefined) settings.promptRecovery = null;
-if (settings.psnapShowMenu === undefined) settings.psnapShowMenu = true;
 if (settings.psnapShowFloat === undefined) settings.psnapShowFloat = true;
 if (settings.floatShowTagFix === undefined) settings.floatShowTagFix = true;
 if (!Array.isArray(settings.floatPanelKeys)) settings.floatPanelKeys = ['inject', 'model', 'reroll', 'beautify', 'autoStop', 'word', 'psnap', 'tag', 'api', 'misc', 'fix'];
@@ -1587,7 +1585,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.29.4'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.29.5'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1813,18 +1811,16 @@ function togglePsnapPanel() {
     if (show) { renderPsnapUI(); setTimeout(() => clampToViewport(win), 30); }
 }
 
-// 入口管理：扩展菜单项 + 右下悬浮球（幂等，切换入口开关时调用重建）
+// 入口管理：扩展菜单项 + 整合悬浮条（幂等重建）
 function updatePsnapEntries() {
     $('#kimi_psnap_menu_item').remove();
-    if (settings.psnapShowMenu) {
-        const $menu = $('#extensionsMenu');
-        if (!$menu.length) { setTimeout(updatePsnapEntries, 1500); return; }
+    const $menu = $('#extensionsMenu');
+    if ($menu.length) {
         $menu.append(`<a id="kimi_psnap_menu_item" class="list-group-item" href="#" title="${t('psnapTitle')}">
             <i class="fa-solid fa-list-check"></i> ${t('psnapTitle')}
         </a>`);
         $('#kimi_psnap_menu_item').on('click', (e) => { e.preventDefault(); e.stopPropagation(); $('#extensionsMenu').fadeOut(200); togglePsnapPanel(); });
     }
-    $('#kimi_psnap_float').remove();
     updateComboFloat();
 }
 
@@ -1957,17 +1953,16 @@ function closeCardFloat() {
     _kimiCardOpenKey = null;
 }
 
-// ===== 整合悬浮入口（所有功能卡的竖向胶囊条，两球合一）=====
+// ===== 整合悬浮入口（所有功能卡的竖向胶囊条）=====
 // 竖向胶囊条：点击展开/收起（高度动画），展开露出各功能卡条目（fa 图标同主页风格），
 // 点条目 → 弹出该卡原版悬浮窗（原样交互直接改，无需开扩展面板）。拖拽带边界钳制+位置记忆。
-// 标签修复的独立浮球在整合模式激活时由 tag-fixer.js 抑制（window.__kimiComboFloat）。
+// 原独立悬浮球（标签修复 / 预设快照）均已移除，统一由本入口接管（悬浮条设置卡控制显隐）。
 function updateComboFloat() {
     window.__kimiComboFloat = {
         showPsnap: !!settings.psnapShowFloat,
-        showTag: !!(extension_settings && extension_settings.tag_auto_fixer && extension_settings.tag_auto_fixer.showFloatingBtn),
+        showTag: !!settings.floatShowTagFix,
     };
     $('#kimi_combo_float').remove();
-    $('#tag_auto_fixer_float_btn').remove();
     $(document).off('.kc');
     $(window).off('.kc');
     if (!window.__kimiComboFloat.showPsnap && !window.__kimiComboFloat.showTag) return;
@@ -3604,11 +3599,6 @@ ${renderWordReplaceRows()}
         <button id="${extensionName}_psnap_save" type="button" class="kimi-btn" style="flex:none">💾 ${t('psnapSaveBtn')}</button>
     </div>
     <div id="${extensionName}_psnap_list" style="margin-top:6px"></div>
-    <div class="kimi-sep"></div>
-    <label class="kimi-label">${t('psnapEntryLabel')}</label>
-    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
-        <label class="checkbox_label" style="margin:0"><input type="checkbox" id="${extensionName}_psnap_menu_entry" ${settings.psnapShowMenu ? 'checked' : ''}/> ${t('psnapMenuEntry')}</label>
-    </div>
 </div>
 </details>
 
@@ -3825,8 +3815,6 @@ partial
         renderPsnapUI();
     });
     $("#" + extensionName + "_psnap_name").on("keydown", function (e) { if (e.key === 'Enter') { e.preventDefault(); $("#" + extensionName + "_psnap_save").trigger('click'); } });
-    const chkPsnapEntry = (id, key) => $("#" + id).on("change", function () { settings[key] = $(this).is(":checked"); saveSettingsDebounced(); updatePsnapEntries(); });
-    chkPsnapEntry(extensionName + "_psnap_menu_entry", 'psnapShowMenu');
     // 悬浮条设置卡：一键修复标签（直接执行）显隐
     $("#" + extensionName + "_float_tagfix").on("change", function () {
         settings.floatShowTagFix = $(this).is(":checked");

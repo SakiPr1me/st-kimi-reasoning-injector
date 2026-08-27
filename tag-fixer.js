@@ -46,7 +46,6 @@ const HTML_TAG_NAMES = [
 const defaultSettings = {
 	tagTree: defaultTagTree,
 	showInlineBtn: true,
-	showFloatingBtn: false,
 	showMenuBtn: true,
 	autoFixEnabled: false,   // 每轮输出结束自动修（默认关，谨慎勾选）
 	autoScanEnabled: false,  // 每轮自动扫描（只标不改，与自动修复互斥；默认关）
@@ -58,7 +57,6 @@ if (!extension_settings[extensionName]) extension_settings[extensionName] = defa
 const settings = extension_settings[extensionName];
 if (!settings.tagTree) settings.tagTree = defaultTagTree;
 if (settings.showInlineBtn === undefined) settings.showInlineBtn = true;
-if (settings.showFloatingBtn === undefined) settings.showFloatingBtn = false;
 if (settings.showMenuBtn === undefined) settings.showMenuBtn = true;
 if (settings.autoFixEnabled === undefined) settings.autoFixEnabled = false;
 if (settings.autoScanEnabled === undefined) settings.autoScanEnabled = false;
@@ -1441,65 +1439,7 @@ jQuery(async () => {
 	}
 	updateInlineBtn();
 
-	// 悬浮按钮（可拖拽）
-	const floatBtnId = `${extensionName}_float_btn`;
-	function updateFloatingBtn() {
-		$(`#${floatBtnId}`).remove();
-		if (!settings.showFloatingBtn) return;
-		// 被「余温工具箱」整合悬浮入口接管时，本插件的独立浮球不再显示（避免右下角两个球）
-		if (window.__kimiComboFloat && (window.__kimiComboFloat.showPsnap || window.__kimiComboFloat.showTag)) return;
-		$('body').append(`<div id="${floatBtnId}" title="修复标签（可拖拽）" style="
-			position:fixed;bottom:80px;right:20px;z-index:9999;
-			width:36px;height:36px;border-radius:50%;background:var(--accent-color, #888);
-			color:#fff;display:flex;align-items:center;justify-content:center;
-			cursor:grab;box-shadow:0 2px 8px rgba(0,0,0,0.3);font-size:14px;
-			opacity:0.7;user-select:none;
-		">🏷️</div>`);
-
-		const $btn = $(`#${floatBtnId}`);
-		let dragging = false, dx = 0, dy = 0, startX, startY;
-
-		$btn.on('mousedown touchstart', function(e) {
-			dragging = false;
-			const ev = e.touches ? e.touches[0] : e;
-			startX = ev.clientX;
-			startY = ev.clientY;
-			const pos = $btn.position();
-			dx = startX - pos.left;
-			dy = startY - pos.top;
-			$btn.css({ cursor: 'grabbing', opacity: '1', transition: 'none' });
-		});
-
-		$(document).on('mousemove touchmove', function(e) {
-			if (!$btn[0] || dx === undefined) return;
-			const ev = e.touches ? e.touches[0] : e;
-			if (Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3) {
-				dragging = true;
-			}
-			if (dragging) {
-				e.preventDefault();
-				const maxX = window.innerWidth - $btn.outerWidth() - 2;
-				const maxY = window.innerHeight - $btn.outerHeight() - 2;
-				$btn.css({
-					left: Math.min(Math.max(ev.clientX - dx, 2), maxX) + 'px',
-					top: Math.min(Math.max(ev.clientY - dy, 2), maxY) + 'px',
-					right: 'auto', bottom: 'auto',
-				});
-			}
-		});
-
-		$(document).on('mouseup touchend', function() {
-			if ($btn[0]) {
-				$btn.css({ cursor: 'grab', opacity: '0.7', transition: 'opacity 0.2s' });
-			}
-			dx = undefined;
-		});
-
-		$btn.on('click', async function() {
-			if (!dragging) await fixLastMessage();
-		});
-	}
-	updateFloatingBtn();
+	// 独立悬浮按钮已移除：由「余温工具箱」整合悬浮入口（悬浮条）接管（入口见 悬浮条设置 面板型勾选）
 
 	// 扩展菜单项（#extensionsMenu 内）
 	const menuItemId = `${extensionName}_menu_item`;
@@ -1561,16 +1501,6 @@ jQuery(async () => {
 		settings.showInlineBtn = this.checked;
 		saveSettingsDebounced();
 		updateInlineBtn();
-	});
-	$(`#${extensionName}_chk_float`).on('change', function() {
-		settings.showFloatingBtn = this.checked;
-		saveSettingsDebounced();
-		// 整合悬浮入口接管时：不显示独立球，通知余温工具箱重建条目
-		if (window.__kimiComboFloat && (window.__kimiComboFloat.showPsnap || window.__kimiComboFloat.showTag)) {
-			window.__kimiRefreshCombo && window.__kimiRefreshCombo();
-			return;
-		}
-		updateFloatingBtn();
 	});
 	$(`#${extensionName}_chk_menu`).on('change', function() {
 		settings.showMenuBtn = this.checked;
@@ -1679,7 +1609,6 @@ export function stTagMountSettings() {
 <label class="kimi-label">${t('tagEntryTitle')}</label>
 <div style="display:flex;gap:12px;align-items:center">
 <label class="checkbox_label"><input type="checkbox" id="${ext}_chk_inline" ${s.showInlineBtn ? 'checked' : ''}> ${t('tagChkInline')}</label>
-<label class="checkbox_label"><input type="checkbox" id="${ext}_chk_float" ${s.showFloatingBtn ? 'checked' : ''}> ${t('tagChkFloat')}</label>
 <label class="checkbox_label"><input type="checkbox" id="${ext}_chk_menu" ${s.showMenuBtn ? 'checked' : ''}> ${t('tagChkMenu')}</label>
 </div>
 
