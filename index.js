@@ -81,6 +81,7 @@ const defaultSettings = {
     promptRecovery: null,            // 固定恢复槽：切换前自动保存的条目开关状态（单槽覆盖制）
     psnapShowMenu: true,             // 扩展菜单入口
     psnapShowFloat: true,            // 悬浮按钮入口（order 注入顺序=首选失败自动落下一个；↑↓调整）
+    floatShowTagFix: true,           // 悬浮条功能区：一键修复标签（直接执行）
     clineModelOverride: false,       // 模型名前缀覆写：请求层把 model 改写为 指定提供商/基础模型名（⚠️脱离cline-pass前缀=按积分计费）
     clineProvider: 'modal',          // 当前选中的 Cline 提供商（默认 modal，据称质量最好）
     clineShowMenuBtn: true,          // 扩展菜单显示「切换Cline提供商」入口
@@ -194,7 +195,7 @@ const UI = {
         apiModel: "模型名", apiKey: "密钥", apiAge: "{d} 天 {h} 小时",
         apiNoPool: "池为空：先添加接口", apiNotCustom: "当前不是 Custom(OpenAI兼容) 连接，API 池不生效",
         apiBannerMsg: "检测到额度用尽（limit）。", apiBannerSwitch: "⇄ 切换到 {name}（{n}/{total}）", apiSwitched: "已切换到 {name}（{n}/{total}）",
-        apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（感谢啊一串信息源）", clineModelOverride: "积分模型名前缀覆写", clineMethodLabel: "指定方式：订阅指定提供商（感谢啊一串信息源）", clineUpTitle: "上移（调整自动切换顺序）", clineDownTitle: "下移（调整自动切换顺序）", upBtn: "📊 各上游实时状况", upTitle: "kimi-k3 各上游实时状况", upLoading: "加载中…（数据源 OpenRouter，免key）", upRefreshing: "刷新中…", upFailed: "获取失败：国内网络可能无法直连 openrouter.ai，请挂梯子后点 ↻ 重试", upSwitch: "切", upProvider: "提供商", upIn: "输入$/M", upOut: "输出$/M", upCache: "缓存读$/M", upLat: "延迟", upTps: "吞吐", upUp5m: "可用(5m)", upUptime: "可用率(1d)", upHint: "✓=可在本插件切换 · ★=当前 · 排序：可切换优先、可用率降序。手动追加自定义提供商（上方输入框）后，对应行也会出现切按钮。数据来自 OpenRouter 公开接口，仅供选型参考。", clineDSTip: "用Cline吃DeepSeek，可指定 deepseek 作为上游（官方缓存生效）！", clineDSBtn: "⇄ 一键切换 deepseek 上游", clineDSSwitched: "已切换：提供商=deepseek（走官方上游带缓存）", clineOverrideWarn: "⚠️ 啊一串实测：消耗积分的模式！限定指定提供商，如果你不知道这是什么就不要勾选", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「模型参数」里勾选 使用 Cline 提供商指定", clinePassWarn: "⚠️ 检测到模型名带 cline-pass/ 前缀：提供商指定不会生效（实测全部被忽略），请改用 moonshotai/kimi-k3 等厂商前缀", clineHint: "开启后每次请求自动注入指定提供商。请删掉附加参数里的任何内容！仅 cline 渠道需要，其它渠道请关闭。不同渠道K3风味不同，自行测试。", psnapTitle: "预设条目开关快照", psnapNamePh: "方案名…", psnapSaveBtn: "保存", psnapApply: "切", psnapDel: "✕", psnapEmpty: "还没有保存的方案", psnapRecovery: "恢复到最近一次未快照时的状态", psnapSaved: "已保存「{n}」", psnapNeedName: "请先填写方案名", psnapMenuEntry: "扩展菜单入口", psnapEntryLabel: "入口：", psnapFloatEntry: "悬浮按钮入口", psnapNoPreset: "未找到预设数据", psnapRecApply: "恢复", psnapRecTime: "可恢复快照",
+        apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（感谢啊一串信息源）", clineModelOverride: "积分模型名前缀覆写", clineMethodLabel: "指定方式：订阅指定提供商（感谢啊一串信息源）", clineUpTitle: "上移（调整自动切换顺序）", clineDownTitle: "下移（调整自动切换顺序）", upBtn: "📊 各上游实时状况", upTitle: "kimi-k3 各上游实时状况", upLoading: "加载中…（数据源 OpenRouter，免key）", upRefreshing: "刷新中…", upFailed: "获取失败：国内网络可能无法直连 openrouter.ai，请挂梯子后点 ↻ 重试", upSwitch: "切", upProvider: "提供商", upIn: "输入$/M", upOut: "输出$/M", upCache: "缓存读$/M", upLat: "延迟", upTps: "吞吐", upUp5m: "可用(5m)", upUptime: "可用率(1d)", upHint: "✓=可在本插件切换 · ★=当前 · 排序：可切换优先、可用率降序。手动追加自定义提供商（上方输入框）后，对应行也会出现切按钮。数据来自 OpenRouter 公开接口，仅供选型参考。", clineDSTip: "用Cline吃DeepSeek，可指定 deepseek 作为上游（官方缓存生效）！", clineDSBtn: "⇄ 一键切换 deepseek 上游", clineDSSwitched: "已切换：提供商=deepseek（走官方上游带缓存）", clineOverrideWarn: "⚠️ 啊一串实测：消耗积分的模式！限定指定提供商，如果你不知道这是什么就不要勾选", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「模型参数」里勾选 使用 Cline 提供商指定", clinePassWarn: "⚠️ 检测到模型名带 cline-pass/ 前缀：提供商指定不会生效（实测全部被忽略），请改用 moonshotai/kimi-k3 等厂商前缀", clineHint: "开启后每次请求自动注入指定提供商。请删掉附加参数里的任何内容！仅 cline 渠道需要，其它渠道请关闭。不同渠道K3风味不同，自行测试。", psnapTitle: "预设条目开关快照", psnapNamePh: "方案名…", psnapSaveBtn: "保存", psnapApply: "切", psnapDel: "✕", psnapEmpty: "还没有保存的方案", psnapRecovery: "恢复到最近一次未快照时的状态", psnapSaved: "已保存「{n}」", psnapNeedName: "请先填写方案名", psnapMenuEntry: "扩展菜单入口", psnapEntryLabel: "入口：", psnapFloatEntry: "悬浮按钮入口", psnapNoPreset: "未找到预设数据", psnapRecApply: "恢复", psnapRecTime: "可恢复快照", floatCardTitle: "悬浮条设置", floatCardTag: "一键修复标签（直接执行）", floatCardHint: "勾选显示悬浮条中快捷执行的图标。面板入口的显示与否在各自功能卡里设置。", tagFixNow: "一键修复标签",
         apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效。切换会同步改写 URL、密钥、模型名 三项，预置/采样等其它参数一概不动；命中 limit/quota/rate 即触发。"
         },
     en: {
@@ -254,7 +255,7 @@ const UI = {
         apiModel: "Model", apiKey: "Key", apiAge: "{d}d {h}h",
         apiNoPool: "Pool is empty: add an endpoint first", apiNotCustom: "Not a Custom (OpenAI-compatible) connection - pool inactive",
         apiBannerMsg: "Quota limit hit.", apiBannerSwitch: "⇄ Switch to {name} ({n}/{total})", apiSwitched: "Switched to {name} ({n}/{total})",
-        apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (credit: the source)", clineModelOverride: "Credits model prefix override", clineMethodLabel: "Method: subscription provider routing (credit: the source)", clineUpTitle: "Move up (auto-switch order)", clineDownTitle: "Move down (auto-switch order)", upBtn: "📊 Live upstream status", upTitle: "kimi-k3 upstream live status", upLoading: "Loading... (OpenRouter, no key needed)", upRefreshing: "Refreshing...", upFailed: "Failed to fetch - openrouter.ai may be unreachable from your network; retry with ↻", upSwitch: "Use", upProvider: "Provider", upIn: "In $/M", upOut: "Out $/M", upCache: "Cache $/M", upLat: "Latency", upTps: "Throughput", upUp5m: "Up(5m)", upUptime: "Uptime(1d)", upHint: "✓ = switchable here · ★ = current · latency/throughput = last 30 min (blank when no traffic) · sorted: switchable first, uptime desc. Data from OpenRouter public API.", snapNamePh: "Profile name…", snapSaveBtn: "💾 Save current", snapApply: "Apply", snapDel: "Delete profile", snapEmpty: "No saved profiles yet: enter a name and hit Save", snapRecovery: "↩ Auto-recovery snapshot (saved before last switch)", snapSaved: "Saved profile \"{n}\"", snapNeedName: "Enter a profile name first", clineDSTip: "Use Cline for DeepSeek with deepseek as the upstream (official caching works)!", clineDSBtn: "⇄ One-click deepseek upstream", clineDSSwitched: "Switched: provider=deepseek (official upstream with caching)", clineOverrideWarn: "WARNING (tested): credits only - locks provider and overrides model to a vendor prefix like moonshotai/kimi-k3.", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Model Settings first", clinePassWarn: "Model has cline-pass/ prefix: provider routing will NOT work (tested). Use a vendor prefix like moonshotai/kimi-k3", clineHint: "Injects the selected provider into every request. Delete anything in Extra Parameters! Only needed for the cline channel; turn off elsewhere. Different providers give K3 different flavors - test them yourself.", psnapTitle: "Preset Toggle Snapshots", psnapNamePh: "Profile name…", psnapSaveBtn: "Save", psnapApply: "Use", psnapDel: "✕", psnapEmpty: "No saved profiles", psnapRecovery: "Restore to last unsaved state", psnapSaved: "Saved \"{n}\"", psnapNeedName: "Enter a profile name first", psnapMenuEntry: "Extensions menu entry", psnapEntryLabel: "Entries:", psnapFloatEntry: "Floating button entry", psnapNoPreset: "Preset data not found", psnapRecApply: "Restore", psnapRecTime: "Recovery snapshot",
+        apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (credit: the source)", clineModelOverride: "Credits model prefix override", clineMethodLabel: "Method: subscription provider routing (credit: the source)", clineUpTitle: "Move up (auto-switch order)", clineDownTitle: "Move down (auto-switch order)", upBtn: "📊 Live upstream status", upTitle: "kimi-k3 upstream live status", upLoading: "Loading... (OpenRouter, no key needed)", upRefreshing: "Refreshing...", upFailed: "Failed to fetch - openrouter.ai may be unreachable from your network; retry with ↻", upSwitch: "Use", upProvider: "Provider", upIn: "In $/M", upOut: "Out $/M", upCache: "Cache $/M", upLat: "Latency", upTps: "Throughput", upUp5m: "Up(5m)", upUptime: "Uptime(1d)", upHint: "✓ = switchable here · ★ = current · latency/throughput = last 30 min (blank when no traffic) · sorted: switchable first, uptime desc. Data from OpenRouter public API.", snapNamePh: "Profile name…", snapSaveBtn: "💾 Save current", snapApply: "Apply", snapDel: "Delete profile", snapEmpty: "No saved profiles yet: enter a name and hit Save", snapRecovery: "↩ Auto-recovery snapshot (saved before last switch)", snapSaved: "Saved profile \"{n}\"", snapNeedName: "Enter a profile name first", clineDSTip: "Use Cline for DeepSeek with deepseek as the upstream (official caching works)!", clineDSBtn: "⇄ One-click deepseek upstream", clineDSSwitched: "Switched: provider=deepseek (official upstream with caching)", clineOverrideWarn: "WARNING (tested): credits only - locks provider and overrides model to a vendor prefix like moonshotai/kimi-k3.", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Model Settings first", clinePassWarn: "Model has cline-pass/ prefix: provider routing will NOT work (tested). Use a vendor prefix like moonshotai/kimi-k3", clineHint: "Injects the selected provider into every request. Delete anything in Extra Parameters! Only needed for the cline channel; turn off elsewhere. Different providers give K3 different flavors - test them yourself.", psnapTitle: "Preset Toggle Snapshots", psnapNamePh: "Profile name…", psnapSaveBtn: "Save", psnapApply: "Use", psnapDel: "✕", psnapEmpty: "No saved profiles", psnapRecovery: "Restore to last unsaved state", psnapSaved: "Saved \"{n}\"", psnapNeedName: "Enter a profile name first", psnapMenuEntry: "Extensions menu entry", psnapEntryLabel: "Entries:", psnapFloatEntry: "Floating button entry", psnapNoPreset: "Preset data not found", psnapRecApply: "Restore", psnapRecTime: "Recovery snapshot", floatCardTitle: "Floating Bar", floatCardTag: "One-click tag fix (direct run)", floatCardHint: "Check icons to show in the floating bar for quick actions. Panel entries are toggled inside each card.", tagFixNow: "Fix tags now",
         apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections. Switching syncs three fields: URL, key and model name - presets/sampling untouched. Triggers on limit/quota/rate."
         },
     ko: {
@@ -314,7 +315,7 @@ const UI = {
         apiModel: "모델명", apiKey: "키", apiAge: "{d}일 {h}시간",
         apiNoPool: "풀이 비어 있음: 먼저 엔드포인트 추가", apiNotCustom: "Custom(OpenAI 호환) 연결이 아님 - 풀 동작 안 함",
         apiBannerMsg: "할당량 초과 감지.", apiBannerSwitch: "⇄ {name}(으)로 전환 ({n}/{total})", apiSwitched: "{name}(으)로 전환됨 ({n}/{total})",
-        apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (정보원 감사)", clineModelOverride: "크레딧 모델 접두사 덮어쓰기", clineMethodLabel: "방식: 구독 공급자 지정", clineUpTitle: "위로(자동 전환 순서)", clineDownTitle: "아래로(자동 전환 순서)", upBtn: "📊 업스트림 실시간 현황", upTitle: "kimi-k3 업스트림 현황", upLoading: "로딩 중... (OpenRouter)", upRefreshing: "새로고침 중...", upFailed: "가져오기 실패 - 네트워크에서 openrouter.ai 접근 불가 가능, ↻로 재시도", upSwitch: "전환", upProvider: "공급자", upIn: "입력$/M", upOut: "출력$/M", upCache: "캐시$/M", upLat: "지연", upTps: "처리량", upUp5m: "가동(5m)", upUptime: "가동률(1d)", upHint: "✓=여기서 전환 가능 · ★=현재 · 지연/처리량=최근 30분 · 정렬: 전환 가능 우선. OpenRouter 공개 API 기준.", snapNamePh: "프로필 이름…", snapSaveBtn: "💾 현재 상태 저장", snapApply: "적용", snapDel: "이 프로필 삭제", snapEmpty: "저장된 프로필 없음: 이름 입력 후 저장", snapRecovery: "↩ 복구 스냅샷(전환 전 자동 저장)", snapSaved: "\"{n}\" 프로필 저장됨", snapNeedName: "먼저 프로필 이름을 입력하세요", clineDSTip: "Cline으로 DeepSeek 사용 - deepseek 업스트림 지정(공식 캐시 적용)!", clineDSBtn: "⇄ 원클릭 deepseek 업스트림", clineDSSwitched: "전환됨: 공급자=deepseek(공식 업스트림, 캐시)", clineOverrideWarn: "주의(실측): 크레딧 소모 - 공급자 지정 및 moonshotai/kimi-k3 등 벤더 접두사로 모델 덮어쓰기.", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 모델 설정에서 Cline 공급자 지정을 체크하세요", clinePassWarn: "모델명에 cline-pass/ 접두사 감지: 공급자 지정 무효(실측). moonshotai/kimi-k3 같은 벤더 접두사 사용", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입합니다. 추가 매개변수의 모든 내용을 삭제하세요! cline 채널에서만 필요, 다른 곳에서는 끄세요. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.", psnapTitle: "프리셋 토글 스냅샷", psnapNamePh: "프로필 이름…", psnapSaveBtn: "저장", psnapApply: "전환", psnapDel: "✕", psnapEmpty: "저장된 프로필 없음", psnapRecovery: "마지막 미스냅샷 상태로 복원", psnapSaved: "\"{n}\" 저장됨", psnapNeedName: "먼저 프로필 이름을 입력하세요", psnapMenuEntry: "확장 메뉴 항목", psnapEntryLabel: "입구:", psnapFloatEntry: "플로팅 버튼 항목", psnapNoPreset: "프리셋 데이터 없음", psnapRecApply: "복원", psnapRecTime: "복구 스냅샷",
+        apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (정보원 감사)", clineModelOverride: "크레딧 모델 접두사 덮어쓰기", clineMethodLabel: "방식: 구독 공급자 지정", clineUpTitle: "위로(자동 전환 순서)", clineDownTitle: "아래로(자동 전환 순서)", upBtn: "📊 업스트림 실시간 현황", upTitle: "kimi-k3 업스트림 현황", upLoading: "로딩 중... (OpenRouter)", upRefreshing: "새로고침 중...", upFailed: "가져오기 실패 - 네트워크에서 openrouter.ai 접근 불가 가능, ↻로 재시도", upSwitch: "전환", upProvider: "공급자", upIn: "입력$/M", upOut: "출력$/M", upCache: "캐시$/M", upLat: "지연", upTps: "처리량", upUp5m: "가동(5m)", upUptime: "가동률(1d)", upHint: "✓=여기서 전환 가능 · ★=현재 · 지연/처리량=최근 30분 · 정렬: 전환 가능 우선. OpenRouter 공개 API 기준.", snapNamePh: "프로필 이름…", snapSaveBtn: "💾 현재 상태 저장", snapApply: "적용", snapDel: "이 프로필 삭제", snapEmpty: "저장된 프로필 없음: 이름 입력 후 저장", snapRecovery: "↩ 복구 스냅샷(전환 전 자동 저장)", snapSaved: "\"{n}\" 프로필 저장됨", snapNeedName: "먼저 프로필 이름을 입력하세요", clineDSTip: "Cline으로 DeepSeek 사용 - deepseek 업스트림 지정(공식 캐시 적용)!", clineDSBtn: "⇄ 원클릭 deepseek 업스트림", clineDSSwitched: "전환됨: 공급자=deepseek(공식 업스트림, 캐시)", clineOverrideWarn: "주의(실측): 크레딧 소모 - 공급자 지정 및 moonshotai/kimi-k3 등 벤더 접두사로 모델 덮어쓰기.", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 모델 설정에서 Cline 공급자 지정을 체크하세요", clinePassWarn: "모델명에 cline-pass/ 접두사 감지: 공급자 지정 무효(실측). moonshotai/kimi-k3 같은 벤더 접두사 사용", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입합니다. 추가 매개변수의 모든 내용을 삭제하세요! cline 채널에서만 필요, 다른 곳에서는 끄세요. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.", psnapTitle: "프리셋 토글 스냅샷", psnapNamePh: "프로필 이름…", psnapSaveBtn: "저장", psnapApply: "전환", psnapDel: "✕", psnapEmpty: "저장된 프로필 없음", psnapRecovery: "마지막 미스냅샷 상태로 복원", psnapSaved: "\"{n}\" 저장됨", psnapNeedName: "먼저 프로필 이름을 입력하세요", psnapMenuEntry: "확장 메뉴 항목", psnapEntryLabel: "입구:", psnapFloatEntry: "플로팅 버튼 항목", psnapNoPreset: "프리셋 데이터 없음", psnapRecApply: "복원", psnapRecTime: "복구 스냅샷", floatCardTitle: "플로팅 바", floatCardTag: "태그 원클릭 수리 (즉시 실행)", floatCardHint: "플로팅 바에 표시할 빠른 실행 아이콘을 선택합니다. 패널 항목은 각 기능 카드에서 설정합니다.", tagFixNow: "태그 지금 수리",
         apiHint: "키는 로컬 settings.json에 평문 저장됨 - 파일 공유 금지. Custom(OpenAI 호환) 연결에서만 동작. 전환 시 URL·키·모델명 세 항목을 함께 변경, 프리셋/샘플링은 불변. limit/quota/rate 에서 트리거."
         }
 };
@@ -356,6 +357,7 @@ if (!Array.isArray(settings.promptSnapshots)) settings.promptSnapshots = [];
 if (settings.promptRecovery === undefined) settings.promptRecovery = null;
 if (settings.psnapShowMenu === undefined) settings.psnapShowMenu = true;
 if (settings.psnapShowFloat === undefined) settings.psnapShowFloat = true;
+if (settings.floatShowTagFix === undefined) settings.floatShowTagFix = true;
 if (settings.clineModelOverride === undefined) settings.clineModelOverride = false;
 delete settings.clineRouteFormat;
 function ensureClinePriority() {
@@ -1582,7 +1584,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.28.9'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.29.0'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1897,6 +1899,9 @@ function openCardFloat(key) {
     const body = w.querySelector('#' + extensionName + '_card_float_body');
     body.innerHTML = '';
     body.appendChild(card);
+    // 浮窗头已显示标题，原卡 summary 隐藏（避免双标题）；移回时恢复
+    const sum = card.querySelector('summary');
+    if (sum) sum.style.display = 'none';
     card.open = true;
     w.style.display = 'block';
 }
@@ -1907,6 +1912,8 @@ function closeCardFloat() {
         const body = w.querySelector('#' + extensionName + '_card_float_body');
         const card = body?.firstElementChild;
         if (card && _kimiCardOrigin && _kimiCardOrigin.parent) {
+            const sum = card.querySelector('summary');
+            if (sum) sum.style.display = '';
             if (_kimiCardOrigin.next && _kimiCardOrigin.next.parentNode === _kimiCardOrigin.parent) {
                 _kimiCardOrigin.parent.insertBefore(card, _kimiCardOrigin.next);
             } else {
@@ -1951,9 +1958,28 @@ function updateComboFloat() {
         <span style="font-size:12px;opacity:.6">⠿</span>
     </div>`);
 
-    // 功能卡条目（垂直展开区；fa 图标单色对齐主页 kimi-card-ico 风格）
+    // 条目区 = 功能（直接操作，绿色 fa 图标，分隔在上）+ 面板（打开设置卡，橙色 fa 图标）
+    const ACTION_DEFS = [
+        { key: 'tag', ico: 'fa-wand-magic-sparkles', label: t('tagFixNow'), color: '#6fce6f' },
+    ].filter(a => (settings.floatShowTagFix && a.key === 'tag'));
+    const panelDefs = KIMI_CARD_DEFS;
+    const rowCount = ACTION_DEFS.length + panelDefs.length + (ACTION_DEFS.length ? 1 : 0);
+
     const $items = $(`<div class="kcf-body" style="overflow:hidden;height:0;background:rgba(0,0,0,.16)"></div>`).appendTo($box);
-    KIMI_CARD_DEFS.forEach(def => {
+
+    // 功能区（直接执行，选中色不同）
+    ACTION_DEFS.forEach(def => {
+        $items.append(`<div class="kcf-item kcf-action" data-act="${def.key}" style="
+            height:${ITEM}px;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;
+            cursor:pointer;border-bottom:1px solid rgba(255,255,255,.07);position:relative
+        " title="${def.label}"><i class="fa-solid ${def.ico} kimi-card-ico" aria-hidden="true" style="font-size:15px;color:${def.color}"></i></div>`);
+    });
+    // 功能区与面板区分隔线
+    if (ACTION_DEFS.length) {
+        $items.append(`<div class="kcf-sep" style="height:5px;background:rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.08);cursor:default"></div>`);
+    }
+    // 面板区（打开设置卡浮窗）
+    panelDefs.forEach(def => {
         const label = t(def.titleKey);
         $items.append(`<div class="kcf-item" data-act="${def.key}" style="
             height:${ITEM}px;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;
@@ -1967,7 +1993,7 @@ function updateComboFloat() {
     let expanded = false;
     function setExpanded(on) {
         expanded = on;
-        const h = on ? KIMI_CARD_DEFS.length * ITEM : 0;
+        const h = on ? rowCount * ITEM : 0;
         $items.css({ height: h + 'px', transition: 'height .22s ease' });
         $box.css('box-shadow', on ? '0 6px 18px rgba(0,0,0,.4)' : '0 3px 10px rgba(0,0,0,.3)');
     }
@@ -1976,10 +2002,13 @@ function updateComboFloat() {
     // 点击头部：展开/收起
     $box.find('.kcf-head').on('click.kc', function () { setExpanded(!expanded); });
 
-    // 点击功能卡条目：弹出该卡原版悬浮窗，随后收起
+    // 点击条目：功能=直接执行（不折叠，方便连续用）；面板=打开卡浮窗（保持展开，方便切换）
     $items.find('.kcf-item').on('click.kc', function () {
         const act = $(this).attr('data-act');
-        setExpanded(false);
+        if ($(this).hasClass('kcf-action')) {
+            try { window.__stTagFixLast && window.__stTagFixLast(); } catch (e) { }
+            return;
+        }
         openCardFloat(act);
     });
 
@@ -2336,6 +2365,84 @@ const KIMI_SETTINGS_CSS = `
     border-top: 1px solid var(--SmartThemeBorderColor);
     margin: 10px 0;
     opacity: 0.6;
+}
+/* 通用卡浮窗作用域（卡被移入悬浮窗后，样式选择器不再命中 #settings 前缀 → 镜像同款配色，防白底/无边框） */
+#kimi_reasoning_injector_card_float .kimi-card {
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-left: 3px solid var(--SmartThemeQuoteColor);
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.08);
+    margin-top: 0;
+}
+#kimi_reasoning_injector_card_float .kimi-card > summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 7px 8px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--SmartThemeBodyColor, inherit);
+}
+#kimi_reasoning_injector_card_float .kimi-card-body {
+    padding: 6px 10px 10px;
+}
+#kimi_reasoning_injector_card_float .kimi-label {
+    display: block;
+    font-size: 0.85em;
+    font-weight: 600;
+    margin: 8px 0 3px;
+    opacity: 0.85;
+}
+#kimi_reasoning_injector_card_float .kimi-hint {
+    font-size: 0.75em;
+    opacity: 0.55;
+    margin: 4px 0 0;
+}
+#kimi_reasoning_injector_card_float .kimi-inner-card {
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 10px;
+    padding: 8px 10px;
+    margin-top: 8px;
+    background: rgba(255, 255, 255, 0.03);
+}
+#kimi_reasoning_injector_card_float .kimi-btn {
+    padding: 3px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--SmartThemeBodyColor, inherit);
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: filter 0.15s ease;
+}
+#kimi_reasoning_injector_card_float .kimi-btn:hover {
+    filter: brightness(1.15);
+}
+#kimi_reasoning_injector_card_float .kimi-num {
+    width: 80px;
+    box-sizing: border-box;
+    display: inline-block;
+}
+#kimi_reasoning_injector_card_float .kimi-sep {
+    border-top: 1px solid var(--SmartThemeBorderColor);
+    margin: 10px 0;
+    opacity: 0.6;
+}
+#kimi_reasoning_injector_card_float .kimi-custom-del {
+    cursor: pointer;
+    opacity: 0.7;
+    font-size: 0.85em;
+    transition: opacity 0.15s ease, filter 0.15s ease;
+}
+#kimi_reasoning_injector_card_float .kimi-custom-del:hover {
+    opacity: 1;
+    filter: brightness(1.3);
+}
+#kimi_reasoning_injector_card_float input[type="text"],
+#kimi_reasoning_injector_card_float textarea,
+#kimi_reasoning_injector_card_float select {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--SmartThemeBodyColor, inherit);
+    border: 1px solid var(--SmartThemeBorderColor);
 }
 `;
 
@@ -3156,6 +3263,18 @@ function initSettingsPanel() {
 <p class="kimi-hint">${t('langHint')}</p>
 </div>
 
+<!-- ═══ 悬浮条设置（悬浮入口的快捷功能区）═══ -->
+<details class="kimi-card">
+<summary><i class="fa-solid fa-magic-wand-sparkles kimi-card-ico" aria-hidden="true"></i>${t('floatCardTitle')}</summary>
+<div class="kimi-card-body">
+<label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
+<input type="checkbox" id="${extensionName}_float_tagfix" ${settings.floatShowTagFix ? 'checked' : ''}/>
+<span style="font-size:.9em">⚡ ${t('floatCardTag')}</span>
+</label>
+<p class="kimi-hint">${t('floatCardHint')}</p>
+</div>
+</details>
+
 <div class="kimi-sep"></div>
 
 <!-- ═══ 注入（默认展开）═══ -->
@@ -3436,7 +3555,6 @@ ${renderWordReplaceRows()}
     <label class="kimi-label">${t('psnapEntryLabel')}</label>
     <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
         <label class="checkbox_label" style="margin:0"><input type="checkbox" id="${extensionName}_psnap_menu_entry" ${settings.psnapShowMenu ? 'checked' : ''}/> ${t('psnapMenuEntry')}</label>
-        <label class="checkbox_label" style="margin:0"><input type="checkbox" id="${extensionName}_psnap_float_entry" ${settings.psnapShowFloat ? 'checked' : ''}/> ${t('psnapFloatEntry')}</label>
     </div>
 </div>
 </details>
@@ -3656,7 +3774,12 @@ partial
     $("#" + extensionName + "_psnap_name").on("keydown", function (e) { if (e.key === 'Enter') { e.preventDefault(); $("#" + extensionName + "_psnap_save").trigger('click'); } });
     const chkPsnapEntry = (id, key) => $("#" + id).on("change", function () { settings[key] = $(this).is(":checked"); saveSettingsDebounced(); updatePsnapEntries(); });
     chkPsnapEntry(extensionName + "_psnap_menu_entry", 'psnapShowMenu');
-    chkPsnapEntry(extensionName + "_psnap_float_entry", 'psnapShowFloat');
+    // 悬浮条设置卡：一键修复标签（直接执行）显隐
+    $("#" + extensionName + "_float_tagfix").on("change", function () {
+        settings.floatShowTagFix = $(this).is(":checked");
+        saveSettingsDebounced();
+        updatePsnapEntries();
+    });
 
     $("#" + extensionName + "_keep_scroll").on("change", function () {
         settings.keepScrollOnGenerate = $(this).is(":checked");
