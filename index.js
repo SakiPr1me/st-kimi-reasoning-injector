@@ -1582,7 +1582,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.28.8'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.28.9'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1823,9 +1823,105 @@ function updatePsnapEntries() {
     updateComboFloat();
 }
 
-// ===== 整合悬浮入口（📇 预设开关快照 + 🏷️ 修复标签，两球合一）=====
-// 竖向胶囊条：点击展开/收起（高度动画），展开露出各功能 emoji 项，点项即开窗或一键修复。
-// 只勾选任一浮球开关即出现；勾几个出现几个；拖拽带边界钳制（不消失出视口）+ 位置记忆。
+// ===== 通用「设置卡」悬浮窗：把主页原版卡移入浮窗（绑定保留），改完移回 =====
+// 卡注册表：悬浮入口条目的顺序/图标/标题（标题键三语，与主页卡 summary 匹配）
+const KIMI_CARD_DEFS = [
+    { key: 'inject', ico: 'fa-bolt', titleKey: 'injectTitle' },
+    { key: 'model', ico: 'fa-brain', titleKey: 'modelTitle' },
+    { key: 'reroll', ico: 'fa-arrows-rotate', titleKey: 'rerollTitle' },
+    { key: 'beautify', ico: 'fa-palette', titleKey: 'beautifyTitle' },
+    { key: 'autoStop', ico: 'fa-scissors', titleKey: 'autoStopTitle' },
+    { key: 'word', ico: 'fa-broom', titleKey: 'wordTitle' },
+    { key: 'psnap', ico: 'fa-list-check', titleKey: 'psnapTitle' },
+    { key: 'tag', ico: 'fa-tag', titleKey: 'tagTitle' },
+    { key: 'api', ico: 'fa-plug', titleKey: 'apiTitle' },
+    { key: 'misc', ico: 'fa-screwdriver-wrench', titleKey: 'miscLabel' },
+    { key: 'fix', ico: 'fa-wrench', titleKey: 'fixTitle' },
+];
+let _kimiCardFloating = null;   // 浮窗 DOM
+let _kimiCardOrigin = null;     // 卡的原父节点+nextSibling（关闭时移回原位置）
+
+function ensureCardFloat() {
+    if (_kimiCardFloating && document.body.contains(_kimiCardFloating)) return _kimiCardFloating;
+    const w = document.createElement('div');
+    w.id = extensionName + '_card_float';
+    w.style.cssText = 'position:fixed;top:60px;right:14px;z-index:9600;width:min(460px,94vw);max-height:82vh;overflow-y:auto;display:none;' +
+        'border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;' +
+        'background:var(--SmartThemeBlurTintColor,rgb(23 23 23));color:var(--SmartThemeBodyColor);' +
+        'box-shadow:0 8px 30px rgba(0,0,0,.55);padding:10px 12px;user-select:none';
+    w.innerHTML = `
+        <div class="kcf-float-head" style="display:flex;align-items:center;gap:6px;cursor:grab;user-select:none">
+            <span style="opacity:.6;cursor:grab">⠿</span><b style="font-size:.9em" id="${extensionName}_card_float_title">设置</b>
+            <button id="${extensionName}_card_float_close" class="kimi-btn" style="margin-left:auto;padding:0 8px;font-size:.85em">✕</button>
+        </div>
+        <div id="${extensionName}_card_float_body" style="margin-top:6px"></div>`;
+    document.body.appendChild(w);
+    // 拖动（同悬浮窗：3px 阈值，document 级，touch 支持）
+    const $head = $('.kcf-float-head', w);
+    let dragging = false, dx, dy, startX, startY;
+    $head.on('mousedown touchstart', function (e) {
+        if (e.target && e.target.closest && e.target.closest('button')) return;
+        dragging = false;
+        const ev = e.touches ? e.touches[0] : e;
+        startX = ev.clientX; startY = ev.clientY;
+        const pos = $(w).position();
+        dx = startX - pos.left; dy = startY - pos.top;
+        e.preventDefault();
+    });
+    $(document).on('mousemove.kcf touchmove.kcf', function (e) {
+        if (dx === undefined || !w.isConnected) return;
+        const ev = e.touches ? e.touches[0] : e;
+        if (Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3) dragging = true;
+        if (dragging) { e.preventDefault(); $(w).css({ left: (ev.clientX - dx) + 'px', top: (ev.clientY - dy) + 'px', right: 'auto' }); }
+    });
+    $(document).on('mouseup.kcf touchend.kcf', function () { dx = undefined; });
+    document.getElementById(extensionName + '_card_float_close').addEventListener('click', () => closeCardFloat());
+    _kimiCardFloating = w;
+    return w;
+}
+
+// 按卡 key 打开浮窗：把主页原版卡 DOM 移进浮窗（jQuery 绑定跟元素走，全部交互原样可用）
+function openCardFloat(key) {
+    const def = KIMI_CARD_DEFS.find(d => d.key === key);
+    if (!def) return;
+    const panel = document.getElementById(extensionName + '_settings');
+    if (!panel) return;
+    const title = t(def.titleKey);
+    const card = [...panel.querySelectorAll('details.kimi-card')].find(c =>
+        (c.querySelector('summary')?.textContent || '').includes(title));
+    if (!card) return;
+    closeCardFloat(); // 若已有打开的先移回
+    _kimiCardOrigin = { parent: card.parentNode, next: card.nextSibling };
+    const w = ensureCardFloat();
+    w.querySelector('#' + extensionName + '_card_float_title').textContent = title;
+    const body = w.querySelector('#' + extensionName + '_card_float_body');
+    body.innerHTML = '';
+    body.appendChild(card);
+    card.open = true;
+    w.style.display = 'block';
+}
+
+function closeCardFloat() {
+    const w = _kimiCardFloating;
+    if (w && document.body.contains(w)) {
+        const body = w.querySelector('#' + extensionName + '_card_float_body');
+        const card = body?.firstElementChild;
+        if (card && _kimiCardOrigin && _kimiCardOrigin.parent) {
+            if (_kimiCardOrigin.next && _kimiCardOrigin.next.parentNode === _kimiCardOrigin.parent) {
+                _kimiCardOrigin.parent.insertBefore(card, _kimiCardOrigin.next);
+            } else {
+                _kimiCardOrigin.parent.appendChild(card);
+            }
+        }
+        if (body) body.innerHTML = '';
+        w.style.display = 'none';
+    }
+    _kimiCardOrigin = null;
+}
+
+// ===== 整合悬浮入口（所有功能卡的竖向胶囊条，两球合一）=====
+// 竖向胶囊条：点击展开/收起（高度动画），展开露出各功能卡条目（fa 图标同主页风格），
+// 点条目 → 弹出该卡原版悬浮窗（原样交互直接改，无需开扩展面板）。拖拽带边界钳制+位置记忆。
 // 标签修复的独立浮球在整合模式激活时由 tag-fixer.js 抑制（window.__kimiComboFloat）。
 function updateComboFloat() {
     window.__kimiComboFloat = {
@@ -1841,10 +1937,6 @@ function updateComboFloat() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem('kimi_combo_pos') || 'null'); } catch (e) { }
 
-    const items = [];
-    if (window.__kimiComboFloat.showPsnap) items.push({ act: 'psnap', emo: '📇', label: t('psnapTitle') });
-    if (window.__kimiComboFloat.showTag) items.push({ act: 'tag', emo: '🏷️', label: '修复标签' });
-
     const W = 46, HEAD = 40, ITEM = 38;
     const $box = $(`<div id="kimi_combo_float" style="
         position:fixed;z-index:9600;width:${W}px;overflow:hidden;
@@ -1859,13 +1951,14 @@ function updateComboFloat() {
         <span style="font-size:12px;opacity:.6">⠿</span>
     </div>`);
 
-    // 功能项（垂直展开区）
-    const $items = $(`<div class="kcf-body" style="overflow:hidden;height:0;background:rgba(0,0,0,.12)"></div>`).appendTo($box);
-    items.forEach(it => {
-        $items.append(`<div class="kcf-item" data-act="${it.act}" style="
-            height:${ITEM}px;display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1;
+    // 功能卡条目（垂直展开区；fa 图标单色对齐主页 kimi-card-ico 风格）
+    const $items = $(`<div class="kcf-body" style="overflow:hidden;height:0;background:rgba(0,0,0,.16)"></div>`).appendTo($box);
+    KIMI_CARD_DEFS.forEach(def => {
+        const label = t(def.titleKey);
+        $items.append(`<div class="kcf-item" data-act="${def.key}" style="
+            height:${ITEM}px;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;
             cursor:pointer;border-bottom:1px solid rgba(255,255,255,.07);position:relative
-        " title="${it.label}">${it.emo}</div>`);
+        " title="${label}"><i class="fa-solid ${def.ico} kimi-card-ico" aria-hidden="true" style="font-size:15px;color:var(--SmartThemeQuoteColor)"></i></div>`);
     });
     $items.find('.kcf-item').on('mouseenter', function () { $(this).css('background', 'rgba(128,128,128,.22)'); });
     $items.find('.kcf-item').on('mouseleave', function () { $(this).css('background', ''); });
@@ -1874,7 +1967,7 @@ function updateComboFloat() {
     let expanded = false;
     function setExpanded(on) {
         expanded = on;
-        const h = on ? items.length * ITEM : 0;
+        const h = on ? KIMI_CARD_DEFS.length * ITEM : 0;
         $items.css({ height: h + 'px', transition: 'height .22s ease' });
         $box.css('box-shadow', on ? '0 6px 18px rgba(0,0,0,.4)' : '0 3px 10px rgba(0,0,0,.3)');
     }
@@ -1883,12 +1976,11 @@ function updateComboFloat() {
     // 点击头部：展开/收起
     $box.find('.kcf-head').on('click.kc', function () { setExpanded(!expanded); });
 
-    // 点击功能项：开窗 / 一键修复，随后收起
+    // 点击功能卡条目：弹出该卡原版悬浮窗，随后收起
     $items.find('.kcf-item').on('click.kc', function () {
         const act = $(this).attr('data-act');
         setExpanded(false);
-        if (act === 'psnap') togglePsnapPanel();
-        else if (act === 'tag') { try { window.__stTagFixLast && window.__stTagFixLast(); } catch (e) { } }
+        openCardFloat(act);
     });
 
     // 拖拽（3px 阈值 + 边界钳制 + 位置记忆）；点击头部不拖拽时是展开
