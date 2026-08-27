@@ -1190,6 +1190,8 @@ async function fixLastMessage() {
 		toastr?.error?.('修复失败，请查看控制台（F12 → Console）');
 	}
 }
+// 供「余温工具箱」整合悬浮入口调用（拖拽/点击由整合入口统一管理）
+window.__stTagFixLast = fixLastMessage;
 
 
 // ========== 批量修复全部楼层 + 幻影 diff 预览（小眼睛） ==========
@@ -1444,6 +1446,8 @@ jQuery(async () => {
 	function updateFloatingBtn() {
 		$(`#${floatBtnId}`).remove();
 		if (!settings.showFloatingBtn) return;
+		// 被「余温工具箱」整合悬浮入口接管时，本插件的独立浮球不再显示（避免右下角两个球）
+		if (window.__kimiComboFloat && window.__kimiComboFloat.showTag) return;
 		$('body').append(`<div id="${floatBtnId}" title="修复标签（可拖拽）" style="
 			position:fixed;bottom:80px;right:20px;z-index:9999;
 			width:36px;height:36px;border-radius:50%;background:var(--accent-color, #888);
@@ -1474,7 +1478,13 @@ jQuery(async () => {
 			}
 			if (dragging) {
 				e.preventDefault();
-				$btn.css({ left: (ev.clientX - dx) + 'px', top: (ev.clientY - dy) + 'px', right: 'auto', bottom: 'auto' });
+				const maxX = window.innerWidth - $btn.outerWidth() - 2;
+				const maxY = window.innerHeight - $btn.outerHeight() - 2;
+				$btn.css({
+					left: Math.min(Math.max(ev.clientX - dx, 2), maxX) + 'px',
+					top: Math.min(Math.max(ev.clientY - dy, 2), maxY) + 'px',
+					right: 'auto', bottom: 'auto',
+				});
 			}
 		});
 
