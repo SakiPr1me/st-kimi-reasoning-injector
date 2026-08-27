@@ -1589,7 +1589,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.30.1'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.30.2'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1608,34 +1608,44 @@ function b64ToText(s) {
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return new TextDecoder().decode(bytes);
 }
-async function fetchRemoteVersion() {
-    // 多源兜底：同内容多路抓取，GitHub API 403 限流时自动换路（raw / CDN / 镜像），全部超时 6s
+async function fetchRemoteVersion(report) {
+    // 多源抓取：GitHub API 403 限流 / CDN 旧缓存时自动换路（raw / CDN / Gitee / API）。
+    // 全部源并发抓取，取「所有成功源里最大的版本号」——避免 jsDelivr @main 旧缓存把版本拉低，
+    // 误报「本地更高」（手机/国内网络常见：raw 失败落到 CDN，CDN 命中旧缓存）。
     const sources = [
         'https://raw.githubusercontent.com/SakiPr1me/st-kimi-reasoning-injector/main/manifest.json',
         'https://cdn.jsdelivr.net/gh/SakiPr1me/st-kimi-reasoning-injector@main/manifest.json',
         'https://gitee.com/satosaki/st-kimi-reasoning-injector/raw/main/manifest.json',
         PLUGIN_REPO_MANIFEST + '?t=' + Date.now(),
     ];
-    let lastErr = null;
-    for (const url of sources) {
+    const seen = {}; // 各源看到的值（report 用；调试「本地更高」时看是哪路缓存拖低）
+    const results = await Promise.allSettled(sources.map(async (url) => {
+        const r = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(6000) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const text = await r.text();
+        let v = '';
         try {
-            const r = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(6000) });
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            const text = await r.text();
-            let v = '';
-            try {
-                const j = JSON.parse(text);
-                if (j && typeof j.content === 'string') {
-                    v = JSON.parse(b64ToText(j.content)).version; // GitHub API contents 格式（base64 包裹）
-                } else {
-                    v = j.version; // raw/CDN/Gitee：manifest.json 直接可读
-                }
-            } catch (e) { throw new Error('parse'); }
-            v = String(v || '').trim();
-            if (v) return v;
-        } catch (e) { lastErr = e; }
+            const j = JSON.parse(text);
+            if (j && typeof j.content === 'string') {
+                v = JSON.parse(b64ToText(j.content)).version; // GitHub API contents 格式（base64 包裹）
+            } else {
+                v = j.version; // raw/CDN/Gitee：manifest.json 直接可读
+            }
+        } catch (e) { throw new Error('parse'); }
+        v = String(v || '').trim();
+        if (!v) throw new Error('empty');
+        seen[url.split('/')[2]] = v;
+        return v;
+    }));
+    const ok = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+    if (report) {
+        try { window.__kimiUpdSources = JSON.parse(JSON.stringify(seen)); } catch (e) { }
     }
-    throw lastErr || new Error('all sources failed');
+    if (ok.length) {
+        return ok.reduce((a, b) => (compareVer(a, b) > 0 ? a : b)); // 取最大版本，防 CDN 旧缓存误判
+    }
+    const failed = results.filter(r => r.status === 'rejected');
+    throw (failed[0] && failed[0].reason) || new Error('all sources failed');
 }
 async function doSelfUpdate(btn, remoteVer, auto) {
     if (btn) { btn.disabled = true; btn.textContent = '⏳ 更新中…'; }
@@ -1686,12 +1696,13 @@ async function manualCheckUpdate(btn) {
     btn.textContent = '⏳'; btn.title = '正在检测…';
     let txt = '', title2 = '', cls = '';
     try {
-        const remoteVer = await fetchRemoteVersion();
+        const remoteVer = await fetchRemoteVersion(true);
         const cmp = compareVer(remoteVer, PLUGIN_VERSION);
         if (cmp > 0) { txt = '✓ 可更新至 v' + remoteVer; cls = 'newer'; }
         else if (cmp === 0) { txt = '✅ 已是最新'; cls = 'same'; }
         else { txt = '⚠ 本地更高'; cls = 'higher'; }
-        title2 = '本机 v' + PLUGIN_VERSION + ' / GitHub v' + remoteVer;
+        const seen = window.__kimiUpdSources ? JSON.stringify(window.__kimiUpdSources) : '';
+        title2 = '本机 v' + PLUGIN_VERSION + ' / 远端取最大 v' + remoteVer + (seen ? '\n各源: ' + seen : '') + (cls === 'higher' ? '\n(若各源版本低于本机, 可能是CDN旧缓存, 过会儿重试)' : '');
     } catch (e) {
         txt = '❌ 检测失败'; title2 = String(e).slice(0, 80); cls = 'fail';
     }
