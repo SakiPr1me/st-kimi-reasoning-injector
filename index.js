@@ -1584,7 +1584,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.29.2'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.29.3'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1842,6 +1842,7 @@ const KIMI_CARD_DEFS = [
 ];
 let _kimiCardFloating = null;   // 浮窗 DOM
 let _kimiCardOrigin = null;     // 卡的原父节点+nextSibling（关闭时移回原位置）
+let _kimiCardOpenKey = null;    // 当前打开浮窗里的卡 key（重复点同一 emoji → 关闭）
 
 function ensureCardFloat() {
     if (_kimiCardFloating && document.body.contains(_kimiCardFloating)) return _kimiCardFloating;
@@ -1905,6 +1906,7 @@ function openCardFloat(key) {
     card.classList.add('kimi-in-float'); // 去卡自身边框，防浮窗双重边框
     card.open = true;
     w.style.display = 'block';
+    _kimiCardOpenKey = key;
 }
 
 function closeCardFloat() {
@@ -1926,6 +1928,7 @@ function closeCardFloat() {
         w.style.display = 'none';
     }
     _kimiCardOrigin = null;
+    _kimiCardOpenKey = null;
 }
 
 // ===== 整合悬浮入口（所有功能卡的竖向胶囊条，两球合一）=====
@@ -2004,11 +2007,15 @@ function updateComboFloat() {
     // 点击头部：展开/收起
     $box.find('.kcf-head').on('click.kc', function () { setExpanded(!expanded); });
 
-    // 点击条目：功能=直接执行（不折叠，方便连续用）；面板=打开卡浮窗（保持展开，方便切换）
+    // 点击条目：功能=直接执行（不折叠，方便连续用）；面板=同卡再点关闭、换卡切窗（保持展开）
     $items.find('.kcf-item').on('click.kc', function () {
         const act = $(this).attr('data-act');
         if ($(this).hasClass('kcf-action')) {
             try { window.__stTagFixLast && window.__stTagFixLast(); } catch (e) { }
+            return;
+        }
+        if (_kimiCardOpenKey === act) {
+            closeCardFloat(); // 重复点同一 emoji → 关闭
             return;
         }
         openCardFloat(act);
