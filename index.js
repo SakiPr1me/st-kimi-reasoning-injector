@@ -1577,6 +1577,72 @@ async function renderUpstream(force) {
 
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
+// ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
+const PLUGIN_VERSION = '1.27.8'; // 与 manifest.json version 同步
+const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
+function compareVer(a, b) {
+    const pa = String(a).split('.').map(Number);
+    const pb = String(b).split('.').map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const x = pa[i] || 0, y = pb[i] || 0;
+        if (x !== y) return x - y;
+    }
+    return 0;
+}
+function b64ToText(s) {
+    s = String(s).split('\r').join('').split('\n').join(' ').split(' ').join('').split('-').join('+').split('_').join('/');
+    while (s.length % 4) s += '=';
+    const bin = atob(s);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+}
+async function fetchRemoteVersion() {
+    const r = await fetch(PLUGIN_REPO_MANIFEST + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    const inner = JSON.parse(b64ToText(j.content));
+    return String(inner.version || '').trim();
+}
+async function doSelfUpdate(btn, remoteVer) {
+    btn.disabled = true; btn.textContent = '⏳ 更新中…';
+    try {
+        const resp = await fetch('/api/extensions/update', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({ extensionName: '/st-kimi-reasoning-injector', global: false }),
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status + ': ' + (await resp.text()).slice(0, 120));
+        const j = await resp.json().catch(() => ({}));
+        if (j.isUpToDate) { btn.textContent = '✓ 已是最新'; return; }
+        btn.textContent = '✅ 已更新';
+        try { toastr.success('✅ 插件已更新到 v' + remoteVer + '，2 秒后自动刷新', null, { timeOut: 4000 }); } catch (e) { }
+        setTimeout(() => location.reload(), 2200);
+    } catch (e) {
+        btn.disabled = false; btn.textContent = '⬆ 可更新至 v' + remoteVer;
+        try { toastr.error('自更新失败：' + e.message + '<br>可到「扩展管理」手动点更新', null, { escapeHtml: false, timeOut: 6000 }); } catch (e2) { }
+    }
+}
+async function checkUpdate() {
+    try {
+        const remoteVer = await fetchRemoteVersion();
+        if (compareVer(remoteVer, PLUGIN_VERSION) > 0) {
+            const el = document.getElementById(extensionName + '_upd_slot');
+            if (el && !el.querySelector('.kimi-upd-btn')) {
+                const btn = document.createElement('button');
+                btn.className = 'kimi-btn kimi-upd-btn';
+                btn.style.marginLeft = '8px'; btn.style.padding = '2px 8px';
+                btn.textContent = '⬆ 可更新至 v' + remoteVer;
+                btn.title = '点击自动更新插件，完成后自动刷新页面';
+                btn.addEventListener('click', () => doSelfUpdate(btn, remoteVer));
+                el.appendChild(btn);
+            }
+        }
+    } catch (e) { /* 网络失败静默 */ }
+}
+// 启动时检查 + 手动检查按钮
+window.__ywCheckUpdate = checkUpdate;
+
 // ===== 预设条目开关快照 =====
 // 保存/恢复左侧对话补全预设面板里各 prompt 条目的启用/禁用状态。
 // 切换后自动保存预设（saveSettingsDebounced），即时生效。
@@ -1937,6 +2003,15 @@ function reasoningTimerTick() {
             } else if (hasBody && isThinkingTitle) {
                 // 无精确时长但正文已开始输出 → 用累计值定格（≈思考时长）
                 done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(Date.now() - startMs, false));
+            } else if (!isGenerating && isThinkingTitle) {
+                // 生成已结束但标题仍是"思考中"且无精确时长/无正文 = 思维链被截断或生成被打断。
+                // 修正：用 gen_started → gen_finished 定格显示，不再永远跳动（用户反馈 BUG）
+                const genEnd = new Date(msg?.gen_finished || 0).getTime();
+                if (Number.isFinite(genEnd) && genEnd > 0) {
+                    done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(genEnd - startMs, false));
+                } else {
+                    return;
+                }
             } else if (!isThinkingTitle) {
                 // 非思考中且无时长（如历史消息「思考了一会」无数据）→ 不接管，保持 ST 显示
                 return;
@@ -2658,6 +2733,11 @@ function initSettingsPanel() {
                 </div>
                 <div class="inline-drawer-content" style="display: none;">
 
+                    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:6px;font-size:.85em;opacity:.9">
+                        <span style="color:var(--SmartThemeQuoteColor,#f0a35e)">🧰 v${'${PLUGIN_VERSION}'}</span>
+                        <span id="${extensionName}_upd_slot"></span>
+                        <button id="${extensionName}_chk_upd" type="button" class="kimi-btn" style="padding:2px 8px">检查更新</button>
+                    </div>
                     <label class="checkbox_label">
                         <input id="${extensionName}_enabled" type="checkbox" ${settings.enabled ? 'checked' : ''}/>
                         ${t('enabled')}
@@ -3033,6 +3113,12 @@ partial
     if (!$('#kimi-fold-style').length) $('<style id="kimi-fold-style">' + foldCSS + '</style>').appendTo('head');
     if (!$('#kimi-settings-style').length) $('<style id="kimi-settings-style">' + KIMI_SETTINGS_CSS + '</style>').appendTo('head');
     if (!$('#kimi-reroll-btn-style').length) $('<style id="kimi-reroll-btn-style">' + rerollBtnCSS + '</style>').appendTo('head');
+
+    $("#" + extensionName + "_chk_upd").on("click", function () {
+        const b = this; b.textContent = '⏳';
+        checkUpdate().finally(() => { b.textContent = '检查更新'; });
+    });
+    checkUpdate(); // 启动自动检查
 
     $("#" + extensionName + "_enabled").on("change", function () {
         settings.enabled = $(this).is(":checked");
