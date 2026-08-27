@@ -1582,7 +1582,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.28.7'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.28.8'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1824,15 +1824,16 @@ function updatePsnapEntries() {
 }
 
 // ===== 整合悬浮入口（📇 预设开关快照 + 🏷️ 修复标签，两球合一）=====
-// 任一个浮球开关打开即显示；点击入口弹出小菜单（实色底），拖拽带边界钳制（不消失出视口）+ 位置记忆。
-// 标签修复的独立浮球通过 window.__kimiComboFloat.showTag 抑制（本模块加载即接管）。
+// 竖向胶囊条：点击展开/收起（高度动画），展开露出各功能 emoji 项，点项即开窗或一键修复。
+// 只勾选任一浮球开关即出现；勾几个出现几个；拖拽带边界钳制（不消失出视口）+ 位置记忆。
+// 标签修复的独立浮球在整合模式激活时由 tag-fixer.js 抑制（window.__kimiComboFloat）。
 function updateComboFloat() {
     window.__kimiComboFloat = {
         showPsnap: !!settings.psnapShowFloat,
         showTag: !!(extension_settings && extension_settings.tag_auto_fixer && extension_settings.tag_auto_fixer.showFloatingBtn),
     };
     $('#kimi_combo_float').remove();
-    $('#kimi_combo_menu').remove();
+    $('#tag_auto_fixer_float_btn').remove();
     $(document).off('.kc');
     $(window).off('.kc');
     if (!window.__kimiComboFloat.showPsnap && !window.__kimiComboFloat.showTag) return;
@@ -1840,90 +1841,87 @@ function updateComboFloat() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem('kimi_combo_pos') || 'null'); } catch (e) { }
 
-    const iconHtml = (window.__kimiComboFloat.showPsnap && window.__kimiComboFloat.showTag)
-        ? '<span style="font-size:13px;line-height:1">📇</span><span style="font-size:13px;line-height:1;margin-left:3px">🏷️</span>'
-        : (window.__kimiComboFloat.showPsnap ? '📇' : '🏷️');
+    const items = [];
+    if (window.__kimiComboFloat.showPsnap) items.push({ act: 'psnap', emo: '📇', label: t('psnapTitle') });
+    if (window.__kimiComboFloat.showTag) items.push({ act: 'tag', emo: '🏷️', label: '修复标签' });
 
-    const $btn = $(`<div id="kimi_combo_float" title="${t('psnapTitle')} / 修复标签（可拖拽，点击展开）" style="
-        position:fixed;z-index:9600;display:flex;align-items:center;justify-content:center;gap:2px;
-        min-width:44px;height:44px;padding:0 9px;border-radius:14px;
-        background:rgba(128,128,128,0.35);color:#fff;font-size:20px;line-height:1;
-        cursor:grab;box-shadow:0 2px 8px rgba(0,0,0,0.3);opacity:0.85;user-select:none;
-        ${saved ? `left:${saved.x}px;top:${saved.y}px;right:auto` : 'right:18px;bottom:150px'}
-    ">${iconHtml}</div>`).appendTo('body');
+    const W = 46, HEAD = 40, ITEM = 38;
+    const $box = $(`<div id="kimi_combo_float" style="
+        position:fixed;z-index:9600;width:${W}px;overflow:hidden;
+        border:1px solid var(--SmartThemeBorderColor);border-radius:14px;
+        background:rgba(128,128,128,0.32);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+        box-shadow:0 3px 10px rgba(0,0,0,.3);user-select:none;
+        ${saved ? `left:${saved.x}px;top:${saved.y}px;right:auto;bottom:auto` : 'right:16px;bottom:150px'}
+    "></div>`).appendTo('body');
 
-    const menuItems = [];
-    if (window.__kimiComboFloat.showPsnap) menuItems.push(['psnap', '📇 ' + t('psnapTitle')]);
-    if (window.__kimiComboFloat.showTag) menuItems.push(['tag', '🏷️ 修复标签']);
-    const $menu = $(`<div id="kimi_combo_menu" style="
-        position:fixed;z-index:9601;display:none;min-width:172px;
-        border:1px solid var(--SmartThemeBorderColor);border-radius:10px;
-        background:var(--SmartThemeBlurTintColor,#16161a);color:var(--SmartThemeBodyColor);
-        box-shadow:0 8px 24px rgba(0,0,0,.5);padding:5px;
-    ">${menuItems.map(([, label]) =>
-        `<div class="kimi-combo-item" style="display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:.85em;white-space:nowrap">${label}</div>`
-    ).join('')}</div>`).appendTo('body');
-    $menu.find('.kimi-combo-item').on('click', function () {
-        const act = menuItems[$(this).index()][0];
-        $menu.hide();
+    // 头部：拖拽把手 + 展开/收起
+    $box.append(`<div class="kcf-head" style="height:${HEAD}px;display:flex;align-items:center;justify-content:center;gap:2px;cursor:grab;font-size:15px;color:var(--SmartThemeBodyColor,#eee);border-bottom:1px solid rgba(255,255,255,.08)">
+        <span style="font-size:12px;opacity:.6">⠿</span>
+    </div>`);
+
+    // 功能项（垂直展开区）
+    const $items = $(`<div class="kcf-body" style="overflow:hidden;height:0;background:rgba(0,0,0,.12)"></div>`).appendTo($box);
+    items.forEach(it => {
+        $items.append(`<div class="kcf-item" data-act="${it.act}" style="
+            height:${ITEM}px;display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1;
+            cursor:pointer;border-bottom:1px solid rgba(255,255,255,.07);position:relative
+        " title="${it.label}">${it.emo}</div>`);
+    });
+    $items.find('.kcf-item').on('mouseenter', function () { $(this).css('background', 'rgba(128,128,128,.22)'); });
+    $items.find('.kcf-item').on('mouseleave', function () { $(this).css('background', ''); });
+
+    // 展开/收起状态
+    let expanded = false;
+    function setExpanded(on) {
+        expanded = on;
+        const h = on ? items.length * ITEM : 0;
+        $items.css({ height: h + 'px', transition: 'height .22s ease' });
+        $box.css('box-shadow', on ? '0 6px 18px rgba(0,0,0,.4)' : '0 3px 10px rgba(0,0,0,.3)');
+    }
+    setExpanded(false);
+
+    // 点击头部：展开/收起
+    $box.find('.kcf-head').on('click.kc', function () { setExpanded(!expanded); });
+
+    // 点击功能项：开窗 / 一键修复，随后收起
+    $items.find('.kcf-item').on('click.kc', function () {
+        const act = $(this).attr('data-act');
+        setExpanded(false);
         if (act === 'psnap') togglePsnapPanel();
         else if (act === 'tag') { try { window.__stTagFixLast && window.__stTagFixLast(); } catch (e) { } }
     });
-    $menu.find('.kimi-combo-item').css('cursor', 'pointer');
-    $menu.find('.kimi-combo-item').on('mouseenter', function () { $(this).css('background', 'rgba(128,128,128,.15)'); });
-    $menu.find('.kimi-combo-item').on('mouseleave', function () { $(this).css('background', ''); });
 
-    function placeMenu() {
-        if ($menu.css('display') === 'none') return;
-        const br = $btn[0].getBoundingClientRect();
-        const mw = $menu[0].offsetWidth;
-        const mh = $menu[0].offsetHeight;
-        let x = Math.min(br.left, window.innerWidth - mw - 6);
-        let y = br.top - mh - 8;
-        if (y < 6) y = br.bottom + 8;
-        $menu.css({ left: Math.max(x, 4) + 'px', top: y + 'px' });
-    }
-    function toggleMenu() {
-        if ($menu.css('display') === 'none') { $menu.show(); placeMenu(); }
-        else $menu.hide();
-    }
-    $(document).on('mousedown.ks.kc touchstart.kc', function (e) {
-        if (!$(e.target).closest('#kimi_combo_float, #kimi_combo_menu').length) $menu.hide();
-    });
-
+    // 拖拽（3px 阈值 + 边界钳制 + 位置记忆）；点击头部不拖拽时是展开
     let dragging = false, dx, dy, startX, startY;
-    $btn.on('mousedown touchstart', function (e) {
+    $box.find('.kcf-head').on('mousedown.kc touchstart.kc', function (e) {
         dragging = false;
         const ev = e.touches ? e.touches[0] : e;
         startX = ev.clientX;
         startY = ev.clientY;
-        const pos = $btn.position();
+        const pos = $box.position();
         dx = startX - pos.left;
         dy = startY - pos.top;
-        $btn.css({ cursor: 'grabbing', opacity: '1', transition: 'none' });
+        $box.css({ cursor: 'grabbing', transition: 'none' });
     });
     $(document).on('mousemove.kc touchmove.kc', function (e) {
-        if (!$btn[0] || dx === undefined) return;
+        if (!$box[0] || dx === undefined) return;
         const ev = e.touches ? e.touches[0] : e;
         if (Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3) dragging = true;
         if (!dragging) return;
         e.preventDefault();
-        const maxX = window.innerWidth - $btn.outerWidth() - 2;
-        const maxY = window.innerHeight - $btn.outerHeight() - 2;
+        const maxX = window.innerWidth - $box.outerWidth() - 2;
+        const maxY = window.innerHeight - $box.outerHeight() - 2;
         const lx = Math.min(Math.max(ev.clientX - dx, 2), Math.max(maxX, 2));
         const ly = Math.min(Math.max(ev.clientY - dy, 2), Math.max(maxY, 2));
-        $btn.css({ left: lx + 'px', top: ly + 'px', right: 'auto', bottom: 'auto' });
+        $box.css({ left: lx + 'px', top: ly + 'px', right: 'auto', bottom: 'auto' });
         try { localStorage.setItem('kimi_combo_pos', JSON.stringify({ x: lx, y: ly })); } catch (err) { }
-        $menu.hide();
     });
     $(document).on('mouseup.kc touchend.kc', function () {
-        if (!$btn[0]) return;
-        $btn.css({ cursor: 'grab', opacity: '0.85', transition: 'opacity 0.2s' });
+        if (!$box[0]) return;
+        $box.css({ cursor: '', transition: '' });
         dx = undefined;
     });
-    $btn.on('click.kc', function () {
-        if (!dragging) toggleMenu();
-    });
+
     // 窗口缩放：把入口钳回视口内（防变窄/缩放后消失到边界外）
     $(window).on('resize.kc', function () {
         const $b = $('#kimi_combo_float');

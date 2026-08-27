@@ -1447,7 +1447,7 @@ jQuery(async () => {
 		$(`#${floatBtnId}`).remove();
 		if (!settings.showFloatingBtn) return;
 		// 被「余温工具箱」整合悬浮入口接管时，本插件的独立浮球不再显示（避免右下角两个球）
-		if (window.__kimiComboFloat && window.__kimiComboFloat.showTag) return;
+		if (window.__kimiComboFloat && (window.__kimiComboFloat.showPsnap || window.__kimiComboFloat.showTag)) return;
 		$('body').append(`<div id="${floatBtnId}" title="修复标签（可拖拽）" style="
 			position:fixed;bottom:80px;right:20px;z-index:9999;
 			width:36px;height:36px;border-radius:50%;background:var(--accent-color, #888);
@@ -1565,6 +1565,11 @@ jQuery(async () => {
 	$(`#${extensionName}_chk_float`).on('change', function() {
 		settings.showFloatingBtn = this.checked;
 		saveSettingsDebounced();
+		// 整合悬浮入口接管时：不显示独立球，通知余温工具箱重建条目
+		if (window.__kimiComboFloat && (window.__kimiComboFloat.showPsnap || window.__kimiComboFloat.showTag)) {
+			window.__kimiRefreshCombo && window.__kimiRefreshCombo();
+			return;
+		}
 		updateFloatingBtn();
 	});
 	$(`#${extensionName}_chk_menu`).on('change', function() {
