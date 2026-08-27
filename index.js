@@ -1584,7 +1584,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.29.0'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.29.1'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1962,7 +1962,7 @@ function updateComboFloat() {
     const ACTION_DEFS = [
         { key: 'tag', ico: 'fa-wand-magic-sparkles', label: t('tagFixNow'), color: '#6fce6f' },
     ].filter(a => (settings.floatShowTagFix && a.key === 'tag'));
-    const panelDefs = KIMI_CARD_DEFS;
+    const panelDefs = KIMI_CARD_DEFS.filter(d => !(settings.floatShowTagFix && d.key === 'tag')); // tag 图标由功能区提供，面板区不重复
     const rowCount = ACTION_DEFS.length + panelDefs.length + (ACTION_DEFS.length ? 1 : 0);
 
     const $items = $(`<div class="kcf-body" style="overflow:hidden;height:0;background:rgba(0,0,0,.16)"></div>`).appendTo($box);
