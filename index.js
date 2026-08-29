@@ -1589,7 +1589,15 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.30.4'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.31.0'; // 与 manifest.json version 同步
+// 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
+try {
+    const __selfUrl = new URL(import.meta.url);
+    const __parts = __selfUrl.pathname.split('/').filter(Boolean);
+    __parts.pop(); // 去掉 index.js
+    window.__kimiSelfFolder = __parts[__parts.length - 1] || 'st-kimi-reasoning-injector'; // 文件夹名（如 st-kimi-reasoning-injector）
+} catch { window.__kimiSelfFolder = 'st-kimi-reasoning-injector'; }
+const KIMI_REPO_URL = 'https://gitee.com/satosaki/st-kimi-reasoning-injector.git'; // 重装兜底用
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1649,33 +1657,59 @@ async function fetchRemoteVersion(report) {
 }
 async function doSelfUpdate(btn, remoteVer, auto) {
     if (btn) { btn.disabled = true; btn.textContent = '⏳ 更新中…'; }
-    try {
-        // extensionName 传纯目录名（官方 basePath 本身含 third-party\ 层，前缀由接口自己拼；
-        // 实测纯名/带/前缀均可 200，纯名是官方语义）。global 双路：false=用户目录，404 自动改 true=全局目录。
-        const updateBody = (global) => JSON.stringify({ extensionName: 'st-kimi-reasoning-injector', global });
-        let resp = await fetch('/api/extensions/update', {
-            method: 'POST',
-            headers: getRequestHeaders(),
-            body: updateBody(false),
-        });
-        if (resp.status === 404) {
-            const msg = await resp.text().catch(() => '');
-            console.warn('[余温工具箱] 用户目录未找到插件，尝试全局目录:', msg.slice(0, 120));
+    const selfName = window.__kimiSelfFolder || 'st-kimi-reasoning-injector';
+    const fullName = 'third-party/' + selfName;
+    // 四组合穷举（与扩展管理页更新同款）：完整名/纯名 × 用户全局。任一 200 即成功。
+    const combos = [
+        { n: fullName, g: false }, { n: selfName, g: false },
+        { n: fullName, g: true }, { n: selfName, g: true },
+    ];
+    let lastErr = null;
+    for (const c of combos) {
+        let resp;
+        try {
             resp = await fetch('/api/extensions/update', {
                 method: 'POST',
                 headers: getRequestHeaders(),
-                body: updateBody(true),
+                body: JSON.stringify({ extensionName: c.n, global: c.g }),
             });
-        }
-        if (!resp.ok) throw new Error('HTTP ' + resp.status + ': ' + (await resp.text()).slice(0, 120));
+        } catch (e) { lastErr = e; continue; }
+        if (resp.status === 404) continue; // 这个目录组合不存在
+        if (!resp.ok) { lastErr = new Error('HTTP ' + resp.status); continue; }
         const j = await resp.json().catch(() => ({}));
         if (j.isUpToDate) { if (btn) btn.textContent = '✓ 已是最新'; return; }
         if (btn) btn.textContent = '✅ 已更新';
         try { toastr.success('✅ 插件已更新到 v' + remoteVer + '，2 秒后自动刷新', null, { timeOut: 4000 }); } catch (e) { }
         setTimeout(() => location.reload(), 2200);
-    } catch (e) {
-        if (btn) { btn.disabled = false; btn.textContent = '⬆ 可更新至 v' + remoteVer; }
-        try { toastr.error('自更新失败：' + e.message + (auto ? '<br>将在下次启动时重试' : '<br>可到「扩展管理」手动点更新'), null, { escapeHtml: false, timeOut: 6000 }); } catch (e2) { }
+        return;
+    }
+    // 阶段2：update 全灭（目录缺 git 元数据 / pull 失败等）→ 自动删旧 + URL 重装
+    try { toastr.info('常规更新不可用，正在通过重装方式更新…', null, { timeOut: 6000 }); } catch (e) { }
+    if (btn) btn.textContent = '⏳ 重装更新中…';
+    for (const g of [false, true]) {
+        try {
+            const rd = await fetch('/api/extensions/delete', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({ extensionName: selfName, global: g }),
+            });
+            if (rd.ok) break;
+        } catch (e) { }
+    }
+    try {
+        const ri = await fetch('/api/extensions/install', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({ url: KIMI_REPO_URL, global: true }),
+        });
+        if (!ri.ok) throw new Error('HTTP ' + ri.status);
+        try { toastr.success('✅ 已通过重装方式更新到 v' + remoteVer + '，3 秒后刷新', null, { timeOut: 4000 }); } catch (e) { }
+        setTimeout(() => location.reload(), 3000);
+        return;
+    } catch (e3) {
+        if (btn) { btn.disabled = false; btn.textContent = '⬆ 可更新'; }
+        try { toastr.error('自更新与重装均失败：' + ((e3 && e3.message) || e3) + (auto ? '<br>将在下次启动时重试' : '<br>请手动到扩展管理删除后重装'), null, { escapeHtml: false, timeOut: 6000 }); } catch (e2) { }
+        return;
     }
 }
 async function checkUpdate() {
@@ -1701,14 +1735,29 @@ async function checkUpdate() {
     } catch (e) { /* 网络失败静默 */ }
 }
 // 手动检查：⏳ → ✓可更新/✅已最新/⚠本地更高/❌失败；再点还原（st-chat-sync 同款状态机）
+// 检测失败后再点：直接走官方更新（更新不依赖检测成功，多为本次网络抖动，不给用户留"点了没反应"）
 async function manualCheckUpdate(btn) {
     if (btn.dataset.busy) return;
-    if (btn.dataset.done) { btn.textContent = '检查更新'; btn.style.color = ''; delete btn.dataset.done; delete btn.dataset.result; return; }
+    if (btn.dataset.forceUpdate) {
+        const ver = btn.dataset.forceUpdVer || '最新版';
+        delete btn.dataset.forceUpdate;
+        delete btn.dataset.forceUpdVer;
+        delete btn.dataset.done;
+        doSelfUpdate(btn, ver, false);
+        return;
+    }
+    if (btn.dataset.done) {
+        btn.textContent = '检查更新'; btn.style.color = '';
+        delete btn.dataset.done; delete btn.dataset.result;
+        return;
+    }
     btn.dataset.busy = '1';
     btn.textContent = '⏳'; btn.title = '正在检测…';
     let txt = '', title2 = '', cls = '';
+    let failedRemoteVer = '';
     try {
         const remoteVer = await fetchRemoteVersion(true);
+        failedRemoteVer = remoteVer;
         const cmp = compareVer(remoteVer, PLUGIN_VERSION);
         if (cmp > 0) { txt = '✓ 可更新至 v' + remoteVer; cls = 'newer'; }
         else if (cmp === 0) { txt = '✅ 已是最新'; cls = 'same'; }
@@ -1721,6 +1770,11 @@ async function manualCheckUpdate(btn) {
     btn.textContent = txt; btn.title = title2;
     btn.dataset.result = cls; btn.dataset.done = '1';
     delete btn.dataset.busy;
+    // 检测失败：再点按钮直接尝试更新到最新（不带版本号也能走官方端口）
+    if (cls === 'fail') {
+        btn.dataset.forceUpdate = '1';
+        btn.dataset.forceUpdVer = failedRemoteVer;
+    }
 }
 window.__ywManualCheck = manualCheckUpdate;
 // 启动时检查 + 手动检查按钮
