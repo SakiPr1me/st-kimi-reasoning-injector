@@ -1589,7 +1589,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.30.3'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.30.4'; // 与 manifest.json version 同步
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
@@ -1650,12 +1650,13 @@ async function fetchRemoteVersion(report) {
 async function doSelfUpdate(btn, remoteVer, auto) {
     if (btn) { btn.disabled = true; btn.textContent = '⏳ 更新中…'; }
     try {
-        // 双路重试：官方 update 接口靠 global 参数定位插件目录（用户目录/全局目录）。
-        // 本插件可能装在两处任一，先按用户目录查，404（装全局目录）就改用全局目录重试。
+        // extensionName 传纯目录名（官方 basePath 本身含 third-party\ 层，前缀由接口自己拼；
+        // 实测纯名/带/前缀均可 200，纯名是官方语义）。global 双路：false=用户目录，404 自动改 true=全局目录。
+        const updateBody = (global) => JSON.stringify({ extensionName: 'st-kimi-reasoning-injector', global });
         let resp = await fetch('/api/extensions/update', {
             method: 'POST',
             headers: getRequestHeaders(),
-            body: JSON.stringify({ extensionName: '/st-kimi-reasoning-injector', global: false }),
+            body: updateBody(false),
         });
         if (resp.status === 404) {
             const msg = await resp.text().catch(() => '');
@@ -1663,7 +1664,7 @@ async function doSelfUpdate(btn, remoteVer, auto) {
             resp = await fetch('/api/extensions/update', {
                 method: 'POST',
                 headers: getRequestHeaders(),
-                body: JSON.stringify({ extensionName: '/st-kimi-reasoning-injector', global: true }),
+                body: updateBody(true),
             });
         }
         if (!resp.ok) throw new Error('HTTP ' + resp.status + ': ' + (await resp.text()).slice(0, 120));
