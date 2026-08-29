@@ -1,5 +1,5 @@
 import { extension_settings } from "../../../extensions.js";
-import { saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, stopGeneration, Generate } from "../../../../script.js";
+import { saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, stopGeneration, Generate, getRequestHeaders } from "../../../../script.js";
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
 import { toggleDrawer } from "../../../utils.js";
 import { stTagMountSettings } from "./tag-fixer.js";
@@ -1589,7 +1589,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.31.1'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.31.2'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -1770,8 +1770,8 @@ async function manualCheckUpdate(btn) {
     btn.textContent = txt; btn.title = title2;
     btn.dataset.result = cls; btn.dataset.done = '1';
     delete btn.dataset.busy;
-    // 检测失败：再点按钮直接尝试更新到最新（不带版本号也能走官方端口）
-    if (cls === 'fail') {
+    // 可更新 / 检测失败：再点按钮直接执行更新到最新（不需要再次检测）
+    if (cls === 'newer' || cls === 'fail') {
         btn.dataset.forceUpdate = '1';
         btn.dataset.forceUpdVer = failedRemoteVer;
     }
