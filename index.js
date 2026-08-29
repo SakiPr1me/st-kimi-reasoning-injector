@@ -1589,7 +1589,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.31.3'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.31.4'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -1655,6 +1655,20 @@ async function fetchRemoteVersion(report) {
     const failed = results.filter(r => r.status === 'rejected');
     throw (failed[0] && failed[0].reason) || new Error('all sources failed');
 }
+// 跨插件协调刷新：多个插件同时自更新时只刷新一次，且由「最后完成的插件」触发，
+// 避免先完成的插件刷掉页面时其他插件还在写盘。约定 window 级函数，st-chat-sync 等插件可复用。
+if (typeof window.__kimiCoordReload !== 'function') {
+    window.__kimiCoordReload = function (ms) {
+        const delay = Math.max(300, ms || 3000);
+        if (window.__kimiReloadFired) return; // 已在刷新/已刷过，不再重复
+        if (window.__kimiReloadTimer) clearTimeout(window.__kimiReloadTimer); // 重置：最后调用者负责刷新
+        window.__kimiReloadTimer = setTimeout(() => {
+            window.__kimiReloadFired = true;
+            try { location.reload(); } catch (e) { }
+        }, delay);
+    };
+    window.__kimiReloadFired = false;
+}
 async function doSelfUpdate(btn, remoteVer, auto) {
     if (btn) { btn.disabled = true; btn.textContent = '⏳ 更新中…'; }
     const selfName = window.__kimiSelfFolder || 'st-kimi-reasoning-injector';
@@ -1679,8 +1693,8 @@ async function doSelfUpdate(btn, remoteVer, auto) {
         const j = await resp.json().catch(() => ({}));
         if (j.isUpToDate) { if (btn) btn.textContent = '✓ 已是最新'; return; }
         if (btn) btn.textContent = '✅ 已更新';
-        try { toastr.success('✅ 插件已更新到 v' + remoteVer + '，2 秒后自动刷新', null, { timeOut: 4000 }); } catch (e) { }
-        setTimeout(() => location.reload(), 2200);
+        try { toastr.success('✅ 插件已更新到 v' + remoteVer + '，即将自动刷新', null, { timeOut: 4000 }); } catch (e) { }
+        window.__kimiCoordReload(3000); // 协调刷新：多插件并发更新时由最后完成者统一刷新
         return;
     }
     // 阶段2：update 全灭（目录缺 git 元数据 / pull 失败等）→ 自动删旧 + URL 重装
@@ -1703,8 +1717,8 @@ async function doSelfUpdate(btn, remoteVer, auto) {
             body: JSON.stringify({ url: KIMI_REPO_URL, global: true }),
         });
         if (!ri.ok) throw new Error('HTTP ' + ri.status);
-        try { toastr.success('✅ 已通过重装方式更新到 v' + remoteVer + '，3 秒后刷新', null, { timeOut: 4000 }); } catch (e) { }
-        setTimeout(() => location.reload(), 3000);
+        try { toastr.success('✅ 已通过重装方式更新到 v' + remoteVer + '，即将自动刷新', null, { timeOut: 4000 }); } catch (e) { }
+        window.__kimiCoordReload(3000); // 协调刷新：多插件并发更新时由最后完成者统一刷新
         return;
     } catch (e3) {
         if (btn) { btn.disabled = false; btn.textContent = '⬆ 可更新'; }
