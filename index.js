@@ -4,6 +4,7 @@ import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../
 import { toggleDrawer } from "../../../utils.js";
 import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js";
+import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 
 
@@ -82,6 +83,9 @@ const defaultSettings = {
     psnapShowFloat: true,            // 整合悬浮条入口（悬浮条设置卡控制内部显隐）
     floatBarEnabled: true,           // 悬浮窗总开关：关闭则悬浮条整体隐藏
     floatShowTagFix: true,           // 悬浮条功能区：一键修复标签（直接执行）
+    floatShowCline: true,            // 悬浮条功能区：Cline 提供商入口（点击打开选择弹窗，自动开启指定）
+    floatRouteBadge: true,           // 悬浮条头部迷你徽标：显示最近一次实际路由的上游
+    clineRouteAlert: false,          // 实际路由与指定不符时提醒（默认关）
     autoUpdate: true,                // 默认自动更新：每次检测到云端有新版直接更新到最新
     floatPanelKeys: ['inject', 'model', 'reroll', 'beautify', 'autoStop', 'word', 'psnap', 'tag', 'api', 'misc', 'fix'], // 悬浮条面板区显示哪些卡
     floatPanelAllKey: 'all',
@@ -198,7 +202,7 @@ const UI = {
         apiModel: "模型名", apiKey: "密钥", apiAge: "{d} 天 {h} 小时",
         apiNoPool: "池为空：先添加接口", apiNotCustom: "当前不是 Custom(OpenAI兼容) 连接，API 池不生效",
         apiBannerMsg: "检测到额度用尽（limit）。", apiBannerSwitch: "⇄ 切换到 {name}（{n}/{total}）", apiSwitched: "已切换到 {name}（{n}/{total}）",
-        apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（感谢啊一串信息源）", clineModelOverride: "积分模型名前缀覆写", clineMethodLabel: "指定方式：订阅指定提供商（感谢啊一串信息源）", clineUpTitle: "上移（调整自动切换顺序）", clineDownTitle: "下移（调整自动切换顺序）", upBtn: "📊 各上游实时状况", upTitle: "kimi-k3 各上游实时状况", upLoading: "加载中…（数据源 OpenRouter，免key）", upRefreshing: "刷新中…", upFailed: "获取失败：国内网络可能无法直连 openrouter.ai，请挂梯子后点 ↻ 重试", upSwitch: "切", upProvider: "提供商", upIn: "输入$/M", upOut: "输出$/M", upCache: "缓存读$/M", upLat: "延迟", upTps: "吞吐", upUp5m: "可用(5m)", upUptime: "可用率(1d)", upHint: "✓=可在本插件切换 · ★=当前 · 排序：可切换优先、可用率降序。手动追加自定义提供商（上方输入框）后，对应行也会出现切按钮。数据来自 OpenRouter 公开接口，仅供选型参考。", clineDSTip: "用Cline吃DeepSeek，可指定 deepseek 作为上游（官方缓存生效）！", clineDSBtn: "⇄ 一键切换 deepseek 上游", clineDSSwitched: "已切换：提供商=deepseek（走官方上游带缓存）", clineOverrideWarn: "⚠️ 啊一串实测：消耗积分的模式！限定指定提供商，如果你不知道这是什么就不要勾选", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「模型参数」里勾选 使用 Cline 提供商指定", clinePassWarn: "⚠️ 检测到模型名带 cline-pass/ 前缀：提供商指定不会生效（实测全部被忽略），请改用 moonshotai/kimi-k3 等厂商前缀", clineHint: "开启后每次请求自动注入指定提供商。请删掉附加参数里的任何内容！仅 cline 渠道需要，其它渠道请关闭。不同渠道K3风味不同，自行测试。", psnapTitle: "预设条目开关快照", psnapNamePh: "方案名…", psnapSaveBtn: "保存", psnapApply: "切", psnapDel: "✕", psnapEmpty: "还没有保存的方案", psnapRecovery: "恢复到最近一次未快照时的状态", psnapSaved: "已保存「{n}」", psnapNeedName: "请先填写方案名", psnapMenuEntry: "扩展菜单入口", psnapEntryLabel: "入口：", psnapFloatEntry: "悬浮按钮入口", psnapNoPreset: "未找到预设数据", psnapRecApply: "恢复", psnapRecTime: "可恢复快照", floatCardTitle: "悬浮条设置", floatCardTag: "一键修复标签（直接执行）", tagFixNow: "一键修复标签", baseTitle: "基础设置", autoUpdateLabel: "自动更新插件至最新", floatBarEnable: "开启悬浮窗", floatPanelClear: "清空", floatFuncLabel: "功能型（点图标直接执行）", floatPanelLabel: "面板型（点图标打开设置浮窗）", floatPanelAll: "全选面板",
+        apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（感谢啊一串信息源）", clineModelOverride: "积分模型名前缀覆写", clineMethodLabel: "指定方式：订阅指定提供商（感谢啊一串信息源）", clineUpTitle: "上移（调整自动切换顺序）", clineDownTitle: "下移（调整自动切换顺序）", upBtn: "📊 各上游实时状况", upTitle: "kimi-k3 各上游实时状况", upLoading: "加载中…（数据源 OpenRouter，免key）", upRefreshing: "刷新中…", upFailed: "获取失败：国内网络可能无法直连 openrouter.ai，请挂梯子后点 ↻ 重试", upSwitch: "切", upProvider: "提供商", upIn: "输入$/M", upOut: "输出$/M", upCache: "缓存读$/M", upLat: "延迟", upTps: "吞吐", upUp5m: "可用(5m)", upUptime: "可用率(1d)", upHint: "✓=可在本插件切换 · ★=当前 · 排序：可切换优先、可用率降序。手动追加自定义提供商（上方输入框）后，对应行也会出现切按钮。数据来自 OpenRouter 公开接口，仅供选型参考。", clineDSTip: "用Cline吃DeepSeek，可指定 deepseek 作为上游（官方缓存生效）！", clineDSBtn: "⇄ 一键切换 deepseek 上游", clineDSSwitched: "已切换：提供商=deepseek（走官方上游带缓存）", clineOverrideWarn: "⚠️ 啊一串实测：消耗积分的模式！限定指定提供商，如果你不知道这是什么就不要勾选", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「模型参数」里勾选 使用 Cline 提供商指定", clinePassWarn: "⚠️ 检测到模型名带 cline-pass/ 前缀：提供商指定不会生效（实测全部被忽略），请改用 moonshotai/kimi-k3 等厂商前缀", clineHint: "开启后每次请求自动注入指定提供商。请删掉附加参数里的任何内容！仅 cline 渠道需要，其它渠道请关闭。不同渠道K3风味不同，自行测试。", psnapTitle: "预设条目开关快照", psnapNamePh: "方案名…", psnapSaveBtn: "保存", psnapApply: "切", psnapDel: "✕", psnapEmpty: "还没有保存的方案", psnapRecovery: "恢复到最近一次未快照时的状态", psnapSaved: "已保存「{n}」", psnapNeedName: "请先填写方案名", psnapMenuEntry: "扩展菜单入口", psnapEntryLabel: "入口：", psnapFloatEntry: "悬浮按钮入口", psnapNoPreset: "未找到预设数据", psnapRecApply: "恢复", psnapRecTime: "可恢复快照", floatCardTitle: "悬浮条设置", floatCardTag: "一键修复标签（直接执行）", tagFixNow: "一键修复标签", baseTitle: "基础设置", autoUpdateLabel: "自动更新插件至最新", floatBarEnable: "开启悬浮窗", floatPanelClear: "清空", floatFuncLabel: "功能型（点图标直接执行）", floatPanelLabel: "面板型（点图标打开设置浮窗）", floatPanelAll: "全选面板", routeLabel: "本次Cline上游：", routeNone: "暂无数据", floatClineEntry: "Cline 提供商入口（点开选择）", floatRouteBadge: "悬浮条显示上游徽标", clineRouteAlertLabel: "实际路由与指定不符时提醒",
         apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效。切换会同步改写 URL、密钥、模型名 三项，预置/采样等其它参数一概不动；命中 limit/quota/rate 即触发。"
         },
     en: {
@@ -258,7 +262,7 @@ const UI = {
         apiModel: "Model", apiKey: "Key", apiAge: "{d}d {h}h",
         apiNoPool: "Pool is empty: add an endpoint first", apiNotCustom: "Not a Custom (OpenAI-compatible) connection - pool inactive",
         apiBannerMsg: "Quota limit hit.", apiBannerSwitch: "⇄ Switch to {name} ({n}/{total})", apiSwitched: "Switched to {name} ({n}/{total})",
-        apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (credit: the source)", clineModelOverride: "Credits model prefix override", clineMethodLabel: "Method: subscription provider routing (credit: the source)", clineUpTitle: "Move up (auto-switch order)", clineDownTitle: "Move down (auto-switch order)", upBtn: "📊 Live upstream status", upTitle: "kimi-k3 upstream live status", upLoading: "Loading... (OpenRouter, no key needed)", upRefreshing: "Refreshing...", upFailed: "Failed to fetch - openrouter.ai may be unreachable from your network; retry with ↻", upSwitch: "Use", upProvider: "Provider", upIn: "In $/M", upOut: "Out $/M", upCache: "Cache $/M", upLat: "Latency", upTps: "Throughput", upUp5m: "Up(5m)", upUptime: "Uptime(1d)", upHint: "✓ = switchable here · ★ = current · latency/throughput = last 30 min (blank when no traffic) · sorted: switchable first, uptime desc. Data from OpenRouter public API.", snapNamePh: "Profile name…", snapSaveBtn: "💾 Save current", snapApply: "Apply", snapDel: "Delete profile", snapEmpty: "No saved profiles yet: enter a name and hit Save", snapRecovery: "↩ Auto-recovery snapshot (saved before last switch)", snapSaved: "Saved profile \"{n}\"", snapNeedName: "Enter a profile name first", clineDSTip: "Use Cline for DeepSeek with deepseek as the upstream (official caching works)!", clineDSBtn: "⇄ One-click deepseek upstream", clineDSSwitched: "Switched: provider=deepseek (official upstream with caching)", clineOverrideWarn: "WARNING (tested): credits only - locks provider and overrides model to a vendor prefix like moonshotai/kimi-k3.", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Model Settings first", clinePassWarn: "Model has cline-pass/ prefix: provider routing will NOT work (tested). Use a vendor prefix like moonshotai/kimi-k3", clineHint: "Injects the selected provider into every request. Delete anything in Extra Parameters! Only needed for the cline channel; turn off elsewhere. Different providers give K3 different flavors - test them yourself.", psnapTitle: "Preset Toggle Snapshots", psnapNamePh: "Profile name…", psnapSaveBtn: "Save", psnapApply: "Use", psnapDel: "✕", psnapEmpty: "No saved profiles", psnapRecovery: "Restore to last unsaved state", psnapSaved: "Saved \"{n}\"", psnapNeedName: "Enter a profile name first", psnapMenuEntry: "Extensions menu entry", psnapEntryLabel: "Entries:", psnapFloatEntry: "Floating button entry", psnapNoPreset: "Preset data not found", psnapRecApply: "Restore", psnapRecTime: "Recovery snapshot", floatCardTitle: "Floating Bar", floatCardTag: "One-click tag fix (direct run)", tagFixNow: "Fix tags now", baseTitle: "Basics", autoUpdateLabel: "Auto-update plugin to latest", floatBarEnable: "Enable floating bar", floatPanelClear: "Clear", floatFuncLabel: "Actions (run directly)", floatPanelLabel: "Panels (open settings popup)", floatPanelAll: "Select all panels",
+        apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (credit: the source)", clineModelOverride: "Credits model prefix override", clineMethodLabel: "Method: subscription provider routing (credit: the source)", clineUpTitle: "Move up (auto-switch order)", clineDownTitle: "Move down (auto-switch order)", upBtn: "📊 Live upstream status", upTitle: "kimi-k3 upstream live status", upLoading: "Loading... (OpenRouter, no key needed)", upRefreshing: "Refreshing...", upFailed: "Failed to fetch - openrouter.ai may be unreachable from your network; retry with ↻", upSwitch: "Use", upProvider: "Provider", upIn: "In $/M", upOut: "Out $/M", upCache: "Cache $/M", upLat: "Latency", upTps: "Throughput", upUp5m: "Up(5m)", upUptime: "Uptime(1d)", upHint: "✓ = switchable here · ★ = current · latency/throughput = last 30 min (blank when no traffic) · sorted: switchable first, uptime desc. Data from OpenRouter public API.", snapNamePh: "Profile name…", snapSaveBtn: "💾 Save current", snapApply: "Apply", snapDel: "Delete profile", snapEmpty: "No saved profiles yet: enter a name and hit Save", snapRecovery: "↩ Auto-recovery snapshot (saved before last switch)", snapSaved: "Saved profile \"{n}\"", snapNeedName: "Enter a profile name first", clineDSTip: "Use Cline for DeepSeek with deepseek as the upstream (official caching works)!", clineDSBtn: "⇄ One-click deepseek upstream", clineDSSwitched: "Switched: provider=deepseek (official upstream with caching)", clineOverrideWarn: "WARNING (tested): credits only - locks provider and overrides model to a vendor prefix like moonshotai/kimi-k3.", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Model Settings first", clinePassWarn: "Model has cline-pass/ prefix: provider routing will NOT work (tested). Use a vendor prefix like moonshotai/kimi-k3", clineHint: "Injects the selected provider into every request. Delete anything in Extra Parameters! Only needed for the cline channel; turn off elsewhere. Different providers give K3 different flavors - test them yourself.", psnapTitle: "Preset Toggle Snapshots", psnapNamePh: "Profile name…", psnapSaveBtn: "Save", psnapApply: "Use", psnapDel: "✕", psnapEmpty: "No saved profiles", psnapRecovery: "Restore to last unsaved state", psnapSaved: "Saved \"{n}\"", psnapNeedName: "Enter a profile name first", psnapMenuEntry: "Extensions menu entry", psnapEntryLabel: "Entries:", psnapFloatEntry: "Floating button entry", psnapNoPreset: "Preset data not found", psnapRecApply: "Restore", psnapRecTime: "Recovery snapshot", floatCardTitle: "Floating Bar", floatCardTag: "One-click tag fix (direct run)", tagFixNow: "Fix tags now", baseTitle: "Basics", autoUpdateLabel: "Auto-update plugin to latest", floatBarEnable: "Enable floating bar", floatPanelClear: "Clear", floatFuncLabel: "Actions (run directly)", floatPanelLabel: "Panels (open settings popup)", floatPanelAll: "Select all panels", routeLabel: "Upstream this time: ", routeNone: "No data yet", floatClineEntry: "Cline provider entry (click to pick)", floatRouteBadge: "Show upstream badge on bar", clineRouteAlertLabel: "Alert when route mismatches",
         apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections. Switching syncs three fields: URL, key and model name - presets/sampling untouched. Triggers on limit/quota/rate."
         },
     ko: {
@@ -318,7 +322,7 @@ const UI = {
         apiModel: "모델명", apiKey: "키", apiAge: "{d}일 {h}시간",
         apiNoPool: "풀이 비어 있음: 먼저 엔드포인트 추가", apiNotCustom: "Custom(OpenAI 호환) 연결이 아님 - 풀 동작 안 함",
         apiBannerMsg: "할당량 초과 감지.", apiBannerSwitch: "⇄ {name}(으)로 전환 ({n}/{total})", apiSwitched: "{name}(으)로 전환됨 ({n}/{total})",
-        apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (정보원 감사)", clineModelOverride: "크레딧 모델 접두사 덮어쓰기", clineMethodLabel: "방식: 구독 공급자 지정", clineUpTitle: "위로(자동 전환 순서)", clineDownTitle: "아래로(자동 전환 순서)", upBtn: "📊 업스트림 실시간 현황", upTitle: "kimi-k3 업스트림 현황", upLoading: "로딩 중... (OpenRouter)", upRefreshing: "새로고침 중...", upFailed: "가져오기 실패 - 네트워크에서 openrouter.ai 접근 불가 가능, ↻로 재시도", upSwitch: "전환", upProvider: "공급자", upIn: "입력$/M", upOut: "출력$/M", upCache: "캐시$/M", upLat: "지연", upTps: "처리량", upUp5m: "가동(5m)", upUptime: "가동률(1d)", upHint: "✓=여기서 전환 가능 · ★=현재 · 지연/처리량=최근 30분 · 정렬: 전환 가능 우선. OpenRouter 공개 API 기준.", snapNamePh: "프로필 이름…", snapSaveBtn: "💾 현재 상태 저장", snapApply: "적용", snapDel: "이 프로필 삭제", snapEmpty: "저장된 프로필 없음: 이름 입력 후 저장", snapRecovery: "↩ 복구 스냅샷(전환 전 자동 저장)", snapSaved: "\"{n}\" 프로필 저장됨", snapNeedName: "먼저 프로필 이름을 입력하세요", clineDSTip: "Cline으로 DeepSeek 사용 - deepseek 업스트림 지정(공식 캐시 적용)!", clineDSBtn: "⇄ 원클릭 deepseek 업스트림", clineDSSwitched: "전환됨: 공급자=deepseek(공식 업스트림, 캐시)", clineOverrideWarn: "주의(실측): 크레딧 소모 - 공급자 지정 및 moonshotai/kimi-k3 등 벤더 접두사로 모델 덮어쓰기.", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 모델 설정에서 Cline 공급자 지정을 체크하세요", clinePassWarn: "모델명에 cline-pass/ 접두사 감지: 공급자 지정 무효(실측). moonshotai/kimi-k3 같은 벤더 접두사 사용", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입합니다. 추가 매개변수의 모든 내용을 삭제하세요! cline 채널에서만 필요, 다른 곳에서는 끄세요. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.", psnapTitle: "프리셋 토글 스냅샷", psnapNamePh: "프로필 이름…", psnapSaveBtn: "저장", psnapApply: "전환", psnapDel: "✕", psnapEmpty: "저장된 프로필 없음", psnapRecovery: "마지막 미스냅샷 상태로 복원", psnapSaved: "\"{n}\" 저장됨", psnapNeedName: "먼저 프로필 이름을 입력하세요", psnapMenuEntry: "확장 메뉴 항목", psnapEntryLabel: "입구:", psnapFloatEntry: "플로팅 버튼 항목", psnapNoPreset: "프리셋 데이터 없음", psnapRecApply: "복원", psnapRecTime: "복구 스냅샷", floatCardTitle: "플로팅 바", floatCardTag: "태그 원클릭 수리 (즉시 실행)", tagFixNow: "태그 지금 수리", baseTitle: "기본 설정", autoUpdateLabel: "플러그인을 최신 버전으로 자동 업데이트", floatBarEnable: "플로팅 바 켜기", floatPanelClear: "비우기", floatFuncLabel: "기능형 (아이콘 즉시 실행)", floatPanelLabel: "패널형 (아이콘 클릭 시 설정 팝업)", floatPanelAll: "모든 패널 선택",
+        apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (정보원 감사)", clineModelOverride: "크레딧 모델 접두사 덮어쓰기", clineMethodLabel: "방식: 구독 공급자 지정", clineUpTitle: "위로(자동 전환 순서)", clineDownTitle: "아래로(자동 전환 순서)", upBtn: "📊 업스트림 실시간 현황", upTitle: "kimi-k3 업스트림 현황", upLoading: "로딩 중... (OpenRouter)", upRefreshing: "새로고침 중...", upFailed: "가져오기 실패 - 네트워크에서 openrouter.ai 접근 불가 가능, ↻로 재시도", upSwitch: "전환", upProvider: "공급자", upIn: "입력$/M", upOut: "출력$/M", upCache: "캐시$/M", upLat: "지연", upTps: "처리량", upUp5m: "가동(5m)", upUptime: "가동률(1d)", upHint: "✓=여기서 전환 가능 · ★=현재 · 지연/처리량=최근 30분 · 정렬: 전환 가능 우선. OpenRouter 공개 API 기준.", snapNamePh: "프로필 이름…", snapSaveBtn: "💾 현재 상태 저장", snapApply: "적용", snapDel: "이 프로필 삭제", snapEmpty: "저장된 프로필 없음: 이름 입력 후 저장", snapRecovery: "↩ 복구 스냅샷(전환 전 자동 저장)", snapSaved: "\"{n}\" 프로필 저장됨", snapNeedName: "먼저 프로필 이름을 입력하세요", clineDSTip: "Cline으로 DeepSeek 사용 - deepseek 업스트림 지정(공식 캐시 적용)!", clineDSBtn: "⇄ 원클릭 deepseek 업스트림", clineDSSwitched: "전환됨: 공급자=deepseek(공식 업스트림, 캐시)", clineOverrideWarn: "주의(실측): 크레딧 소모 - 공급자 지정 및 moonshotai/kimi-k3 등 벤더 접두사로 모델 덮어쓰기.", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 모델 설정에서 Cline 공급자 지정을 체크하세요", clinePassWarn: "모델명에 cline-pass/ 접두사 감지: 공급자 지정 무효(실측). moonshotai/kimi-k3 같은 벤더 접두사 사용", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입합니다. 추가 매개변수의 모든 내용을 삭제하세요! cline 채널에서만 필요, 다른 곳에서는 끄세요. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.", psnapTitle: "프리셋 토글 스냅샷", psnapNamePh: "프로필 이름…", psnapSaveBtn: "저장", psnapApply: "전환", psnapDel: "✕", psnapEmpty: "저장된 프로필 없음", psnapRecovery: "마지막 미스냅샷 상태로 복원", psnapSaved: "\"{n}\" 저장됨", psnapNeedName: "먼저 프로필 이름을 입력하세요", psnapMenuEntry: "확장 메뉴 항목", psnapEntryLabel: "입구:", psnapFloatEntry: "플로팅 버튼 항목", psnapNoPreset: "프리셋 데이터 없음", psnapRecApply: "복원", psnapRecTime: "복구 스냅샷", floatCardTitle: "플로팅 바", floatCardTag: "태그 원클릭 수리 (즉시 실행)", tagFixNow: "태그 지금 수리", baseTitle: "기본 설정", autoUpdateLabel: "플러그인을 최신 버전으로 자동 업데이트", floatBarEnable: "플로팅 바 켜기", floatPanelClear: "비우기", floatFuncLabel: "기능형 (아이콘 즉시 실행)", floatPanelLabel: "패널형 (아이콘 클릭 시 설정 팝업)", floatPanelAll: "모든 패널 선택", routeLabel: "이번 Cline 업스트림: ", routeNone: "데이터 없음", floatClineEntry: "Cline 공급자 입구 (클릭하여 선택)", floatRouteBadge: "플로팅 바에 업스트림 배지 표시", clineRouteAlertLabel: "라우팅 불일치 시 알림",
         apiHint: "키는 로컬 settings.json에 평문 저장됨 - 파일 공유 금지. Custom(OpenAI 호환) 연결에서만 동작. 전환 시 URL·키·모델명 세 항목을 함께 변경, 프리셋/샘플링은 불변. limit/quota/rate 에서 트리거."
         }
 };
@@ -361,6 +365,9 @@ if (settings.promptRecovery === undefined) settings.promptRecovery = null;
 if (settings.psnapShowFloat === undefined) settings.psnapShowFloat = true;
 if (settings.floatBarEnabled === undefined) settings.floatBarEnabled = true;
 if (settings.floatShowTagFix === undefined) settings.floatShowTagFix = true;
+if (settings.floatShowCline === undefined) settings.floatShowCline = true;
+if (settings.floatRouteBadge === undefined) settings.floatRouteBadge = true;
+if (settings.clineRouteAlert === undefined) settings.clineRouteAlert = false;
 if (settings.autoUpdate === undefined) settings.autoUpdate = true;
 if (!Array.isArray(settings.floatPanelKeys)) settings.floatPanelKeys = ['inject', 'model', 'reroll', 'beautify', 'autoStop', 'word', 'psnap', 'tag', 'api', 'misc', 'fix'];
 if (settings.clineModelOverride === undefined) settings.clineModelOverride = false;
@@ -797,12 +804,17 @@ if (!window.__kimiFetchPatched) {
 window.__kimiFetchPatched = true;
 window.fetch = async function(...args) {
     const [resource, config] = args;
+    let routeProbeModel = ''; // 本次生成的模型名（响应侧路由解析用）
 
     if (typeof resource === 'string' && resource.includes('/api/backends/chat-completions/generate') && config?.body) {
         try {
             let bodyObj = JSON.parse(config.body);
             let msgs = bodyObj.messages;
             let changed = false;
+            routeProbeModel = String(bodyObj.model || '');
+
+            // 0) Cline 路由探测：让网关回传路由元数据（X-OpenRouter-Metadata: enabled，纯只读）
+            if (settings.enabled && injectRouteProbe(bodyObj)) changed = true;
 
             // 1) 种子注入（partial / reasoning_content 可多选）
             if (settings.enabled && settings.reasoningContent.trim() !== "") {
@@ -883,6 +895,12 @@ window.fetch = async function(...args) {
     // API 池响应侧钩子：非 2xx 且含 limit 类关键词 → 触发切换流程（api-pool.js 注册）
     if (typeof window.__apiPoolOnResponse === 'function') {
         try { window.__apiPoolOnResponse(res); } catch (e) { /* 静默 */ }
+    }
+    // Cline 路由监视：clone 副本异步解析实际路由（流结束后才读完，不阻塞、原响应不动）
+    if (routeProbeModel && res && res.ok && typeof res.clone === 'function') {
+        try {
+            res.clone().text().then(t => inspectRouteResponse(t, routeProbeModel)).catch(() => { });
+        } catch (e) { /* 静默 */ }
     }
     return res;
 };
@@ -1408,6 +1426,32 @@ function updateClineMenuItem() {
     });
 }
 
+// 路由显示行（Cline 弹窗 / 模型参数卡共用）：极简一行「本次Cline上游：X」
+function renderRouteLine(el) {
+    if (!el) return;
+    const info = window.__kimiRouteInfo || null;
+    const val = (info && info.provider) ? info.provider : t('routeNone');
+    el.textContent = t('routeLabel') + val;
+}
+// 悬浮条头部迷你徽标：DOM 查询式更新（独立函数，route 回调/悬浮条重建都可调）
+function updateRouteBadgeDom() {
+    try {
+        const b = document.querySelector('#kimi_combo_float .kcf-route');
+        if (!b) return;
+        const info = window.__kimiRouteInfo || null;
+        const v = (info && info.provider) ? String(info.provider) : '—';
+        b.textContent = v;
+        b.style.fontSize = v.length > 8 ? '8px' : '9px';
+        b.title = t('routeLabel') + v;
+    } catch (e) { }
+}
+// 路由数据更新（route-monitor 解析完回调）：刷新弹窗行/模型卡行/悬浮条徽标
+window.__kimiRouteUpdated = () => {
+    try { renderRouteLine(document.getElementById('kimi_route_line')); } catch (e) { }
+    try { renderRouteLine(document.getElementById(extensionName + '_route_line_card')); } catch (e) { }
+    try { updateRouteBadgeDom(); } catch (e) { }
+};
+
 function openClineModal() {
     if (!settings.clineProviderEnabled) {
         try { toastr.warning(String(t('clineNeedEnable')), 'Cline', { timeOut: 3500 }); } catch (e) { }
@@ -1423,11 +1467,13 @@ function openClineModal() {
     <div id="kimi_cline_modal" class="kimi-cline-overlay">
     <div class="kimi-cline-modal-card">
     <b style="font-size:.95em">${t('clineTitle')}</b>
+    <div id="kimi_route_line" style="margin-top:8px;font-size:.85em;padding:4px 8px;border:1px dashed var(--SmartThemeBorderColor);border-radius:6px;background:rgba(0,0,0,.06)"></div>
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px">${btns}</div>
     <p class="kimi-hint" style="margin-top:10px">${t('clineHint')}</p>
     </div>
     </div>`);
     $('body').append($ov);
+    renderRouteLine(document.getElementById('kimi_route_line'));
     // 阻止事件冒泡到 document——否则 ST 的抽屉逻辑会把扩展面板主界面关掉
     ['click', 'pointerdown', 'mousedown', 'touchstart', 'pointerup', 'mouseup', 'touchend'].forEach(ev =>
         $ov[0].addEventListener(ev, (e) => e.stopPropagation()));
@@ -1589,7 +1635,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.31.4'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.32.0'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2103,15 +2149,21 @@ function updateComboFloat() {
         ${saved ? `left:${saved.x}px;top:${saved.y}px;right:auto;bottom:auto` : 'right:16px;bottom:150px'}
     "></div>`).appendTo('body');
 
-    // 头部：拖拽把手 + 展开/收起
+    // 头部：拖拽把手 + 展开/收起（+ 上游徽标：最近一次实际路由，route-monitor 更新）
     $box.append(`<div class="kcf-head" style="height:${HEAD}px;display:flex;align-items:center;justify-content:center;gap:2px;cursor:grab;font-size:15px;color:var(--SmartThemeBodyColor,#eee);border-bottom:1px solid rgba(255,255,255,.08)">
         <span style="font-size:17px;line-height:1">🔥</span>
     </div>`);
+    let routeBadgeEl = null;
+    if (settings.floatRouteBadge) {
+        routeBadgeEl = $(`<div class="kcf-route" style="height:14px;display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1;opacity:.75;letter-spacing:-.2px;color:var(--SmartThemeBodyColor,#eee);border-bottom:1px solid rgba(255,255,255,.06);white-space:nowrap;overflow:hidden">—</div>`).appendTo($box);
+    }
+    updateRouteBadgeDom();
 
     // 条目区 = 功能（直接操作，绿色 fa 图标，分隔在上）+ 面板（打开设置卡，橙色 fa 图标）
     const ACTION_DEFS = [
-        { key: 'tag', ico: 'fa-wand-magic-sparkles', label: t('tagFixNow'), color: '#6fce6f' },
-    ].filter(a => (settings.floatShowTagFix && a.key === 'tag'));
+        { key: 'tag', ico: 'fa-wand-magic-sparkles', label: t('tagFixNow'), color: '#6fce6f', on: !!settings.floatShowTagFix },
+        { key: 'cline', ico: 'fa-route', label: t('floatClineEntry'), color: '#6fb7f0', on: !!settings.floatShowCline },
+    ].filter(a => a.on);
     const panelDefs = KIMI_CARD_DEFS.filter(d => settings.floatPanelKeys.includes(d.key) && !(settings.floatShowTagFix && d.key === 'tag')); // 按勾选过滤；tag 图标由功能区提供，面板区不重复
     const rowCount = ACTION_DEFS.length + panelDefs.length + (ACTION_DEFS.length ? 1 : 0);
 
@@ -2156,6 +2208,17 @@ function updateComboFloat() {
     $items.find('.kcf-item').on('click.kc', function () {
         const act = $(this).attr('data-act');
         if ($(this).hasClass('kcf-action')) {
+            if (act === 'cline') {
+                // Cline 提供商入口：未开启指定时自动开启（用户确认的行为），再打开选择弹窗
+                if (!settings.clineProviderEnabled) {
+                    settings.clineProviderEnabled = true;
+                    saveSettingsDebounced();
+                    try { toastr.success(String(t('clineEnabled')), 'Cline', { timeOut: 2500 }); } catch (e) { }
+                    try { $('#' + extensionName + '_cline_enabled').prop('checked', true); } catch (e) { }
+                }
+                openClineModal();
+                return;
+            }
             try { window.__stTagFixLast && window.__stTagFixLast(); } catch (e) { }
             return;
         }
@@ -3444,6 +3507,14 @@ ${t('enabled')}
 <input type="checkbox" id="${extensionName}_float_tagfix" ${settings.floatShowTagFix ? 'checked' : ''}/>
 <span style="font-size:.9em">⚡ ${t('floatCardTag')}</span>
 </label>
+<label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
+<input type="checkbox" id="${extensionName}_float_cline" ${settings.floatShowCline ? 'checked' : ''}/>
+<span style="font-size:.9em">🧭 ${t('floatClineEntry')}</span>
+</label>
+<label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
+<input type="checkbox" id="${extensionName}_float_route_badge" ${settings.floatRouteBadge ? 'checked' : ''}/>
+<span style="font-size:.9em">📡 ${t('floatRouteBadge')}</span>
+</label>
 <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
 <label class="kimi-label" style="margin:0">${t('floatPanelLabel')}</label>
 <button id="${extensionName}_float_panel_all" type="button" class="kimi-btn" style="margin-left:auto;padding:1px 8px;font-size:.75em">${t('floatPanelAll')}</button>
@@ -3555,6 +3626,10 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
 <div id="${extensionName}_cline_chips" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px"></div>
 <label class="checkbox_label" style="margin-top:5px">
 <input id="${extensionName}_cline_menu_entry" type="checkbox" ${settings.clineShowMenuBtn ? 'checked' : ''}/> ${t('clineMenuEntry')}
+</label>
+<div id="${extensionName}_route_line_card" style="margin-top:6px;font-size:.85em;padding:4px 8px;border:1px dashed var(--SmartThemeBorderColor);border-radius:6px;background:rgba(0,0,0,.06)"></div>
+<label class="checkbox_label" style="margin-top:4px">
+<input id="${extensionName}_cline_route_alert" type="checkbox" ${settings.clineRouteAlert ? 'checked' : ''}/> <span style="font-size:.85em">${t('clineRouteAlertLabel')}</span>
 </label>
 
 <div class="kimi-sep"></div>
@@ -3956,11 +4031,28 @@ partial
         saveSettingsDebounced();
         updatePsnapEntries();
     });
-    // 悬浮条设置卡：一键修复标签（直接执行）显隐
+// 悬浮条设置卡：一键修复标签（直接执行）显隐
     $("#" + extensionName + "_float_tagfix").on("change", function () {
         settings.floatShowTagFix = $(this).is(":checked");
         saveSettingsDebounced();
         updatePsnapEntries();
+    });
+    // 悬浮条功能区：Cline 提供商入口显隐
+    $("#" + extensionName + "_float_cline").on("change", function () {
+        settings.floatShowCline = $(this).is(":checked");
+        saveSettingsDebounced();
+        updatePsnapEntries();
+    });
+    // 悬浮条：上游徽标显隐（重建悬浮条生效）
+    $("#" + extensionName + "_float_route_badge").on("change", function () {
+        settings.floatRouteBadge = $(this).is(":checked");
+        saveSettingsDebounced();
+        updatePsnapEntries();
+    });
+    // Cline 路由不符提醒
+    $("#" + extensionName + "_cline_route_alert").on("change", function () {
+        settings.clineRouteAlert = $(this).is(":checked");
+        saveSettingsDebounced();
     });
     // 面板型：各自勾选是否出现在悬浮条
     $("#" + extensionName + "_float_panels").on("change", ".kimi-float-panel", function () {
@@ -4392,6 +4484,8 @@ partial
     // 思维链计时常驻（interval 幂等，覆盖生成中/结束后/切聊天所有阶段）
     if (settings.reasoningTimer) startReasoningTimer(1500);
     updatePsnapEntries();
+    // 路由显示行初值（模型参数卡；弹窗行在 openClineModal 时填）
+    renderRouteLine(document.getElementById(extensionName + '_route_line_card'));
     // v1.13.0: 跟随余温面板重建，重新挂载「标签修复」设置卡（切语言/重渲染时保持存在，幂等）
     if (typeof stTagMountSettings === 'function') stTagMountSettings();
     // API 池（额度轮换）卡（独立模块，随面板重建重挂）
