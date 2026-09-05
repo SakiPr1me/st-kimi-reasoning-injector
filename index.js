@@ -689,7 +689,7 @@ function upsertYamlTopKey(yaml, topKey, blockText) {
 // （TavernHelper 重注入/调试器重跑），避免叠多层拦截器导致 partial 身份锚重复前置、词汇替换重复应用。
 // originalFetch 经 window.__kimiOrigFetch 传递，任何一层拿到的都是最初的原生 fetch。
 // ===== Cline 提供商指定（providerOptions.gateway.only）=====
-const CLINE_PROVIDERS = ['modal', 'fireworks', 'togetherai', 'baseten', 'nebius', 'digitalocean', 'moonshotai', 'morph', 'deepseek']; // deepseek：用Cline吃DS——指定deepseek上游（带缓存），注入 {provider:{order:["deepseek"],allow_fallbacks:false}}
+const CLINE_PROVIDERS = ['modal', 'fireworks', 'togetherai', 'baseten', 'nebius', 'digitalocean', 'moonshotai', 'morph', 'deepseek', 'sail-research']; // deepseek：用Cline吃DS——指定deepseek上游（带缓存）；sail-research：OpenRouter端点表实测slug（Sail Research，端点sail-research/fp4，order用slug前缀即可）
 function getClineProviders() {
     const custom = (settings.clineCustomProviders || []).filter(x => x && String(x).trim());
     return CLINE_PROVIDERS.concat(custom.map(x => String(x).trim()));
@@ -1635,7 +1635,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.32.0'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.32.1'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
