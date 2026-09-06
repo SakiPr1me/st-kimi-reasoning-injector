@@ -1635,7 +1635,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.34.1'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.34.2'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -3186,7 +3186,30 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
     console.log('[余温工具箱] ENDED 守卫: 手动停止，跳过');
     if (manualStopClicked) return; // 用户手动停止：不当作空回
     console.log('[余温工具箱] ENDED 守卫: 已收到token，非空回');
-    if (streamGotToken) return;
+    if (streamGotToken) {
+        // 半截楼兜底（v1.34.2）：流式中途断流（网络断/超时/服务器中断——「输出到一半截断」的典型形态）时
+        // 消息没有正常完成 → MESSAGE_RECEIVED 不触发 → checkNativeReroll 没机会跑 → 有 token 的截断楼从不重roll。
+        // 此处补跑完整性判定：checkNativeReroll 内部自带标记校验/冷却/上限/总闸，重复调用无害。
+        // （能走到这里说明非手动停止——manualStopClicked 在上方 3187 已 return）
+        if (settings.enabled && settings.rerollOnNoMutter && !rerollFiredThisGen && !settings.rerollPaused) {
+            let rid = lastObservedMesId;
+            if (rid < 0) {
+                try {
+                    const ctxB = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+                    const cb = ctxB?.chat;
+                    for (let i = (cb?.length || 1) - 1; i >= 0; i--) {
+                        const m = cb[i];
+                        if (m && !m.is_user && !m.is_system) { rid = i; break; }
+                    }
+                } catch (e) { }
+            }
+            if (rid >= 0) {
+                console.log('[余温工具箱] ENDED 半截楼兜底判定：消息#' + rid);
+                checkNativeReroll(rid);
+            }
+        }
+        return;
+    }
     console.log('[余温工具箱] ENDED 守卫: 已流式截断');
     if (earlyStopTriggered) return;
     // v1.11.9：不再检查 chat 消息内容（swipe 500 回滚后消息非空会误判为"非空回"）。
