@@ -1635,7 +1635,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.33.0'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.33.1'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -1645,6 +1645,8 @@ try {
 } catch { window.__kimiSelfFolder = 'st-kimi-reasoning-injector'; }
 const KIMI_REPO_URL = 'https://gitee.com/satosaki/st-kimi-reasoning-injector.git'; // 重装兜底用
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
+const GITEE_API_MANIFEST = 'https://gitee.com/api/v5/repos/satosaki/st-kimi-reasoning-injector/contents/manifest.json'; // 权威源：手机/国内直连可达（gitee raw 直链在 WebView 下无 CORS 头被拦，必须走 API contents）
+const GITEE_READ_TOKEN = '2bf7029efdcafba86f4ed28968f85f25'; // 只读令牌（公开仓不涉密，与 st-chat-sync 同款做法：避免匿名限流403）
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
     const pb = String(b).split('.').map(Number);
@@ -1663,32 +1665,37 @@ function b64ToText(s) {
     return new TextDecoder().decode(bytes);
 }
 async function fetchRemoteVersion(report) {
-    // 多源抓取：GitHub API 403 限流 / CDN 旧缓存时自动换路（raw / CDN / Gitee / API）。
-    // 全部源并发抓取，取「所有成功源里最大的版本号」——避免 jsDelivr @main 旧缓存把版本拉低，
-    // 误报「本地更高」（手机/国内网络常见：raw 失败落到 CDN，CDN 命中旧缓存）。
+    // 多源抓取：权威 API 在前（Gitee API 手机国内可达 / GitHub API），raw/CDN 在后（可能旧缓存）。
+    // 并发抓取取最大版本——防 CDN 旧缓存误判；gitee 用 raw 直链在 WebView 下被 CORS 拦，故必须走 API contents。
     const sources = [
-        'https://raw.githubusercontent.com/SakiPr1me/st-kimi-reasoning-injector/main/manifest.json',
-        'https://cdn.jsdelivr.net/gh/SakiPr1me/st-kimi-reasoning-injector@main/manifest.json',
-        'https://gitee.com/satosaki/st-kimi-reasoning-injector/raw/main/manifest.json',
-        PLUGIN_REPO_MANIFEST + '?t=' + Date.now(),
+        GITEE_API_MANIFEST + '?t=' + Date.now(), // ① Gitee API（权威，带 token，手机可达）
+        PLUGIN_REPO_MANIFEST + '?t=' + Date.now(), // ② GitHub API（权威）
+        'https://raw.githubusercontent.com/SakiPr1me/st-kimi-reasoning-injector/main/manifest.json', // ③ GitHub raw（手机可能被墙）
+        'https://cdn.jsdelivr.net/gh/SakiPr1me/st-kimi-reasoning-injector@main/manifest.json', // ④ jsDelivr（缓存较久，仅兜底）
+        'https://gitee.com/satosaki/st-kimi-reasoning-injector/raw/main/manifest.json', // ⑤ Gitee raw（WebView CORS 拦，聊胜于无）
     ];
     const seen = {}; // 各源看到的值（report 用；调试「本地更高」时看是哪路缓存拖低）
+    window.__kimiRemoteAuthoritative = false; // 权威API源是否至少一个成功（决定"已是最新"是否可信）
     const results = await Promise.allSettled(sources.map(async (url) => {
-        const r = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(6000) });
+        const headers = {};
+        if (url.includes('gitee.com/api')) headers['Authorization'] = 'token ' + GITEE_READ_TOKEN;
+        if (url.includes('api.github.com')) headers['Accept'] = 'application/vnd.github+json';
+        const r = await fetch(url, { cache: 'no-store', headers, signal: AbortSignal.timeout(6000) });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const text = await r.text();
         let v = '';
         try {
             const j = JSON.parse(text);
             if (j && typeof j.content === 'string') {
-                v = JSON.parse(b64ToText(j.content)).version; // GitHub API contents 格式（base64 包裹）
+                v = JSON.parse(b64ToText(j.content)).version; // API contents 格式（base64 包裹）
             } else {
-                v = j.version; // raw/CDN/Gitee：manifest.json 直接可读
+                v = j.version; // raw/CDN：manifest.json 直接可读
             }
         } catch (e) { throw new Error('parse'); }
         v = String(v || '').trim();
         if (!v) throw new Error('empty');
         seen[url.split('/')[2]] = v;
+        if (url.includes('api.')) window.__kimiRemoteAuthoritative = true; // gitee.com/api / api.github.com
         return v;
     }));
     const ok = results.filter(r => r.status === 'fulfilled').map(r => r.value);
@@ -1712,6 +1719,12 @@ if (typeof window.__kimiCoordReload !== 'function') {
             window.__kimiReloadFired = true;
             try { location.reload(); } catch (e) { }
         }, delay);
+        // watchdog：5s 内仍未刷新（手机 WebView 计时器异常兜底，st-chat-sync 同款经验）→ 强刷
+        if (!window.__kimiReloadWatchdog) {
+            window.__kimiReloadWatchdog = setTimeout(() => {
+                if (!window.__kimiReloadFired) { window.__kimiReloadFired = true; location.reload(); }
+            }, 5000);
+        }
     };
     window.__kimiReloadFired = false;
 }
@@ -1823,7 +1836,9 @@ async function manualCheckUpdate(btn) {
         else if (cmp === 0) { txt = '✅ 已是最新'; cls = 'same'; }
         else { txt = '⚠ 本地更高'; cls = 'higher'; }
         const seen = window.__kimiUpdSources ? JSON.stringify(window.__kimiUpdSources) : '';
-        title2 = '本机 v' + PLUGIN_VERSION + ' / 远端取最大 v' + remoteVer + (seen ? '\n各源: ' + seen : '') + (cls === 'higher' ? '\n(若各源版本低于本机, 可能是CDN旧缓存, 过会儿重试)' : '');
+        title2 = '本机 v' + PLUGIN_VERSION + ' / 远端取最大 v' + remoteVer + (seen ? '\n各源: ' + seen : '')
+            + (window.__kimiRemoteAuthoritative ? '' : '\n(⚠️权威API源均未成功, 结果可能受CDN缓存影响)')
+            + (cls === 'higher' ? '\n(若各源版本低于本机, 可能是CDN旧缓存, 过会儿重试)' : '');
     } catch (e) {
         txt = '❌ 检测失败'; title2 = String(e).slice(0, 80); cls = 'fail';
     }
