@@ -1635,7 +1635,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.33.1'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.33.2'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -1732,11 +1732,22 @@ async function doSelfUpdate(btn, remoteVer, auto) {
     if (btn) { btn.disabled = true; btn.textContent = '⏳ 更新中…'; }
     const selfName = window.__kimiSelfFolder || 'st-kimi-reasoning-injector';
     const fullName = 'third-party/' + selfName;
-    // 四组合穷举（与扩展管理页更新同款）：完整名/纯名 × 用户全局。任一 200 即成功。
-    const combos = [
-        { n: fullName, g: false }, { n: selfName, g: false },
-        { n: fullName, g: true }, { n: selfName, g: true },
-    ];
+    // 先查插件真实安装位置（discover：global/local），按真实位置排组合——第一路即命中，
+    // 避免穷举 404（手机 TT 会把 404 响应弹成全局「后端错误」toast，虽然无害但吓人）。
+    let typeKnown = null;
+    try {
+        const dr = await fetch('/api/extensions/discover', { cache: 'no-store', signal: AbortSignal.timeout(6000) });
+        if (dr.ok) {
+            const list = await dr.json().catch(() => []);
+            const e = (Array.isArray(list) ? list : []).find(x => String(x.name || '').endsWith(selfName));
+            if (e && e.type) typeKnown = e.type;
+        }
+    } catch (e) { }
+    const combos = typeKnown === 'global'
+        ? [{ n: selfName, g: true }, { n: fullName, g: true }, { n: selfName, g: false }, { n: fullName, g: false }]
+        : typeKnown === 'local'
+            ? [{ n: selfName, g: false }, { n: fullName, g: false }, { n: selfName, g: true }, { n: fullName, g: true }]
+            : [{ n: fullName, g: false }, { n: selfName, g: false }, { n: fullName, g: true }, { n: selfName, g: true }];
     let lastErr = null;
     for (const c of combos) {
         let resp;
