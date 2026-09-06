@@ -1635,7 +1635,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.34.0'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.34.1'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -1732,8 +1732,14 @@ async function doSelfUpdate(btn, remoteVer, auto) {
     if (btn) { btn.disabled = true; btn.textContent = '⏳ 更新中…'; }
     const selfName = window.__kimiSelfFolder || 'st-kimi-reasoning-injector';
     const fullName = 'third-party/' + selfName;
-    // 先查插件真实安装位置（discover：global/local），按真实位置排组合——第一路即命中，
-    // 避免穷举 404（手机 TT 会把 404 响应弹成全局「后端错误」toast，虽然无害但吓人）。
+    // 组合排序（目标：第一路即命中，杜绝 404——手机 TT 会把 404 响应弹成全局「后端错误」toast）：
+    // ① 上次成功组合记忆置顶（localStorage，设备维度最可靠）
+    // ② discover 查真实安装位置（手机旧版 TT 可能无此接口）
+    // ③ 默认 global 优先（本插件用户群实测几乎都是全局安装）
+    const pool = [
+        { n: selfName, g: true }, { n: fullName, g: true },
+        { n: selfName, g: false }, { n: fullName, g: false },
+    ];
     let typeKnown = null;
     try {
         const dr = await fetch('/api/extensions/discover', { cache: 'no-store', signal: AbortSignal.timeout(6000) });
@@ -1743,11 +1749,15 @@ async function doSelfUpdate(btn, remoteVer, auto) {
             if (e && e.type) typeKnown = e.type;
         }
     } catch (e) { }
-    const combos = typeKnown === 'global'
-        ? [{ n: selfName, g: true }, { n: fullName, g: true }, { n: selfName, g: false }, { n: fullName, g: false }]
-        : typeKnown === 'local'
-            ? [{ n: selfName, g: false }, { n: fullName, g: false }, { n: selfName, g: true }, { n: fullName, g: true }]
-            : [{ n: fullName, g: false }, { n: selfName, g: false }, { n: fullName, g: true }, { n: selfName, g: true }];
+    let combos;
+    if (typeKnown === 'global') combos = pool.filter(c => c.g).concat(pool.filter(c => !c.g));
+    else if (typeKnown === 'local') combos = pool.filter(c => !c.g).concat(pool.filter(c => c.g));
+    else combos = pool; // 默认 global 优先
+    let mem = null;
+    try { mem = JSON.parse(localStorage.getItem('kimi_upd_combo') || 'null'); } catch (e) { }
+    if (mem && mem.n && typeof mem.g === 'boolean') {
+        combos = [mem].concat(combos.filter(c => !(c.n === mem.n && c.g === mem.g)));
+    }
     let lastErr = null;
     for (const c of combos) {
         let resp;
@@ -1762,6 +1772,7 @@ async function doSelfUpdate(btn, remoteVer, auto) {
         if (!resp.ok) { lastErr = new Error('HTTP ' + resp.status); continue; }
         const j = await resp.json().catch(() => ({}));
         if (j.isUpToDate) { if (btn) btn.textContent = '✓ 已是最新'; return; }
+        try { localStorage.setItem('kimi_upd_combo', JSON.stringify(c)); } catch (e) { } // 记住命中组合，下次第一路直击
         if (btn) btn.textContent = '✅ 已更新';
         try { toastr.success('✅ 插件已更新到 v' + remoteVer + '，即将自动刷新', null, { timeOut: 4000 }); } catch (e) { }
         window.__kimiCoordReload(3000); // 协调刷新：多插件并发更新时由最后完成者统一刷新
