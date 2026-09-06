@@ -1129,19 +1129,21 @@ function checkNativeReroll(messageId) {
             // 被迫partial（思考在 content 里，idx>0）不算——用户接受那种
             shouldReroll = true;
             reason = '无思维链直接出正文';
-        } else if (settings.rerollOnNoMutter && stopMarker && !mes.includes(stopMarker) && !lastGenManuallyStopped && !manualStopClicked) {
-            // 手动停止双保险：点击#mes_stop瞬间(manualStopClicked)与STOPPED转存(lastGenManuallyStopped)
-            // 任一为真都豁免——MESSAGE_RECEIVED 与 STOPPED 的先后顺序在不同路径下不定，双信号才稳
+        } else if (settings.rerollOnNoMutter && stopMarker && !mes.includes(stopMarker)) {
             // 完整性判定：生成结束但全文没有截断标记（<mutter>）＝半截楼
             // （思维链截断：mes 空/占位；正文截断：有 <scene> 但没收尾标记。均命中）
             // 手动停止的楼不roll（lastGenManuallyStopped，用户自己停的可能想留着看）
-            shouldReroll = true;
-            reason = '生成结束仍无截断标记（半截楼/疑似截断）';
+            if (lastGenManuallyStopped || manualStopClicked) {
+                console.log('[余温工具箱] 半截楼但为手动停止（用户自己停的可能想留着看）→ 豁免重roll');
+            } else {
+                shouldReroll = true;
+                reason = '生成结束仍无截断标记（半截楼/疑似截断）';
+            }
         }
 
         if (shouldReroll) {
-            if (rerollFiredThisGen) return; // 总闸：本次生成已触发过重roll
-            if (settings.rerollPaused) return;
+            if (rerollFiredThisGen) { console.log('[余温工具箱] 半截楼命中但本次生成已触发过重roll（总闸）→ 跳过'); return; }
+            if (settings.rerollPaused) { console.log('[余温工具箱] 半截楼命中但「暂停自动重roll」开关开启 → 跳过'); return; }
             // 防重复：同一消息刚触发过重roll（如 MESSAGE_RECEIVED 连发）→ 冷却 3 秒内跳过；
             // 新 swipe 分支生成需要数秒，完成后已过冷却 → 新分支再失败会继续重roll（受连续上限约束）
             const now = Date.now();
@@ -1635,7 +1637,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.34.2'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.34.3'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
