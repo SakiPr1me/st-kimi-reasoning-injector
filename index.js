@@ -1637,7 +1637,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.34.3'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.34.4'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -1697,7 +1697,7 @@ async function fetchRemoteVersion(report) {
         v = String(v || '').trim();
         if (!v) throw new Error('empty');
         seen[url.split('/')[2]] = v;
-        if (url.includes('api.')) window.__kimiRemoteAuthoritative = true; // gitee.com/api / api.github.com
+        if (url.includes('gitee.com/api')) window.__kimiRemoteAuthoritative = true; // 0.13.0 权威仅认 Gitee API(与 st-chat-sync 统一): GitHub API 镜像滞后会被当权威→误报"已是最新/本地更高"
         return v;
     }));
     const ok = results.filter(r => r.status === 'fulfilled').map(r => r.value);
@@ -1856,13 +1856,11 @@ async function manualCheckUpdate(btn) {
         const remoteVer = await fetchRemoteVersion(true);
         failedRemoteVer = remoteVer;
         const cmp = compareVer(remoteVer, PLUGIN_VERSION);
-        if (cmp > 0) { txt = '✓ 可更新至 v' + remoteVer; cls = 'newer'; }
-        else if (cmp === 0) { txt = '✅ 已是最新'; cls = 'same'; }
-        else { txt = '⚠ 本地更高'; cls = 'higher'; }
+        if (cmp === 0) { txt = '✅ 已是最新'; cls = 'same'; }
+        else { txt = '✓ 可更新至 v' + remoteVer; cls = 'newer'; } // 0.13.0 归并(与 st-chat-sync 统一): 版本不一致(含"本地更高")一律显示可更新, 点更新走仓库最新
         const seen = window.__kimiUpdSources ? JSON.stringify(window.__kimiUpdSources) : '';
         title2 = '本机 v' + PLUGIN_VERSION + ' / 远端取最大 v' + remoteVer + (seen ? '\n各源: ' + seen : '')
-            + (window.__kimiRemoteAuthoritative ? '' : '\n(⚠️权威API源均未成功, 结果可能受CDN缓存影响)')
-            + (cls === 'higher' ? '\n(若各源版本低于本机, 可能是CDN旧缓存, 过会儿重试)' : '');
+            + (window.__kimiRemoteAuthoritative ? '' : '\n(⚠️权威API源均未成功, 结果可能受CDN缓存影响)');
     } catch (e) {
         txt = '❌ 检测失败'; title2 = String(e).slice(0, 80); cls = 'fail';
     }
