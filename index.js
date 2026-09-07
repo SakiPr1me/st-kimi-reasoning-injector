@@ -733,6 +733,11 @@ function injectOpencodeHeaders(bodyObj) {
         return false;
     } catch (e) { return false; }
 }
+// 面板「本聊天 Session ID」显示行（模块级：切聊天/勾选时刷新）
+function renderOpencodeSid() {
+    const el = document.getElementById(extensionName + '_opencode_sid');
+    if (el) el.textContent = settings.opencodeHeadersEnabled ? t('opencodeSession') + opencodeSessionIdForChat() : '';
+}
 
 // 拦截器只装一次（哨兵防重入）：脚本在不刷新页面的情况下被重复执行时
 // （TavernHelper 重注入/调试器重跑），避免叠多层拦截器导致 partial 身份锚重复前置、词汇替换重复应用。
@@ -1688,7 +1693,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.0'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.1'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2435,7 +2440,7 @@ window.__ywDebug = {
     t,
     // Cline 提供商
     buildClineIncludeBody, applyClineProvider, CLINE_PROVIDERS, getClineProviders, updateClineMenuItem,
-    upsertHeaderLine, opencodeSessionIdForChat, injectOpencodeHeaders,
+    upsertHeaderLine, opencodeSessionIdForChat, injectOpencodeHeaders, renderOpencodeSid,
     normalizeCotInPreset, resetReasoningToDefault, healTruncatedPreset,
     setManualStopClicked: (v) => { manualStopClicked = !!v; },
 };
@@ -3363,6 +3368,7 @@ eventSource.on(event_types.CHAT_CHANGED, () => {
     updateRerollStatus();
     lastAutoRerollMessageId = -1;
     lastAutoRerollTime = 0;
+    renderOpencodeSid(); // 切聊天：面板「本聊天 Session ID」跟随新聊天刷新
     earlyStopTriggered = false;
     earlyRerollMessageId = -1;
     emptyRerollHandled = false;
@@ -4181,10 +4187,6 @@ partial
         saveSettingsDebounced();
         renderOpencodeSid();
     });
-    const renderOpencodeSid = () => {
-        const el = document.getElementById(extensionName + '_opencode_sid');
-        if (el) el.textContent = settings.opencodeHeadersEnabled ? t('opencodeSession') + opencodeSessionIdForChat() : '';
-    };
     renderOpencodeSid();
     // 面板型：各自勾选是否出现在悬浮条
     $("#" + extensionName + "_float_panels").on("change", ".kimi-float-panel", function () {
