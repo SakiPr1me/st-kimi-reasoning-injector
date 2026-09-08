@@ -1,5 +1,5 @@
 import { extension_settings } from "../../../extensions.js";
-import { saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, stopGeneration, Generate, getRequestHeaders } from "../../../../script.js";
+import { saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, stopGeneration, Generate, getRequestHeaders, is_send_press } from "../../../../script.js";
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
 import { toggleDrawer } from "../../../utils.js";
 import { stTagMountSettings } from "./tag-fixer.js";
@@ -36,7 +36,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.37.2 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.37.3 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -1001,7 +1001,7 @@ function checkStreamingAbort(messageId) {
     if (!isGenerating) return; // 流式截断检测只在生成中有效（修正消息触发 observer 时避免误判）
     if (earlyStopTriggered) return;
     if (!settings.rerollOnEnglishThinking && !settings.rerollOnNoThinking && settings.rerollMinThinkingTokens <= 0) return;
-    // v1.37.2：只检测"正在生成的新分支"（chat 最后一条 assistant），跳过旧消息——
+    // v1.37.3：只检测"正在生成的新分支"（chat 最后一条 assistant），跳过旧消息——
     // observer 会因 swipe 动画/样式/计数器等捕获旧消息的 DOM 变化，若旧消息恰好是英文
     // （如刚被截断的重roll目标），会误触发 stopGeneration 把刚开的新分支 abort → "进不去分支"死循环。
     // 新分支一旦开始流式，它就是 chat 最后一条 assistant，检测它才是正确的目标。
@@ -1228,19 +1228,19 @@ function checkNativeReroll(messageId) {
 // v1.11.38：若 chat 最后一条是用户消息（AI 空回没生成 / regenerate 删了 AI 消息）→ 改用 Generate('regenerate') 重新生成；
 // 否则 swipe（实时用 chat.length-1，regenerate 删建后缓存 id 会失效）。
 // 等待 ST 的 abort 完全收尾：截断 stopGeneration 后 ST 内部仍在跑 abort 链（onErrorStreaming /
-// finishGenerating / Swiping back），此时立刻 swipe 会 "Generation was aborted" 回滚。用 ST 停止按钮
-// 显隐判断 ST 是否仍认为在生成（真实用户停止/abort 期间按钮可见），等它消失再 swipe。
-// v1.37.3：最多等 6 秒，期间每 200ms 轮询一次；超时也继续（不无限阻塞自动重roll）。
+// finishGenerating / Swiping back），此时立刻 swipe 会 "Generation was aborted" 回滚。
+// v1.37.3 曾用 #mes_stop 显隐判断——但按钮隐藏 ≠ is_send_press 清空（abort 链还在异步收尾），
+// swipe 时 ST 的 `run_generate && !is_send_press` 不满足 → Generate('swipe') 不执行 → 分支不加。
+// v1.37.3：改为直接等 is_send_press（ST 正在生成标志，import live binding）变 false 才 swipe。
+// 最多等 6 秒，期间每 150ms 轮询；超时也继续（不无限阻塞自动重roll）。
 async function waitStAbortSettled() {
     try {
         const t0 = Date.now();
         while (Date.now() - t0 < 6000) {
-            const btn = document.querySelector('#mes_stop');
-            const busy = btn && getComputedStyle(btn).display !== 'none' && btn.getBoundingClientRect().width > 0;
-            if (!busy) return true; // ST 空闲 → abort 已收尾
-            await new Promise(r => setTimeout(r, 200));
+            if (!is_send_press) return true; // ST 真正空闲 → abort 已收尾，可以安全 swipe 开新分支
+            await new Promise(r => setTimeout(r, 150));
         }
-        console.log('[余温工具箱] 等待 ST abort 收尾超时(6s)，继续 swipe');
+        console.log('[余温工具箱] 等待 ST abort 收尾超时(6s, is_send_press 仍 true)，继续 swipe');
         return true;
     } catch (e) { return true; }
 }
@@ -1281,7 +1281,7 @@ async function triggerAutoSwipe(messageId) {
                 if (pendingSwipeConfirm !== targetId) return; // 已被 GENERATION_STARTED 确认
                 pendingSwipeConfirm = -1;
                 // 距 swipe 已超时且从未进入新生成 → 释放本次"已重roll"的总闸，允许再触发
-                // v1.37.2：已达连续上限时不再复位总闸——复位会让后续检测再次通过、count 继续++，
+                // v1.37.3：已达连续上限时不再复位总闸——复位会让后续检测再次通过、count 继续++，
                 // 造成 31/30、32/30 突破上限的无限循环。上限就是硬停：让 rerollBlockedNotified 提示生效，
                 // 等一条通过检测的消息或用户手动 swipe 把计数归零。
                 if ((rerollFiredThisGen || earlyRerollHandled || emptyRerollHandled) && autoRerollCount < settings.autoRerollLimit) {
@@ -1291,7 +1291,7 @@ async function triggerAutoSwipe(messageId) {
                     emptyRerollHandled = false;
                     earlyRerollMessageId = -1;
                     lastGenManuallyStopped = false;
-                    // v1.37.2：不再用 regenerate 兜底——regenerate 会删掉最后一条 AI 消息重建，
+                    // v1.37.3：不再用 regenerate 兜底——regenerate 会删掉最后一条 AI 消息重建，
                     // 新消息 swipe_id=undefined，ST 下次 swipe 时会把 swipes 清空（script.js swipe_id
                     // undefined 分支），造成"分支被清成 1 个"、重roll永远进不了新分支的死循环。
                     // 复位总闸后，后续 ENDED/MESSAGE_RECEIVED 的自然事件流会再次触发重roll（swipe 开新分支）。
@@ -1792,7 +1792,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.2'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.3'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
