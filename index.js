@@ -1557,7 +1557,7 @@ function ensureClineModalStyle() {
     __clineStyleDone = true;
     const css = `
 .kimi-cline-overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center}
-.kimi-cline-modal-card{background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;padding:16px;width:min(430px,92vw);box-shadow:0 4px 24px rgba(0,0,0,.45);color:var(--SmartThemeBodyColor)}
+.kimi-cline-modal-card{background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;padding:16px;width:min(430px,92vw);max-height:88vh;overflow-y:auto;box-shadow:0 4px 24px rgba(0,0,0,.45);color:var(--SmartThemeBodyColor)}
 .kimi-cline-p{border:1px solid var(--SmartThemeBorderColor);border-radius:10px;padding:9px 6px;background:rgba(255,255,255,.04);color:var(--SmartThemeBodyColor);cursor:pointer;font-size:.92em;text-align:center;transition:filter .15s ease,border-color .15s ease}
 .kimi-cline-p:hover{filter:brightness(1.3)}
 .kimi-cline-p.kimi-cline-cur{border:1.5px solid var(--golden-color,#e0a800)!important;background:rgba(224,168,0,.14);font-weight:700}
@@ -1693,7 +1693,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.14'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.15'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
