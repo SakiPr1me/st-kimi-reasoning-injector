@@ -2244,7 +2244,7 @@ function updateComboFloat() {
     const $box = $(`<div id="kimi_combo_float" style="
         position:fixed;z-index:9600;width:${W}px;overflow:hidden;
         border:1px solid var(--SmartThemeBorderColor);border-radius:14px;
-        background:rgba(128,128,128,0.32);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+        background:rgba(128,128,128,0.32);
         box-shadow:0 3px 10px rgba(0,0,0,.3);user-select:none;
         ${saved ? `left:${saved.x}px;top:${saved.y}px;right:auto;bottom:auto` : 'right:16px;bottom:150px'}
     "></div>`).appendTo('body');
