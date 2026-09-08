@@ -1524,21 +1524,24 @@ function openClineModal() {
     const w = document.createElement('div');
     w.id = 'kimi_cline_float';
     w.className = 'kimi-cline-float';
-    w.style.cssText = 'position:fixed;top:70px;right:14px;z-index:10001;width:min(440px,94vw);max-height:80vh;overflow-y:auto;' +
+    w.style.cssText = 'position:fixed;top:70px;right:14px;z-index:10001;width:min(440px,94vw);max-height:80vh;' +
+        'display:flex;flex-direction:column;overflow:hidden;' +
         'border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;' +
         'background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));color:var(--SmartThemeBodyColor);' +
         'box-shadow:0 8px 30px rgba(0,0,0,.55);padding:12px 14px;user-select:none';
-    w.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
+    w.innerHTML = '<div style="flex:none;display:flex;justify-content:space-between;align-items:center;gap:8px">' +
         '<b style="font-size:.95em">' + t('clineTitle') + '</b>' +
         '<button type="button" class="kimi-btn" id="kimi_cline_float_close" style="flex:none;padding:0 9px">✕</button>' +
         '</div>' +
-        '<label style="display:flex;align-items:center;gap:6px;margin-top:10px;cursor:pointer">' +
+        '<div style="flex:1;min-height:0;overflow-y:auto;margin-top:10px">' +
+        '<label style="display:flex;align-items:center;gap:6px;cursor:pointer">' +
         '<input type="checkbox" id="kimi_cline_float_enabled" ' + (settings.clineProviderEnabled ? 'checked' : '') + ' style="cursor:pointer"/>' +
         '<span style="font-size:.88em">' + t('clineEnabled') + '</span>' +
         '</label>' +
         '<div id="kimi_route_line" style="margin-top:8px;font-size:.85em;padding:4px 8px;border:1px dashed var(--SmartThemeBorderColor);border-radius:6px;background:rgba(128,128,128,.08)"></div>' +
         '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px">' + btns + '</div>' +
-        '<p class="kimi-hint" style="margin-top:10px;font-size:.8em;opacity:.8">' + t('clineHint') + '</p>';
+        '<p class="kimi-hint" style="margin-top:10px;font-size:.8em;opacity:.8">' + t('clineHint') + '</p>' +
+        '</div>';
     document.body.appendChild(w);
     renderRouteLine(document.getElementById('kimi_route_line'));
     w.addEventListener('click', (e) => e.stopPropagation());
@@ -1634,7 +1637,7 @@ function ensureUpstreamStyle() {
     const st = document.createElement('style');
     st.id = 'kimi-upstream-style';
     st.textContent = '.kimi-cline-overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px}'
-        + '.kimi-up-card{border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));color:var(--SmartThemeBodyColor);width:min(720px,94vw);max-height:82vh;overflow-y:auto;padding:14px 16px;box-shadow:0 4px 24px rgba(0,0,0,.45)}'
+        + '.kimi-up-card{border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));color:var(--SmartThemeBodyColor);width:min(720px,94vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;padding:14px 16px;box-shadow:0 4px 24px rgba(0,0,0,.45)}'
         + '.kimi-up-card table{width:100%;border-collapse:collapse;font-size:.82em}'
         + '.kimi-up-card th,.kimi-up-card td{padding:4px 6px;text-align:left;border-bottom:1px solid var(--SmartThemeBorderColor);white-space:nowrap}'
         + '.kimi-up-card th{opacity:.65;font-weight:600}'
@@ -1655,8 +1658,8 @@ async function openUpstreamModal() {
     <button id="kimi_up_refresh" class="kimi-up-btn" style="margin-left:auto">↻</button>
     <button id="kimi_up_close" class="kimi-up-btn">✕</button>
     </div>
-    <div id="kimi_up_body" style="margin-top:8px"><span style="opacity:.6">${t('upLoading')}</span></div>
-    <p class="kimi-hint" style="margin-top:8px">${t('upHint')}</p>
+    <div id="kimi_up_body" style="flex:1;min-height:0;overflow-y:auto;margin-top:8px"><span style="opacity:.6">${t('upLoading')}</span></div>
+    <p class="kimi-hint" style="flex:none;margin-top:8px">${t('upHint')}</p>
     </div>
     </div>`);
     $('body').append($ov);
@@ -1718,7 +1721,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.20'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.21'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2052,20 +2055,21 @@ function ensurePsnapPanel() {
     const win = document.createElement('div');
     win.id = extensionName + '_psnap_panel';
     win.className = 'kimi-psnap-panel';
-    win.style.cssText = 'position:fixed;top:70px;right:20px;z-index:9600;width:min(320px,90vw);display:none;' +
+    win.style.cssText = 'position:fixed;top:70px;right:20px;z-index:9600;width:min(320px,90vw);max-height:80vh;display:none;' +
+        'flex-direction:column;overflow:hidden;' +
         'border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;' +
         'background:var(--SmartThemeBlurTintColor,rgb(23 23 23));' +
         'color:var(--SmartThemeBodyColor);box-shadow:0 8px 30px rgba(0,0,0,.55);padding:10px 12px;user-select:none';
     win.innerHTML = `
-    <div class="kimi-psnap-head" style="display:flex;align-items:center;gap:6px;cursor:grab;user-select:none">
+    <div class="kimi-psnap-head" style="flex:none;display:flex;align-items:center;gap:6px;cursor:grab;user-select:none">
         <span style="opacity:.6;cursor:grab">⠿</span><b style="font-size:.92em">📇 ${t('psnapTitle')}</b>
         <button id="${extensionName}_psnap_close" class="kimi-btn" style="margin-left:auto;padding:0 8px;font-size:.85em">✕</button>
     </div>
-    <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:6px">
+    <div style="flex:none;display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:6px">
         <input id="${extensionName}_psnap_name" type="text" class="text_pole" placeholder="${t('psnapNamePh')}" style="flex:1;min-width:80px"/>
         <button id="${extensionName}_psnap_save" type="button" class="kimi-btn" style="flex:none;padding:2px 8px">💾 ${t('psnapSaveBtn')}</button>
     </div>
-    <div id="${extensionName}_psnap_body" style="margin-top:5px"></div>`;
+    <div id="${extensionName}_psnap_body" style="flex:1;min-height:0;overflow-y:auto;margin-top:5px"></div>`;
     document.body.appendChild(win);
     // 拖拽（标签修复同款：3px 阈值判定 + document 级移动 + touch 支持；✕ 等按钮上按下不启动拖拽）
     const $win = $(win);
@@ -2107,8 +2111,8 @@ function togglePsnapPanel() {
     ensurePsnapPanel();
     const win = document.getElementById(extensionName + '_psnap_panel');
     if (!win) return;
-    const show = win.style.display !== 'block';
-    win.style.display = show ? 'block' : 'none';
+    const show = win.style.display === 'none' || !win.style.display;
+    win.style.display = show ? 'flex' : 'none';
     if (show) { renderPsnapUI(); setTimeout(() => clampToViewport(win), 30); }
 }
 
@@ -2169,16 +2173,17 @@ function ensureCardFloat() {
     if (_kimiCardFloating && document.body.contains(_kimiCardFloating)) return _kimiCardFloating;
     const w = document.createElement('div');
     w.id = extensionName + '_card_float';
-    w.style.cssText = 'position:fixed;top:60px;right:14px;z-index:9600;width:min(460px,94vw);max-height:82vh;overflow-y:auto;display:none;' +
+    w.style.cssText = 'position:fixed;top:60px;right:14px;z-index:9600;width:min(460px,94vw);max-height:82vh;display:none;' +
+        'flex-direction:column;overflow:hidden;' +
         'border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;' +
         'background:var(--SmartThemeBlurTintColor,rgb(23 23 23));color:var(--SmartThemeBodyColor);' +
         'box-shadow:0 8px 30px rgba(0,0,0,.55);padding:10px 12px;user-select:none';
     w.innerHTML = `
-        <div class="kcf-float-head" style="display:flex;align-items:center;gap:6px;cursor:grab;user-select:none">
+        <div class="kcf-float-head" style="flex:none;display:flex;align-items:center;gap:6px;cursor:grab;user-select:none">
             <span style="opacity:.6;cursor:grab">⠿</span><b style="font-size:.9em" id="${extensionName}_card_float_title">设置</b>
             <button id="${extensionName}_card_float_close" class="kimi-btn" style="margin-left:auto;padding:0 8px;font-size:.85em">✕</button>
         </div>
-        <div id="${extensionName}_card_float_body" style="margin-top:6px"></div>`;
+        <div id="${extensionName}_card_float_body" style="flex:1;min-height:0;overflow-y:auto;margin-top:6px"></div>`;
     document.body.appendChild(w);
     // 拖动（同悬浮窗：3px 阈值，document 级，touch 支持）
     const $head = $('.kcf-float-head', w);
@@ -2199,7 +2204,7 @@ function ensureCardFloat() {
         if (dragging) { e.preventDefault(); $(w).css({ left: (ev.clientX - dx) + 'px', top: (ev.clientY - dy) + 'px', right: 'auto' }); }
     });
     $(document).on('mouseup.kcf touchend.kcf', () => { dx = undefined; clampToViewport(w); });
-    $(window).on('resize.kcf', () => { if (w.style.display === 'block') clampToViewport(w); });
+    $(window).on('resize.kcf', () => { if (w.style.display === 'flex' || w.style.display === 'block') clampToViewport(w); });
     document.getElementById(extensionName + '_card_float_close').addEventListener('click', () => closeCardFloat());
     _kimiCardFloating = w;
     return w;
@@ -2227,7 +2232,7 @@ function openCardFloat(key) {
     if (sum) sum.style.display = 'none';
     card.classList.add('kimi-in-float'); // 去卡自身边框，防浮窗双重边框
     card.open = true;
-    w.style.display = 'block';
+    w.style.display = 'flex';
     setTimeout(() => clampToViewport(w), 30); // 打开后钳回视口内（窄屏/移动端防出界）
     _kimiCardOpenKey = key;
 }
