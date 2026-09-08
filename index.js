@@ -1693,7 +1693,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.8'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.9'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2281,9 +2281,9 @@ function updateComboFloat() {
     }
     const $box = $(`<div id="kimi_combo_float" style="
         position:fixed;z-index:9600;width:${W}px;overflow:hidden;
-        border:1px solid rgba(255,255,255,.16);border-radius:50%;
-        background:rgba(92,98,116,0.40);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-        box-shadow:0 5px 16px rgba(0,0,0,.35), inset 0 0 0 .5px rgba(255,255,255,.05);user-select:none;
+        border:1px solid transparent;border-radius:50%;
+        background:transparent;
+        box-shadow:none;user-select:none;
         left:${initPos.x}px;top:${initPos.y}px;right:auto;bottom:auto;
     "></div>`).appendTo('body');
     // 创建后实测校验: fixed 相对布局视口, 布局视口比可视大(手机/缩放)时球仍可能不在屏内 → rect 拉回可视区
@@ -2299,7 +2299,7 @@ function updateComboFloat() {
 
     // 头部：拖拽把手 + 展开/收起（+ 上游徽标：最近一次实际路由，route-monitor 更新）
     $box.append(`<div class="kcf-head" style="height:${HEAD}px;display:flex;align-items:center;justify-content:center;gap:2px;cursor:grab;font-size:15px;color:var(--SmartThemeBodyColor,#eee);transition:background .2s ease">
-        <span style="font-size:20px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))">🔥</span>
+        <span style="font-size:32px;line-height:1;cursor:pointer;filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))">🔥</span>
     </div>`);
     let routeBadgeEl = null;
     if (settings.floatRouteBadge) {
@@ -2315,7 +2315,7 @@ function updateComboFloat() {
     const panelDefs = KIMI_CARD_DEFS.filter(d => settings.floatPanelKeys.includes(d.key) && !(settings.floatShowTagFix && d.key === 'tag')); // 按勾选过滤；tag 图标由功能区提供，面板区不重复
     const rowCount = ACTION_DEFS.length + panelDefs.length + (ACTION_DEFS.length ? 1 : 0);
 
-    const $items = $(`<div class="kcf-body" style="overflow:hidden;height:0;background:rgba(24,26,32,.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)"></div>`).appendTo($box);
+    const $items = $(`<div class="kcf-body" style="overflow:hidden;height:0;background:transparent"></div>`).appendTo($box);
 
     // 功能区（直接执行，选中色不同）
     ACTION_DEFS.forEach(def => {
@@ -2345,8 +2345,22 @@ function updateComboFloat() {
         expanded = on;
         const h = on ? rowCount * ITEM : 0;
         $items.css({ height: h + 'px', transition: 'height .22s ease' });
-        $box.css('box-shadow', on ? '0 8px 26px rgba(0,0,0,.45)' : '0 5px 16px rgba(0,0,0,.35)');
-        $box.css('border-radius', on ? '19px' : '50%');
+        // 1.35.9 折叠=纯漂浮emoji无背景; 展开才加毛玻璃sheet背景
+        $box.css(on ? {
+            'background': 'rgba(26,28,36,.85)',
+            'backdrop-filter': 'blur(14px)',
+            '-webkit-backdrop-filter': 'blur(14px)',
+            'border-color': 'rgba(255,255,255,.16)',
+            'box-shadow': '0 8px 26px rgba(0,0,0,.45)',
+            'border-radius': '20px',
+        } : {
+            'background': 'transparent',
+            'backdrop-filter': 'none',
+            '-webkit-backdrop-filter': 'none',
+            'border-color': 'transparent',
+            'box-shadow': 'none',
+            'border-radius': '50%',
+        });
         // 1.35.8 cline 渠道(routeBadge)常态收起不可见, 点开才显示
         if (routeBadgeEl && routeBadgeEl.length) routeBadgeEl.css('display', on ? 'flex' : 'none');
     }
