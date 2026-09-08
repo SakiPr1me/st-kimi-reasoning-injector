@@ -828,56 +828,8 @@ function applyClineProvider(bodyObj) {
         }
         return true;
     }
-    // 关闭：清除一切来源的 providerOptions（插件注入/手填存量），无则不动
-    let changed = false;
-    if (bodyObj.providerOptions !== undefined) { delete bodyObj.providerOptions; changed = true; }
-    if (bodyObj.provider !== undefined && bodyObj.provider !== null && typeof bodyObj.provider === 'object' && 'order' in bodyObj.provider) {
-        delete bodyObj.provider; changed = true; // 只清带 order 的路由型 provider 键，不误伤其它
-    }
-    if (inc) {
-        let obj = null;
-        try { const parsed = JSON.parse(inc); if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) obj = parsed; } catch (e) { }
-        if (obj) {
-            if ('providerOptions' in obj) { delete obj.providerOptions; changed = true; }
-            if (obj.provider && typeof obj.provider === 'object' && 'order' in obj.provider) { delete obj.provider; changed = true; }
-            if (changed) {
-                const rest = JSON.stringify(obj, null, 2);
-                bodyObj.custom_include_body = (rest === '{}' || rest === '[]') ? '' : rest;
-            }
-        } else {
-            // 混合形态兜底：插件先注入单行 JSON provider，再 YAML 追加 effort/thinking 等 → 整段无法 JSON.parse。
-            // ① stripYamlTopKey 删 YAML 顶行 provider/providerOptions（含缩进子块）；
-            // ② 逐行删「独立 JSON.parse 成功且顶层含 provider/providerOptions 的对象行」（JSON 内嵌 provider）。
-            let cleaned = stripYamlTopKey(stripYamlTopKey(inc, 'providerOptions'), 'provider');
-            const lines = String(cleaned).split('\n');
-            const kept = [];
-            let dirty = false;
-            for (const line of lines) {
-                const t = String(line).trim();
-                if (!t) continue;
-                let dropped = false;
-                if (t.startsWith('{')) {
-                    try {
-                        const j = JSON.parse(t);
-                        if (j && typeof j === 'object' && !Array.isArray(j) && ('provider' in j || 'providerOptions' in j)) {
-                            delete j.providerOptions;
-                            if (j.provider && typeof j.provider === 'object' && 'order' in j.provider) delete j.provider;
-                            if (Object.keys(j).length === 0) { dirty = true; continue; } // 只剩路由键 → 整行删
-                            // 同对象里还混着 effort 等其它键：去掉路由键后保留（极罕见，但保内容）
-                            const rest = JSON.stringify(j);
-                            kept.push(rest !== '{}' ? rest : '');
-                            dirty = true;
-                            dropped = true;
-                        }
-                    } catch (e) { /* 非独立 JSON 行，保留 */ }
-                }
-                if (!dropped) kept.push(line);
-            }
-            cleaned = kept.join('\n').replace(/\n{2,}/g, '\n').trim();
-            if (cleaned !== inc) { bodyObj.custom_include_body = cleaned; changed = true; }
-        }
-    }
-    return changed;
+    // 不勾选：插件完全不干预请求（每个注入相互独立，用户手填的内容原样保留）
+    return false;
 }
 
 const originalFetch = window.__kimiOrigFetch || window.fetch;
@@ -1769,7 +1721,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.25'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.26'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
