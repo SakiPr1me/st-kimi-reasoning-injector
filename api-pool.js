@@ -260,8 +260,11 @@ function refreshCurrentIndicator() {
 }
 
 function renderList(slotSel) {
-    const list = document.getElementById('kimi_api_list');
-    if (list) list.innerHTML = settings.pool.map((e, i) => rowHTML(e, i)).join('') || '<span style="opacity:.5;font-size:.85em">' + t('apiNoPool') + '</span>';
+    // 刷新所有 #kimi_api_list：面板重建会在 slot 挂新卡，而旧卡可能仍被移入悬浮窗 → 两份并存，
+    // getElementById 只取第一份会让另一份黄框不跟随（真 bug）。全量遍历刷新。
+    document.querySelectorAll('#kimi_api_list').forEach(list => {
+        list.innerHTML = settings.pool.map((e, i) => rowHTML(e, i)).join('') || '<span style="opacity:.5;font-size:.85em">' + t('apiNoPool') + '</span>';
+    });
 }
 
 export function mountApiPoolCard(slotSel) {
@@ -289,13 +292,12 @@ export function mountApiPoolCard(slotSel) {
         updateApiMenuItem();
     });
 
-    // 列表事件委托（增删改都走这里，重渲染后依然有效）。
-    // ⚠️ 必须防重复绑定：语言切换/删除重挂会多次调用本挂载函数，jQuery .on 会叠加监听器，
-    //    叠加后点一次 ✕ 会触发多个 handler 各删一条（真 bug：一次删除误删多条）
-    const $list = $('#kimi_api_list');
-    if (!$list.data('kimiDelegated')) {
-        $list.data('kimiDelegated', true);
-        $list.on('input', '.kimi-api-model, .kimi-api-url, .kimi-api-key', function () {
+    // 列表事件委托（增删改都走这里，重渲染后依然有效；document 级覆盖所有 #kimi_api_list，
+    // 含被移入悬浮窗的旧卡——主界面与悬浮框两份并存时切换/删除都生效）。
+    // 防重复：document 级委托 + data 标志，语言切换/重挂多次调用只绑一次。
+    if (!$(document).data('kimiApiDelegated')) {
+        $(document).data('kimiApiDelegated', true);
+        $(document).on('input', '#kimi_api_list .kimi-api-model, #kimi_api_list .kimi-api-url, #kimi_api_list .kimi-api-key', function () {
             const i = Number($(this).attr('data-i'));
             const e = settings.pool[i];
             if (!e) return;
@@ -304,16 +306,16 @@ export function mountApiPoolCard(slotSel) {
             else e.key = $(this).val();
             saveSettingsDebounced();
         });
-        $list.on('click', '.kimi-api-switch', function () {
+        $(document).on('click', '#kimi_api_list .kimi-api-switch', function () {
             const e = settings.pool[Number($(this).attr('data-i'))];
             if (e) doSwitch(e);
         });
-        $list.on('click', '.kimi-api-del', function () {
+        $(document).on('click', '#kimi_api_list .kimi-api-del', function () {
             const i = Number($(this).attr('data-i'));
             settings.pool.splice(i, 1);
             saveSettingsDebounced();
             updateApiMenuItem();
-            renderList(slotSel); // 只重渲染列表；整卡重挂是重复绑定的源头，不再使用
+            renderList(); // 只重渲染列表；整卡重挂是重复绑定的源头，不再使用
         });
     }
 }
