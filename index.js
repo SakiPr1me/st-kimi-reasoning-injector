@@ -36,7 +36,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.29.1 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.37.0 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -962,6 +962,7 @@ let autoStopTriggered = false;             // 本次生成是否已触发自动�
 let lastGenManuallyStopped = false;   // 上一次生成是否为用户手动停止（手动停的半截楼不做“无标记重roll”）
 let earlyRerollHandled = false;            // 流式截断重roll 是否已处理（GENERATION_ENDED 兜底防 MESSAGE_RECEIVED 缺失时双重重roll）
 let rerollFiredThisGen = false;      // 总闸：本次生成是否已触发过自动重roll（一次生成最多一次，封死双触发/连续两楼）
+let pendingSwipeConfirm = -1;        // 最近一次自动 swipe 的目标消息 id：等待真实 GENERATION_STARTED 确认（防 ST Swiping back 假成功导致总闸卡死）
 
 // 注入种子本身是否英文开头（用户手动贴英文模板时，模型跟随英文思考不算夺舍失败）
 function seedIsEnglish() {
@@ -1216,9 +1217,29 @@ function checkNativeReroll(messageId) {
 // 避免新生成和旧生成收尾并发导致 swipe 无效（ST 自己的 auto-swipe 也在 finalize 之后才调）。
 // v1.11.38：若 chat 最后一条是用户消息（AI 空回没生成 / regenerate 删了 AI 消息）→ 改用 Generate('regenerate') 重新生成；
 // 否则 swipe（实时用 chat.length-1，regenerate 删建后缓存 id 会失效）。
+// 等待 ST 的 abort 完全收尾：截断 stopGeneration 后 ST 内部仍在跑 abort 链（onErrorStreaming /
+// finishGenerating / Swiping back），此时立刻 swipe 会 "Generation was aborted" 回滚。用 ST 停止按钮
+// 显隐判断 ST 是否仍认为在生成（真实用户停止/abort 期间按钮可见），等它消失再 swipe。
+// v1.37.3：最多等 6 秒，期间每 200ms 轮询一次；超时也继续（不无限阻塞自动重roll）。
+async function waitStAbortSettled() {
+    try {
+        const t0 = Date.now();
+        while (Date.now() - t0 < 6000) {
+            const btn = document.querySelector('#mes_stop');
+            const busy = btn && getComputedStyle(btn).display !== 'none' && btn.getBoundingClientRect().width > 0;
+            if (!busy) return true; // ST 空闲 → abort 已收尾
+            await new Promise(r => setTimeout(r, 200));
+        }
+        console.log('[余温工具箱] 等待 ST abort 收尾超时(6s)，继续 swipe');
+        return true;
+    } catch (e) { return true; }
+}
+
 async function triggerAutoSwipe(messageId) {
     await new Promise(r => setTimeout(r, 300));
     try {
+        // 先等上一次 stopGeneration 的 abort 完全收尾，再开新分支（防竞态假成功）
+        await waitStAbortSettled();
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const chat = ctx?.chat;
         if (!chat || chat.length === 0) return;
@@ -1239,6 +1260,37 @@ async function triggerAutoSwipe(messageId) {
         console.log(`[余温工具箱] 触发自动重roll：消息#${targetId} 开新分支`);
         await doSwipe(targetId);
         console.log(`[余温工具箱] 自动重roll swipe 完成`);
+        // v1.37.3：swipe 确认 watchdog —— ST 在 abort 竞态下会 "Swipe failed, Swiping back" 回滚
+        // （doSwipe 的 ctx.swipe.to 不抛错、扩展无法感知），导致没有新分支、rerollFiredThisGen
+        // 永远等不到 GENERATION_STARTED 重置 → 后续空回/截断全被总闸挡 → 停在空回。
+        // 这里登记等待真实 GENERATION_STARTED；超时未确认 → 判定 swipe 假成功 → 复位总闸 + 各状态，
+        // 让后续事件（或空回兜底）能继续触发重roll，不再卡死。
+        if (targetId >= 0 && settings.enabled && !settings.rerollPaused) {
+            pendingSwipeConfirm = targetId;
+            setTimeout(() => {
+                if (pendingSwipeConfirm !== targetId) return; // 已被 GENERATION_STARTED 确认
+                pendingSwipeConfirm = -1;
+                // 距 swipe 已超时且从未进入新生成 → 释放本次"已重roll"的总闸，允许再触发
+                if (rerollFiredThisGen || earlyRerollHandled || emptyRerollHandled) {
+                    console.log('[余温工具箱] swipe 疑似假成功（ST Swiping back 回滚，未进入新生成）→ 复位总闸，允许后续重roll');
+                    rerollFiredThisGen = false;
+                    earlyRerollHandled = false;
+                    emptyRerollHandled = false;
+                    earlyRerollMessageId = -1;
+                    lastGenManuallyStopped = false;
+                    // 若恰好最后一条仍是空消息 → 补一次 regenerate（生成不依赖 swipe 状态，最稳）
+                    try {
+                        const ctxW = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+                        const chatW = ctxW?.chat;
+                        const lastW = chatW && chatW.length ? chatW[chatW.length - 1] : null;
+                        if (lastW && !lastW.is_user && isEmptyMes(lastW.mes) && autoRerollCount < settings.autoRerollLimit) {
+                            console.log('[余温工具箱] swipe 假成功且最后为空消息 → regenerate 兜底重roll');
+                            Generate('regenerate').catch(e2 => console.warn('[余温工具箱] regenerate 兜底失败:', e2));
+                        }
+                    } catch (eW) { console.warn('[余温工具箱] swipe watchdog 兜底失败:', eW); }
+                }
+            }, 8000);
+        }
     } catch (e) {
         console.warn('[余温工具箱] 自动重roll失败:', e);
     }
@@ -1721,7 +1773,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.36.0'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.0'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -3271,6 +3323,7 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
         return;
     }
     console.log('[余温工具箱] GENERATION_STARTED');
+    pendingSwipeConfirm = -1;    // 已进入真实生成 → 自动 swipe 确认成功（watchdog 不再兜底）
     lastGenManuallyStopped = false;
     rerollFiredThisGen = false;
     earlyStopTriggered = false;
@@ -3429,8 +3482,12 @@ eventSource.on(event_types.GENERATION_STOPPED, () => {
     }
 });
 
-// 手动停止检测：ST 停止按钮 #mes_stop 被点击 = 用户手动停止
+// 手动停止检测：ST 停止按钮 #mes_stop 被点击 = 用户手动停止。
+// v1.37.3：仅信任真实用户点击（isTrusted）。扩展流式截断/自动重roll 的 stopGeneration 竞态下，
+// ST 内部会程序化触发 #mes_stop 的 click（isTrusted=false），若误判成"手动停止"会把
+// lastGenManuallyStopped 置 true → 后续所有重roll被豁免 → 正好造成"空回后停住"。
 document.addEventListener('click', (e) => {
+    if (e.isTrusted !== true) return; // 程序化 click（ST abort 竞态触发）不算用户手动停止
     if (e.target && e.target.closest && e.target.closest('#mes_stop')) {
         manualStopClicked = true;
     }
