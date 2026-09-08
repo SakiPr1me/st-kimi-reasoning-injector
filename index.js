@@ -1693,7 +1693,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.13'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.14'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -1834,12 +1834,12 @@ async function doSelfUpdate(btn, remoteVer, auto) {
             // 必须自动刷新加载新代码，否则页面一直跑旧版（"更新了但看不到变化"）
             try { localStorage.setItem('kimi_upd_combo', JSON.stringify(c)); } catch (e) { } // 记住命中组合
             if (btn) btn.textContent = '✅ 已是最新';
-            try { toastr.success('✅ 插件已同步到最新，即将自动刷新', null, { timeOut: 3000 }); } catch (e) { }
+            try { toastr.success('🔥 余温工具箱：已同步到最新，即将自动刷新', null, { timeOut: 3000 }); } catch (e) { }
             window.__kimiCoordReload(2000);
             return;
         }
         if (btn) btn.textContent = '✅ 已更新';
-        try { toastr.success('✅ 插件已更新到 v' + remoteVer + '，即将自动刷新', null, { timeOut: 4000 }); } catch (e) { }
+        try { toastr.success('🔥 余温工具箱：已更新到 v' + remoteVer + '，即将自动刷新', null, { timeOut: 4000 }); } catch (e) { }
         window.__kimiCoordReload(3000); // 协调刷新：多插件并发更新时由最后完成者统一刷新
         return;
     }
@@ -1863,7 +1863,7 @@ async function doSelfUpdate(btn, remoteVer, auto) {
             body: JSON.stringify({ url: KIMI_REPO_URL, global: true }),
         });
         if (!ri.ok) throw new Error('HTTP ' + ri.status);
-        try { toastr.success('✅ 已通过重装方式更新到 v' + remoteVer + '，即将自动刷新', null, { timeOut: 4000 }); } catch (e) { }
+        try { toastr.success('🔥 余温工具箱：已通过重装方式更新到 v' + remoteVer + '，即将自动刷新', null, { timeOut: 4000 }); } catch (e) { }
         window.__kimiCoordReload(3000); // 协调刷新：多插件并发更新时由最后完成者统一刷新
         return;
     } catch (e3) {
