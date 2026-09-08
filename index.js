@@ -36,7 +36,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.37.4 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.37.5 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -1002,22 +1002,23 @@ function checkStreamingAbort(messageId) {
     if (!isGenerating) return; // 流式截断检测只在生成中有效（修正消息触发 observer 时避免误判）
     if (earlyStopTriggered) return;
     if (!settings.rerollOnEnglishThinking && !settings.rerollOnNoThinking && settings.rerollMinThinkingTokens <= 0) return;
-    // v1.37.4：只检测"本次生成正在写入的新分支"，跳过历史/静态内容——
+    // v1.37.5：只检测"本次生成正在写入的新分支"，跳过历史/静态内容——
     // ① observer 会因 swipe 动画/计数器捕获旧消息 DOM 变化，若旧消息是英文会误触发；
     // ② 用户手动往分支填英文 / 加载历史分支（gen_started 是旧时间）也绝不能触发截断——
     //    那只是查看内容，不是"本次生成输出英文"（模型本次可能根本没输出）。
     // 判定"本次生成的消息"：消息的 gen_started 必须晚于本次 GENERATION_STARTED（genStartAt）。
     // swipe 开的新分支生成时 ST 会更新 gen_started = 本次；手动编辑/加载旧分支保持旧 gen_started。
+    let dbgSkip = ''; // 诊断：记录跳过原因（临时排查用）
     try {
         const ctx0 = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const chat0 = ctx0?.chat;
         const lastAiIdx = (() => { for (let i = (chat0?.length || 1) - 1; i >= 0; i--) { const mm = chat0?.[i]; if (mm && !mm.is_user && !mm.is_system) return i; } return -1; })();
-        if (lastAiIdx < 0 || messageId !== lastAiIdx) return; // 非最后一条 assistant → 旧消息，跳过
+        if (lastAiIdx < 0 || messageId !== lastAiIdx) { dbgSkip = 'not-last-ai(id=' + messageId + ',lastAi=' + lastAiIdx + ')'; return; } // 非最后一条 assistant → 旧消息，跳过
         const lastAiMsg = chat0?.[lastAiIdx];
         if (lastAiMsg && genStartAt > 0) {
             const gs = lastAiMsg.gen_started ? new Date(lastAiMsg.gen_started).getTime() : 0;
             // 容差 2s：ST 的 gen_started 可能略早于 GENERATION_STARTED 事件；历史消息则远早于本次
-            if (Number.isFinite(gs) && gs > 0 && gs < genStartAt - 2000) return; // 历史消息（本次生成前就存在）→ 跳过
+            if (Number.isFinite(gs) && gs > 0 && gs < genStartAt - 2000) { dbgSkip = 'old-gen_started(gs=' + gs + ',genStartAt=' + genStartAt + ')'; return; } // 历史消息（本次生成前就存在）→ 跳过
         }
     } catch (e) { /* 静默：拿不到 chat 时不拦截 */ }
     try {
@@ -1073,6 +1074,12 @@ function checkStreamingAbort(messageId) {
         }
 
         if (stopReason) {
+            // 诊断（临时）：打印触发截断的确切内容与时间信息，排查"检测到静态英文"误触发
+            try {
+                const dbgMsg = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext().chat?.[messageId] : null;
+                const gsTxt = dbgMsg?.gen_started ? new Date(dbgMsg.gen_started).toISOString() : 'none';
+                console.log('[余温工具箱] [截断诊断] mid=' + messageId + ' skip=' + (dbgSkip || '-') + ' genStartAt=' + new Date(genStartAt).toISOString() + ' msgGenStarted=' + gsTxt + ' mesHead=' + JSON.stringify(String(dbgMsg?.mes || '').slice(0, 80)) + ' reasoningHead=' + JSON.stringify(String(dbgMsg?.extra?.reasoning || '').slice(0, 60)));
+            } catch (e) { }
             let stopped = false;
             try { stopped = stopGeneration(); } catch (e) { console.warn('[余温工具箱] 截断失败:', e); }
             if (stopped) {
@@ -1238,9 +1245,9 @@ function checkNativeReroll(messageId) {
 // 否则 swipe（实时用 chat.length-1，regenerate 删建后缓存 id 会失效）。
 // 等待 ST 的 abort 完全收尾：截断 stopGeneration 后 ST 内部仍在跑 abort 链（onErrorStreaming /
 // finishGenerating / Swiping back），此时立刻 swipe 会 "Generation was aborted" 回滚。
-// v1.37.4 曾用 #mes_stop 显隐判断——但按钮隐藏 ≠ is_send_press 清空（abort 链还在异步收尾），
+// v1.37.5 曾用 #mes_stop 显隐判断——但按钮隐藏 ≠ is_send_press 清空（abort 链还在异步收尾），
 // swipe 时 ST 的 `run_generate && !is_send_press` 不满足 → Generate('swipe') 不执行 → 分支不加。
-// v1.37.4：改为直接等 is_send_press（ST 正在生成标志，import live binding）变 false 才 swipe。
+// v1.37.5：改为直接等 is_send_press（ST 正在生成标志，import live binding）变 false 才 swipe。
 // 最多等 6 秒，期间每 150ms 轮询；超时也继续（不无限阻塞自动重roll）。
 async function waitStAbortSettled() {
     try {
@@ -1279,7 +1286,7 @@ async function triggerAutoSwipe(messageId) {
         console.log(`[余温工具箱] 触发自动重roll：消息#${targetId} 开新分支`);
         await doSwipe(targetId);
         console.log(`[余温工具箱] 自动重roll swipe 完成`);
-        // v1.37.4：swipe 确认 watchdog —— ST 在 abort 竞态下会 "Swipe failed, Swiping back" 回滚
+        // v1.37.5：swipe 确认 watchdog —— ST 在 abort 竞态下会 "Swipe failed, Swiping back" 回滚
         // （doSwipe 的 ctx.swipe.to 不抛错、扩展无法感知），导致没有新分支、rerollFiredThisGen
         // 永远等不到 GENERATION_STARTED 重置 → 后续空回/截断全被总闸挡 → 停在空回。
         // 这里登记等待真实 GENERATION_STARTED；超时未确认 → 判定 swipe 假成功 → 复位总闸 + 各状态，
@@ -1290,7 +1297,7 @@ async function triggerAutoSwipe(messageId) {
                 if (pendingSwipeConfirm !== targetId) return; // 已被 GENERATION_STARTED 确认
                 pendingSwipeConfirm = -1;
                 // 距 swipe 已超时且从未进入新生成 → 释放本次"已重roll"的总闸，允许再触发
-                // v1.37.4：已达连续上限时不再复位总闸——复位会让后续检测再次通过、count 继续++，
+                // v1.37.5：已达连续上限时不再复位总闸——复位会让后续检测再次通过、count 继续++，
                 // 造成 31/30、32/30 突破上限的无限循环。上限就是硬停：让 rerollBlockedNotified 提示生效，
                 // 等一条通过检测的消息或用户手动 swipe 把计数归零。
                 if ((rerollFiredThisGen || earlyRerollHandled || emptyRerollHandled) && autoRerollCount < settings.autoRerollLimit) {
@@ -1300,7 +1307,7 @@ async function triggerAutoSwipe(messageId) {
                     emptyRerollHandled = false;
                     earlyRerollMessageId = -1;
                     lastGenManuallyStopped = false;
-                    // v1.37.4：不再用 regenerate 兜底——regenerate 会删掉最后一条 AI 消息重建，
+                    // v1.37.5：不再用 regenerate 兜底——regenerate 会删掉最后一条 AI 消息重建，
                     // 新消息 swipe_id=undefined，ST 下次 swipe 时会把 swipes 清空（script.js swipe_id
                     // undefined 分支），造成"分支被清成 1 个"、重roll永远进不了新分支的死循环。
                     // 复位总闸后，后续 ENDED/MESSAGE_RECEIVED 的自然事件流会再次触发重roll（swipe 开新分支）。
@@ -1801,7 +1808,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.4'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.5'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -3512,7 +3519,7 @@ eventSource.on(event_types.GENERATION_STOPPED, () => {
 });
 
 // 手动停止检测：ST 停止按钮 #mes_stop 被点击 = 用户手动停止。
-// v1.37.4：仅信任真实用户点击（isTrusted）。扩展流式截断/自动重roll 的 stopGeneration 竞态下，
+// v1.37.5：仅信任真实用户点击（isTrusted）。扩展流式截断/自动重roll 的 stopGeneration 竞态下，
 // ST 内部会程序化触发 #mes_stop 的 click（isTrusted=false），若误判成"手动停止"会把
 // lastGenManuallyStopped 置 true → 后续所有重roll被豁免 → 正好造成"空回后停住"。
 document.addEventListener('click', (e) => {
