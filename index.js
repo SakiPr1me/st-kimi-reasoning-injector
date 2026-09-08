@@ -1532,6 +1532,10 @@ function openClineModal() {
         '<b style="font-size:.95em">' + t('clineTitle') + '</b>' +
         '<button type="button" class="kimi-btn" id="kimi_cline_float_close" style="flex:none;padding:0 9px">✕</button>' +
         '</div>' +
+        '<label style="display:flex;align-items:center;gap:6px;margin-top:10px;cursor:pointer">' +
+        '<input type="checkbox" id="kimi_cline_float_enabled" ' + (settings.clineProviderEnabled ? 'checked' : '') + ' style="cursor:pointer"/>' +
+        '<span style="font-size:.88em">' + t('clineEnabled') + '</span>' +
+        '</label>' +
         '<div id="kimi_route_line" style="margin-top:8px;font-size:.85em;padding:4px 8px;border:1px dashed var(--SmartThemeBorderColor);border-radius:6px;background:rgba(128,128,128,.08)"></div>' +
         '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px">' + btns + '</div>' +
         '<p class="kimi-hint" style="margin-top:10px;font-size:.8em;opacity:.8">' + t('clineHint') + '</p>';
@@ -1539,6 +1543,13 @@ function openClineModal() {
     renderRouteLine(document.getElementById('kimi_route_line'));
     w.addEventListener('click', (e) => e.stopPropagation());
     document.getElementById('kimi_cline_float_close').addEventListener('click', () => w.remove());
+    // 「使用 Cline 提供商指定」勾选：与模型参数卡同款（关闭时同时关闭浮窗——无指定可切）
+    document.getElementById('kimi_cline_float_enabled').addEventListener('change', function () {
+        settings.clineProviderEnabled = this.checked;
+        saveSettingsDebounced();
+        updateClineMenuItem();
+        if (!this.checked) { w.remove(); }
+    });
     w.querySelectorAll('.kimi-cline-p').forEach(btn => btn.addEventListener('click', function () {
         const p = this.getAttribute('data-p');
         if (!p || p === settings.clineProvider) { w.remove(); return; }
@@ -1707,7 +1718,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.19'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.20'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
