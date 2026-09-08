@@ -1693,7 +1693,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.11'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.12'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2303,7 +2303,7 @@ function updateComboFloat() {
     </div>`);
     let routeBadgeEl = null;
     if (settings.floatRouteBadge) {
-        routeBadgeEl = $(`<div class="kcf-route" style="height:14px;display:none;align-items:center;justify-content:center;font-size:9px;line-height:1;opacity:.8;letter-spacing:-.2px;color:var(--SmartThemeQuoteColor,#f0a35e);border-top:1px solid rgba(255,255,255,.07);white-space:nowrap;overflow:hidden">—</div>`).appendTo($box);
+        routeBadgeEl = $(`<div class="kcf-route" style="height:14px;display:none;align-items:center;justify-content:center;font-size:9px;line-height:1;opacity:.8;letter-spacing:-.2px;color:var(--SmartThemeQuoteColor,#f0a35e);border-top:1px solid rgba(128,128,128,.28);white-space:nowrap;overflow:hidden">—</div>`).appendTo($box);
     }
     updateRouteBadgeDom();
 
@@ -2321,19 +2321,19 @@ function updateComboFloat() {
     ACTION_DEFS.forEach(def => {
         $items.append(`<div class="kcf-item kcf-action" data-act="${def.key}" style="
             height:${ITEM}px;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;
-            cursor:pointer;border-bottom:1px solid rgba(255,255,255,.07);position:relative
+            cursor:pointer;border-bottom:1px solid rgba(128,128,128,.28);position:relative
         " title="${def.label}"><span style="display:inline-flex;align-items:center;justify-content:center">${__kimiSvgIcon(def.ico, def.color)}</span></div>`);
     });
     // 功能区与面板区分隔线
     if (ACTION_DEFS.length) {
-        $items.append(`<div class="kcf-sep" style="height:5px;background:rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.08);cursor:default"></div>`);
+        $items.append(`<div class="kcf-sep" style="height:5px;background:rgba(128,128,128,.16);border-bottom:1px solid rgba(128,128,128,.28);cursor:default"></div>`);
     }
     // 面板区（打开设置卡浮窗）
     panelDefs.forEach(def => {
         const label = t(def.titleKey);
         $items.append(`<div class="kcf-item" data-act="${def.key}" style="
             height:${ITEM}px;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;
-            cursor:pointer;border-bottom:1px solid rgba(255,255,255,.07);position:relative
+            cursor:pointer;border-bottom:1px solid rgba(128,128,128,.28);position:relative
         " title="${label}"><span style="display:inline-flex;align-items:center;justify-content:center">${__kimiSvgIcon(def.ico, 'var(--SmartThemeQuoteColor)')}</span></div>`);
     });
     $items.find('.kcf-item').on('mouseenter', function () { $(this).css('background', 'rgba(128,128,128,.22)'); });
@@ -2347,10 +2347,10 @@ function updateComboFloat() {
         $items.css({ height: h + 'px', opacity: on ? 1 : 0, transition: 'height .22s ease, opacity .18s ease' });
         // 1.35.9 折叠=纯漂浮emoji无背景; 展开才加毛玻璃sheet背景
         $box.css(on ? {
-            'background': 'rgba(26,28,36,.85)',
+            'background': 'var(--SmartThemeBlurTintColor, rgba(30,32,40,.88))',
             'backdrop-filter': 'blur(14px)',
             '-webkit-backdrop-filter': 'blur(14px)',
-            'border-color': 'rgba(255,255,255,.16)',
+            'border-color': 'var(--SmartThemeBorderColor, rgba(255,255,255,.16))',
             'box-shadow': '0 8px 26px rgba(0,0,0,.45)',
             'border-radius': '20px',
         } : {
