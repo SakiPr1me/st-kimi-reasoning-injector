@@ -41,7 +41,13 @@ function isCustomSource() {
 
 function currentIndex() {
     const cur = norm(oai_settings?.custom_url);
-    const idx = settings.pool.findIndex(e => e.url && norm(e.url) === cur);
+    const curModel = String(oai_settings?.custom_model || '').trim();
+    // 优先「URL+模型」都匹配（同 URL 不同模型的池记录能精确定位当前行）；
+    // 池记录没填模型（切它时不动 custom_model）→ 只按 URL 兜底匹配第一条；
+    // 全无匹配回退纯 URL 匹配（兼容自定义模型名不在池里记录等场景）
+    let idx = settings.pool.findIndex(e => e.url && norm(e.url) === cur && e.model && String(e.model).trim() && String(e.model).trim() === curModel);
+    if (idx < 0) idx = settings.pool.findIndex(e => e.url && norm(e.url) === cur && !(e.model && String(e.model).trim()));
+    if (idx < 0) idx = settings.pool.findIndex(e => e.url && norm(e.url) === cur);
     return idx;
 }
 
