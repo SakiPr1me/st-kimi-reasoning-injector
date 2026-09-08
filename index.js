@@ -36,7 +36,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.37.0 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.37.1 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -1271,21 +1271,30 @@ async function triggerAutoSwipe(messageId) {
                 if (pendingSwipeConfirm !== targetId) return; // 已被 GENERATION_STARTED 确认
                 pendingSwipeConfirm = -1;
                 // 距 swipe 已超时且从未进入新生成 → 释放本次"已重roll"的总闸，允许再触发
-                if (rerollFiredThisGen || earlyRerollHandled || emptyRerollHandled) {
+                // v1.37.1：已达连续上限时不再复位总闸——复位会让后续检测再次通过、count 继续++，
+                // 造成 31/30、32/30 突破上限的无限循环。上限就是硬停：让 rerollBlockedNotified 提示生效，
+                // 等一条通过检测的消息或用户手动 swipe 把计数归零。
+                if ((rerollFiredThisGen || earlyRerollHandled || emptyRerollHandled) && autoRerollCount < settings.autoRerollLimit) {
                     console.log('[余温工具箱] swipe 疑似假成功（ST Swiping back 回滚，未进入新生成）→ 复位总闸，允许后续重roll');
                     rerollFiredThisGen = false;
                     earlyRerollHandled = false;
                     emptyRerollHandled = false;
                     earlyRerollMessageId = -1;
                     lastGenManuallyStopped = false;
-                    // 若恰好最后一条仍是空消息 → 补一次 regenerate（生成不依赖 swipe 状态，最稳）
+                    // v1.37.1：不再用 regenerate 兜底——regenerate 会删掉最后一条 AI 消息重建，
+                    // 新消息 swipe_id=undefined，ST 下次 swipe 时会把 swipes 清空（script.js swipe_id
+                    // undefined 分支），造成"分支被清成 1 个"、重roll永远进不了新分支的死循环。
+                    // 复位总闸后，后续 ENDED/MESSAGE_RECEIVED 的自然事件流会再次触发重roll（swipe 开新分支）。
+                    // 这里只做一件事：若消息 swipe_id 异常（undefined/负数）则修正，确保下一次 swipe 走分支逻辑。
                     try {
                         const ctxW = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
                         const chatW = ctxW?.chat;
                         const lastW = chatW && chatW.length ? chatW[chatW.length - 1] : null;
-                        if (lastW && !lastW.is_user && isEmptyMes(lastW.mes) && autoRerollCount < settings.autoRerollLimit) {
-                            console.log('[余温工具箱] swipe 假成功且最后为空消息 → regenerate 兜底重roll');
-                            Generate('regenerate').catch(e2 => console.warn('[余温工具箱] regenerate 兜底失败:', e2));
+                        if (lastW && !lastW.is_user && typeof lastW.swipe_id !== 'number') {
+                            const sw = Array.isArray(lastW.swipes) ? lastW.swipes : [];
+                            lastW.swipe_id = Math.max(0, sw.length - 1);
+                            if (!Array.isArray(lastW.swipes)) lastW.swipes = [lastW.mes ?? ''];
+                            console.log('[余温工具箱] 修正消息 swipe_id=' + lastW.swipe_id + '（防 ST 把 swipe 降级为 normal）');
                         }
                     } catch (eW) { console.warn('[余温工具箱] swipe watchdog 兜底失败:', eW); }
                 }
@@ -1773,7 +1782,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.0'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.1'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
