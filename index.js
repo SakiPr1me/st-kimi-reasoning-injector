@@ -1693,7 +1693,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.10'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.11'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2283,7 +2283,7 @@ function updateComboFloat() {
         position:fixed;z-index:9600;width:${W}px;overflow:hidden;
         border:1px solid transparent;border-radius:50%;
         background:transparent;
-        box-shadow:none;user-select:none;
+        box-shadow:none;user-select:none;transition:background .2s ease,border-color .2s ease,box-shadow .2s ease,border-radius .2s ease,backdrop-filter .2s ease,-webkit-backdrop-filter .2s ease;
         left:${initPos.x}px;top:${initPos.y}px;right:auto;bottom:auto;
     "></div>`).appendTo('body');
     // 创建后实测校验: fixed 相对布局视口, 布局视口比可视大(手机/缩放)时球仍可能不在屏内 → rect 拉回可视区
@@ -2344,7 +2344,7 @@ function updateComboFloat() {
     function setExpanded(on) {
         expanded = on;
         const h = on ? rowCount * ITEM : 0;
-        $items.css({ height: h + 'px', transition: 'height .22s ease' });
+        $items.css({ height: h + 'px', opacity: on ? 1 : 0, transition: 'height .22s ease, opacity .18s ease' });
         // 1.35.9 折叠=纯漂浮emoji无背景; 展开才加毛玻璃sheet背景
         $box.css(on ? {
             'background': 'rgba(26,28,36,.85)',
