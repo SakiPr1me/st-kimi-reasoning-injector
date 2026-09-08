@@ -1511,10 +1511,7 @@ window.__kimiRouteUpdated = () => {
 };
 
 function openClineModal() {
-    if (!settings.clineProviderEnabled) {
-        try { toastr.warning(String(t('clineNeedEnable')), 'Cline', { timeOut: 3500 }); } catch (e) { }
-        return;
-    }
+    // 面板总能打开：顶部勾选显示「使用Cline提供商指定」的真实状态，由用户自行勾选/取消（不自动改）
     $('.kimi-cline-float').remove(); // 幂等重建
     const btns = getClineProviders().map(p => {
         const cur = p === settings.clineProvider;
@@ -1551,6 +1548,7 @@ function openClineModal() {
         settings.clineProviderEnabled = this.checked;
         saveSettingsDebounced();
         updateClineMenuItem();
+        try { $('#' + extensionName + '_cline_enabled').prop('checked', this.checked); } catch (e) { } // 同步主面板勾选态
         if (!this.checked) { w.remove(); }
     });
     w.querySelectorAll('.kimi-cline-p').forEach(btn => btn.addEventListener('click', function () {
@@ -1721,7 +1719,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.21'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.22'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2412,13 +2410,7 @@ function updateComboFloat() {
         const act = $(this).attr('data-act');
         if ($(this).hasClass('kcf-action')) {
             if (act === 'cline') {
-                // Cline 提供商入口：未开启指定时自动开启（用户确认的行为），再打开选择弹窗
-                if (!settings.clineProviderEnabled) {
-                    settings.clineProviderEnabled = true;
-                    saveSettingsDebounced();
-                    try { toastr.success(String(t('clineEnabled')), 'Cline', { timeOut: 2500 }); } catch (e) { }
-                    try { $('#' + extensionName + '_cline_enabled').prop('checked', true); } catch (e) { }
-                }
+                // Cline 提供商入口：不自动开启指定——未开启时 openClineModal 会提示先勾选，由用户自己决定
                 openClineModal();
                 return;
             }
