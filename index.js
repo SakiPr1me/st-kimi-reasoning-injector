@@ -1526,9 +1526,9 @@ function openClineModal() {
         'border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;' +
         'background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));color:var(--SmartThemeBodyColor);' +
         'box-shadow:0 8px 30px rgba(0,0,0,.55);padding:12px 14px;user-select:none';
-    w.innerHTML = '<div style="flex:none;display:flex;justify-content:space-between;align-items:center;gap:8px">' +
-        '<b style="font-size:.95em">' + t('clineTitle') + '</b>' +
-        '<button type="button" class="kimi-btn" id="kimi_cline_float_close" style="flex:none;padding:0 9px">✕</button>' +
+    w.innerHTML = '<div id="kimi_cline_float_head" style="flex:none;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:grab;user-select:none">' +
+        '<span style="opacity:.6;cursor:grab">⠿</span><b style="font-size:.95em">' + t('clineTitle') + '</b>' +
+        '<button type="button" class="kimi-btn" id="kimi_cline_float_close" style="flex:none;padding:0 9px;margin-left:auto">✕</button>' +
         '</div>' +
         '<div style="flex:1;min-height:0;overflow-y:auto;margin-top:10px">' +
         '<label style="display:flex;align-items:center;gap:6px;cursor:pointer">' +
@@ -1561,7 +1561,27 @@ function openClineModal() {
         try { $('#' + extensionName + '_cline_provider').val(p); } catch (e) { }
         w.remove();
     }));
-    // 与通用卡浮窗一致: 打开后钳回视口内(窄屏/移动端防出界) + 点空白关闭
+    // 拖拽（卡浮窗同款：3px 阈值 + document 级移动 + touch；✕/勾选按钮上不启动）
+    const $head = $('#kimi_cline_float_head', w);
+    let dragging = false, dx, dy, startX, startY;
+    $head.on('mousedown touchstart', function (e) {
+        if (e.target && e.target.closest && e.target.closest('button, input, label')) return;
+        dragging = false;
+        const ev = e.touches ? e.touches[0] : e;
+        startX = ev.clientX; startY = ev.clientY;
+        const pos = $(w).position();
+        dx = startX - pos.left; dy = startY - pos.top;
+        e.preventDefault();
+    });
+    $(document).on('mousemove.kimi_drag touchmove.kimi_drag', function (e) {
+        if (dx === undefined || !w.isConnected) return;
+        const ev = e.touches ? e.touches[0] : e;
+        if (Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3) dragging = true;
+        if (dragging) { e.preventDefault(); $(w).css({ left: (ev.clientX - dx) + 'px', top: (ev.clientY - dy) + 'px', right: 'auto' }); }
+    });
+    $(document).on('mouseup.kimi_drag touchend.kimi_drag', () => { dx = undefined; clampToViewport(w, 6); });
+    $(window).on('resize.kimi_drag', () => { if (w.isConnected) clampToViewport(w, 6); });
+    // 打开后钳回视口内（窄屏/移动端防出界）
     setTimeout(() => clampToViewport(w, 6), 30);
     setTimeout(() => {
         $(document).one('click.kimi_cline', (e) => { if (w.isConnected && !w.contains(e.target)) w.remove(); });
@@ -1582,6 +1602,9 @@ function ensureClineModalStyle() {
 #kimi_cline_float .kimi-cline-p:hover{filter:brightness(1.25)}
 #kimi_cline_float .kimi-cline-p.kimi-cline-cur{border:1.5px solid var(--golden-color,#e0a800)!important;background:rgba(224,168,0,.16);font-weight:700}
 #kimi_cline_float .kimi-hint{color:var(--SmartThemeBodyColor);opacity:.75}
+#kimi_cline_float .kimi-btn{padding:3px 10px;border-radius:8px;border:1px solid var(--SmartThemeBorderColor);background:rgba(255,255,255,.05);color:var(--SmartThemeBodyColor,inherit);cursor:pointer;font-size:.85em;transition:filter .15s ease}
+#kimi_cline_float .kimi-btn:hover{filter:brightness(1.15)}
+#kimi_cline_float input[type="checkbox"]{accent-color:var(--golden-color,#e0a800)}
 .kimi-cline-overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px}
 .kimi-cline-modal-card{background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;padding:16px;width:min(430px,92vw);flex-shrink:0;box-shadow:0 4px 24px rgba(0,0,0,.45);color:var(--SmartThemeBodyColor)}
 .kimi-cline-p{border:1px solid var(--SmartThemeBorderColor);border-radius:10px;padding:9px 6px;background:rgba(255,255,255,.04);color:var(--SmartThemeBodyColor);cursor:pointer;font-size:.92em;text-align:center;transition:filter .15s ease,border-color .15s ease}
@@ -1719,7 +1742,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.22'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.23'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
