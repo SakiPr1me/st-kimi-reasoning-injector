@@ -844,8 +844,9 @@ function applyClineProvider(bodyObj) {
                 const rest = JSON.stringify(obj, null, 2);
                 bodyObj.custom_include_body = (rest === '{}' || rest === '[]') ? '' : rest;
             }
-        } else if (/^providerOptions\s*:/m.test(inc)) {
-            bodyObj.custom_include_body = stripYamlTopKey(inc, 'providerOptions');
+        } else if (/^providerOptions\s*:/m.test(inc) || /^provider\s*:/m.test(inc)) {
+            // 清 YAML 顶行路由键：providerOptions 和 provider（插件注入与手填都是 provider: 顶行格式）
+            bodyObj.custom_include_body = stripYamlTopKey(stripYamlTopKey(inc, 'providerOptions'), 'provider');
             changed = true;
         }
     }
@@ -1543,13 +1544,12 @@ function openClineModal() {
     renderRouteLine(document.getElementById('kimi_route_line'));
     w.addEventListener('click', (e) => e.stopPropagation());
     document.getElementById('kimi_cline_float_close').addEventListener('click', () => w.remove());
-    // 「使用 Cline 提供商指定」勾选：与模型参数卡同款（关闭时同时关闭浮窗——无指定可切）
+    // 「使用 Cline 提供商指定」勾选：只同步设置 + 主面板，勾选/取消都不关闭浮窗（面板停留供继续操作）
     document.getElementById('kimi_cline_float_enabled').addEventListener('change', function () {
         settings.clineProviderEnabled = this.checked;
         saveSettingsDebounced();
         updateClineMenuItem();
         try { $('#' + extensionName + '_cline_enabled').prop('checked', this.checked); } catch (e) { } // 同步主面板勾选态
-        if (!this.checked) { w.remove(); }
     });
     w.querySelectorAll('.kimi-cline-p').forEach(btn => btn.addEventListener('click', function () {
         const p = this.getAttribute('data-p');
@@ -1742,7 +1742,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.23'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.24'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
