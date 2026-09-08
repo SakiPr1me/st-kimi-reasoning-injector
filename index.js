@@ -1515,40 +1515,44 @@ function openClineModal() {
         try { toastr.warning(String(t('clineNeedEnable')), 'Cline', { timeOut: 3500 }); } catch (e) { }
         return;
     }
-    $('#kimi_cline_win').remove();
+    $('.kimi-cline-float').remove(); // 幂等重建
     const btns = getClineProviders().map(p => {
         const cur = p === settings.clineProvider;
         return `<button class="kimi-cline-p${cur ? ' kimi-cline-cur' : ''}" data-p="${p}">${p}${cur ? ' ✓' : ''}</button>`;
     }).join('');
     ensureClineModalStyle();
-    const $win = $(`
-    <div id="kimi_cline_win" class="kimi-cline-win">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <b style="font-size:.95em">${t('clineTitle')}</b>
-        <button type="button" class="kimi-cline-close" title="关闭">✕</button>
-      </div>
-      <div id="kimi_route_line" style="margin-top:8px;font-size:.85em;padding:4px 8px;border:1px dashed var(--SmartThemeBorderColor);border-radius:6px;background:rgba(128,128,128,.08)"></div>
-      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px">${btns}</div>
-      <p class="kimi-hint" style="margin-top:10px;font-size:.8em;opacity:.8">${t('clineHint')}</p>
-    </div>`).appendTo('body');
+    const w = document.createElement('div');
+    w.id = 'kimi_cline_float';
+    w.className = 'kimi-cline-float';
+    w.style.cssText = 'position:fixed;top:70px;right:14px;z-index:10001;width:min(440px,94vw);max-height:80vh;overflow-y:auto;' +
+        'border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;' +
+        'background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));color:var(--SmartThemeBodyColor);' +
+        'box-shadow:0 8px 30px rgba(0,0,0,.55);padding:12px 14px;user-select:none';
+    w.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
+        '<b style="font-size:.95em">' + t('clineTitle') + '</b>' +
+        '<button type="button" class="kimi-btn" id="kimi_cline_float_close" style="flex:none;padding:0 9px">✕</button>' +
+        '</div>' +
+        '<div id="kimi_route_line" style="margin-top:8px;font-size:.85em;padding:4px 8px;border:1px dashed var(--SmartThemeBorderColor);border-radius:6px;background:rgba(128,128,128,.08)"></div>' +
+        '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px">' + btns + '</div>' +
+        '<p class="kimi-hint" style="margin-top:10px;font-size:.8em;opacity:.8">' + t('clineHint') + '</p>';
+    document.body.appendChild(w);
     renderRouteLine(document.getElementById('kimi_route_line'));
-    // 阻止事件冒泡到 document——否则 ST 抽屉逻辑会把扩展面板主界面关掉
-    ['click', 'pointerdown', 'mousedown', 'touchstart', 'pointerup', 'mouseup', 'touchend'].forEach(ev =>
-        $win[0].addEventListener(ev, (e) => e.stopPropagation()));
-    $win.find('.kimi-cline-p').on('click', function () {
-        const p = $(this).attr('data-p');
-        if (!p || p === settings.clineProvider) { $win.remove(); return; }
+    w.addEventListener('click', (e) => e.stopPropagation());
+    document.getElementById('kimi_cline_float_close').addEventListener('click', () => w.remove());
+    w.querySelectorAll('.kimi-cline-p').forEach(btn => btn.addEventListener('click', function () {
+        const p = this.getAttribute('data-p');
+        if (!p || p === settings.clineProvider) { w.remove(); return; }
         settings.clineProvider = p;
         saveSettingsDebounced();
         try { toastr.success(String(t('clineSwitched')).replace('{p}', p), 'Cline', { timeOut: 2500 }); } catch (e) { }
         updateClineMenuItem();
         try { $('#' + extensionName + '_cline_provider').val(p); } catch (e) { }
-        $win.remove();
-    });
-    $win.find('.kimi-cline-close').on('click', function () { $win.remove(); });
-    // 点浮窗以外空白处关闭(半透明遮罩由 win 的 box-shadow/背景承担, 不另造 overlay)
+        w.remove();
+    }));
+    // 与通用卡浮窗一致: 打开后钳回视口内(窄屏/移动端防出界) + 点空白关闭
+    setTimeout(() => clampToViewport(w, 6), 30);
     setTimeout(() => {
-        $(document).one('click.kimi_cline', (e) => { if ($win[0] && !$win[0].contains(e.target)) $win.remove(); });
+        $(document).one('click.kimi_cline', (e) => { if (w.isConnected && !w.contains(e.target)) w.remove(); });
     }, 0);
 }
 
@@ -1559,6 +1563,11 @@ function ensureClineModalStyle() {
 .kimi-cline-win{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10001;width:min(430px,92vw);max-height:86vh;overflow-y:auto;background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.5);color:var(--SmartThemeBodyColor)}
 .kimi-cline-close{background:none;border:none;color:var(--SmartThemeBodyColor);font-size:1em;cursor:pointer;padding:2px 8px;border-radius:6px}
 .kimi-cline-close:hover{background:rgba(128,128,128,.2)}
+.kimi-cline-float{position:fixed;top:70px;right:14px;z-index:10001;width:min(440px,94vw);max-height:80vh;overflow-y:auto;background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;padding:12px 14px;box-shadow:0 8px 30px rgba(0,0,0,.55);color:var(--SmartThemeBodyColor)}
+#kimi_cline_float .kimi-cline-p{border:1px solid var(--SmartThemeBorderColor);border-radius:10px;padding:9px 6px;background:rgba(128,128,128,.1);color:var(--SmartThemeBodyColor);cursor:pointer;font-size:.92em;text-align:center}
+#kimi_cline_float .kimi-cline-p:hover{filter:brightness(1.25)}
+#kimi_cline_float .kimi-cline-p.kimi-cline-cur{border:1.5px solid var(--golden-color,#e0a800)!important;background:rgba(224,168,0,.16);font-weight:700}
+#kimi_cline_float .kimi-hint{color:var(--SmartThemeBodyColor);opacity:.75}
 .kimi-cline-overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px}
 .kimi-cline-modal-card{background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;padding:16px;width:min(430px,92vw);flex-shrink:0;box-shadow:0 4px 24px rgba(0,0,0,.45);color:var(--SmartThemeBodyColor)}
 .kimi-cline-p{border:1px solid var(--SmartThemeBorderColor);border-radius:10px;padding:9px 6px;background:rgba(255,255,255,.04);color:var(--SmartThemeBodyColor);cursor:pointer;font-size:.92em;text-align:center;transition:filter .15s ease,border-color .15s ease}
@@ -1696,7 +1705,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.17'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.18'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
