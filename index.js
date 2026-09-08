@@ -1693,7 +1693,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.12'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.13'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -1913,29 +1913,37 @@ async function manualCheckUpdate(btn) {
     }
     btn.dataset.busy = '1';
     btn.textContent = '⏳'; btn.title = '正在检测…';
-    let txt = '', title2 = '', cls = '';
     let failedRemoteVer = '';
     try {
         const remoteVer = await fetchRemoteVersion(true);
         failedRemoteVer = remoteVer;
         const cmp = compareVer(remoteVer, PLUGIN_VERSION);
-        if (cmp === 0) { txt = '✅ 已是最新'; cls = 'same'; }
-        else { txt = '✓ 可更新至 v' + remoteVer; cls = 'newer'; } // 0.13.0 归并(与 st-chat-sync 统一): 版本不一致(含"本地更高")一律显示可更新, 点更新走仓库最新
-        const seen = window.__kimiUpdSources ? JSON.stringify(window.__kimiUpdSources) : '';
-        title2 = '本机 v' + PLUGIN_VERSION + ' / 远端取最大 v' + remoteVer + (seen ? '\n各源: ' + seen : '')
-            + (window.__kimiRemoteAuthoritative ? '' : '\n(⚠️权威API源均未成功, 结果可能受CDN缓存影响)');
+        if (cmp === 0) {
+            const seen = window.__kimiUpdSources ? JSON.stringify(window.__kimiUpdSources) : '';
+            btn.textContent = '✅ 已是最新'; btn.style.color = '';
+            btn.title = '本机 v' + PLUGIN_VERSION + ' / 远端取最大 v' + remoteVer + (seen ? '\n各源: ' + seen : '')
+                + (window.__kimiRemoteAuthoritative ? '' : '\n(⚠️权威API源均未成功, 结果可能受CDN缓存影响)');
+            btn.dataset.result = 'same'; btn.dataset.done = '1';
+            delete btn.dataset.busy;
+            return;
+        }
+        // 1.35.13 检测到可更新 → 直接执行更新并刷新(与 st-chat-sync 0.12.74 统一)
+        btn.textContent = '⬆ 发现 v' + remoteVer + '，自动更新中…';
+        btn.title = '本机 v' + PLUGIN_VERSION + ' / 远端 v' + remoteVer;
+        delete btn.dataset.busy; delete btn.dataset.done; delete btn.dataset.result; delete btn.dataset.forceUpdate; delete btn.dataset.forceUpdVer;
+        doSelfUpdate(btn, remoteVer, false);
+        return;
     } catch (e) {
-        txt = '❌ 检测失败'; title2 = String(e).slice(0, 80); cls = 'fail';
-    }
-    btn.textContent = txt; btn.title = title2;
-    btn.dataset.result = cls; btn.dataset.done = '1';
-    delete btn.dataset.busy;
-    // 可更新 / 检测失败：再点按钮直接执行更新到最新（不需要再次检测）
-    if (cls === 'newer' || cls === 'fail') {
+        btn.textContent = '❌ 检测失败';
+        btn.title = String(e).slice(0, 80) + '\n(再点一次＝直接执行更新，无需令牌/检测)';
+        btn.dataset.result = 'fail'; btn.dataset.done = '1';
+        delete btn.dataset.busy;
         btn.dataset.forceUpdate = '1';
         btn.dataset.forceUpdVer = failedRemoteVer;
+        return;
     }
 }
+
 window.__ywManualCheck = manualCheckUpdate;
 // 启动时检查 + 手动检查按钮
 window.__ywCheckUpdate = checkUpdate;
