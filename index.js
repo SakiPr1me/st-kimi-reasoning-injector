@@ -1693,7 +1693,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.3'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.35.4'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2095,17 +2095,17 @@ function updatePsnapEntries() {
 // ===== 通用「设置卡」悬浮窗：把主页原版卡移入浮窗（绑定保留），改完移回 =====
 // 卡注册表：悬浮入口条目的顺序/图标/标题（标题键三语，与主页卡 summary 匹配）
 const KIMI_CARD_DEFS = [
-    { key: 'inject', ico: 'fa-bolt', titleKey: 'injectTitle' },
-    { key: 'model', ico: 'fa-brain', titleKey: 'modelTitle' },
-    { key: 'reroll', ico: 'fa-arrows-rotate', titleKey: 'rerollTitle' },
-    { key: 'beautify', ico: 'fa-palette', titleKey: 'beautifyTitle' },
-    { key: 'autoStop', ico: 'fa-scissors', titleKey: 'autoStopTitle' },
-    { key: 'word', ico: 'fa-broom', titleKey: 'wordTitle' },
-    { key: 'psnap', ico: 'fa-list-check', titleKey: 'psnapTitle' },
-    { key: 'tag', ico: 'fa-tag', titleKey: 'tagTitle' },
-    { key: 'api', ico: 'fa-plug', titleKey: 'apiTitle' },
-    { key: 'misc', ico: 'fa-screwdriver-wrench', titleKey: 'miscLabel' },
-    { key: 'fix', ico: 'fa-wrench', titleKey: 'fixTitle' },
+    { key: 'inject', ico: '⚡', titleKey: 'injectTitle' },
+    { key: 'model', ico: '🧠', titleKey: 'modelTitle' },
+    { key: 'reroll', ico: '🔄', titleKey: 'rerollTitle' },
+    { key: 'beautify', ico: '🎨', titleKey: 'beautifyTitle' },
+    { key: 'autoStop', ico: '✂️', titleKey: 'autoStopTitle' },
+    { key: 'word', ico: '🧹', titleKey: 'wordTitle' },
+    { key: 'psnap', ico: '📋', titleKey: 'psnapTitle' },
+    { key: 'tag', ico: '🏷️', titleKey: 'tagTitle' },
+    { key: 'api', ico: '🔌', titleKey: 'apiTitle' },
+    { key: 'misc', ico: '🔧', titleKey: 'miscLabel' },
+    { key: 'fix', ico: '🛠️', titleKey: 'fixTitle' },
 ];
 let _kimiCardFloating = null;   // 浮窗 DOM
 let _kimiCardOrigin = null;     // 卡的原父节点+nextSibling（关闭时移回原位置）
@@ -2261,8 +2261,8 @@ function updateComboFloat() {
 
     // 条目区 = 功能（直接操作，绿色 fa 图标，分隔在上）+ 面板（打开设置卡，橙色 fa 图标）
     const ACTION_DEFS = [
-        { key: 'tag', ico: 'fa-wand-magic-sparkles', label: t('tagFixNow'), color: '#6fce6f', on: !!settings.floatShowTagFix },
-        { key: 'cline', ico: 'fa-route', label: t('floatClineEntry'), color: '#6fb7f0', on: !!settings.floatShowCline },
+        { key: 'tag', ico: '🪄', label: t('tagFixNow'), color: '#6fce6f', on: !!settings.floatShowTagFix },
+        { key: 'cline', ico: '🗺️', label: t('floatClineEntry'), color: '#6fb7f0', on: !!settings.floatShowCline },
     ].filter(a => a.on);
     const panelDefs = KIMI_CARD_DEFS.filter(d => settings.floatPanelKeys.includes(d.key) && !(settings.floatShowTagFix && d.key === 'tag')); // 按勾选过滤；tag 图标由功能区提供，面板区不重复
     const rowCount = ACTION_DEFS.length + panelDefs.length + (ACTION_DEFS.length ? 1 : 0);
@@ -2274,7 +2274,7 @@ function updateComboFloat() {
         $items.append(`<div class="kcf-item kcf-action" data-act="${def.key}" style="
             height:${ITEM}px;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;
             cursor:pointer;border-bottom:1px solid rgba(255,255,255,.07);position:relative
-        " title="${def.label}"><i class="fa-solid ${def.ico} kimi-card-ico" aria-hidden="true" style="font-size:15px;color:${def.color}"></i></div>`);
+        " title="${def.label}"><span aria-hidden="true" style="font-size:17px;line-height:1">${def.ico}</span></div>`);
     });
     // 功能区与面板区分隔线
     if (ACTION_DEFS.length) {
@@ -2286,7 +2286,7 @@ function updateComboFloat() {
         $items.append(`<div class="kcf-item" data-act="${def.key}" style="
             height:${ITEM}px;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;
             cursor:pointer;border-bottom:1px solid rgba(255,255,255,.07);position:relative
-        " title="${label}"><i class="fa-solid ${def.ico} kimi-card-ico" aria-hidden="true" style="font-size:15px;color:var(--SmartThemeQuoteColor)"></i></div>`);
+        " title="${label}"><span aria-hidden="true" style="font-size:17px;line-height:1">${def.ico}</span></div>`);
     });
     $items.find('.kcf-item').on('mouseenter', function () { $(this).css('background', 'rgba(128,128,128,.22)'); });
     $items.find('.kcf-item').on('mouseleave', function () { $(this).css('background', ''); });
