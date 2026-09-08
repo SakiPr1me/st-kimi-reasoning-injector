@@ -832,6 +832,82 @@ function applyClineProvider(bodyObj) {
     return false;
 }
 
+
+// ===== 请求注入（单一入口，由 CHAT_COMPLETION_SETTINGS_READY 事件调用）=====
+// ST 在 emit 该事件后才会 fetch(JSON.stringify(generate_data))——监听器同步改 generate_data 即进请求。
+// 不依赖 window.fetch 链（其它插件覆盖 fetch 时注入仍生效）；fetch 拦截器不再做注入（防双写）。
+function applyRequestInjections(bodyObj) {
+    if (!bodyObj || typeof bodyObj !== 'object') return false;
+    let changed = false;
+    try {
+        const msgs = Array.isArray(bodyObj.messages) ? bodyObj.messages : null;
+        const isDeepSeek = typeof bodyObj.model === 'string' && bodyObj.model.toLowerCase().includes('deepseek');
+
+        // 0) Cline 路由探测：让网关回传路由元数据（纯只读）
+        if (settings.enabled && injectRouteProbe(bodyObj)) changed = true;
+        // 0.5) Opencode 请求标头
+        if (settings.enabled && injectOpencodeHeaders(bodyObj)) changed = true;
+
+        // 1) 种子注入（KIMI 强破限/DS 引导，核心）
+        if (settings.enabled && msgs && settings.reasoningContent.trim() !== "") {
+            const seed = applyCotByMode(seedResolved || buildSeed(settings.reasoningContent.trim()));
+            if (injectSeed(msgs, seed)) changed = true;
+        }
+
+        // 1.5) 历史 assistant <content> 单换行补双换行
+        if (settings.enabled && settings.fixMesOnGenerate !== false && msgs) {
+            for (let i = 0; i < msgs.length; i++) {
+                const m = msgs[i];
+                if (m && m.role === 'assistant' && typeof m.content === 'string' && m.content.includes('<content>') && i < msgs.length - 1) {
+                    const fixed = normalizeParagraphs(m.content);
+                    if (fixed !== m.content) { m.content = fixed; changed = true; }
+                }
+            }
+        }
+
+        // 2) reasoning_effort（非 deepseek）
+        if (!isDeepSeek && settings.enabled && settings.reasoningEffort && settings.reasoningEffort !== 'off') {
+            bodyObj.reasoning_effort = settings.reasoningEffort;
+            bodyObj.custom_include_body = upsertYamlTopKey(String(bodyObj.custom_include_body || ''), 'reasoning_effort', 'reasoning_effort: ' + settings.reasoningEffort);
+            changed = true;
+        }
+
+        // 3) DeepSeek 专用
+        if (isDeepSeek && settings.enabled) {
+            if (settings.dsThinkingMode === 'disabled') {
+                bodyObj.thinking = { type: 'disabled' };
+                bodyObj.custom_include_body = upsertYamlTopKey(String(bodyObj.custom_include_body || ''), 'thinking', 'thinking:\n  type: disabled');
+                changed = true;
+            }
+            if (settings.dsReasoningEffort && settings.dsReasoningEffort !== 'off') {
+                bodyObj.reasoning_effort = settings.dsReasoningEffort;
+                bodyObj.custom_include_body = upsertYamlTopKey(String(bodyObj.custom_include_body || ''), 'reasoning_effort', 'reasoning_effort: ' + settings.dsReasoningEffort);
+                changed = true;
+            }
+        }
+
+        // 3.5) Cline 提供商指定
+        if (applyClineProvider(bodyObj)) changed = true;
+
+        // 4) 词汇替换（仅后端提示词）
+        if (settings.wordReplaceEnabled && msgs) {
+            for (const m of msgs) {
+                if (m && m.role !== 'system' && typeof m.content === 'string') {
+                    const replaced = applyReplacements(m.content, 'prompt');
+                    if (replaced !== m.content) { m.content = replaced; changed = true; }
+                }
+            }
+        }
+
+        if (changed && msgs && msgs.length) {
+            const last = msgs[msgs.length - 1];
+            const rc = last && last.reasoning_content;
+            console.log('[余温工具箱] 注入(READY):', 'role=' + (last && last.role), '| partial=' + (last && last.partial ? 'true' : 'false'), '| reasoning_content=' + (rc ? '已注入(' + String(rc).slice(0, 60) + '...)' : '无'));
+        }
+    } catch (e) { console.error('[余温工具箱] 注入失败:', e); }
+    return changed;
+}
+
 const originalFetch = window.__kimiOrigFetch || window.fetch;
 window.__kimiOrigFetch = originalFetch;
 if (!window.__kimiFetchPatched) {
@@ -847,90 +923,9 @@ window.fetch = async function(...args) {
 
     if (typeof resource === 'string' && resource.includes('/api/backends/chat-completions/generate') && config?.body) {
         try {
-            let bodyObj = JSON.parse(config.body);
-            let msgs = bodyObj.messages;
-            let changed = false;
-            routeProbeModel = String(bodyObj.model || '');
-
-            // 0) Cline 路由探测：让网关回传路由元数据（X-OpenRouter-Metadata: enabled，纯只读）
-            if (settings.enabled && injectRouteProbe(bodyObj)) changed = true;
-            // 0.5) Opencode 请求标头：X-Opencode-Session 自动注入（每聊天固定ID）
-            if (settings.enabled && injectOpencodeHeaders(bodyObj)) changed = true;
-
-            // 1) 种子注入（partial / reasoning_content 可多选）
-            if (settings.enabled && settings.reasoningContent.trim() !== "") {
-                const seed = applyCotByMode(seedResolved || buildSeed(settings.reasoningContent.trim()));
-                if (injectSeed(msgs, seed)) changed = true;
-            }
-
-            // 1.5) 历史 assistant 消息的 <content> 内单换行补成双换行（防 AI 从上文学到单换行格式）。
-            //      只修历史消息（i < 最后一条），不动最后一条 assistant（那是 partial 注入目标）。
-            if (settings.enabled && settings.fixMesOnGenerate !== false && Array.isArray(msgs)) {
-                for (let i = 0; i < msgs.length; i++) {
-                    const m = msgs[i];
-                    if (m && m.role === 'assistant' && typeof m.content === 'string' && m.content.includes('<content>') && i < msgs.length - 1) {
-                        const fixed = normalizeParagraphs(m.content);
-                        if (fixed !== m.content) {
-                            m.content = fixed;
-                            changed = true;
-                        }
-                    }
-                }
-            }
-
-            // 2) reasoning_effort：K3 顶层参数，控制思考强度/时长（off=不注入用默认 max）
-            // 借道 CUSTOM 源自带的「自定义请求体」custom_include_body（YAML）透传给 K3——不需要改 ST 核心、拷走即用
-            // ⚠️ 仅非 deepseek 时用：deepseek 走下面第 3) 段的 dsReasoningEffort，避免两套 effort 打架
-            const isDeepSeek = typeof bodyObj.model === 'string' && bodyObj.model.toLowerCase().includes('deepseek');
-            if (!isDeepSeek && settings.enabled && settings.reasoningEffort && settings.reasoningEffort !== 'off') {
-                bodyObj.reasoning_effort = settings.reasoningEffort;
-                bodyObj.custom_include_body = upsertYamlTopKey(String(bodyObj.custom_include_body || ''), 'reasoning_effort', 'reasoning_effort: ' + settings.reasoningEffort);
-                changed = true;
-            }
-
-            // 3) DeepSeek 专用：思考开关 + 思考强度（仅当模型名含 deepseek 时生效）
-            // 必须走 custom_include_body（YAML）——ST 的 requestBody 只展开 bodyParams，
-            // 顶层 bodyObj.thinking / bodyObj.reasoning_effort 不会被带进最终请求（已查 ST 源码确认）
-            if (isDeepSeek && settings.enabled) {
-                if (settings.dsThinkingMode === 'disabled') {
-                    bodyObj.thinking = { type: 'disabled' };
-                    bodyObj.custom_include_body = upsertYamlTopKey(String(bodyObj.custom_include_body || ''), 'thinking', 'thinking:\n  type: disabled');
-                    changed = true;
-                }
-                if (settings.dsReasoningEffort && settings.dsReasoningEffort !== 'off') {
-                    bodyObj.reasoning_effort = settings.dsReasoningEffort;
-                    bodyObj.custom_include_body = upsertYamlTopKey(String(bodyObj.custom_include_body || ''), 'reasoning_effort', 'reasoning_effort: ' + settings.dsReasoningEffort);
-                    changed = true;
-                }
-            }
-
-            // 3.5) Cline 提供商指定：providerOptions.gateway.only（与 DS 各占不同顶层键，互不覆盖）
-            if (applyClineProvider(bodyObj)) changed = true;
-
-            // 4) 词汇替换 · 仅后端提示词：替换发给 AI 的历史消息（跳过 system 指南，避免规则误改 NSFW_GUIDE/禁词表）
-            // 只改请求体，不改存储、不改显示。让 AI 生成时「看到」目标词而非原词。
-            if (settings.wordReplaceEnabled) {
-                let promptChanged = false;
-                for (const m of msgs) {
-                    if (m && m.role !== 'system' && typeof m.content === 'string') {
-                        const replaced = applyReplacements(m.content, 'prompt');
-                        if (replaced !== m.content) { m.content = replaced; promptChanged = true; }
-                    }
-                }
-                if (promptChanged) changed = true;
-            }
-
-            if (changed) {
-                config.body = JSON.stringify(bodyObj);
-                const last = msgs[msgs.length - 1];
-                const rc = last && last.reasoning_content;
-                console.log('[余温工具箱] 改写后最后一条:', 'role=' + (last && last.role), '| partial=' + (last && last.partial ? 'true' : 'false'), '| reasoning_content=' + (rc ? '已注入(' + rc.slice(0, 80).replace(/\n/g, '\\n') + '...)' : '无'));
-            } else {
-                console.log('[余温工具箱] 未改写', 'enabled=' + settings.enabled, '| reasoningContent非空=' + (settings.reasoningContent.trim() !== ''), '| injectModes=' + JSON.stringify(settings.injectModes));
-            }
-        } catch (e) {
-            console.error("[余温工具箱] 失败:", e);
-        }
+            const parsed = JSON.parse(config.body);
+            if (parsed && typeof parsed === 'object') routeProbeModel = String(parsed.model || '');
+        } catch (e) { /* 请求体非 JSON（如 FormData），跳过模型捕获 */ }
     }
     const res = await originalFetch.apply(this, args);
     // API 池响应侧钩子：非 2xx 且含 limit 类关键词 → 触发切换流程（api-pool.js 注册）
@@ -1726,7 +1721,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.35.29'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.36.0'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -4739,6 +4734,10 @@ partial
 
 // 全局事件只绑定一次（语言切换重渲染 initSettingsPanel 时不会重复监听）
 eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, onSettingsReady);
+// 注入挂到 CHAT_COMPLETION_SETTINGS_READY（ST 发请求前最后机会）——不依赖 fetch 链，防其它插件覆盖 window.fetch 致注入失效
+eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, (generateData) => {
+    try { if (typeof applyRequestInjections === 'function') applyRequestInjections(generateData); } catch (e) { console.warn('[余温工具箱] READY 注入失败:', e); }
+});
 jQuery(initSettingsPanel);
 
 
