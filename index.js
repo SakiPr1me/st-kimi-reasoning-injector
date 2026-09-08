@@ -36,7 +36,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.37.7 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.37.8 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -53,7 +53,7 @@ const defaultSettings = {
     rerollOnEmpty: true,             // 空回复（断流/零token）→ 自动重roll
     rerollOnNoMutter: false,        // 生成结束全文没有截断标记（半截楼）→ 自动重roll（swipe新分支；默认关：手动停止易误判，知情后再开）
     rerollOnKeyword: true,          // 检测到指定关键词（如 CSAM）→ 停止 → 自动重roll（开新分支）
-    rerollKeywords: 'CSAM',        // 触发重roll的关键词，逗号分隔（英文逗号，可含空格；不区分大小写）
+    rerollKeywords: 'CSAM,',        // 触发重roll的关键词，逗号分隔（英文逗号，可含空格；不区分大小写）
     mutterSoundEnabled: true,       // 完整生成（含截断标记）→ 播放提示音（内置beep）
     mutterSoundType: 'ding',        // 提示音色：ding=柔和叮咚(默认) | crisp=清脆 | chord=治愈和弦 | soft=低柔单音
     autoRerollLimit: 30,             // 连续自动重roll次数（无上限）
@@ -161,7 +161,7 @@ const UI = {
         rcLabel: "Reasoning Content：",
         usageTitle: "使用方法：", usage1: "· 只打开step 1：原生思维链不进正文，正文质量理论最高。有概率极端内容夺舍失败（AI 道歉），好在出现英文可手动截停，重roll可破，主要看渠道。", usage2: "· 同时打开step 1和step2：思维链放进正文，破限较强，稳定夺舍。有概率在思考完就截断。这种截断在使用无限能源时会扣费！", usage3: "⚠️注意：两种破限方式都需要搭配专用预设，渠道仅测试opencode，其它自测。",
         rerollSectionTitle: "自动重ROLL：", alertSectionTitle: "完成提醒：",
-        rerollNoMutter: "结束仍无截断标记（半截楼/截断）", mutterSound: "完整生成 → 播放提示音", mutterVibrate: "同时震动提醒（Android；iOS不支持）", rcReset: "复原默认注入", rcResetDone: "已复原为当前模式的默认预设", rcResetCustom: "自定义模板没有内置默认可复原", mutterTrigMarker: "检测到截断标记（K3/余温预设适用）", mutterTrigDone: "输出完成即提醒（不用截断标记的模型适用）", mutterSndDing: "柔和叮咚（推荐）", mutterSndCrisp: "清脆两声", mutterSndChord: "治愈和弦", mutterSndSoft: "低柔单音", mutterSndMelody: "八音盒旋律（约2秒）", mutterSndLongbell: "长铃余音（约2秒）", mutterSndLullaby: "摇篮琶音（约5秒）", mutterSndHarp: "竖琴流水（约5秒）", mutterSndTest: "试听", mutterHint: "两项均以「自动截断」卡的截断标记（默认 <mutter>）为准：有标记＝完整→响两声beep；无标记＝半截楼→swipe进新分支继续roll（受连续上限约束；手动停止的楼不会被判半截）。提示音为内置音，不依赖酒馆音效设置。", rerollLabel: "自动重roll：", rerollEnglish: "思维链是英文（触审易道歉）", rerollNoThink: "无思维链直接出正文（没思考 or 少思考）", rerollEmpty: "空回复（PVP）", rerollKeyword: "出现关键词（如CSAM）即重roll", rerollKeywordsLabel: "关键词（逗号分隔）：", rerollKeywordsHint: "生成内容（含思维链）出现任一关键词 → 立即停止并重roll开新分支。多个用英文逗号 , 分隔，不区分大小写；留空=关闭该功能。",
+        rerollNoMutter: "结束仍无截断标记（半截楼/截断）", mutterSound: "完整生成 → 播放提示音", mutterVibrate: "同时震动提醒（Android；iOS不支持）", rcReset: "复原默认注入", rcResetDone: "已复原为当前模式的默认预设", rcResetCustom: "自定义模板没有内置默认可复原", mutterTrigMarker: "检测到截断标记（K3/余温预设适用）", mutterTrigDone: "输出完成即提醒（不用截断标记的模型适用）", mutterSndDing: "柔和叮咚（推荐）", mutterSndCrisp: "清脆两声", mutterSndChord: "治愈和弦", mutterSndSoft: "低柔单音", mutterSndMelody: "八音盒旋律（约2秒）", mutterSndLongbell: "长铃余音（约2秒）", mutterSndLullaby: "摇篮琶音（约5秒）", mutterSndHarp: "竖琴流水（约5秒）", mutterSndTest: "试听", mutterHint: "两项均以「自动截断」卡的截断标记（默认 <mutter>）为准：有标记＝完整→响两声beep；无标记＝半截楼→swipe进新分支继续roll（受连续上限约束；手动停止的楼不会被判半截）。提示音为内置音，不依赖酒馆音效设置。", rerollLabel: "自动重roll：", rerollEnglish: "思维链是英文（触审易道歉）", rerollNoThink: "无思维链直接出正文（没思考 or 少思考）", rerollEmpty: "空回复（PVP）", rerollKeyword: "出现以下关键词即重roll", rerollKeywordsLabel: "关键词（逗号分隔）：", rerollKeywordsHint: "生成内容（含思维链）出现任一关键词 → 立即停止并重roll开新分支。多个用英文逗号 , 分隔，不区分大小写；留空=关闭该功能。",
         rerollLimitLabel: "连续自动重roll上限：", rerollTimes: " 次", rerollMinTokensLabel: "思考太短截断阈值：",
         rerollWarning: "注意：玩极端的内容时，容易出现英文思维链，重roll虽然可以避免大概率道歉的英文思维链，但是中文思维链也有道歉几率，只是比较低！你要多关注下手动截断。",
         foldLabel: "思维链美化折叠", foldHint: "当选择正文思维链，爆出的思维链放正文不好看，用美化把它折叠起来。不想要美化也可以关掉，打开不显示&lt;scene&gt;之前内容的<b>正则</b>。",
@@ -222,7 +222,7 @@ const UI = {
         rcLabel: "Reasoning Content: ",
         usageTitle: "Usage: ", usage1: "· Step 1 only: native CoT stays out of the body - theoretically best body quality. Extreme content may fail takeover (AI apologizes); stop manually if English thinking appears, reroll usually fixes it (depends on the channel).", usage2: "· Step 1 + Step 2: CoT goes into the body - stronger jailbreak, stable takeover. May stop right after thinking. That stop still costs tokens on unlimited-energy plans!", usage3: "⚠️ Both modes need the matching preset. Only tested on opencode channel.",
         rerollSectionTitle: "AUTO REROLL:", alertSectionTitle: "COMPLETION ALERT:",
-        rerollNoMutter: "No stop marker at end (truncated reply)", mutterSound: "Complete reply → play beep", rcReset: "Reset default injection", rcResetDone: "Restored the default preset for this mode", rcResetCustom: "Custom templates have no built-in default to restore", mutterVibrate: "Also vibrate (Android; not on iOS)", mutterTrigMarker: "On stop marker detected (K3 / YuWen presets)", mutterTrigDone: "When output finishes (models without stop marker)", mutterSndDing: "Soft ding-dong (recommended)", mutterSndCrisp: "Crisp double", mutterSndChord: "Healing chord", mutterSndSoft: "Low soft tone", mutterSndMelody: "Music-box melody (~2s)", mutterSndLongbell: "Long bell (~2s)", mutterSndLullaby: "Lullaby arpeggio (~5s)", mutterSndHarp: "Harp cascade (~5s)", mutterSndTest: "Test", mutterHint: "Both use the Auto-Stop marker (default <mutter>): marker found = complete → two beeps; missing = truncated → swipe to a new branch (bounded by the reroll limit; manually stopped replies are exempt). Beep is built-in, independent of ST sound settings.", rerollLabel: "Auto Reroll: ", rerollEnglish: "English thinking (easily triggers moderation apology)", rerollNoThink: "No thinking, straight to body (no/little thinking)", rerollEmpty: "Empty reply (PVP)", rerollKeyword: "Reroll when a keyword appears (e.g. CSAM)", rerollKeywordsLabel: "Keywords (comma-separated): ", rerollKeywordsHint: "If any keyword appears in generated content (incl. thinking) → stop and reroll to a new branch. Separate with English commas , ; case-insensitive. Leave empty to disable.",
+        rerollNoMutter: "No stop marker at end (truncated reply)", mutterSound: "Complete reply → play beep", rcReset: "Reset default injection", rcResetDone: "Restored the default preset for this mode", rcResetCustom: "Custom templates have no built-in default to restore", mutterVibrate: "Also vibrate (Android; not on iOS)", mutterTrigMarker: "On stop marker detected (K3 / YuWen presets)", mutterTrigDone: "When output finishes (models without stop marker)", mutterSndDing: "Soft ding-dong (recommended)", mutterSndCrisp: "Crisp double", mutterSndChord: "Healing chord", mutterSndSoft: "Low soft tone", mutterSndMelody: "Music-box melody (~2s)", mutterSndLongbell: "Long bell (~2s)", mutterSndLullaby: "Lullaby arpeggio (~5s)", mutterSndHarp: "Harp cascade (~5s)", mutterSndTest: "Test", mutterHint: "Both use the Auto-Stop marker (default <mutter>): marker found = complete → two beeps; missing = truncated → swipe to a new branch (bounded by the reroll limit; manually stopped replies are exempt). Beep is built-in, independent of ST sound settings.", rerollLabel: "Auto Reroll: ", rerollEnglish: "English thinking (easily triggers moderation apology)", rerollNoThink: "No thinking, straight to body (no/little thinking)", rerollEmpty: "Empty reply (PVP)", rerollKeyword: "Reroll when any of the following keywords appear", rerollKeywordsLabel: "Keywords (comma-separated): ", rerollKeywordsHint: "If any keyword appears in generated content (incl. thinking) → stop and reroll to a new branch. Separate with English commas , ; case-insensitive. Leave empty to disable.",
         rerollLimitLabel: "Max consecutive auto rerolls: ", rerollTimes: " times", rerollMinTokensLabel: "Short-thinking cutoff threshold: ",
         rerollWarning: "Note: extreme content often produces English thinking. Reroll avoids the high-risk English thinking, but Chinese thinking can still trigger apologies (lower chance). Watch for manual stops.",
         foldLabel: "CoT Fold Beautify", foldHint: "With body CoT, leaked thinking looks ugly in the body - fold it with beautify. Can disable and use a <b>regex</b> that hides everything before &lt;scene&gt; instead.",
@@ -282,7 +282,7 @@ const UI = {
         rcLabel: "Reasoning Content: ",
         usageTitle: "사용법: ", usage1: "· step 1만: 네이티브 CoT가 본문에 안 들어가서 본문 품질이 이론상 최고. 극단적 내용은 탈취 실패(AI 사과) 가능성이 있고, 영어 사고가 나오면 수동 중단 + reroll로 해결(채널에 따라 다름).", usage2: "· step 1+2 동시: CoT가 본문에 들어가 탈옥이 강하고 안정적. 사고 직후 끊길 수 있음. 무제한 에너지 요금제에서는 이 끊김이 과금될 수 있음!", usage3: "⚠️ 두 방식 모두 전용 프리셋 필요. opencode 채널에서만 테스트됨.",
         rerollSectionTitle: "자동 REROLL:", alertSectionTitle: "완료 알림:",
-        rerollNoMutter: "끝에 중단 마커 없음(잘린 응답)", mutterSound: "완전한 응답 → 비프음 재생", rcReset: "기본 주입으로 복원", rcResetDone: "현재 모드의 기본 프리셋으로 복원됨", rcResetCustom: "커스텀 템플릿은 복원할 내장 기본값이 없습니다", mutterVibrate: "진동 알림 함께(Android; iOS 미지원)", mutterTrigMarker: "중단 마커 감지 시 (K3/여온 프리셋)", mutterTrigDone: "출력 완료 시 (마커 없는 모델)", mutterSndDing: "부드러운 딩동(추천)", mutterSndCrisp: "맑은 두 소리", mutterSndChord: "힐링 코드", mutterSndSoft: "낮은 부드러운 소리", mutterSndMelody: "오르골 멜로디(약 2초)", mutterSndLongbell: "긴 종소리(약 2초)", mutterSndLullaby: "자장가 아르페지오(약 5초)", mutterSndHarp: "하프 흐름(약 5초)", mutterSndTest: "시청", mutterHint: "두 항목 모두 자동 중단 마커(기본 <mutter>) 기준: 마커 있음=완전→비프 2회; 없음=잘림→새 분기로 swipe(상한 제한 있음, 수동 정지 응답 제외). 비프음은 내장, ST 사운드 설정과 무관.", rerollLabel: "자동 reroll: ", rerollEnglish: "영어 사고(심사 사과 유발 쉬움)", rerollNoThink: "사고 없이 바로 본문 (사고 없음/적음)", rerollEmpty: "빈 응답 (PVP)", rerollKeyword: "키워드(예: CSAM) 등장 시 reroll", rerollKeywordsLabel: "키워드(쉬표 구분): ", rerollKeywordsHint: "생성 내용(사고 포함)에 키워드가 나타나면 즉시 중단하고 새 분기로 reroll. 영문 쉬표 , 로 구분, 대소문자 무시. 비우면 비활성화.",
+        rerollNoMutter: "끝에 중단 마커 없음(잘린 응답)", mutterSound: "완전한 응답 → 비프음 재생", rcReset: "기본 주입으로 복원", rcResetDone: "현재 모드의 기본 프리셋으로 복원됨", rcResetCustom: "커스텀 템플릿은 복원할 내장 기본값이 없습니다", mutterVibrate: "진동 알림 함께(Android; iOS 미지원)", mutterTrigMarker: "중단 마커 감지 시 (K3/여온 프리셋)", mutterTrigDone: "출력 완료 시 (마커 없는 모델)", mutterSndDing: "부드러운 딩동(추천)", mutterSndCrisp: "맑은 두 소리", mutterSndChord: "힐링 코드", mutterSndSoft: "낮은 부드러운 소리", mutterSndMelody: "오르골 멜로디(약 2초)", mutterSndLongbell: "긴 종소리(약 2초)", mutterSndLullaby: "자장가 아르페지오(약 5초)", mutterSndHarp: "하프 흐름(약 5초)", mutterSndTest: "시청", mutterHint: "두 항목 모두 자동 중단 마커(기본 <mutter>) 기준: 마커 있음=완전→비프 2회; 없음=잘림→새 분기로 swipe(상한 제한 있음, 수동 정지 응답 제외). 비프음은 내장, ST 사운드 설정과 무관.", rerollLabel: "자동 reroll: ", rerollEnglish: "영어 사고(심사 사과 유발 쉬움)", rerollNoThink: "사고 없이 바로 본문 (사고 없음/적음)", rerollEmpty: "빈 응답 (PVP)", rerollKeyword: "다음 키워드 등장 시 reroll", rerollKeywordsLabel: "키워드(쉬표 구분): ", rerollKeywordsHint: "생성 내용(사고 포함)에 키워드가 나타나면 즉시 중단하고 새 분기로 reroll. 영문 쉬표 , 로 구분, 대소문자 무시. 비우면 비활성화.",
         rerollLimitLabel: "연속 자동 reroll 상한: ", rerollTimes: " 회", rerollMinTokensLabel: "사고 너무 짧음 절단 기준: ",
         rerollWarning: "주의: 극단적 콘텐츠에서는 영어 사고가 자주 나옵니다. reroll로 사과 확률 높은 영어 사고를 피할 수 있지만, 한국어 사고도 사과 확률이 낮지만 있습니다! 수동 중단에 신경 쓰세요.",
         foldLabel: "CoT 접기 미화", foldHint: "본문 CoT 선택 시 본문에 새어나온 사고가 보기 안 좋으니 미화로 접습니다. 미화를 끄고 &lt;scene&gt; 이전 내용을 숨기는 <b>정규식</b>을 켜도 됩니다.",
@@ -359,7 +359,7 @@ if (settings.rerollOnNoThinking === undefined) settings.rerollOnNoThinking = def
 if (settings.rerollOnEmpty === undefined) settings.rerollOnEmpty = defaultSettings.rerollOnEmpty;
 if (settings.rerollOnNoMutter === undefined) settings.rerollOnNoMutter = false;
 if (settings.rerollOnKeyword === undefined) settings.rerollOnKeyword = true;
-if (settings.rerollKeywords === undefined) settings.rerollKeywords = 'CSAM';
+if (settings.rerollKeywords === undefined) settings.rerollKeywords = 'CSAM,';
 if (settings.mutterSoundEnabled === undefined) settings.mutterSoundEnabled = true;
 if (!settings.mutterSoundType) settings.mutterSoundType = 'ding';
 if (settings.mutterVibrate === undefined) settings.mutterVibrate = false;
@@ -1007,7 +1007,7 @@ function checkStreamingAbort(messageId) {
     if (!isGenerating) return; // 流式截断检测只在生成中有效（修正消息触发 observer 时避免误判）
     if (earlyStopTriggered) return;
     if (!settings.rerollOnEnglishThinking && !settings.rerollOnNoThinking && settings.rerollMinThinkingTokens <= 0 && settings.rerollOnKeyword === false) return;
-    // v1.37.7：只检测"本次生成正在写入的新分支"，跳过历史/静态内容——
+    // v1.37.8：只检测"本次生成正在写入的新分支"，跳过历史/静态内容——
     // ① observer 会因 swipe 动画/计数器捕获旧消息 DOM 变化，若旧消息是英文会误触发；
     // ② 用户手动往分支填英文 / 加载历史分支（gen_started 是旧时间）也绝不能触发截断——
     //    那只是查看内容，不是"本次生成输出英文"（模型本次可能根本没输出）。
@@ -1042,7 +1042,7 @@ function checkStreamingAbort(messageId) {
         if (settings.rerollOnEnglishThinking && settings.injectTarget === 'kimi' && !seedIsEnglish()) {
             let sample = '';
             if (reasoning.length > 0) {
-                // v1.37.7：reasoning 通道检测英文前，先确认 reasoning 是"本次生成新增"的——
+                // v1.37.8：reasoning 通道检测英文前，先确认 reasoning 是"本次生成新增"的——
                 // extra.reasoning 可能有静态残留（用户测试手动填的 English / 上一条被截断的英文），
                 // 若与 GENERATION_STARTED 快照完全相同（本次没新增），说明模型还没输出 thinking，
                 // 检测它 = 把残留误判成本次英文 → 每次 swipe 都误截断 → "进不去新分支"死循环。
@@ -1093,7 +1093,7 @@ function checkStreamingAbort(messageId) {
             }
         }
 
-        // v1.37.7：关键词检测——生成内容（含思维链 reasoning + 正文 mes）出现任一关键词
+        // v1.37.8：关键词检测——生成内容（含思维链 reasoning + 正文 mes）出现任一关键词
         //（如 CSAM）→ 立即停止并重roll开新分支。多个用英文逗号分隔，不区分大小写。
         if (!stopReason && settings.rerollOnKeyword !== false) {
             const kwRaw = String(settings.rerollKeywords ?? '').trim();
@@ -1233,7 +1233,7 @@ function checkNativeReroll(messageId) {
                 reason = '生成结束仍无截断标记（半截楼/疑似截断）';
             }
         }
-        // v1.37.7：关键词检测（完成后兜底）——流式中若漏检（如关键词只在末尾出现）在此补上
+        // v1.37.8：关键词检测（完成后兜底）——流式中若漏检（如关键词只在末尾出现）在此补上
         if (!shouldReroll && settings.rerollOnKeyword !== false) {
             const kwRaw2 = String(settings.rerollKeywords ?? '').trim();
             if (kwRaw2) {
@@ -1288,9 +1288,9 @@ function checkNativeReroll(messageId) {
 // 否则 swipe（实时用 chat.length-1，regenerate 删建后缓存 id 会失效）。
 // 等待 ST 的 abort 完全收尾：截断 stopGeneration 后 ST 内部仍在跑 abort 链（onErrorStreaming /
 // finishGenerating / Swiping back），此时立刻 swipe 会 "Generation was aborted" 回滚。
-// v1.37.7 曾用 #mes_stop 显隐判断——但按钮隐藏 ≠ is_send_press 清空（abort 链还在异步收尾），
+// v1.37.8 曾用 #mes_stop 显隐判断——但按钮隐藏 ≠ is_send_press 清空（abort 链还在异步收尾），
 // swipe 时 ST 的 `run_generate && !is_send_press` 不满足 → Generate('swipe') 不执行 → 分支不加。
-// v1.37.7：改为直接等 is_send_press（ST 正在生成标志，import live binding）变 false 才 swipe。
+// v1.37.8：改为直接等 is_send_press（ST 正在生成标志，import live binding）变 false 才 swipe。
 // 最多等 6 秒，期间每 150ms 轮询；超时也继续（不无限阻塞自动重roll）。
 async function waitStAbortSettled() {
     try {
@@ -1329,7 +1329,7 @@ async function triggerAutoSwipe(messageId) {
         console.log(`[余温工具箱] 触发自动重roll：消息#${targetId} 开新分支`);
         await doSwipe(targetId);
         console.log(`[余温工具箱] 自动重roll swipe 完成`);
-        // v1.37.7：swipe 确认 watchdog —— ST 在 abort 竞态下会 "Swipe failed, Swiping back" 回滚
+        // v1.37.8：swipe 确认 watchdog —— ST 在 abort 竞态下会 "Swipe failed, Swiping back" 回滚
         // （doSwipe 的 ctx.swipe.to 不抛错、扩展无法感知），导致没有新分支、rerollFiredThisGen
         // 永远等不到 GENERATION_STARTED 重置 → 后续空回/截断全被总闸挡 → 停在空回。
         // 这里登记等待真实 GENERATION_STARTED；超时未确认 → 判定 swipe 假成功 → 复位总闸 + 各状态，
@@ -1340,7 +1340,7 @@ async function triggerAutoSwipe(messageId) {
                 if (pendingSwipeConfirm !== targetId) return; // 已被 GENERATION_STARTED 确认
                 pendingSwipeConfirm = -1;
                 // 距 swipe 已超时且从未进入新生成 → 释放本次"已重roll"的总闸，允许再触发
-                // v1.37.7：已达连续上限时不再复位总闸——复位会让后续检测再次通过、count 继续++，
+                // v1.37.8：已达连续上限时不再复位总闸——复位会让后续检测再次通过、count 继续++，
                 // 造成 31/30、32/30 突破上限的无限循环。上限就是硬停：让 rerollBlockedNotified 提示生效，
                 // 等一条通过检测的消息或用户手动 swipe 把计数归零。
                 if ((rerollFiredThisGen || earlyRerollHandled || emptyRerollHandled) && autoRerollCount < settings.autoRerollLimit) {
@@ -1350,7 +1350,7 @@ async function triggerAutoSwipe(messageId) {
                     emptyRerollHandled = false;
                     earlyRerollMessageId = -1;
                     lastGenManuallyStopped = false;
-                    // v1.37.7：不再用 regenerate 兜底——regenerate 会删掉最后一条 AI 消息重建，
+                    // v1.37.8：不再用 regenerate 兜底——regenerate 会删掉最后一条 AI 消息重建，
                     // 新消息 swipe_id=undefined，ST 下次 swipe 时会把 swipes 清空（script.js swipe_id
                     // undefined 分支），造成"分支被清成 1 个"、重roll永远进不了新分支的死循环。
                     // 复位总闸后，后续 ENDED/MESSAGE_RECEIVED 的自然事件流会再次触发重roll（swipe 开新分支）。
@@ -1851,7 +1851,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.7'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.8'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -3419,7 +3419,7 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
         const ctxStart = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const lastStart = ctxStart?.chat?.[ctxStart.chat.length - 1];
         generationStartLastMes = (lastStart && typeof lastStart.mes === 'string') ? lastStart.mes : null;
-        // v1.37.7：记录最后一条 assistant 的 reasoning 快照——流式英文检测只在 reasoning 本次新增时触发，
+        // v1.37.8：记录最后一条 assistant 的 reasoning 快照——流式英文检测只在 reasoning 本次新增时触发，
         // 防止 extra.reasoning 里的静态残留（如用户测试手动填的 English）在每次生成时被误判成"本次输出英文"。
         genStartReasoning = (lastStart && !lastStart.is_user && lastStart.extra?.reasoning) ? String(lastStart.extra.reasoning) : '';
     } catch (e) { generationStartLastMes = null; genStartReasoning = ''; }
@@ -3565,7 +3565,7 @@ eventSource.on(event_types.GENERATION_STOPPED, () => {
 });
 
 // 手动停止检测：ST 停止按钮 #mes_stop 被点击 = 用户手动停止。
-// v1.37.7：仅信任真实用户点击（isTrusted）。扩展流式截断/自动重roll 的 stopGeneration 竞态下，
+// v1.37.8：仅信任真实用户点击（isTrusted）。扩展流式截断/自动重roll 的 stopGeneration 竞态下，
 // ST 内部会程序化触发 #mes_stop 的 click（isTrusted=false），若误判成"手动停止"会把
 // lastGenManuallyStopped 置 true → 后续所有重roll被豁免 → 正好造成"空回后停住"。
 document.addEventListener('click', (e) => {
@@ -4045,7 +4045,7 @@ ${t('rerollNoMutter')}
 ${t('rerollKeyword')}
 </label>
 <div style="margin-top:3px">
-<input id="${extensionName}_reroll_keywords" type="text" class="text_pole" style="width:100%" value="${String(settings.rerollKeywords ?? 'CSAM')}" placeholder="CSAM, xxx"/>
+<input id="${extensionName}_reroll_keywords" type="text" class="text_pole" style="width:100%" value="${String(settings.rerollKeywords ?? 'CSAM,')}" placeholder="CSAM, xxx"/>
 <span class="kimi-hint" style="display:block">${t('rerollKeywordsHint')}</span>
 </div>
 <div style="margin-top:5px">
@@ -4254,14 +4254,28 @@ partial
     $("#extensions_settings").append(settingsHtml);
 
     // 卡片展开状态记忆（localStorage 按卡片序号存，跨刷新/语言切换保持）
+    // v1.37.8：手风琴——点开任一卡自动关闭其它卡（设置面板不拉太长，免滚轮累）；
+    // 仅主设置面板内互斥；被移入浮窗的卡不在面板容器内，不受影响。
     const bindCardMemory = () => {
         try {
-            document.querySelectorAll('#' + extensionName + '_settings .kimi-card').forEach((card, idx) => {
+            const panel = document.getElementById(extensionName + '_settings');
+            if (!panel) return;
+            panel.querySelectorAll('details.kimi-card').forEach((card, idx) => {
                 if (card.dataset.kimiMemBound) return;
                 card.dataset.kimiMemBound = '1';
                 const key = 'kimi_card_open_' + idx;
                 if (localStorage.getItem(key) === '1') card.open = true;
-                card.addEventListener('toggle', () => { try { localStorage.setItem(key, card.open ? '1' : '0'); } catch (e) { } });
+                card.addEventListener('toggle', () => {
+                    try {
+                        localStorage.setItem(key, card.open ? '1' : '0');
+                        // 手风琴：本卡打开时，收起面板内其它已打开的卡（保留各自的记忆状态）
+                        if (card.open) {
+                            panel.querySelectorAll('details.kimi-card[open]').forEach((other) => {
+                                if (other !== card) other.open = false;
+                            });
+                        }
+                    } catch (e) { /* localStorage 不可用则静默 */ }
+                });
             });
         } catch (e) { /* localStorage 不可用则静默 */ }
     };
