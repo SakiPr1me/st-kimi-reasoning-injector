@@ -1902,7 +1902,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.27'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.28'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2524,10 +2524,10 @@ function __kimiSvgIcon(ico, color) {
     return `<svg viewBox="${m.v}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:15px;height:15px;fill:${color || 'currentColor'};flex:none"><path d="${m.d}"/></svg>`;
 }
 
-// ===== 悬浮球：透明玻璃火球（Canvas 2D；v1.37.27） =====
-// 真实玻璃感（不区分深/浅主题，同一套中性材质）：
-//   透明球体 + 内侧宽柔暗环(厚度/折射) + 顶部月牙高光 + 左下小高光点 + 底部暖透光，
-//   不用显眼描边线；火粒子只在球内自下而上燃烧。球外全透明。rAF 自停，后台自动暂停。
+// ===== 悬浮球：透明玻璃火球（Canvas 2D；v1.37.28） =====
+// 玻璃珠质感（同一套中性材质，深浅主题通用）：
+//   淡冷青透光球体 + 内侧极柔暗影(厚度) + 左上椭圆柔光主高光 + 锐利小亮点 + 底部暖透光，
+//   无任何描边弧线；火粒子只在球内自下而上燃烧。球外全透明。rAF 自停，后台自动暂停。
 function startFlameBall(cv) {
     try {
         const ctx = cv.getContext('2d');
@@ -2560,10 +2560,10 @@ function startFlameBall(cv) {
             ctx.clearRect(0, 0, S, S);
             // 1) 透明玻璃体：中心全透，仅最外缘一圈淡淡的冷白（玻璃折射透光，柔和不成线）
             const glass = ctx.createRadialGradient(CX, CY, R * 0.2, CX, CY, R);
-            glass.addColorStop(0, 'rgba(255,255,255,0.015)');
-            glass.addColorStop(0.78, 'rgba(255,255,255,0.02)');
-            glass.addColorStop(0.94, 'rgba(255,255,255,0.05)');
-            glass.addColorStop(1, 'rgba(255,255,255,0.11)');
+            glass.addColorStop(0, 'rgba(215,235,255,0.02)');   // 中心：极淡冷青（玻璃色）
+            glass.addColorStop(0.78, 'rgba(215,235,255,0.03)');
+            glass.addColorStop(0.94, 'rgba(225,240,255,0.06)');
+            glass.addColorStop(1, 'rgba(240,248,255,0.10)');   // 外缘：一点点珠光
             ctx.fillStyle = glass;
             ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832); ctx.fill();
             // 2) 内部火焰（裁在球内，火苗只占中下→上，顶部留透明）
@@ -2595,27 +2595,32 @@ function startFlameBall(cv) {
                 }
             }
             ctx.restore();
-            // 3) 玻璃内侧宽柔暗环（厚度/折射感——宽而淡，不是描边线；浅底给轮廓，深底几乎隐没不抢戏）
+            // 3) 玻璃装饰（玻璃珠质感：无描边线，用柔光/高光/暗影表现体积）
             ctx.save();
             ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832); ctx.clip();
-            ctx.beginPath(); ctx.arc(CX, CY, R - 1.2, 0, 6.2832);
-            ctx.strokeStyle = 'rgba(12,16,24,0.16)';
-            ctx.lineWidth = 3;
+            // 3a) 内侧极柔暗影（贴边缘一圈 2px 的淡影给厚度，弱到只是"珠体感"）
+            ctx.beginPath(); ctx.arc(CX, CY, R - 0.6, 0, 6.2832);
+            ctx.strokeStyle = 'rgba(10,14,22,0.10)';
+            ctx.lineWidth = 1.8;
             ctx.stroke();
-            // 4) 顶部月牙高光（真实玻璃标志性反光，一段弧而非全圈亮边）
+            // 3b) 主高光：左上椭圆柔光（玻璃珠对光源的反光——小而集中的一团光晕）
+            const hl = ctx.createRadialGradient(CX - R * 0.36, CY - R * 0.42, 0.5, CX - R * 0.36, CY - R * 0.42, R * 0.55);
+            hl.addColorStop(0, 'rgba(255,255,255,0.42)');
+            hl.addColorStop(0.5, 'rgba(255,255,255,0.13)');
+            hl.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = hl;
             ctx.beginPath();
-            ctx.arc(CX, CY, R - 1.6, Math.PI * 1.15, Math.PI * 1.85);
-            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-            ctx.lineWidth = 1.6;
-            ctx.stroke();
-            // 5) 左下小高光点（次反光）
-            ctx.fillStyle = 'rgba(255,255,255,0.32)';
-            ctx.beginPath();
-            ctx.ellipse(CX - R * 0.45, CY + R * 0.2, R * 0.13, R * 0.08, 0.6, 0, 6.2832);
+            ctx.ellipse(CX - R * 0.36, CY - R * 0.42, R * 0.55, R * 0.4, -0.7, 0, 6.2832);
             ctx.fill();
-            // 6) 底部暖透光（玻璃下缘被火映亮，很淡）
-            const bottom = ctx.createRadialGradient(CX, CY + R * 0.8, 0.5, CX, CY + R * 0.72, R * 0.6);
-            bottom.addColorStop(0, 'rgba(255,160,80,0.15)');
+            // 3c) 锐利小亮点（玻璃珠标志性的集中反光点）
+            const hot = ctx.createRadialGradient(CX - R * 0.48, CY - R * 0.5, 0, CX - R * 0.48, CY - R * 0.5, R * 0.16);
+            hot.addColorStop(0, 'rgba(255,255,255,0.9)');
+            hot.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = hot;
+            ctx.beginPath(); ctx.arc(CX - R * 0.48, CY - R * 0.5, R * 0.16, 0, 6.2832); ctx.fill();
+            // 3d) 底部被火映亮的暖透光（很淡，玻璃透光感）
+            const bottom = ctx.createRadialGradient(CX, CY + R * 0.82, 0.5, CX, CY + R * 0.74, R * 0.6);
+            bottom.addColorStop(0, 'rgba(255,165,85,0.13)');
             bottom.addColorStop(1, 'rgba(255,150,60,0)');
             ctx.fillStyle = bottom;
             ctx.fillRect(0, 0, S, S);
