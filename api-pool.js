@@ -16,7 +16,7 @@ if (!Array.isArray(settings.pool)) settings.pool = [];
 if (settings.enabled === undefined) settings.enabled = false;
 if (settings.autoSwitch === undefined) settings.autoSwitch = false;
 if (!settings.keywords || !String(settings.keywords).trim()) settings.keywords = 'limit,quota,rate';
-if (settings.showMenuBtn === undefined) settings.showMenuBtn = true;
+if (settings.showMenuBtn === undefined) settings.showMenuBtn = false; // 左下角拓展菜单入口（默认关）
 
 // 生成中才检测（防误触其他请求/非生成报错）
 let generating = false;

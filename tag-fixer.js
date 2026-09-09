@@ -45,8 +45,8 @@ const HTML_TAG_NAMES = [
 
 const defaultSettings = {
 	tagTree: defaultTagTree,
-	showInlineBtn: false,    // 输入框旁「修复标签」小图标（默认关：新装不占用发送栏）
-	showMenuBtn: true,
+	showInlineBtn: false,    // 输入框旁「修复标签」小图标（默认关）
+	showMenuBtn: false,      // 左下角拓展菜单「修复标签」入口（默认关）
 	autoFixEnabled: false,   // 每轮输出结束自动修（默认关，谨慎勾选）
 	autoScanEnabled: false,  // 每轮自动扫描（只标不改，与自动修复互斥；默认关）
 	wrapMissingEnabled: false, // 智能补全：标签整块丢失时推断补回（默认关，谨慎勾选）
@@ -56,8 +56,8 @@ const defaultSettings = {
 if (!extension_settings[extensionName]) extension_settings[extensionName] = defaultSettings;
 const settings = extension_settings[extensionName];
 if (!settings.tagTree) settings.tagTree = defaultTagTree;
-if (settings.showInlineBtn === undefined) settings.showInlineBtn = false; // 默认关（新装不占用发送栏）
-if (settings.showMenuBtn === undefined) settings.showMenuBtn = true;
+if (settings.showInlineBtn === undefined) settings.showInlineBtn = false; // 默认关
+if (settings.showMenuBtn === undefined) settings.showMenuBtn = false; // 默认关
 if (settings.autoFixEnabled === undefined) settings.autoFixEnabled = false;
 if (settings.autoScanEnabled === undefined) settings.autoScanEnabled = false;
 if (settings.wrapMissingEnabled === undefined) settings.wrapMissingEnabled = false;

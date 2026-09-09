@@ -94,12 +94,12 @@ const defaultSettings = {
     floatPanelAllKey: 'all',
     clineModelOverride: false,       // 模型名前缀覆写：请求层把 model 改写为 指定提供商/基础模型名（⚠️脱离cline-pass前缀=按积分计费）
     clineProvider: 'modal',          // 当前选中的 Cline 提供商（默认 modal，据称质量最好）
-    clineShowMenuBtn: true,          // 扩展菜单显示「切换Cline提供商」入口
+    clineShowMenuBtn: false,         // 扩展菜单显示「切换Cline提供商」入口（默认关）
     clineCustomProviders: [],        // 用户自定义追加的提供商名（与内置8个合并出现在下拉/弹窗）
     floatShowStopReroll: true,       // 悬浮条功能区：停止重roll（直接执行，第三功能钮）
-    stopRerollMenuBtn: true,         // 扩展菜单显示「停止重roll」入口
-    stopRerollInlineBtn: false,      // 输入框旁「停止重roll」小图标（默认关：新装不占用发送栏）
-    psnapShowMenuBtn: true,          // 扩展菜单显示「预设条目开关快照」入口
+    stopRerollMenuBtn: false,        // 扩展菜单显示「停止重roll」入口（默认关）
+    stopRerollInlineBtn: false,      // 输入框旁「停止重roll」小图标（默认关）
+    psnapShowMenuBtn: false,         // 扩展菜单显示「预设条目开关快照」入口（默认关）
 };
 
 // ===== 双模式三语预设 =====
@@ -390,12 +390,12 @@ function ensureClinePriority() {
 }
 // 注意：不在模块顶层调用（此时 CLINE_PROVIDERS 尚未初始化会 TDZ 崩模块）；各使用点自会调用
 if (!settings.clineProvider) settings.clineProvider = 'modal';
-if (settings.clineShowMenuBtn === undefined) settings.clineShowMenuBtn = true;
+if (settings.clineShowMenuBtn === undefined) settings.clineShowMenuBtn = false;
 if (!Array.isArray(settings.clineCustomProviders)) settings.clineCustomProviders = [];
 if (settings.floatShowStopReroll === undefined) settings.floatShowStopReroll = true;
-if (settings.stopRerollMenuBtn === undefined) settings.stopRerollMenuBtn = true;
+if (settings.stopRerollMenuBtn === undefined) settings.stopRerollMenuBtn = false;
 if (settings.stopRerollInlineBtn === undefined) settings.stopRerollInlineBtn = false;
-if (settings.psnapShowMenuBtn === undefined) settings.psnapShowMenuBtn = true;
+if (settings.psnapShowMenuBtn === undefined) settings.psnapShowMenuBtn = false;
 if (settings.autoRerollLimit === undefined) settings.autoRerollLimit = defaultSettings.autoRerollLimit;
 if (settings.fixMesOnGenerate === undefined) settings.fixMesOnGenerate = false;
 if (settings.fixMarker === undefined) settings.fixMarker = 'content';
@@ -1902,7 +1902,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.18'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.19'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -4017,7 +4017,7 @@ ${t('enabled')}
     <div class="kimi-sep" style="margin:6px 0"></div>
     <div style="font-size:.85em;font-weight:700;margin:2px 0;opacity:.9">${t('entryMenuGroup')}</div>
     <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
-        <input type="checkbox" class="kimi-entry" data-entry="tag_menu" style="margin:0" ${(extension_settings.tag_auto_fixer || {}).showMenuBtn !== false ? 'checked' : ''}/>
+        <input type="checkbox" class="kimi-entry" data-entry="tag_menu" style="margin:0" ${(extension_settings.tag_auto_fixer || {}).showMenuBtn === true ? 'checked' : ''}/>
         <span style="display:inline-flex;align-items:center;color:#6fce6f;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-tag', '#6fce6f')}</span>
         <span style="color:#6fce6f;font-weight:600">${t('tagFixNow')}</span>
     </label>
@@ -4027,7 +4027,7 @@ ${t('enabled')}
         <span style="color:#6fb7f0;font-weight:600">${t('clineMenuSwitch')}</span>
     </label>
     <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
-        <input type="checkbox" class="kimi-entry" data-entry="api_menu" style="margin:0" ${(extension_settings.api_pool || {}).showMenuBtn !== false ? 'checked' : ''}/>
+        <input type="checkbox" class="kimi-entry" data-entry="api_menu" style="margin:0" ${(extension_settings.api_pool || {}).showMenuBtn === true ? 'checked' : ''}/>
         <span style="display:inline-flex;align-items:center;color:var(--SmartThemeQuoteColor);width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-plug', 'var(--SmartThemeQuoteColor)')}</span>
         <span>${t('apiMenuSwitch')}</span>
     </label>
