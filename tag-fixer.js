@@ -1563,7 +1563,7 @@ export function stTagMountSettings() {
 <div class="kimi-sep"></div>
 
 <details class="kimi-inner-card">
-<summary style="cursor:pointer;font-size:0.88em;color:var(--SmartThemeBodyColor, inherit)">${t('tagContainerTitle')}</summary>
+<summary>${t('tagContainerTitle')}</summary>
 <div id="${ext}_html_box" style="margin-top:6px">
 <p class="kimi-hint">${t('tagContainerHint1')}</p>
 <textarea id="${ext}_container" class="text_pole" style="width:100%;height:40px;font-family:monospace">${s.htmlContainer}</textarea>

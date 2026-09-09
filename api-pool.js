@@ -235,7 +235,7 @@ function poolHTML() {
     <details class="kimi-card">
     <summary><i class="fa-solid fa-plug kimi-card-ico" aria-hidden="true"></i>${t('apiTitle')}</summary>
     <div class="kimi-card-body">
-        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:2px">
             <label class="checkbox_label" style="margin:0"><input type="checkbox" id="kimi_api_enabled" ${settings.enabled ? 'checked' : ''}/> ${t('apiEnabled')}</label>
             <label class="checkbox_label" style="margin:0"><input type="checkbox" id="kimi_api_auto" ${settings.autoSwitch ? 'checked' : ''}/> ${t('apiAuto')}</label>
         </div>
@@ -244,7 +244,7 @@ function poolHTML() {
             <input id="kimi_api_keywords" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${escHtml(settings.keywords)}"/>
         </div>
         <div id="kimi_api_list" style="margin-top:5px">${rows || '<span style="opacity:.5;font-size:.85em">' + t('apiNoPool') + '</span>'}</div>
-        <div style="margin-top:5px"><button id="kimi_api_add" class="menu_button" style="display:inline-block;width:auto">${t('apiAdd')}</button></div>
+        <div style="margin-top:5px"><button id="kimi_api_add" class="kimi-btn">${t('apiAdd')}</button></div>
         <p class="kimi-hint">${t('apiHint')}</p>
     </div>
     </details>`;

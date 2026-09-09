@@ -1926,7 +1926,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.41'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.42'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2272,7 +2272,7 @@ function ensurePsnapPanel() {
         'color:var(--SmartThemeBodyColor);box-shadow:0 8px 30px rgba(0,0,0,.55);padding:10px 12px;user-select:none';
     win.innerHTML = `
     <div class="kimi-psnap-head" style="flex:none;display:flex;align-items:center;gap:6px;cursor:grab;user-select:none">
-        <span style="opacity:.6;cursor:grab">⠿</span><b style="font-size:.92em">📇 ${t('psnapTitle')}</b>
+        <span style="opacity:.6;cursor:grab">⠿</span><b style="font-size:.95em">📇 ${t('psnapTitle')}</b>
         <button id="${extensionName}_psnap_close" class="kimi-btn" style="margin-left:auto;padding:0 8px;font-size:.85em">✕</button>
     </div>
     <div style="flex:none;display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:6px">
@@ -3065,7 +3065,7 @@ function renderPsnapUI() {
         const dt = new Date(Number(settings.promptRecovery.time));
         const ts = isNaN(dt) ? '' : (dt.getMonth()+1)+'/'+dt.getDate()+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
         html += `<div style="display:flex;gap:6px;align-items:center;margin-top:3px;padding:3px 8px;border:1px dashed var(--golden-color,#e0a800);border-radius:6px;background:rgba(224,168,0,.05)">
-        <span style="flex:1;font-size:.82em">↩ ${t('psnapRecovery')} <span style="opacity:.5">(${ts})</span></span>
+        <span style="flex:1;font-size:.85em">↩ ${t('psnapRecovery')} <span style="opacity:.5">(${ts})</span></span>
         <button class="kimi-btn kimi-psnap-rec" style="padding:2px 8px;font-size:.82em">${t('psnapRecApply')}</button>
         </div>`;
     }
@@ -3079,7 +3079,7 @@ function renderPsnapUI() {
         </div>`;
     }
     if (!settings.promptSnapshots.length && !settings.promptRecovery) {
-        html = '<span style="opacity:.5;font-size:.82em">' + t('psnapEmpty') + '</span>';
+        html = '<span style="opacity:.5;font-size:.85em">' + t('psnapEmpty') + '</span>';
     }
     [box, boxFloat].forEach(t => {
         if (!t || t === box) { /* 卡为主渲染 */ }
@@ -3456,7 +3456,8 @@ const KIMI_SETTINGS_CSS = `
 }
 #kimi_reasoning_injector_card_float .kimi-card > summary {
     cursor: pointer;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
     padding: 7px 8px;
     background: rgba(255, 255, 255, 0.04);
     color: var(--SmartThemeBodyColor, inherit);
@@ -3466,14 +3467,14 @@ const KIMI_SETTINGS_CSS = `
 }
 #kimi_reasoning_injector_card_float .kimi-label {
     display: block;
-    font-size: 0.85em;
+    font-size: 0.88em;
     font-weight: 600;
     margin: 8px 0 3px;
     opacity: 0.85;
 }
 #kimi_reasoning_injector_card_float .kimi-hint {
-    font-size: 0.75em;
-    opacity: 0.55;
+    font-size: 0.72em;
+    opacity: 0.72;
     margin: 4px 0 0;
 }
 #kimi_reasoning_injector_card_float .kimi-inner-card {
@@ -3522,6 +3523,55 @@ const KIMI_SETTINGS_CSS = `
     background: rgba(255, 255, 255, 0.05);
     color: var(--SmartThemeBodyColor, inherit);
     border: 1px solid var(--SmartThemeBorderColor);
+}
+/* ═══ 1.37.42 全局排版规范：主面板与浮窗共用同一字号/间距体系 ═══ */
+/* —— 基准：设置面板与浮窗内文字统一从 14px 计算（消除 ST 各处继承差异）—— */
+#kimi_reasoning_injector_settings .kimi-card-body,
+#kimi_reasoning_injector_card_float .kimi-card-body {
+    font-size: 14px;
+}
+/* —— hint 统一为弱化小字（覆盖 0.72/0.75/0.82 游离档的继承差异）—— */
+#kimi_reasoning_injector_settings .kimi-hint,
+#kimi_reasoning_injector_card_float .kimi-hint {
+    font-size: 0.72em;
+    opacity: 0.72;
+    line-height: 1.5;
+}
+/* —— 卡内小节标题统一（原本 kimi-label / 裸<b> / 彩色 span 三套并存）—— */
+#kimi_reasoning_injector_settings .kimi-card-body .kimi-section-label,
+#kimi_reasoning_injector_card_float .kimi-card-body .kimi-section-label {
+    display: block;
+    font-size: 0.85em;
+    font-weight: 700;
+    color: var(--SmartThemeBodyColor, inherit);
+    opacity: 0.9;
+    margin: 10px 0 4px;
+}
+/* —— 子折叠标题（kimi-sub-summary 之前是死类，补 CSS：与 summary 同款但更轻）—— */
+#kimi_reasoning_injector_settings details.kimi-card .kimi-inner-card > summary,
+#kimi_reasoning_injector_settings details.kimi-card details.kimi-inner-card > summary,
+#kimi_reasoning_injector_card_float details.kimi-card .kimi-inner-card > summary {
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--SmartThemeBodyColor, inherit);
+    opacity: 0.9;
+    list-style: none;
+    outline: none;
+    user-select: none;
+    padding: 2px 0;
+}
+#kimi_reasoning_injector_settings .kimi-inner-card > summary::-webkit-details-marker,
+#kimi_reasoning_injector_card_float .kimi-inner-card > summary::-webkit-details-marker { display: none; }
+/* —— 行内 checkbox 开关组统一（勾选行高度/间距节奏）—— */
+#kimi_reasoning_injector_settings .kimi-card-body label.checkbox_label,
+#kimi_reasoning_injector_card_float .kimi-card-body label.checkbox_label {
+    font-size: 0.9em;
+    line-height: 1.35;
+}
+#kimi_reasoning_injector_settings .kimi-card-body label.checkbox_label > b,
+#kimi_reasoning_injector_card_float .kimi-card-body label.checkbox_label > b {
+    font-weight: 600;
 }
 `;
 
@@ -4389,13 +4439,13 @@ function initSettingsPanel() {
 <details class="kimi-card">
 <summary><i class="fa-solid fa-gear kimi-card-ico" aria-hidden="true"></i>${t('baseTitle')}</summary>
 <div class="kimi-card-body">
-<label class="kimi-entry-row" style="display:flex;align-items:center;gap:7px;font-size:.9em;padding:2px 0">
+<label class="checkbox_label" style="margin-top:2px">
 <input id="${extensionName}_enabled" type="checkbox" ${settings.enabled ? 'checked' : ''}/>
-<span class="kimi-entry-txt">${t('enabled')}</span>
+<b>${t('enabled')}</b>
 </label>
-<label class="kimi-entry-row" style="display:flex;align-items:center;gap:7px;font-size:.9em;padding:2px 0">
+<label class="checkbox_label">
 <input id="${extensionName}_auto_update" type="checkbox" ${settings.autoUpdate ? 'checked' : ''}/>
-<span class="kimi-entry-txt">${t('autoUpdateLabel')}</span>
+${t('autoUpdateLabel')}
 </label>
 <div style="margin-top:6px">
 <label class="kimi-label" for="${extensionName}_language">${t('langLabel')}</label>
@@ -4497,7 +4547,7 @@ function initSettingsPanel() {
 <summary><i class="fa-solid fa-bolt kimi-card-ico" aria-hidden="true"></i>${t('injectTitle')}</summary>
 <div class="kimi-card-body">
 
-<label class="kimi-label">${t('targetLabel')}</label>
+<div class="kimi-section-label">${t('targetLabel')}</div>
 <div id="${extensionName}_target_radios" style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center">
 <label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="kimi" ${settings.injectTarget === 'kimi' ? 'checked' : ''}/>KIMI</label>
 <label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="ds" ${settings.injectTarget === 'ds' ? 'checked' : ''}/>DS</label>
@@ -4513,7 +4563,7 @@ ${(settings.customPresets || []).map(p => {
 
 <div class="kimi-sep"></div>
 
-<label class="kimi-label">${t('injectLabel')}</label>
+<div class="kimi-section-label">${t('injectLabel')}</div>
 <label class="checkbox_label">
 <input id="${extensionName}_inject_rc" type="checkbox" ${settings.injectModes.includes('reasoning_content')?'checked':''}/>
 ${t('injectStep1')}
@@ -4532,7 +4582,7 @@ ${t('injectStep2')}
 
 <!-- 使用方法（子折叠，默认收起） -->
 <details class="kimi-inner-card">
-<summary class="kimi-sub-summary">${t('usageTitle')}</summary>
+<summary>${t('usageTitle')}</summary>
 <p class="kimi-hint">
 ${t('usage1')}<br>
 ${t('usage2')}<br>
@@ -4624,7 +4674,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
 <details class="kimi-card">
 <summary><i class="fa-solid fa-arrows-rotate kimi-card-ico" aria-hidden="true"></i>${t('rerollTitle')}</summary>
 <div class="kimi-card-body">
-<label class="kimi-label">${t('rerollSectionTitle')}</label>
+<div class="kimi-section-label">${t('rerollSectionTitle')}</div>
 <label class="checkbox_label">
 <input id="${extensionName}_reroll_english" type="checkbox" ${settings.rerollOnEnglishThinking ? 'checked' : ''}/>
 ${t('rerollEnglish')}
@@ -4661,7 +4711,7 @@ ${t('rerollKeyword')}
 </div>
 <p class="kimi-hint">${t('rerollWarning')}</p>
 <div class="kimi-sep"></div>
-<label class="kimi-label">${t('alertSectionTitle')}</label>
+<div class="kimi-section-label">${t('alertSectionTitle')}</div>
 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
 <label class="checkbox_label" style="margin:0;flex:1 1 auto;min-width:120px">
 <input id="${extensionName}_mutter_sound" type="checkbox" ${settings.mutterSoundEnabled ? 'checked' : ''}/>
@@ -4767,7 +4817,7 @@ ${t('wordEnabled')}
 ${renderWordReplaceRows()}
 </div>
 <div style="margin-top:5px">
-<button id="${extensionName}_word_add" class="menu_button" style="display:inline-block;width:auto">${t('wordAdd')}</button>
+<button id="${extensionName}_word_add" class="kimi-btn">${t('wordAdd')}</button>
 </div>
 <p class="kimi-hint">${t('wordHint')}</p>
 </div>
@@ -4822,8 +4872,8 @@ ${t('showTpsLabel')}
 <input id="${extensionName}_fix_marker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${fixMarkerHtml}"/>
 </div>
 <div style="margin-top:5px">
-<button id="${extensionName}_fix_now" class="menu_button" style="display:inline-block;width:auto;margin-right:6px">${t('fixNow')}</button>
-<button id="${extensionName}_fix_revert" class="menu_button" style="display:inline-block;width:auto">${t('fixRevert')}</button>
+<button id="${extensionName}_fix_now" class="kimi-btn" style="margin-right:6px">${t('fixNow')}</button>
+<button id="${extensionName}_fix_revert" class="kimi-btn">${t('fixRevert')}</button>
 </div>
 <div class="kimi-sep"></div>
 <label class="kimi-label">${t('nameLabel')}</label>
