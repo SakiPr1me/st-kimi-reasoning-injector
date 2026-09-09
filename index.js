@@ -1902,7 +1902,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.26'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.27'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2524,10 +2524,10 @@ function __kimiSvgIcon(ico, color) {
     return `<svg viewBox="${m.v}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:15px;height:15px;fill:${color || 'currentColor'};flex:none"><path d="${m.d}"/></svg>`;
 }
 
-// ===== 悬浮球：透明玻璃火球（Canvas 2D；v1.37.26） =====
-// 玻璃质感：极淡渐变球体 + 描边 + 左上高光 + 底部暖反光，背景透出页面；
-// 火焰粒子只在球内部自下而上燃烧（clip 圆内），球外完全透明。rAF 自停，后台自动暂停。
-// 深/浅主题自适应：浅色下描边/高光换深色、玻璃边缘加深、火焰更浓，保证两种主题都清晰。
+// ===== 悬浮球：透明玻璃火球（Canvas 2D；v1.37.27） =====
+// 真实玻璃感（不区分深/浅主题，同一套中性材质）：
+//   透明球体 + 内侧宽柔暗环(厚度/折射) + 顶部月牙高光 + 左下小高光点 + 底部暖透光，
+//   不用显眼描边线；火粒子只在球内自下而上燃烧。球外全透明。rAF 自停，后台自动暂停。
 function startFlameBall(cv) {
     try {
         const ctx = cv.getContext('2d');
@@ -2537,47 +2537,9 @@ function startFlameBall(cv) {
         cv.width = S * DPR; cv.height = S * DPR;
         ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
         const CX = S / 2, CY = S / 2;   // 球心居中
-        const R = S / 2 - 1.5;          // 玻璃半径（留边给描边）
+        const R = S / 2 - 1;            // 玻璃半径
         const parts = [];
         const rand = (a, b) => a + Math.random() * (b - a);
-        // 主题深浅（间隔检测，换主题后自动适应）
-        let isLight = false;
-        let themeCheck = 0;
-        function detectTheme() {
-            try {
-                const lumOf = (el) => {
-                    const cs = getComputedStyle(el);
-                    const m = cs.backgroundColor.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
-                    return m ? (Number(m[1]) + Number(m[2]) + Number(m[3])) / 3 : null;
-                };
-                let lum = lumOf(document.body);
-                if (lum === null) lum = lumOf(document.documentElement);
-                isLight = lum !== null ? lum > 150 : false;
-            } catch (e) { isLight = false; }
-        }
-        detectTheme();
-        // 主题配色（深色默认白边玻璃 / 浅色深边玻璃 + 更浓的火）
-        const C = () => isLight ? {
-            edge: 'rgba(90,80,70,0.65)',      // 浅色：深灰暖描边
-            glassEdge: 'rgba(120,100,80,0.16)', // 浅色：玻璃边缘一圈暖灰
-            glassMid: 'rgba(255,255,255,0)',
-            high: 'rgba(255,255,255,0.75)',   // 浅色：高光用亮白（浅底上仍可见）
-            glowIn: 'rgba(255,120,30,0.20)',
-            glowOut: 'rgba(255,110,20,0)',
-            bottomIn: 'rgba(255,120,40,0.28)',
-            bottomOut: 'rgba(255,110,30,0)',
-            lightBase: 1.0,                    // 火焰亮度整体倍率（浅色可稍压避免过曝）
-        } : {
-            edge: 'rgba(255,255,255,0.55)',   // 深色：白描边
-            glassEdge: 'rgba(255,255,255,0.13)',
-            glassMid: 'rgba(255,255,255,0.03)',
-            high: 'rgba(255,255,255,0.4)',
-            glowIn: 'rgba(255,150,50,0.14)',
-            glowOut: 'rgba(255,120,30,0)',
-            bottomIn: 'rgba(255,170,90,0.2)',
-            bottomOut: 'rgba(255,150,60,0)',
-            lightBase: 1.0,
-        };
         let raf = 0;
         function spawn() {
             if (parts.length >= 40) return;
@@ -2595,23 +2557,22 @@ function startFlameBall(cv) {
         }
         function tick() {
             if (!cv.isConnected) return;
-            if ((themeCheck++ & 31) === 0) detectTheme(); // 每 ~32 帧（约0.5s）重判一次主题
-            const c = C();
             ctx.clearRect(0, 0, S, S);
-            // 1) 玻璃底色（极淡，保持透明感：边缘一圈微色，中间全透）
-            const glass = ctx.createRadialGradient(CX, CY, R * 0.35, CX, CY, R);
-            glass.addColorStop(0, c.glassMid);
-            glass.addColorStop(0.85, c.glassMid);
-            glass.addColorStop(1, c.glassEdge);
+            // 1) 透明玻璃体：中心全透，仅最外缘一圈淡淡的冷白（玻璃折射透光，柔和不成线）
+            const glass = ctx.createRadialGradient(CX, CY, R * 0.2, CX, CY, R);
+            glass.addColorStop(0, 'rgba(255,255,255,0.015)');
+            glass.addColorStop(0.78, 'rgba(255,255,255,0.02)');
+            glass.addColorStop(0.94, 'rgba(255,255,255,0.05)');
+            glass.addColorStop(1, 'rgba(255,255,255,0.11)');
             ctx.fillStyle = glass;
             ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832); ctx.fill();
             // 2) 内部火焰（裁在球内，火苗只占中下→上，顶部留透明）
             ctx.save();
-            ctx.beginPath(); ctx.arc(CX, CY, R - 0.6, 0, 6.2832); ctx.clip();
+            ctx.beginPath(); ctx.arc(CX, CY, R - 0.5, 0, 6.2832); ctx.clip();
             // 底部一点内透火光（模拟玻璃被火焰照亮）
             const glow = ctx.createRadialGradient(CX, CY + R * 0.55, 1, CX, CY + R * 0.3, R * 1.05);
-            glow.addColorStop(0, c.glowIn);
-            glow.addColorStop(1, c.glowOut);
+            glow.addColorStop(0, 'rgba(255,150,50,0.12)');
+            glow.addColorStop(1, 'rgba(255,120,30,0)');
             ctx.fillStyle = glow;
             ctx.fillRect(0, 0, S, S);
             ctx.globalCompositeOperation = 'lighter';
@@ -2624,33 +2585,38 @@ function startFlameBall(cv) {
                 const k = p.life / p.max;
                 const alpha = Math.sin(Math.PI * Math.min(k * 1.6, 1)) * 0.9;
                 // 底部白黄亮 → 中段橙 → 末端红并淡出，形成火苗纵向渐变
-                let light = k < 0.35 ? 88 - k * 60 : 70 - k * 45;
-                if (isLight) light = Math.min(light, 82); // 浅色背景压一点最亮黄，避免糊白
-                const sat = isLight ? 100 : 100 - k * 15;
+                const light = Math.min(k < 0.35 ? 88 - k * 60 : 70 - k * 45, 84); // 上限84：亮黄不糊白
+                const sat = 100;
                 ctx.fillStyle = 'hsla(' + p.hue + ',' + sat + '%,' + Math.max(light, 15) + '%,' + alpha + ')';
                 ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(p.r * (1 - k * 0.5), 0.35), 0, 6.2832); ctx.fill();
                 if (k < 0.4 && p.r > 1.1) { // 火心白亮
-                    ctx.fillStyle = 'hsla(48,100%,' + (isLight ? 88 : 95) + '%,' + alpha * 0.7 + ')';
+                    ctx.fillStyle = 'hsla(48,100%,92%,' + alpha * 0.7 + ')';
                     ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.4, 0, 6.2832); ctx.fill();
                 }
             }
             ctx.restore();
-            // 3) 玻璃描边（透明球轮廓，主题色）
-            ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832);
-            ctx.strokeStyle = c.edge;
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            // 4) 左上高光（玻璃反光点）
+            // 3) 玻璃内侧宽柔暗环（厚度/折射感——宽而淡，不是描边线；浅底给轮廓，深底几乎隐没不抢戏）
             ctx.save();
             ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832); ctx.clip();
-            ctx.fillStyle = c.high;
+            ctx.beginPath(); ctx.arc(CX, CY, R - 1.2, 0, 6.2832);
+            ctx.strokeStyle = 'rgba(12,16,24,0.16)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            // 4) 顶部月牙高光（真实玻璃标志性反光，一段弧而非全圈亮边）
             ctx.beginPath();
-            ctx.ellipse(CX - R * 0.42, CY - R * 0.5, R * 0.2, R * 0.13, -0.6, 0, 6.2832);
+            ctx.arc(CX, CY, R - 1.6, Math.PI * 1.15, Math.PI * 1.85);
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 1.6;
+            ctx.stroke();
+            // 5) 左下小高光点（次反光）
+            ctx.fillStyle = 'rgba(255,255,255,0.32)';
+            ctx.beginPath();
+            ctx.ellipse(CX - R * 0.45, CY + R * 0.2, R * 0.13, R * 0.08, 0.6, 0, 6.2832);
             ctx.fill();
-            // 5) 底部暖反光（玻璃下缘被火映亮的一小弧）
-            const bottom = ctx.createRadialGradient(CX, CY + R * 0.75, 0.5, CX, CY + R * 0.72, R * 0.55);
-            bottom.addColorStop(0, c.bottomIn);
-            bottom.addColorStop(1, c.bottomOut);
+            // 6) 底部暖透光（玻璃下缘被火映亮，很淡）
+            const bottom = ctx.createRadialGradient(CX, CY + R * 0.8, 0.5, CX, CY + R * 0.72, R * 0.6);
+            bottom.addColorStop(0, 'rgba(255,160,80,0.15)');
+            bottom.addColorStop(1, 'rgba(255,150,60,0)');
             ctx.fillStyle = bottom;
             ctx.fillRect(0, 0, S, S);
             ctx.restore();
