@@ -1926,7 +1926,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.39'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.40'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -3250,6 +3250,82 @@ const KIMI_SETTINGS_CSS = `
     margin: 10px 0;
     opacity: 0.6;
 }
+/* ═══ 快捷入口面板（v1.37.40：统一样式，替代零散 inline 字号）═══ */
+#kimi_reasoning_injector_settings .kimi-entry-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+#kimi_reasoning_injector_settings .kimi-entry-panel .kimi-entry-group-title {
+    font-size: 0.8em;
+    font-weight: 700;
+    margin: 6px 0 2px;
+    opacity: 0.75;
+    letter-spacing: .02em;
+}
+#kimi_reasoning_injector_settings .kimi-entry-panel .kimi-entry-master {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+    font-weight: 600;
+    padding: 2px 0;
+    cursor: pointer;
+}
+#kimi_reasoning_injector_settings .kimi-entry-panel .kimi-entry-master input {
+    margin: 0;
+}
+#kimi_reasoning_injector_settings .kimi-entry-panel label.kimi-entry-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.88em;
+    line-height: 1.2;
+    padding: 2px 0;
+    margin: 0;
+    cursor: pointer;
+    user-select: none;
+}
+#kimi_reasoning_injector_settings .kimi-entry-panel label.kimi-entry-row input[type="checkbox"] {
+    margin: 0;
+    flex: none;
+}
+#kimi_reasoning_injector_settings .kimi-entry-panel .kimi-entry-ico {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    flex: none;
+}
+#kimi_reasoning_injector_settings .kimi-entry-panel .kimi-entry-txt {
+    color: var(--SmartThemeBodyColor, inherit);
+}
+#kimi_reasoning_injector_settings .kimi-entry-panel .kimi-entry-txt.kimi-entry-txt-strong {
+    font-weight: 600;
+}
+#kimi_reasoning_injector_settings .kimi-entry-panel .kimi-entry-panels {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px 10px;
+    margin-top: 2px;
+}
+#kimi_reasoning_injector_settings .kimi-entry-panel .kimi-entry-panels label.kimi-entry-row {
+    font-size: 0.85em;
+}
+#kimi_reasoning_injector_settings .kimi-entry-panel .kimi-entry-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 0;
+}
+#kimi_reasoning_injector_settings .kimi-entry-panel .kimi-entry-actions .kimi-entry-group-title {
+    margin: 0;
+    flex: 1;
+}
+#kimi_reasoning_injector_settings .kimi-entry-panel .kimi-sep {
+    margin: 7px 0 4px;
+}
+/* ═══ 快捷入口面板结束 ═══ */
 #kimi_reasoning_injector_settings .kimi-btn {
     padding: 3px 10px;
     border-radius: 8px;
@@ -4313,15 +4389,15 @@ function initSettingsPanel() {
 <details class="kimi-card">
 <summary><i class="fa-solid fa-gear kimi-card-ico" aria-hidden="true"></i>${t('baseTitle')}</summary>
 <div class="kimi-card-body">
-<label class="checkbox_label">
+<label class="kimi-entry-row" style="display:flex;align-items:center;gap:7px;font-size:.9em;padding:2px 0">
 <input id="${extensionName}_enabled" type="checkbox" ${settings.enabled ? 'checked' : ''}/>
-${t('enabled')}
+<span class="kimi-entry-txt">${t('enabled')}</span>
 </label>
-<label class="checkbox_label" style="margin-top:6px;display:flex;align-items:center;gap:6px">
+<label class="kimi-entry-row" style="display:flex;align-items:center;gap:7px;font-size:.9em;padding:2px 0">
 <input id="${extensionName}_auto_update" type="checkbox" ${settings.autoUpdate ? 'checked' : ''}/>
-<span style="font-size:.9em">${t('autoUpdateLabel')}</span>
+<span class="kimi-entry-txt">${t('autoUpdateLabel')}</span>
 </label>
-<div style="margin-top:8px">
+<div style="margin-top:6px">
 <label class="kimi-label" for="${extensionName}_language">${t('langLabel')}</label>
 <select id="${extensionName}_language" class="text_pole" style="width:100%">
 <option value="zh" ${settings.language !== 'en' && settings.language !== 'ko' ? 'selected' : ''}>${t('langZh')}</option>
@@ -4333,84 +4409,84 @@ ${t('enabled')}
 
 <div class="kimi-sep"></div>
 
-<!-- ═══ 快捷入口（v1.37.18：行首统一插件内联SVG图标=定宽对齐；标签=功能名，分组=出现位置）═══ -->
+<!-- ═══ 快捷入口（v1.37.40 统一样式：行高/字号/图标列一致，面板型双列）═══ -->
 <div class="kimi-entry-panel">
-    <label class="kimi-entry-master" style="display:flex!important;align-items:center;gap:6px;font-size:.92em;margin-bottom:4px;cursor:pointer">
-        <input type="checkbox" id="${extensionName}_float_bar" style="margin:0" ${settings.floatBarEnabled ? 'checked' : ''}/>
-        <span style="font-weight:600">${t('floatBarEnable')}</span>
+    <label class="kimi-entry-master">
+        <input type="checkbox" id="${extensionName}_float_bar" ${settings.floatBarEnabled ? 'checked' : ''}/>
+        <span>${t('floatBarEnable')}</span>
     </label>
-    <label class="checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0 4px 0;padding-left:0;font-size:.85em;cursor:pointer">
-        <input type="checkbox" id="${extensionName}_float_route_badge" style="margin:0" ${settings.floatRouteBadge ? 'checked' : ''}/>
-        <span style="opacity:.75">${t('floatRouteBadge')}</span>
-    </label>
-
-    <div class="kimi-sep" style="margin:6px 0"></div>
-    <div style="font-size:.85em;font-weight:700;margin:2px 0;opacity:.9">${t('floatFuncLabel')}</div>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
-        <input type="checkbox" id="${extensionName}_float_tagfix" style="margin:0" ${settings.floatShowTagFix ? 'checked' : ''}/>
-        <span style="display:inline-flex;align-items:center;color:#6fce6f;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-wand-magic-sparkles', '#6fce6f')}</span>
-        <span style="color:#6fce6f;font-weight:600">${t('tagFixNow')}</span>
-    </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
-        <input type="checkbox" id="${extensionName}_float_cline" style="margin:0" ${settings.floatShowCline ? 'checked' : ''}/>
-        <span style="display:inline-flex;align-items:center;color:#6fb7f0;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-route', '#6fb7f0')}</span>
-        <span style="color:#6fb7f0;font-weight:600">${t('floatClineEntry')}</span>
-    </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
-        <input type="checkbox" id="${extensionName}_float_stop" style="margin:0" ${settings.floatShowStopReroll ? 'checked' : ''}/>
-        <span style="display:inline-flex;align-items:center;color:#ef6f6f;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-pause', '#ef6f6f')}</span>
-        <span style="color:#ef6f6f;font-weight:600">${t('stopRerollName')}</span>
+    <label class="kimi-entry-row" style="opacity:.85">
+        <input type="checkbox" id="${extensionName}_float_route_badge" ${settings.floatRouteBadge ? 'checked' : ''}/>
+        <span class="kimi-entry-txt">${t('floatRouteBadge')}</span>
     </label>
 
-    <div class="kimi-sep" style="margin:6px 0"></div>
-    <div style="display:flex;align-items:center;gap:8px">
-        <div style="font-size:.85em;font-weight:700;opacity:.9">${t('floatPanelLabel')}</div>
-        <button id="${extensionName}_float_panel_all" type="button" class="kimi-btn" style="margin-left:auto;padding:1px 8px;font-size:.75em">${t('floatPanelAll')}</button>
+    <div class="kimi-sep"></div>
+    <div class="kimi-entry-group-title">${t('floatFuncLabel')}</div>
+    <label class="kimi-entry-row">
+        <input type="checkbox" id="${extensionName}_float_tagfix" ${settings.floatShowTagFix ? 'checked' : ''}/>
+        <span class="kimi-entry-ico" style="color:#6fce6f">${__kimiSvgIcon('fa-wand-magic-sparkles', '#6fce6f')}</span>
+        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#6fce6f">${t('tagFixNow')}</span>
+    </label>
+    <label class="kimi-entry-row">
+        <input type="checkbox" id="${extensionName}_float_cline" ${settings.floatShowCline ? 'checked' : ''}/>
+        <span class="kimi-entry-ico" style="color:#6fb7f0">${__kimiSvgIcon('fa-route', '#6fb7f0')}</span>
+        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#6fb7f0">${t('floatClineEntry')}</span>
+    </label>
+    <label class="kimi-entry-row">
+        <input type="checkbox" id="${extensionName}_float_stop" ${settings.floatShowStopReroll ? 'checked' : ''}/>
+        <span class="kimi-entry-ico" style="color:#ef6f6f">${__kimiSvgIcon('fa-pause', '#ef6f6f')}</span>
+        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#ef6f6f">${t('stopRerollName')}</span>
+    </label>
+
+    <div class="kimi-sep"></div>
+    <div class="kimi-entry-actions">
+        <div class="kimi-entry-group-title" style="flex:1">${t('floatPanelLabel')}</div>
+        <button id="${extensionName}_float_panel_all" type="button" class="kimi-btn" style="padding:1px 8px;font-size:.75em">${t('floatPanelAll')}</button>
         <button id="${extensionName}_float_panel_clear" type="button" class="kimi-btn" style="padding:1px 8px;font-size:.75em">${t('floatPanelClear')}</button>
     </div>
-    <div id="${extensionName}_float_panels" style="margin-top:2px">
-        ${KIMI_CARD_DEFS.map(d => `<label class="checkbox_label kimi-entry-panel" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;font-size:.85em;cursor:pointer"><input type="checkbox" class="kimi-float-panel" data-key="${d.key}" style="margin:0" ${settings.floatPanelKeys.includes(d.key) ? 'checked' : ''}/> <span style="display:inline-flex;align-items:center;color:var(--SmartThemeQuoteColor);width:16px;justify-content:center;flex:none">${__kimiSvgIcon(d.ico, 'var(--SmartThemeQuoteColor)')}</span>${t(d.titleKey)}</label>`).join('')}
+    <div id="${extensionName}_float_panels" class="kimi-entry-panels">
+        ${KIMI_CARD_DEFS.map(d => `<label class="kimi-entry-row"><input type="checkbox" class="kimi-float-panel" data-key="${d.key}" ${settings.floatPanelKeys.includes(d.key) ? 'checked' : ''}/> <span class="kimi-entry-ico" style="color:var(--SmartThemeQuoteColor)">${__kimiSvgIcon(d.ico, 'var(--SmartThemeQuoteColor)')}</span><span class="kimi-entry-txt">${t(d.titleKey)}</span></label>`).join('')}
     </div>
 
-    <div class="kimi-sep" style="margin:6px 0"></div>
-    <div style="font-size:.85em;font-weight:700;margin:2px 0;opacity:.9">${t('entryMenuGroup')}</div>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
-        <input type="checkbox" class="kimi-entry" data-entry="tag_menu" style="margin:0" ${(extension_settings.tag_auto_fixer || {}).showMenuBtn === true ? 'checked' : ''}/>
-        <span style="display:inline-flex;align-items:center;color:#6fce6f;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-tag', '#6fce6f')}</span>
-        <span style="color:#6fce6f;font-weight:600">${t('tagFixNow')}</span>
+    <div class="kimi-sep"></div>
+    <div class="kimi-entry-group-title">${t('entryMenuGroup')}</div>
+    <label class="kimi-entry-row">
+        <input type="checkbox" class="kimi-entry" data-entry="tag_menu" ${(extension_settings.tag_auto_fixer || {}).showMenuBtn === true ? 'checked' : ''}/>
+        <span class="kimi-entry-ico" style="color:#6fce6f">${__kimiSvgIcon('fa-tag', '#6fce6f')}</span>
+        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#6fce6f">${t('tagFixNow')}</span>
     </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
-        <input type="checkbox" class="kimi-entry" data-entry="cline_menu" style="margin:0" ${settings.clineShowMenuBtn ? 'checked' : ''}/>
-        <span style="display:inline-flex;align-items:center;color:#6fb7f0;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-route', '#6fb7f0')}</span>
-        <span style="color:#6fb7f0;font-weight:600">${t('clineMenuSwitch')}</span>
+    <label class="kimi-entry-row">
+        <input type="checkbox" class="kimi-entry" data-entry="cline_menu" ${settings.clineShowMenuBtn ? 'checked' : ''}/>
+        <span class="kimi-entry-ico" style="color:#6fb7f0">${__kimiSvgIcon('fa-route', '#6fb7f0')}</span>
+        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#6fb7f0">${t('clineMenuSwitch')}</span>
     </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
-        <input type="checkbox" class="kimi-entry" data-entry="api_menu" style="margin:0" ${(extension_settings.api_pool || {}).showMenuBtn === true ? 'checked' : ''}/>
-        <span style="display:inline-flex;align-items:center;color:var(--SmartThemeQuoteColor);width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-plug', 'var(--SmartThemeQuoteColor)')}</span>
-        <span>${t('apiMenuSwitch')}</span>
+    <label class="kimi-entry-row">
+        <input type="checkbox" class="kimi-entry" data-entry="api_menu" ${(extension_settings.api_pool || {}).showMenuBtn === true ? 'checked' : ''}/>
+        <span class="kimi-entry-ico" style="color:var(--SmartThemeQuoteColor)">${__kimiSvgIcon('fa-plug', 'var(--SmartThemeQuoteColor)')}</span>
+        <span class="kimi-entry-txt">${t('apiMenuSwitch')}</span>
     </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
-        <input type="checkbox" class="kimi-entry" data-entry="psnap_menu" style="margin:0" ${settings.psnapShowMenuBtn ? 'checked' : ''}/>
-        <span style="display:inline-flex;align-items:center;color:var(--SmartThemeQuoteColor);width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-list-check', 'var(--SmartThemeQuoteColor)')}</span>
-        <span>${t('psnapTitle')}</span>
+    <label class="kimi-entry-row">
+        <input type="checkbox" class="kimi-entry" data-entry="psnap_menu" ${settings.psnapShowMenuBtn ? 'checked' : ''}/>
+        <span class="kimi-entry-ico" style="color:var(--SmartThemeQuoteColor)">${__kimiSvgIcon('fa-list-check', 'var(--SmartThemeQuoteColor)')}</span>
+        <span class="kimi-entry-txt">${t('psnapTitle')}</span>
     </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
-        <input type="checkbox" class="kimi-entry" data-entry="stop_menu" style="margin:0" ${settings.stopRerollMenuBtn ? 'checked' : ''}/>
-        <span style="display:inline-flex;align-items:center;color:#ef6f6f;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-pause', '#ef6f6f')}</span>
-        <span style="color:#ef6f6f;font-weight:600">${t('stopRerollName')}</span>
+    <label class="kimi-entry-row">
+        <input type="checkbox" class="kimi-entry" data-entry="stop_menu" ${settings.stopRerollMenuBtn ? 'checked' : ''}/>
+        <span class="kimi-entry-ico" style="color:#ef6f6f">${__kimiSvgIcon('fa-pause', '#ef6f6f')}</span>
+        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#ef6f6f">${t('stopRerollName')}</span>
     </label>
 
-    <div class="kimi-sep" style="margin:6px 0"></div>
-    <div style="font-size:.85em;font-weight:700;margin:2px 0;opacity:.9">${t('entryInlineGroup')}</div>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
-        <input type="checkbox" class="kimi-entry" data-entry="tag_inline" style="margin:0" ${(extension_settings.tag_auto_fixer || {}).showInlineBtn === true ? 'checked' : ''}/>
-        <span style="display:inline-flex;align-items:center;color:#6fce6f;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-tag', '#6fce6f')}</span>
-        <span style="color:#6fce6f;font-weight:600">${t('tagFixNow')}</span>
+    <div class="kimi-sep"></div>
+    <div class="kimi-entry-group-title">${t('entryInlineGroup')}</div>
+    <label class="kimi-entry-row">
+        <input type="checkbox" class="kimi-entry" data-entry="tag_inline" ${(extension_settings.tag_auto_fixer || {}).showInlineBtn === true ? 'checked' : ''}/>
+        <span class="kimi-entry-ico" style="color:#6fce6f">${__kimiSvgIcon('fa-tag', '#6fce6f')}</span>
+        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#6fce6f">${t('tagFixNow')}</span>
     </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
-        <input type="checkbox" class="kimi-entry" data-entry="stop_inline" style="margin:0" ${settings.stopRerollInlineBtn ? 'checked' : ''}/>
-        <span style="display:inline-flex;align-items:center;color:#ef6f6f;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-pause', '#ef6f6f')}</span>
-        <span style="color:#ef6f6f;font-weight:600">${t('stopRerollName')}</span>
+    <label class="kimi-entry-row">
+        <input type="checkbox" class="kimi-entry" data-entry="stop_inline" ${settings.stopRerollInlineBtn ? 'checked' : ''}/>
+        <span class="kimi-entry-ico" style="color:#ef6f6f">${__kimiSvgIcon('fa-pause', '#ef6f6f')}</span>
+        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#ef6f6f">${t('stopRerollName')}</span>
     </label>
 </div>
 </div>
