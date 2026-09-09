@@ -165,7 +165,7 @@ const UI = {
         rcLabel: "Reasoning Content：",
         usageTitle: "使用方法：", usage1: "· 只打开step 1：原生思维链不进正文，正文质量理论最高。有概率极端内容夺舍失败（AI 道歉），好在出现英文可手动截停，重roll可破，主要看渠道。", usage2: "· 同时打开step 1和step2：思维链放进正文，破限较强，稳定夺舍。有概率在思考完就截断。这种截断在使用无限能源时会扣费！", usage3: "⚠️注意：两种破限方式都需要搭配专用预设，渠道仅测试opencode，其它自测。",
         rerollSectionTitle: "自动重ROLL：", alertSectionTitle: "完成提醒：",
-        rerollNoMutter: "结束仍无截断标记（半截楼/截断）", mutterSound: "完整生成 → 播放提示音", mutterVibrate: "同时震动提醒（Android；iOS不支持）", rcReset: "复原默认注入", rcResetDone: "已复原为当前模式的默认预设", rcResetCustom: "自定义模板没有内置默认可复原", mutterTrigMarker: "检测到截断标记（K3/余温预设适用）", mutterTrigDone: "输出完成即提醒（不用截断标记的模型适用）", mutterSndDing: "柔和叮咚（推荐）", mutterSndCrisp: "清脆两声", mutterSndChord: "治愈和弦", mutterSndSoft: "低柔单音", mutterSndMelody: "八音盒旋律（约2秒）", mutterSndLongbell: "长铃余音（约2秒）", mutterSndLullaby: "摇篮琶音（约5秒）", mutterSndHarp: "竖琴流水（约5秒）", mutterSndTest: "试听", mutterHint: "两项均以「自动截断」卡的截断标记（默认 <mutter>）为准：有标记＝完整→响两声beep；无标记＝半截楼→swipe进新分支继续roll（受连续上限约束；手动停止的楼不会被判半截）。提示音为内置音，不依赖酒馆音效设置。", rerollLabel: "自动重roll：", rerollEnglish: "思维链是英文（触审易道歉）", rerollNoThink: "无思维链直接出正文（没思考 or 少思考）", rerollEmpty: "空回复（PVP）", rerollKeyword: "出现以下关键词即重roll", rerollKeywordsLabel: "关键词（逗号分隔）：", rerollKeywordsHint: "生成内容（含思维链）出现任一关键词 → 立即停止并重roll开新分支。多个用英文逗号 , 分隔，不区分大小写；留空=关闭该功能。",
+        rerollNoMutter: "结束仍无截断标记（半截楼/截断）", mutterSound: "完整生成播放", mutterVibrate: "同时震动提醒（Android；iOS不支持）", rcReset: "复原默认注入", rcResetDone: "已复原为当前模式的默认预设", rcResetCustom: "自定义模板没有内置默认可复原", mutterTrigMarker: "检测到截断标记（K3/余温预设适用）", mutterTrigDone: "输出完成即提醒（不用截断标记的模型适用）", mutterSndDing: "柔和叮咚（推荐）", mutterSndCrisp: "清脆两声", mutterSndChord: "治愈和弦", mutterSndSoft: "低柔单音", mutterSndMelody: "八音盒旋律（约2秒）", mutterSndLongbell: "长铃余音（约2秒）", mutterSndLullaby: "摇篮琶音（约5秒）", mutterSndHarp: "竖琴流水（约5秒）", mutterSndTest: "试听", mutterHint: "两项均以「自动截断」卡的截断标记（默认 <mutter>）为准：有标记＝完整→响两声beep；无标记＝半截楼→swipe进新分支继续roll（受连续上限约束；手动停止的楼不会被判半截）。提示音为内置音，不依赖酒馆音效设置。", rerollLabel: "自动重roll：", rerollEnglish: "思维链是英文（触审易道歉）", rerollNoThink: "无思维链直接出正文（没思考 or 少思考）", rerollEmpty: "空回复（PVP）", rerollKeyword: "出现以下关键词即重roll", rerollKeywordsLabel: "关键词（逗号分隔）：", rerollKeywordsHint: "生成内容（含思维链）出现任一关键词 → 立即停止并重roll开新分支。多个用英文逗号 , 分隔，不区分大小写；留空=关闭该功能。",
         rerollLimitLabel: "连续自动重roll上限：", rerollTimes: " 次", rerollMinTokensLabel: "思考太短截断阈值：",
         rerollWarning: "注意：玩极端的内容时，容易出现英文思维链，重roll虽然可以避免大概率道歉的英文思维链，但是中文思维链也有道歉几率，只是比较低！你要多关注下手动截断。",
         foldLabel: "思维链美化折叠", foldHint: "当选择正文思维链，爆出的思维链放正文不好看，用美化把它折叠起来。不想要美化也可以关掉，打开不显示&lt;scene&gt;之前内容的<b>正则</b>。",
@@ -1902,7 +1902,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.20'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.21'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -4215,25 +4215,26 @@ ${t('rerollKeyword')}
 <input id="${extensionName}_reroll_keywords" type="text" class="text_pole" style="width:100%" value="${String(settings.rerollKeywords ?? 'CSAM,')}" placeholder="CSAM, xxx"/>
 <span class="kimi-hint" style="display:block">${t('rerollKeywordsHint')}</span>
 </div>
-<div style="margin-top:5px">
-<label class="kimi-label" for="${extensionName}_reroll_limit">${t('rerollLimitLabel')}</label>
+<div style="margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+<label class="kimi-label" for="${extensionName}_reroll_limit" style="display:inline-block;margin:0">${t('rerollLimitLabel')}</label>
 <input id="${extensionName}_reroll_limit" type="number" min="1" max="999" step="1" class="text_pole kimi-num" value="${settings.autoRerollLimit}"/>
-<span class="kimi-hint" style="display:inline">${t('rerollTimes')}</span>
+<span class="kimi-hint" style="display:inline;margin:0">${t('rerollTimes')}</span>
 </div>
-<div style="margin-top:5px">
-<label class="kimi-label" for="${extensionName}_reroll_mintokens">${t('rerollMinTokensLabel')}</label>
-<input id="${extensionName}_reroll_mintokens" type="number" min="0" max="5000" step="10" class="text_pole kimi-num" style="width:100px" value="${settings.rerollMinThinkingTokens}"/>
-<span class="kimi-hint" style="display:inline"> token</span>
+<div style="margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+<label class="kimi-label" for="${extensionName}_reroll_mintokens" style="display:inline-block;margin:0">${t('rerollMinTokensLabel')}</label>
+<input id="${extensionName}_reroll_mintokens" type="number" min="0" max="5000" step="10" class="text_pole kimi-num" value="${settings.rerollMinThinkingTokens}"/>
+<span class="kimi-hint" style="display:inline;margin:0"> token</span>
 </div>
 <p class="kimi-hint">${t('rerollWarning')}</p>
 <div class="kimi-sep"></div>
 <label class="kimi-label">${t('alertSectionTitle')}</label>
 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-<label class="checkbox_label" style="margin:0">
+<label class="checkbox_label" style="margin:0;flex:1 1 auto;min-width:120px">
 <input id="${extensionName}_mutter_sound" type="checkbox" ${settings.mutterSoundEnabled ? 'checked' : ''}/>
 ${t('mutterSound')}
 </label>
-<select id="${extensionName}_mutter_snd_type" class="text_pole" style="width:auto">
+<span style="display:inline-flex;align-items:center;gap:6px;flex:none">
+<select id="${extensionName}_mutter_snd_type" class="text_pole" style="width:auto;max-width:220px">
 <option value="ding" ${settings.mutterSoundType === 'ding' ? 'selected' : ''}>${t('mutterSndDing')}</option>
 <option value="crisp" ${settings.mutterSoundType === 'crisp' ? 'selected' : ''}>${t('mutterSndCrisp')}</option>
 <option value="chord" ${settings.mutterSoundType === 'chord' ? 'selected' : ''}>${t('mutterSndChord')}</option>
@@ -4244,6 +4245,7 @@ ${t('mutterSound')}
 <option value="harp" ${settings.mutterSoundType === 'harp' ? 'selected' : ''}>${t('mutterSndHarp')}</option>
 </select>
 <button id="${extensionName}_mutter_snd_test" type="button" class="kimi-btn">♪ ${t('mutterSndTest')}</button>
+</span>
 </div>
 <div style="margin-top:4px">
 <label class="checkbox_label" style="margin:0">
