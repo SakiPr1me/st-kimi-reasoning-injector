@@ -1902,7 +1902,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.31'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.32'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2051,29 +2051,9 @@ async function doSelfUpdate(btn, remoteVer, auto) {
             return;
         }
         if (btn) btn.textContent = '✅ 已更新';
-        // v1.37.31：更新后、刷新前自校验 manifest.json 完好——git pull 若弱网中断可能损坏文件，
-        // 直接刷新会让 ST 加载不到 manifest → 工具箱消失。校验失败则明确报错不刷新。
-        // ⚠️ 1.37.30 曾只拼 /scripts/extensions/{c.n}/manifest.json，当 c.n 不带 third-party/ 前缀时
-        // 该 URL 恒 404 → 明明更新成功却误报"校验失败"。改为多路径探测（任意一条取到合法 manifest 即通过）。
-        let manifestOk = false;
-        const probePaths = [
-            '/scripts/extensions/' + c.n + '/manifest.json',
-            '/scripts/extensions/' + fullName + '/manifest.json',
-            '/scripts/extensions/third-party/' + selfName + '/manifest.json',
-            '/scripts/extensions/' + selfName + '/manifest.json',
-        ];
-        for (const p of [...new Set(probePaths)]) {
-            try {
-                const mf = await fetch(p, { cache: 'no-store' });
-                if (mf.ok) { const mj = await mf.json().catch(() => null); if (mj && mj.js && mj.version) { manifestOk = true; break; } }
-            } catch (e) { }
-        }
-        if (!manifestOk) {
-            if (btn) { btn.disabled = false; btn.textContent = '⬆ 可更新'; }
-            try { toastr.error('更新完成但 manifest 校验失败（文件可能受损）。为避免扩展消失，未自动刷新。<br>请到「管理扩展」删除本插件后用 https://gitee.com/satosaki/st-kimi-reasoning-injector.git 重装', null, { escapeHtml: false, timeOut: 10000 }); } catch (e2) { }
-            console.warn('[余温工具箱] 更新后 manifest 校验失败，未刷新', c);
-            return;
-        }
+        // v1.37.32：更新接口返回成功 = git pull 完成，不再做 manifest 自校验——
+        // 校验靠 HTTP fetch 拼安装路径极易 404 误报（1.37.30 多路径探测仍偶发），
+        // 误判会让用户卡在"已更新但提示校验失败不刷新"。官方 update 成功即可信，统一走协调刷新。
         try {
             localStorage.setItem('kimi_updated_to', String(remoteVer || PLUGIN_VERSION)); // v1.37.15：记录已达版本，防刷新后缓存旧代码重复触发
         } catch (e) { }
