@@ -45,7 +45,7 @@ const HTML_TAG_NAMES = [
 
 const defaultSettings = {
 	tagTree: defaultTagTree,
-	showInlineBtn: true,
+	showInlineBtn: false,    // 输入框旁「修复标签」小图标（默认关：新装不占用发送栏）
 	showMenuBtn: true,
 	autoFixEnabled: false,   // 每轮输出结束自动修（默认关，谨慎勾选）
 	autoScanEnabled: false,  // 每轮自动扫描（只标不改，与自动修复互斥；默认关）
@@ -56,7 +56,7 @@ const defaultSettings = {
 if (!extension_settings[extensionName]) extension_settings[extensionName] = defaultSettings;
 const settings = extension_settings[extensionName];
 if (!settings.tagTree) settings.tagTree = defaultTagTree;
-if (settings.showInlineBtn === undefined) settings.showInlineBtn = true;
+if (settings.showInlineBtn === undefined) settings.showInlineBtn = false; // 默认关（新装不占用发送栏）
 if (settings.showMenuBtn === undefined) settings.showMenuBtn = true;
 if (settings.autoFixEnabled === undefined) settings.autoFixEnabled = false;
 if (settings.autoScanEnabled === undefined) settings.autoScanEnabled = false;

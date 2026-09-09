@@ -206,7 +206,7 @@ function rowHTML(e, i) {
     <div class="kimi-api-row" style="display:block;${curStyle};border-radius:6px;padding:5px 6px;margin-top:5px">
         <div class="kimi-api-l1" style="display:flex;gap:6px;align-items:center;width:100%;min-width:0">
             <input type="text" class="kimi-api-model text_pole" data-i="${i}" value="${escHtml(e.model || '')}" placeholder="${t('apiModel')}" style="width:32%;min-width:60px"/>
-            <button class="kimi-api-fetch kimi-btn kimi-api-btn-sm" data-i="${i}" title="${t('apiFetchModels')}" style="flex:none">📋</button>
+            <button class="kimi-api-fetch kimi-btn kimi-api-btn-sm" data-i="${i}" title="${t('apiFetchModels')}" style="flex:none">${t('apiFetchBtn')}</button>
             <input type="text" class="kimi-api-url text_pole" data-i="${i}" value="${escHtml(e.url || '')}" placeholder="https://.../v1" style="flex:1;min-width:0"/>
         </div>
         <div class="kimi-api-l2" style="display:flex;gap:6px;align-items:center;width:100%;min-width:0;margin-top:4px">

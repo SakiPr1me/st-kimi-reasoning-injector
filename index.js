@@ -98,7 +98,7 @@ const defaultSettings = {
     clineCustomProviders: [],        // 用户自定义追加的提供商名（与内置8个合并出现在下拉/弹窗）
     floatShowStopReroll: true,       // 悬浮条功能区：停止重roll（直接执行，第三功能钮）
     stopRerollMenuBtn: true,         // 扩展菜单显示「停止重roll」入口
-    stopRerollInlineBtn: true,       // 输入框旁显示「停止重roll」小图标
+    stopRerollInlineBtn: false,      // 输入框旁「停止重roll」小图标（默认关：新装不占用发送栏）
     psnapShowMenuBtn: true,          // 扩展菜单显示「预设条目开关快照」入口
 };
 
@@ -206,7 +206,7 @@ const UI = {
         tagSlashHint: "也可用 /fix-tags 斜杠命令",
         apiTitle: "API 池（额度轮换）", apiEnabled: "启用 limit 检测", apiAuto: "命中后自动切换下一条（不询问）",
         apiKeywords: "触发关键词（逗号分隔）", apiAdd: "＋ 添加接口", apiDel: "删除", apiSwitchTo: "⇄ 切到此条", apiCurrent: "当前",
-        apiModel: "模型名", apiKey: "密钥", apiAge: "{d} 天 {h} 小时", apiFetchModels: "获取可用模型", apiModelsLoading: "获取模型中…", apiModelEmpty: "未获取到模型（检查 URL/密钥）", apiModelErr: "获取模型失败",
+        apiModel: "模型名", apiKey: "密钥", apiAge: "{d} 天 {h} 小时", apiFetchModels: "获取可用模型", apiFetchBtn: "获取", apiModelsLoading: "获取模型中…", apiModelEmpty: "未获取到模型（检查 URL/密钥）", apiModelErr: "获取模型失败",
         apiNoPool: "池为空：先添加接口", apiNotCustom: "当前不是 Custom(OpenAI兼容) 连接，API 池不生效",
         apiBannerMsg: "检测到额度用尽（limit）。", apiBannerSwitch: "⇄ 切换到 {name}（{n}/{total}）", apiSwitched: "已切换到 {name}（{n}/{total}）",
         apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（感谢啊一串信息源）", clineModelOverride: "积分模型名前缀覆写", clineMethodLabel: "指定方式：订阅指定提供商（感谢啊一串信息源）", clineUpTitle: "上移（调整自动切换顺序）", clineDownTitle: "下移（调整自动切换顺序）", upBtn: "📊 各上游实时状况", upTitle: "kimi-k3 各上游实时状况", upLoading: "加载中…（数据源 OpenRouter，免key）", upRefreshing: "刷新中…", upFailed: "获取失败：国内网络可能无法直连 openrouter.ai，请挂梯子后点 ↻ 重试", upSwitch: "切", upProvider: "提供商", upIn: "输入$/M", upOut: "输出$/M", upCache: "缓存读$/M", upLat: "延迟", upTps: "吞吐", upUp5m: "可用(5m)", upUptime: "可用率(1d)", upHint: "✓=可在本插件切换 · ★=当前 · 排序：可切换优先、可用率降序。手动追加自定义提供商（上方输入框）后，对应行也会出现切按钮。数据来自 OpenRouter 公开接口，仅供选型参考。", clineDSTip: "用Cline吃DeepSeek，可指定 deepseek 作为上游（官方缓存生效）！", clineDSBtn: "⇄ 一键切换 deepseek 上游", clineDSSwitched: "已切换：提供商=deepseek（走官方上游带缓存）", clineOverrideWarn: "⚠️ 啊一串实测：消耗积分的模式！限定指定提供商，如果你不知道这是什么就不要勾选", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「模型参数」里勾选 使用 Cline 提供商指定", clinePassWarn: "⚠️ 检测到模型名带 cline-pass/ 前缀：提供商指定不会生效（实测全部被忽略），请改用 moonshotai/kimi-k3 等厂商前缀", clineHint: "开启后每次请求自动注入指定提供商。请删掉附加参数里的任何内容！仅 cline 渠道需要，其它渠道请关闭。不同渠道K3风味不同，自行测试。", psnapTitle: "预设条目开关快照", psnapNamePh: "方案名…", psnapSaveBtn: "保存", psnapApply: "切", psnapDel: "✕", psnapEmpty: "还没有保存的方案", psnapRecovery: "恢复到最近一次未快照时的状态", psnapSaved: "已保存「{n}」", psnapNeedName: "请先填写方案名", psnapMenuEntry: "扩展菜单入口", psnapEntryLabel: "入口：", psnapFloatEntry: "悬浮按钮入口", psnapNoPreset: "未找到预设数据", psnapRecApply: "恢复", psnapRecTime: "可恢复快照", floatCardTitle: "悬浮条设置", floatCardTag: "一键修复标签（直接执行）", tagFixNow: "一键修复标签", baseTitle: "基础设置", autoUpdateLabel: "自动更新插件至最新", floatBarEnable: "开启悬浮窗", floatPanelClear: "清空", floatFuncLabel: "功能型（点图标直接执行）", floatPanelLabel: "面板型（点图标打开设置浮窗）", floatPanelAll: "全选面板", routeLabel: "本次Cline上游：", routeNone: "暂无数据", floatClineEntry: "Cline 提供商入口（点开选择）", floatRouteBadge: "悬浮条显示上游徽标", stopRerollName: "停止重roll", entryMenuGroup: "拓展菜单（左下角）", entryInlineGroup: "输入框旁（发送栏）", clineRouteAlertLabel: "实际路由与指定不符时提醒", opencodeLabel: "Opencode 请求标头（9/6 后红字需启用）", opencodeHint: "自动注入 X-Opencode-Session 请求头（CUSTOM 源生效）。同一聊天固定同一 ID（GPU 上下文缓存命中），不同聊天不同 ID。", opencodeSession: "本聊天 Session ID：",
@@ -266,7 +266,7 @@ const UI = {
         tagSlashHint: "Also use /fix-tags command",
         apiTitle: "API Pool (quota rotation)", apiEnabled: "Enable limit detection", apiAuto: "Auto-switch on hit",
         apiKeywords: "Trigger keywords (comma-separated)", apiAdd: "+ Add Endpoint", apiDel: "Delete", apiSwitchTo: "⇄ Switch here", apiCurrent: "current",
-        apiModel: "Model", apiKey: "Key", apiAge: "{d}d {h}h", apiFetchModels: "Fetch available models", apiModelsLoading: "Fetching models…", apiModelEmpty: "No models returned (check URL/key)", apiModelErr: "Failed to fetch models",
+        apiModel: "Model", apiKey: "Key", apiAge: "{d}d {h}h", apiFetchModels: "Fetch available models", apiFetchBtn: "Fetch", apiModelsLoading: "Fetching models…", apiModelEmpty: "No models returned (check URL/key)", apiModelErr: "Failed to fetch models",
         apiNoPool: "Pool is empty: add an endpoint first", apiNotCustom: "Not a Custom (OpenAI-compatible) connection - pool inactive",
         apiBannerMsg: "Quota limit hit.", apiBannerSwitch: "⇄ Switch to {name} ({n}/{total})", apiSwitched: "Switched to {name} ({n}/{total})",
         apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (credit: the source)", clineModelOverride: "Credits model prefix override", clineMethodLabel: "Method: subscription provider routing (credit: the source)", clineUpTitle: "Move up (auto-switch order)", clineDownTitle: "Move down (auto-switch order)", upBtn: "📊 Live upstream status", upTitle: "kimi-k3 upstream live status", upLoading: "Loading... (OpenRouter, no key needed)", upRefreshing: "Refreshing...", upFailed: "Failed to fetch - openrouter.ai may be unreachable from your network; retry with ↻", upSwitch: "Use", upProvider: "Provider", upIn: "In $/M", upOut: "Out $/M", upCache: "Cache $/M", upLat: "Latency", upTps: "Throughput", upUp5m: "Up(5m)", upUptime: "Uptime(1d)", upHint: "✓ = switchable here · ★ = current · latency/throughput = last 30 min (blank when no traffic) · sorted: switchable first, uptime desc. Data from OpenRouter public API.", snapNamePh: "Profile name…", snapSaveBtn: "💾 Save current", snapApply: "Apply", snapDel: "Delete profile", snapEmpty: "No saved profiles yet: enter a name and hit Save", snapRecovery: "↩ Auto-recovery snapshot (saved before last switch)", snapSaved: "Saved profile \"{n}\"", snapNeedName: "Enter a profile name first", clineDSTip: "Use Cline for DeepSeek with deepseek as the upstream (official caching works)!", clineDSBtn: "⇄ One-click deepseek upstream", clineDSSwitched: "Switched: provider=deepseek (official upstream with caching)", clineOverrideWarn: "WARNING (tested): credits only - locks provider and overrides model to a vendor prefix like moonshotai/kimi-k3.", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Model Settings first", clinePassWarn: "Model has cline-pass/ prefix: provider routing will NOT work (tested). Use a vendor prefix like moonshotai/kimi-k3", clineHint: "Injects the selected provider into every request. Delete anything in Extra Parameters! Only needed for the cline channel; turn off elsewhere. Different providers give K3 different flavors - test them yourself.", psnapTitle: "Preset Toggle Snapshots", psnapNamePh: "Profile name…", psnapSaveBtn: "Save", psnapApply: "Use", psnapDel: "✕", psnapEmpty: "No saved profiles", psnapRecovery: "Restore to last unsaved state", psnapSaved: "Saved \"{n}\"", psnapNeedName: "Enter a profile name first", psnapMenuEntry: "Extensions menu entry", psnapEntryLabel: "Entries:", psnapFloatEntry: "Floating button entry", psnapNoPreset: "Preset data not found", psnapRecApply: "Restore", psnapRecTime: "Recovery snapshot", floatCardTitle: "Floating Bar", floatCardTag: "One-click tag fix (direct run)", tagFixNow: "Fix tags now", baseTitle: "Basics", autoUpdateLabel: "Auto-update plugin to latest", floatBarEnable: "Enable floating bar", floatPanelClear: "Clear", floatFuncLabel: "Actions (run directly)", floatPanelLabel: "Panels (open settings popup)", floatPanelAll: "Select all panels", routeLabel: "Upstream this time: ", routeNone: "No data yet", floatClineEntry: "Cline provider entry (click to pick)", floatRouteBadge: "Show upstream badge on bar", stopRerollName: "Stop reroll", entryMenuGroup: "Extensions menu (bottom-left)", entryInlineGroup: "Beside input (send bar)", clineRouteAlertLabel: "Alert when route mismatches", opencodeLabel: "Opencode request header (enable after 9/6)", opencodeHint: "Auto-inject X-Opencode-Session (works on Custom source). Same chat keeps one fixed ID (GPU context cache), different chats differ.", opencodeSession: "Session ID for this chat: ",
@@ -326,7 +326,7 @@ const UI = {
         tagSlashHint: "/fix-tags 명령도 사용 가능",
         apiTitle: "API 풀 (한도 교체)", apiEnabled: "limit 감지 활성화", apiAuto: "감지 시 자동으로 다음으로 교체",
         apiKeywords: "트리거 키워드 (쉼표 구분)", apiAdd: "＋ 엔드포인트 추가", apiDel: "삭제", apiSwitchTo: "⇄ 여기로 전환", apiCurrent: "현재",
-        apiModel: "모델명", apiKey: "키", apiAge: "{d}일 {h}시간", apiFetchModels: "사용 가능한 모델 가져오기", apiModelsLoading: "모델 가져오는 중…", apiModelEmpty: "모델이 없습니다 (URL/키 확인)", apiModelErr: "모델 가져오기 실패",
+        apiModel: "모델명", apiKey: "키", apiAge: "{d}일 {h}시간", apiFetchModels: "사용 가능한 모델 가져오기", apiFetchBtn: "가져오기", apiModelsLoading: "모델 가져오는 중…", apiModelEmpty: "모델이 없습니다 (URL/키 확인)", apiModelErr: "모델 가져오기 실패",
         apiNoPool: "풀이 비어 있음: 먼저 엔드포인트 추가", apiNotCustom: "Custom(OpenAI 호환) 연결이 아님 - 풀 동작 안 함",
         apiBannerMsg: "할당량 초과 감지.", apiBannerSwitch: "⇄ {name}(으)로 전환 ({n}/{total})", apiSwitched: "{name}(으)로 전환됨 ({n}/{total})",
         apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (정보원 감사)", clineModelOverride: "크레딧 모델 접두사 덮어쓰기", clineMethodLabel: "방식: 구독 공급자 지정", clineUpTitle: "위로(자동 전환 순서)", clineDownTitle: "아래로(자동 전환 순서)", upBtn: "📊 업스트림 실시간 현황", upTitle: "kimi-k3 업스트림 현황", upLoading: "로딩 중... (OpenRouter)", upRefreshing: "새로고침 중...", upFailed: "가져오기 실패 - 네트워크에서 openrouter.ai 접근 불가 가능, ↻로 재시도", upSwitch: "전환", upProvider: "공급자", upIn: "입력$/M", upOut: "출력$/M", upCache: "캐시$/M", upLat: "지연", upTps: "처리량", upUp5m: "가동(5m)", upUptime: "가동률(1d)", upHint: "✓=여기서 전환 가능 · ★=현재 · 지연/처리량=최근 30분 · 정렬: 전환 가능 우선. OpenRouter 공개 API 기준.", snapNamePh: "프로필 이름…", snapSaveBtn: "💾 현재 상태 저장", snapApply: "적용", snapDel: "이 프로필 삭제", snapEmpty: "저장된 프로필 없음: 이름 입력 후 저장", snapRecovery: "↩ 복구 스냅샷(전환 전 자동 저장)", snapSaved: "\"{n}\" 프로필 저장됨", snapNeedName: "먼저 프로필 이름을 입력하세요", clineDSTip: "Cline으로 DeepSeek 사용 - deepseek 업스트림 지정(공식 캐시 적용)!", clineDSBtn: "⇄ 원클릭 deepseek 업스트림", clineDSSwitched: "전환됨: 공급자=deepseek(공식 업스트림, 캐시)", clineOverrideWarn: "주의(실측): 크레딧 소모 - 공급자 지정 및 moonshotai/kimi-k3 등 벤더 접두사로 모델 덮어쓰기.", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 모델 설정에서 Cline 공급자 지정을 체크하세요", clinePassWarn: "모델명에 cline-pass/ 접두사 감지: 공급자 지정 무효(실측). moonshotai/kimi-k3 같은 벤더 접두사 사용", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입합니다. 추가 매개변수의 모든 내용을 삭제하세요! cline 채널에서만 필요, 다른 곳에서는 끄세요. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.", psnapTitle: "프리셋 토글 스냅샷", psnapNamePh: "프로필 이름…", psnapSaveBtn: "저장", psnapApply: "전환", psnapDel: "✕", psnapEmpty: "저장된 프로필 없음", psnapRecovery: "마지막 미스냅샷 상태로 복원", psnapSaved: "\"{n}\" 저장됨", psnapNeedName: "먼저 프로필 이름을 입력하세요", psnapMenuEntry: "확장 메뉴 항목", psnapEntryLabel: "입구:", psnapFloatEntry: "플로팅 버튼 항목", psnapNoPreset: "프리셋 데이터 없음", psnapRecApply: "복원", psnapRecTime: "복구 스냅샷", floatCardTitle: "플로팅 바", floatCardTag: "태그 원클릭 수리 (즉시 실행)", tagFixNow: "태그 지금 수리", baseTitle: "기본 설정", autoUpdateLabel: "플러그인을 최신 버전으로 자동 업데이트", floatBarEnable: "플로팅 바 켜기", floatPanelClear: "비우기", floatFuncLabel: "기능형 (아이콘 즉시 실행)", floatPanelLabel: "패널형 (아이콘 클릭 시 설정 팝업)", floatPanelAll: "모든 패널 선택", routeLabel: "이번 Cline 업스트림: ", routeNone: "데이터 없음", floatClineEntry: "Cline 공급자 입구 (클릭하여 선택)", floatRouteBadge: "플로팅 바에 업스트림 배지 표시", stopRerollName: "리롤 중지", entryMenuGroup: "확장 메뉴 (좌하단)", entryInlineGroup: "입력창 옆 (보내기 바)", clineRouteAlertLabel: "라우팅 불일치 시 알림", opencodeLabel: "Opencode 요청 헤더 (9/6 이후 활성화 필요)", opencodeHint: "X-Opencode-Session 요청 헤더 자동 주입 (CUSTOM 소스). 같은 대화는 동일 ID (GPU 컨텍스트 캐시), 다른 대화는 다른 ID.", opencodeSession: "이 대화의 Session ID: ",
@@ -394,7 +394,7 @@ if (settings.clineShowMenuBtn === undefined) settings.clineShowMenuBtn = true;
 if (!Array.isArray(settings.clineCustomProviders)) settings.clineCustomProviders = [];
 if (settings.floatShowStopReroll === undefined) settings.floatShowStopReroll = true;
 if (settings.stopRerollMenuBtn === undefined) settings.stopRerollMenuBtn = true;
-if (settings.stopRerollInlineBtn === undefined) settings.stopRerollInlineBtn = true;
+if (settings.stopRerollInlineBtn === undefined) settings.stopRerollInlineBtn = false;
 if (settings.psnapShowMenuBtn === undefined) settings.psnapShowMenuBtn = true;
 if (settings.autoRerollLimit === undefined) settings.autoRerollLimit = defaultSettings.autoRerollLimit;
 if (settings.fixMesOnGenerate === undefined) settings.fixMesOnGenerate = false;
@@ -1584,7 +1584,7 @@ function notifyReroll(msg, level = 'warning') {
     try {
         if (typeof toastr === 'undefined') return;
         if (rerollBannerHideTimer) { clearTimeout(rerollBannerHideTimer); rerollBannerHideTimer = null; }
-        const btn = settings.rerollPaused ? '' : `<button type="button" class="kimi-reroll-btn">⏹ 停止</button>`;
+        const btn = settings.rerollPaused ? '' : `<button type="button" class="kimi-reroll-btn" style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-flex">${__kimiSvgIcon('fa-pause', 'currentColor')}</span>停止</button>`;
         const html = msg + btn;
         const $cur = rerollBannerRef ? $(rerollBannerRef.el || rerollBannerRef) : null;
         if ($cur && $cur.length && $cur.is(':visible')) {
@@ -1902,7 +1902,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.17'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.18'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2320,7 +2320,7 @@ function updateStopRerollEntries() {
         const $menu = $('#extensionsMenu');
         if ($menu.length) {
             $menu.append(`<a id="kimi_stop_menu_item" class="list-group-item" href="#" title="${t('stopRerollName')}">
-                <i class="fa-solid fa-stop" style="color:#ef6f6f"></i> ${t('stopRerollName')}
+                ${__kimiSvgIcon('fa-pause', '#ef6f6f')} ${t('stopRerollName')}
             </a>`);
             $('#kimi_stop_menu_item').on('click', (e) => {
                 e.preventDefault();
@@ -2330,10 +2330,10 @@ function updateStopRerollEntries() {
             });
         }
     }
-    // 输入框旁小图标（受 stopRerollInlineBtn 控制）
+    // 输入框旁小图标（受 stopRerollInlineBtn 控制；内联 SVG，不依赖 FontAwesome 字体）
     $('#kimi_stop_inline_btn').remove();
     if (settings.stopRerollInlineBtn) {
-        const btnHtml = `<div id="kimi_stop_inline_btn" class="fa-solid fa-stop interactable" title="${t('stopRerollName')}" style="cursor:pointer;padding:0 3px;font-size:0.7em;opacity:.5;margin-right:1px;color:#ef6f6f"></div>`;
+        const btnHtml = `<div id="kimi_stop_inline_btn" class="interactable" title="${t('stopRerollName')}" style="cursor:pointer;padding:0 3px;opacity:.55;margin-right:1px;display:inline-flex;align-items:center">${__kimiSvgIcon('fa-pause', '#ef6f6f')}</div>`;
         const left = $('#leftSendForm'), right = $('#rightSendForm');
         const target = left.length ? left : (right.length ? right : null);
         if (target) {
@@ -2509,7 +2509,7 @@ const KIMI_FA_ICONS = {
     'palette': { v:'0 0 512 512', d:'M512 256c0 .9 0 1.8 0 2.7c-.4 36.5-33.6 61.3-70.1 61.3H344c-26.5 0-48 21.5-48 48c0 3.4 .4 6.7 1 9.9c2.1 10.2 6.5 20 10.8 29.9c6.1 13.8 12.1 27.5 12.1 42c0 31.8-21.6 60.7-53.4 62c-3.5 .1-7 .2-10.6 .2C114.6 512 0 397.4 0 256S114.6 0 256 0S512 114.6 512 256zM128 288a32 32 0 1 0 -64 0 32 32 0 1 0 64 0zm0-96a32 32 0 1 0 0-64 32 32 0 1 0 0 64zM288 96a32 32 0 1 0 -64 0 32 32 0 1 0 64 0zm96 96a32 32 0 1 0 0-64 32 32 0 1 0 0 64z' },
     'plug': { v:'0 0 384 512', d:'M96 0C78.3 0 64 14.3 64 32v96h64V32c0-17.7-14.3-32-32-32zM288 0c-17.7 0-32 14.3-32 32v96h64V32c0-17.7-14.3-32-32-32zM32 160c-17.7 0-32 14.3-32 32s14.3 32 32 32v32c0 77.4 55 142 128 156.8V480c0 17.7 14.3 32 32 32s32-14.3 32-32V412.8C297 398 352 333.4 352 256V224c17.7 0 32-14.3 32-32s-14.3-32-32-32H32z' },
     'route': { v:'0 0 512 512', d:'M512 96c0 50.2-59.1 125.1-84.6 155c-3.8 4.4-9.4 6.1-14.5 5H320c-17.7 0-32 14.3-32 32s14.3 32 32 32h96c53 0 96 43 96 96s-43 96-96 96H139.6c8.7-9.9 19.3-22.6 30-36.8c6.3-8.4 12.8-17.6 19-27.2H416c17.7 0 32-14.3 32-32s-14.3-32-32-32H320c-53 0-96-43-96-96s43-96 96-96h39.8c-21-31.5-39.8-67.7-39.8-96c0-53 43-96 96-96s96 43 96 96zM117.1 489.1c-3.8 4.3-7.2 8.1-10.1 11.3l-1.8 2-.2-.2c-6 4.6-14.6 4-20-1.8C59.8 473 0 402.5 0 352c0-53 43-96 96-96s96 43 96 96c0 30-21.1 67-43.5 97.9c-10.7 14.7-21.7 28-30.8 38.5l-.6 .7zM128 352a32 32 0 1 0 -64 0 32 32 0 1 0 64 0zM416 128a32 32 0 1 0 0-64 32 32 0 1 0 0 64z' },
-    'stop': { v:'0 0 384 512', d:'M0 64C0 28.7 28.7 0 64 0H320c35.3 0 64 28.7 64 64V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V64z' },
+    'pause': { v:'0 0 320 512', d:'M48 64C21.5 64 0 85.5 0 112V400c0 26.5 21.5 48 48 48H80c26.5 0 48-21.5 48-48V112c0-26.5-21.5-48-48-48H48zm192 0c-26.5 0-48 21.5-48 48V400c0 26.5 21.5 48 48 48h32c26.5 0 48-21.5 48-48V112c0-26.5-21.5-48-48-48H240z' },
     'scissors': { v:'0 0 512 512', d:'M256 192l-39.5-39.5c4.9-12.6 7.5-26.2 7.5-40.5C224 50.1 173.9 0 112 0S0 50.1 0 112s50.1 112 112 112c14.3 0 27.9-2.7 40.5-7.5L192 256l-39.5 39.5c-12.6-4.9-26.2-7.5-40.5-7.5C50.1 288 0 338.1 0 400s50.1 112 112 112s112-50.1 112-112c0-14.3-2.7-27.9-7.5-40.5L499.2 76.8c7.1-7.1 7.1-18.5 0-25.6c-28.3-28.3-74.1-28.3-102.4 0L256 192zm22.6 150.6L396.8 460.8c28.3 28.3 74.1 28.3 102.4 0c7.1-7.1 7.1-18.5 0-25.6L342.6 278.6l-64 64zM64 112a48 48 0 1 1 96 0 48 48 0 1 1 -96 0zm48 240a48 48 0 1 1 0 96 48 48 0 1 1 0-96z' },
     'screwdriver-wrench': { v:'0 0 512 512', d:'M78.6 5C69.1-2.4 55.6-1.5 47 7L7 47c-8.5 8.5-9.4 22-2.1 31.6l80 104c4.5 5.9 11.6 9.4 19 9.4h54.1l109 109c-14.7 29-10 65.4 14.3 89.6l112 112c12.5 12.5 32.8 12.5 45.3 0l64-64c12.5-12.5 12.5-32.8 0-45.3l-112-112c-24.2-24.2-60.6-29-89.6-14.3l-109-109V104c0-7.5-3.5-14.5-9.4-19L78.6 5zM19.9 396.1C7.2 408.8 0 426.1 0 444.1C0 481.6 30.4 512 67.9 512c18 0 35.3-7.2 48-19.9L233.7 374.3c-7.8-20.9-9-43.6-3.6-65.1l-61.7-61.7L19.9 396.1zM512 144c0-10.5-1.1-20.7-3.2-30.5c-2.4-11.2-16.1-14.1-24.2-6l-63.9 63.9c-3 3-7.1 4.7-11.3 4.7H352c-8.8 0-16-7.2-16-16V102.6c0-4.2 1.7-8.3 4.7-11.3l63.9-63.9c8.1-8.1 5.2-21.8-6-24.2C388.7 1.1 378.5 0 368 0C288.5 0 224 64.5 224 144l0 .8 85.3 85.3c36-9.1 75.8 .5 104 28.7L429 274.5c49-23 83-72.8 83-130.5zM56 432a24 24 0 1 1 48 0 24 24 0 1 1 -48 0z' },
     'tag': { v:'0 0 448 512', d:'M0 80V229.5c0 17 6.7 33.3 18.7 45.3l176 176c25 25 65.5 25 90.5 0L418.7 317.3c25-25 25-65.5 0-90.5l-176-176c-12-12-28.3-18.7-45.3-18.7H48C21.5 32 0 53.5 0 80zm112 32a32 32 0 1 1 0 64 32 32 0 1 1 0-64z' },
@@ -2584,7 +2584,7 @@ function updateComboFloat() {
     const ACTION_DEFS = [
         { key: 'tag', ico: 'fa-wand-magic-sparkles', label: t('tagFixNow'), color: '#6fce6f', on: !!settings.floatShowTagFix },
         { key: 'cline', ico: 'fa-route', label: t('floatClineEntry'), color: '#6fb7f0', on: !!settings.floatShowCline },
-        { key: 'stop', ico: 'fa-stop', label: t('stopRerollName'), color: '#ef6f6f', on: !!settings.floatShowStopReroll },
+        { key: 'stop', ico: 'fa-pause', label: t('stopRerollName'), color: '#ef6f6f', on: !!settings.floatShowStopReroll },
     ].filter(a => a.on);
     const panelDefs = KIMI_CARD_DEFS.filter(d => settings.floatPanelKeys.includes(d.key) && !(settings.floatShowTagFix && d.key === 'tag')); // 按勾选过滤；tag 图标由功能区提供，面板区不重复
     const rowCount = ACTION_DEFS.length + panelDefs.length + (ACTION_DEFS.length ? 1 : 0);
@@ -3975,30 +3975,33 @@ ${t('enabled')}
 
 <div class="kimi-sep"></div>
 
-<!-- ═══ 快捷入口（v1.37.17 重构：功能型/面板型/拓展菜单/输入框旁 分组建，仿 st-chat-sync）═══ -->
+<!-- ═══ 快捷入口（v1.37.18：行首统一插件内联SVG图标=定宽对齐；标签=功能名，分组=出现位置）═══ -->
 <div class="kimi-entry-panel">
     <label class="kimi-entry-master" style="display:flex!important;align-items:center;gap:6px;font-size:.92em;margin-bottom:4px;cursor:pointer">
         <input type="checkbox" id="${extensionName}_float_bar" style="margin:0" ${settings.floatBarEnabled ? 'checked' : ''}/>
         <span style="font-weight:600">${t('floatBarEnable')}</span>
     </label>
+    <label class="checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0 4px 0;padding-left:0;font-size:.85em;cursor:pointer">
+        <input type="checkbox" id="${extensionName}_float_route_badge" style="margin:0" ${settings.floatRouteBadge ? 'checked' : ''}/>
+        <span style="opacity:.75">${t('floatRouteBadge')}</span>
+    </label>
 
     <div class="kimi-sep" style="margin:6px 0"></div>
     <div style="font-size:.85em;font-weight:700;margin:2px 0;opacity:.9">${t('floatFuncLabel')}</div>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:5px;margin:2px 0;cursor:pointer">
+    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
         <input type="checkbox" id="${extensionName}_float_tagfix" style="margin:0" ${settings.floatShowTagFix ? 'checked' : ''}/>
-        <span style="color:#6fce6f;font-weight:600">⚡ ${t('floatCardTag')}</span>
+        <span style="display:inline-flex;align-items:center;color:#6fce6f;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-wand-magic-sparkles', '#6fce6f')}</span>
+        <span style="color:#6fce6f;font-weight:600">${t('tagFixNow')}</span>
     </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:5px;margin:2px 0;cursor:pointer">
+    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
         <input type="checkbox" id="${extensionName}_float_cline" style="margin:0" ${settings.floatShowCline ? 'checked' : ''}/>
-        <span style="color:#6fb7f0;font-weight:600">🧭 ${t('floatClineEntry')}</span>
+        <span style="display:inline-flex;align-items:center;color:#6fb7f0;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-route', '#6fb7f0')}</span>
+        <span style="color:#6fb7f0;font-weight:600">${t('floatClineEntry')}</span>
     </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:5px;margin:2px 0;cursor:pointer">
+    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
         <input type="checkbox" id="${extensionName}_float_stop" style="margin:0" ${settings.floatShowStopReroll ? 'checked' : ''}/>
-        <span style="color:#ef6f6f;font-weight:600">⏹ ${t('stopRerollName')}</span>
-    </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:5px;margin:2px 0;cursor:pointer">
-        <input type="checkbox" id="${extensionName}_float_route_badge" style="margin:0" ${settings.floatRouteBadge ? 'checked' : ''}/>
-        <span style="opacity:.85">📡 ${t('floatRouteBadge')}</span>
+        <span style="display:inline-flex;align-items:center;color:#ef6f6f;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-pause', '#ef6f6f')}</span>
+        <span style="color:#ef6f6f;font-weight:600">${t('stopRerollName')}</span>
     </label>
 
     <div class="kimi-sep" style="margin:6px 0"></div>
@@ -4008,41 +4011,48 @@ ${t('enabled')}
         <button id="${extensionName}_float_panel_clear" type="button" class="kimi-btn" style="padding:1px 8px;font-size:.75em">${t('floatPanelClear')}</button>
     </div>
     <div id="${extensionName}_float_panels" style="margin-top:2px">
-        ${KIMI_CARD_DEFS.map(d => `<label class="checkbox_label kimi-entry-panel" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;font-size:.85em;cursor:pointer"><input type="checkbox" class="kimi-float-panel" data-key="${d.key}" style="margin:0" ${settings.floatPanelKeys.includes(d.key) ? 'checked' : ''}/> <span style="display:inline-flex;align-items:center;color:var(--SmartThemeQuoteColor);width:16px">${__kimiSvgIcon(d.ico, 'var(--SmartThemeQuoteColor)')}</span>${t(d.titleKey)}</label>`).join('')}
+        ${KIMI_CARD_DEFS.map(d => `<label class="checkbox_label kimi-entry-panel" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;font-size:.85em;cursor:pointer"><input type="checkbox" class="kimi-float-panel" data-key="${d.key}" style="margin:0" ${settings.floatPanelKeys.includes(d.key) ? 'checked' : ''}/> <span style="display:inline-flex;align-items:center;color:var(--SmartThemeQuoteColor);width:16px;justify-content:center;flex:none">${__kimiSvgIcon(d.ico, 'var(--SmartThemeQuoteColor)')}</span>${t(d.titleKey)}</label>`).join('')}
     </div>
 
     <div class="kimi-sep" style="margin:6px 0"></div>
     <div style="font-size:.85em;font-weight:700;margin:2px 0;opacity:.9">${t('entryMenuGroup')}</div>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:5px;margin:2px 0;cursor:pointer">
+    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
         <input type="checkbox" class="kimi-entry" data-entry="tag_menu" style="margin:0" ${(extension_settings.tag_auto_fixer || {}).showMenuBtn !== false ? 'checked' : ''}/>
-        <span style="color:#6fce6f;font-weight:600">⚡ ${t('tagChkMenu')}</span>
+        <span style="display:inline-flex;align-items:center;color:#6fce6f;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-tag', '#6fce6f')}</span>
+        <span style="color:#6fce6f;font-weight:600">${t('tagFixNow')}</span>
     </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:5px;margin:2px 0;cursor:pointer">
+    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
         <input type="checkbox" class="kimi-entry" data-entry="cline_menu" style="margin:0" ${settings.clineShowMenuBtn ? 'checked' : ''}/>
-        <span style="color:#6fb7f0;font-weight:600">🧭 ${t('clineMenuSwitch')}</span>
+        <span style="display:inline-flex;align-items:center;color:#6fb7f0;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-route', '#6fb7f0')}</span>
+        <span style="color:#6fb7f0;font-weight:600">${t('clineMenuSwitch')}</span>
     </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:5px;margin:2px 0;cursor:pointer">
+    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
         <input type="checkbox" class="kimi-entry" data-entry="api_menu" style="margin:0" ${(extension_settings.api_pool || {}).showMenuBtn !== false ? 'checked' : ''}/>
-        <span style="opacity:.9">🔌 ${t('apiMenuSwitch')}</span>
+        <span style="display:inline-flex;align-items:center;color:var(--SmartThemeQuoteColor);width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-plug', 'var(--SmartThemeQuoteColor)')}</span>
+        <span>${t('apiMenuSwitch')}</span>
     </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:5px;margin:2px 0;cursor:pointer">
+    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
         <input type="checkbox" class="kimi-entry" data-entry="psnap_menu" style="margin:0" ${settings.psnapShowMenuBtn ? 'checked' : ''}/>
-        <span style="opacity:.9">☑ ${t('psnapTitle')}</span>
+        <span style="display:inline-flex;align-items:center;color:var(--SmartThemeQuoteColor);width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-list-check', 'var(--SmartThemeQuoteColor)')}</span>
+        <span>${t('psnapTitle')}</span>
     </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:5px;margin:2px 0;cursor:pointer">
+    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
         <input type="checkbox" class="kimi-entry" data-entry="stop_menu" style="margin:0" ${settings.stopRerollMenuBtn ? 'checked' : ''}/>
-        <span style="color:#ef6f6f;font-weight:600">⏹ ${t('stopRerollName')}</span>
+        <span style="display:inline-flex;align-items:center;color:#ef6f6f;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-pause', '#ef6f6f')}</span>
+        <span style="color:#ef6f6f;font-weight:600">${t('stopRerollName')}</span>
     </label>
 
     <div class="kimi-sep" style="margin:6px 0"></div>
     <div style="font-size:.85em;font-weight:700;margin:2px 0;opacity:.9">${t('entryInlineGroup')}</div>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:5px;margin:2px 0;cursor:pointer">
-        <input type="checkbox" class="kimi-entry" data-entry="tag_inline" style="margin:0" ${(extension_settings.tag_auto_fixer || {}).showInlineBtn !== false ? 'checked' : ''}/>
-        <span style="color:#6fce6f;font-weight:600">⚡ ${t('tagChkInline')}</span>
+    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
+        <input type="checkbox" class="kimi-entry" data-entry="tag_inline" style="margin:0" ${(extension_settings.tag_auto_fixer || {}).showInlineBtn === true ? 'checked' : ''}/>
+        <span style="display:inline-flex;align-items:center;color:#6fce6f;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-tag', '#6fce6f')}</span>
+        <span style="color:#6fce6f;font-weight:600">${t('tagFixNow')}</span>
     </label>
-    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:5px;margin:2px 0;cursor:pointer">
+    <label class="kimi-entry-chk checkbox_label" style="display:flex!important;align-items:center;gap:6px;margin:2px 0;cursor:pointer">
         <input type="checkbox" class="kimi-entry" data-entry="stop_inline" style="margin:0" ${settings.stopRerollInlineBtn ? 'checked' : ''}/>
-        <span style="color:#ef6f6f;font-weight:600">⏹ ${t('stopRerollName')}</span>
+        <span style="display:inline-flex;align-items:center;color:#ef6f6f;width:16px;justify-content:center;flex:none">${__kimiSvgIcon('fa-pause', '#ef6f6f')}</span>
+        <span style="color:#ef6f6f;font-weight:600">${t('stopRerollName')}</span>
     </label>
 </div>
 </div>
