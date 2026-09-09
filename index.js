@@ -1902,7 +1902,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.22'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.23'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2542,15 +2542,28 @@ function updateComboFloat() {
 
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem('kimi_combo_pos') || 'null'); } catch (e) { }
+    let dockSt = null;
+    try { dockSt = JSON.parse(localStorage.getItem('kimi_combo_dock') || 'null'); } catch (e) { }
 
     const W = 48, HEAD = 48, ITEM = 38;
+    const DOCK_VIS = 26;                 // 吸附时露出的可视宽度（半圆多一点）
+    const DOCK_EDGE = Math.round(W * 1.6); // 距边缘多少 px 内松手即吸附
     // 1.35.5 同 st-chat-sync 0.12.81: 恢复/默认位置统一 visual 视口坐标 JS 定位(手机端 CSS right/bottom 会落布局视口外→屏外看不到)
+    // v1.37.23 手机悬浮球式边缘吸附：默认贴右靠上、露半截；拖到边缘自动吸住；点开先拉出再展开，收起若在附近再吸回
+    let dockSide = (dockSt && (dockSt.side === 'left' || dockSt.side === 'right')) ? dockSt.side : null;
     let initPos = null;
     const maxX = window.innerWidth - W - 2, maxY = window.innerHeight - HEAD - 2;
-    if (saved && Number.isFinite(Number(saved.x)) && Number.isFinite(Number(saved.y))) {
-        initPos = { x: Math.min(Math.max(Number(saved.x), 2), Math.max(maxX, 2)), y: Math.min(Math.max(Number(saved.y), 2), Math.max(maxY, 2)) };
+    const clampY = (y) => Math.min(Math.max(Number(y) || 2, 2), Math.max(maxY, 2));
+    if (dockSide) {
+        // 恢复吸附：y 记忆在 dock.y（新装/无存档时默认右上靠上）
+        const dockY = (dockSt && Number.isFinite(Number(dockSt.y))) ? Number(dockSt.y) : Math.max(2, Math.round(window.innerHeight * 0.16));
+        initPos = { x: dockSide === 'right' ? window.innerWidth - DOCK_VIS : -(W - DOCK_VIS), y: clampY(dockY) };
+    } else if (saved && Number.isFinite(Number(saved.x)) && Number.isFinite(Number(saved.y))) {
+        initPos = { x: Math.min(Math.max(Number(saved.x), 2), Math.max(maxX, 2)), y: clampY(saved.y) };
     } else {
-        initPos = { x: Math.max(2, maxX), y: Math.max(2, window.innerHeight - 150) };
+        // 新装默认：贴右靠上吸附
+        dockSide = 'right';
+        initPos = { x: window.innerWidth - DOCK_VIS, y: Math.max(2, Math.round(window.innerHeight * 0.16)) };
     }
     const $box = $(`<div id="kimi_combo_float" style="
         position:fixed;z-index:9600;width:${W}px;overflow:hidden;
@@ -2559,14 +2572,32 @@ function updateComboFloat() {
         box-shadow:none;user-select:none;transition:background .2s ease,border-color .2s ease,box-shadow .2s ease,border-radius .2s ease,backdrop-filter .2s ease,-webkit-backdrop-filter .2s ease;
         left:${initPos.x}px;top:${initPos.y}px;right:auto;bottom:auto;
     "></div>`).appendTo('body');
-    // 创建后实测校验: fixed 相对布局视口, 布局视口比可视大(手机/缩放)时球仍可能不在屏内 → rect 拉回可视区
+    // 吸附态开头：emoji 挪到露出的可见半区中央（不裁脸）；创建后校验仅自由位置需要拉回，吸附态不拉回
+    const setEmojiShift = (side) => {
+        const $em = $box.find('.kcf-head > span');
+        if ($em.length) $em.css('transform', side === 'right' ? 'translateX(-11px)' : side === 'left' ? 'translateX(11px)' : 'none');
+    };
+    // ===== 位置持久化（自由位置 kimi_combo_pos / 吸附状态 kimi_combo_dock 分开存） =====
+    const savePos = (x, y) => { try { localStorage.setItem('kimi_combo_pos', JSON.stringify({ x, y })); } catch (e) { } };
+    const saveDockState = () => {
+        try {
+            if (dockSide) {
+                const p = $box.position();
+                localStorage.setItem('kimi_combo_dock', JSON.stringify({ side: dockSide, y: p.top }));
+            } else {
+                localStorage.removeItem('kimi_combo_dock');
+            }
+        } catch (e) { }
+    };
     try {
-        const rect = $box[0].getBoundingClientRect();
-        const vw = window.innerWidth, vh = window.innerHeight;
-        if (!rect || rect.left < 0 || rect.top < 0 || rect.left > vw - 20 || rect.top > vh - 20 || rect.left + W > vw || rect.top + HEAD > vh) {
-            const nx = Math.max(2, Math.min((rect && rect.left) || 0, vw - W - 2));
-            const ny = Math.max(2, Math.min((rect && rect.top) || 0, vh - HEAD - 2));
-            $box.css({ left: nx + 'px', top: ny + 'px', right: 'auto', bottom: 'auto' });
+        if (!dockSide) {
+            const rect = $box[0].getBoundingClientRect();
+            const vw = window.innerWidth, vh = window.innerHeight;
+            if (!rect || rect.left < 0 || rect.top < 0 || rect.left > vw - 20 || rect.top > vh - 20 || rect.left + W > vw || rect.top + HEAD > vh) {
+                const nx = Math.max(2, Math.min((rect && rect.left) || 0, vw - W - 2));
+                const ny = Math.max(2, Math.min((rect && rect.top) || 0, vh - HEAD - 2));
+                $box.css({ left: nx + 'px', top: ny + 'px', right: 'auto', bottom: 'auto' });
+            }
         }
     } catch (e) { }
 
@@ -2574,6 +2605,7 @@ function updateComboFloat() {
     $box.append(`<div class="kcf-head" style="height:${HEAD}px;display:flex;align-items:center;justify-content:center;gap:2px;cursor:grab;font-size:15px;color:var(--SmartThemeBodyColor,#eee);transition:background .2s ease">
         <span style="font-size:24px;line-height:1;cursor:pointer;filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))">🔥</span>
     </div>`);
+    setEmojiShift(dockSide); // 初始即吸附时，emoji 挪到露出的可见半区
     let routeBadgeEl = null;
     if (settings.floatRouteBadge) {
         routeBadgeEl = $(`<div class="kcf-route" style="height:14px;display:none;align-items:center;justify-content:center;font-size:9px;line-height:1;opacity:.8;letter-spacing:-.2px;color:var(--SmartThemeQuoteColor,#f0a35e);border-top:1px solid rgba(128,128,128,.28);white-space:nowrap;overflow:hidden">—</div>`).appendTo($box);
@@ -2613,8 +2645,36 @@ function updateComboFloat() {
     $items.find('.kcf-item').on('mouseenter', function () { $(this).css('background', 'rgba(128,128,128,.22)'); });
     $items.find('.kcf-item').on('mouseleave', function () { $(this).css('background', ''); });
 
-    // 展开/收起状态
+    // 展开/收起状态（v1.37.23：吸附态点开 = 先拉回屏内完整再展开；收起后若贴边则吸回）
     let expanded = false;
+    const pullOutOfDock = () => {
+        if (!dockSide) return;
+        const side = dockSide;
+        dockSide = null;
+        const vw = window.innerWidth;
+        const fullX = side === 'right' ? vw - W - 4 : 4;
+        $box.css({ left: fullX + 'px', right: 'auto', bottom: 'auto' });
+        setEmojiShift(null);
+        saveDockState();
+    };
+    const trySnap = (silent) => {
+        // 松手/收起时若球贴在左右边缘附近 → 吸住露半截
+        const vw = window.innerWidth;
+        const lx = $box.position().left;
+        let side = null;
+        if (lx <= DOCK_EDGE) side = 'left';
+        else if (lx + W >= vw - DOCK_EDGE) side = 'right';
+        if (side) {
+            dockSide = side;
+            $box.css({ left: (side === 'right' ? vw - DOCK_VIS : -(W - DOCK_VIS)) + 'px', right: 'auto', bottom: 'auto' });
+            setEmojiShift(side);
+            saveDockState();
+            return true;
+        }
+        dockSide = null;
+        saveDockState();
+        return false;
+    };
     function setExpanded(on) {
         expanded = on;
         const h = on ? rowCount * ITEM : 0;
@@ -2637,10 +2697,15 @@ function updateComboFloat() {
         });
         // 1.35.8 cline 渠道(routeBadge)常态收起不可见, 点开才显示
         if (routeBadgeEl && routeBadgeEl.length) routeBadgeEl.css('display', on ? 'flex' : 'none');
+        if (on) {
+            pullOutOfDock(); // 吸附着点开 → 先拉回屏内完整，避免展开内容被屏外裁掉
+        } else {
+            trySnap(); // 收起后仍贴边 → 吸回露半截（如用户拖到中间则保持自由）
+        }
     }
     setExpanded(false);
 
-    // 点击头部：展开/收起
+    // 点击头部：展开/收起（吸附态点开先拉回再展开，见 setExpanded）
     $box.find('.kcf-head').on('click.kc', function () { setExpanded(!expanded); });
 
     // 点击条目：功能=直接执行（不折叠，方便连续用）；面板=同卡再点关闭、换卡切窗（保持展开）
@@ -2667,7 +2732,7 @@ function updateComboFloat() {
         openCardFloat(act);
     });
 
-    // 拖拽（3px 阈值 + 边界钳制 + 位置记忆）；点击头部不拖拽时是展开
+    // 拖拽（3px 阈值 + 边界钳制 + 位置记忆）；点击头部不拖拽时是展开；拖到边缘自动吸附
     let dragging = false, dx, dy, startX, startY;
     $box.find('.kcf-head').on('mousedown.kc touchstart.kc', function (e) {
         dragging = false;
@@ -2682,27 +2747,46 @@ function updateComboFloat() {
     $(document).on('mousemove.kc touchmove.kc', function (e) {
         if (!$box[0] || dx === undefined) return;
         const ev = e.touches ? e.touches[0] : e;
-        if (Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3) dragging = true;
-        if (!dragging) return;
+        if (!dragging) {
+            if (Math.abs(ev.clientX - startX) <= 3 && Math.abs(ev.clientY - startY) <= 3) return;
+            dragging = true;
+            if (dockSide) { // 从吸附态拖起：先把球拉回屏内完整，再按指针继续拖
+                pullOutOfDock();
+                dx = startX - $box.position().left;
+                dy = startY - $box.position().top;
+            }
+        }
         e.preventDefault();
         const maxX = window.innerWidth - $box.outerWidth() - 2;
         const maxY = window.innerHeight - $box.outerHeight() - 2;
         const lx = Math.min(Math.max(ev.clientX - dx, 2), Math.max(maxX, 2));
         const ly = Math.min(Math.max(ev.clientY - dy, 2), Math.max(maxY, 2));
         $box.css({ left: lx + 'px', top: ly + 'px', right: 'auto', bottom: 'auto' });
-        try { localStorage.setItem('kimi_combo_pos', JSON.stringify({ x: lx, y: ly })); } catch (err) { }
+        savePos(lx, ly);
     });
     $(document).on('mouseup.kc touchend.kc', function () {
         if (!$box[0]) return;
         $box.css({ cursor: '', transition: '' });
         dx = undefined;
+        if (dragging) {
+            dragging = false;
+            if (!expanded) trySnap(); // 真拖过且当前收起：松手靠边 → 吸住露半截
+        }
     });
 
-    // 窗口缩放：把入口钳回视口内（防变窄/缩放后消失到边界外）
+    // 窗口缩放：吸附态保持贴边；自由态钳回视口内
     $(window).on('resize.kc', function () {
         const $b = $('#kimi_combo_float');
         if (!$b.length || $b[0].style.left === '') return;
-        const maxX = window.innerWidth - $b.outerWidth() - 2;
+        const vw = window.innerWidth;
+        if (dockSide) {
+            const p = $b.position();
+            const ny = Math.min(Math.max(p.top, 2), Math.max(window.innerHeight - HEAD - 2, 2));
+            $b.css({ left: (dockSide === 'right' ? vw - DOCK_VIS : -(W - DOCK_VIS)) + 'px', top: ny + 'px', right: 'auto', bottom: 'auto' });
+            saveDockState();
+            return;
+        }
+        const maxX = vw - $b.outerWidth() - 2;
         const maxY = window.innerHeight - $b.outerHeight() - 2;
         let lx = parseInt($b.css('left'), 10), ly = parseInt($b.css('top'), 10);
         if (isNaN(lx) || isNaN(ly)) return;
@@ -2710,7 +2794,7 @@ function updateComboFloat() {
         const ny = Math.min(Math.max(ly, 2), Math.max(maxY, 2));
         if (nx !== lx) $b.css('left', nx);
         if (ny !== ly) $b.css('top', ny);
-        try { localStorage.setItem('kimi_combo_pos', JSON.stringify({ x: nx, y: ny })); } catch (e) { }
+        savePos(nx, ny);
     });
 }
 window.__kimiRefreshCombo = updateComboFloat;
