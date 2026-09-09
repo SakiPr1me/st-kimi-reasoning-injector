@@ -152,7 +152,7 @@ const COT_STRIP_RE = /<cot>\s*\n\s*/i;
 // ===== 三语 UI 文案（设置面板所有文字；key 见 t() 引用） =====
 const UI = {
     zh: {
-        pluginName: "🔥 余温工具箱（注入/重roll/替换/轮询/修标签）", enabled: "插件开关",
+        pluginName: "🔥 余温工具箱", enabled: "插件开关",
         langLabel: "语言 / Language：", langZh: "中文（默认）", langEn: "English", langKo: "한국어",
         langHint: "切换语言会自动替换 Reasoning Content 为对应语言版本（可再手动编辑）；「&lt;cot&gt; 注入」「partial 身份锚」「默认角色名」也会跟随语言。",
         dsModeLabel: "Deepseek思维链开关：", dsNative: "原生思维链", dsDisabled: "正文思维链(thinking disabled)",
@@ -1902,7 +1902,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.19'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.20'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
