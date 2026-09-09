@@ -1902,7 +1902,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.32'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.33'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2784,34 +2784,30 @@ function updateComboFloat() {
     function setExpanded(on) {
         expanded = on;
         const h = on ? rowCount * ITEM : 0;
-        // v1.37.31 展开 = 玻璃珠 + 一体磨砂玻璃卡。磨砂底色取当前主题色（不硬编码偏蓝灰）：
-        // 从 ST 主题变量 SmartThemeBlurTintColor/背景色解析出 RGB，再叠白做玻璃质感。
-        const themeRgb = (() => {
+        // v1.37.33 展开卡不强制毛玻璃：仅当主题本身是毛玻璃风格（SmartThemeBlurTintColor 变量
+        // 存在且非 transparent，即 ST 模糊背景主题）才用该色做玻璃底 + blur；普通/浅色主题
+        // 回退为高不透明度实底（近白/近黑取主题明暗），保证内容清晰可读。
+        const themeInfo = (() => {
             try {
                 const st = getComputedStyle(document.documentElement);
-                let v = st.getPropertyValue('--SmartThemeBlurTintColor').trim();
-                if (!v || v === 'transparent') v = getComputedStyle(document.body).backgroundColor;
+                const blurVar = st.getPropertyValue('--SmartThemeBlurTintColor').trim();
+                const isGlass = !!blurVar && blurVar !== 'transparent' && blurVar !== 'initial' && blurVar !== 'none';
+                // 背景亮度（毛玻璃变量或 body 背景），决定回退实底深浅
+                const v = (isGlass ? blurVar : '') || getComputedStyle(document.body).backgroundColor;
                 const m = v.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
-                if (m) return [Math.round(+m[1]), Math.round(+m[2]), Math.round(+m[3])];
-                return null;
-            } catch (e) { return null; }
+                const lum = m ? (Number(m[1]) + Number(m[2]) + Number(m[3])) / 3 : (isGlass ? 40 : 255);
+                return { isGlass, lum, blurVar };
+            } catch (e) { return { isGlass: false, lum: 40, blurVar: '' }; }
         })();
-        const isLight = themeRgb ? ((themeRgb[0] + themeRgb[1] + themeRgb[2]) / 3 > 150) : (() => {
-            try {
-                const cs = getComputedStyle(document.body);
-                const m = cs.backgroundColor.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
-                return m ? (Number(m[1]) + Number(m[2]) + Number(m[3])) / 3 > 150 : false;
-            } catch (e) { return false; }
-        })();
-        const [tr, tg, tb] = themeRgb || (isLight ? [245, 246, 248] : [30, 32, 38]);
-        // 磨砂 = 主题色低透明渐变 + 强 blur；浅色主题叠白提亮，深色主题直接主题色
-        const glassBg = isLight
-            ? `linear-gradient(180deg, rgba(${tr},${tg},${tb},0.30), rgba(${Math.min(tr + 10, 255)},${Math.min(tg + 10, 255)},${Math.min(tb + 10, 255)},0.12))`
-            : `linear-gradient(180deg, rgba(${Math.min(tr + 14, 255)},${Math.min(tg + 16, 255)},${Math.min(tb + 20, 255)},0.42), rgba(${tr},${tg},${tb},0.30))`;
-        const cardShadow = isLight
-            ? '0 0 0 1px rgba(0,0,0,0.05), 0 10px 26px rgba(0,0,0,0.14)'
-            : '0 0 0 1px rgba(255,255,255,0.06), 0 12px 30px rgba(0,0,0,0.35)';
-        // 珠子区域保持透明（珠子画在页面上），下方整卡一体磨砂
+        const solidBg = themeInfo.lum > 150
+            ? 'rgba(252,252,254,0.97)'   // 浅色主题 → 近白实底
+            : 'rgba(24,26,30,0.97)';      // 深色主题 → 近黑实底
+        const glassBg = themeInfo.isGlass ? themeInfo.blurVar : solidBg;
+        const useBlur = themeInfo.isGlass ? 'blur(20px) saturate(1.4)' : 'none';
+        const cardShadow = themeInfo.lum > 150
+            ? '0 0 0 1px rgba(0,0,0,0.06), 0 10px 26px rgba(0,0,0,0.12)'
+            : '0 0 0 1px rgba(255,255,255,0.07), 0 12px 30px rgba(0,0,0,0.38)';
+        // 珠子区域保持透明（珠子画在页面上），下方整卡一体（毛玻璃或实底）
         $box.css(on ? {
             'background': 'transparent',
             'backdrop-filter': 'none',
@@ -2831,13 +2827,13 @@ function updateComboFloat() {
             height: h + 'px', opacity: on ? 1 : 0,
             transition: 'height .22s ease, opacity .18s ease',
             background: on ? glassBg : 'transparent',
-            'backdrop-filter': on ? 'blur(22px) saturate(1.5)' : 'none',
-            '-webkit-backdrop-filter': on ? 'blur(22px) saturate(1.5)' : 'none',
+            'backdrop-filter': on ? useBlur : 'none',
+            '-webkit-backdrop-filter': on ? useBlur : 'none',
             'border-radius': on ? '0 0 15px 15px' : '0',
         });
         if (routeBadgeEl && routeBadgeEl.length) {
             routeBadgeEl.css('display', on ? 'flex' : 'none');
-            routeBadgeEl.css(on ? { background: glassBg, 'backdrop-filter': 'blur(22px) saturate(1.5)', '-webkit-backdrop-filter': 'blur(22px) saturate(1.5)' } : { background: '', 'backdrop-filter': '', '-webkit-backdrop-filter': '' });
+            routeBadgeEl.css(on ? { background: glassBg, 'backdrop-filter': useBlur, '-webkit-backdrop-filter': useBlur } : { background: '', 'backdrop-filter': '', '-webkit-backdrop-filter': '' });
         }
         // 1.35.8 cline 渠道(routeBadge)常态收起不可见, 点开才显示
         if (on) {
