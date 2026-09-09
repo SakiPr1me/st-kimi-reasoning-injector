@@ -1902,7 +1902,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.30'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.31'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2051,13 +2051,23 @@ async function doSelfUpdate(btn, remoteVer, auto) {
             return;
         }
         if (btn) btn.textContent = '✅ 已更新';
-        // v1.37.15：更新后、刷新前自校验 manifest.json 完好——git pull 若弱网中断可能损坏文件，
+        // v1.37.31：更新后、刷新前自校验 manifest.json 完好——git pull 若弱网中断可能损坏文件，
         // 直接刷新会让 ST 加载不到 manifest → 工具箱消失。校验失败则明确报错不刷新。
+        // ⚠️ 1.37.30 曾只拼 /scripts/extensions/{c.n}/manifest.json，当 c.n 不带 third-party/ 前缀时
+        // 该 URL 恒 404 → 明明更新成功却误报"校验失败"。改为多路径探测（任意一条取到合法 manifest 即通过）。
         let manifestOk = false;
-        try {
-            const mf = await fetch('/scripts/extensions/' + c.n + '/manifest.json', { cache: 'no-store' });
-            if (mf.ok) { const mj = await mf.json().catch(() => null); manifestOk = !!(mj && mj.js && mj.version); }
-        } catch (e) { }
+        const probePaths = [
+            '/scripts/extensions/' + c.n + '/manifest.json',
+            '/scripts/extensions/' + fullName + '/manifest.json',
+            '/scripts/extensions/third-party/' + selfName + '/manifest.json',
+            '/scripts/extensions/' + selfName + '/manifest.json',
+        ];
+        for (const p of [...new Set(probePaths)]) {
+            try {
+                const mf = await fetch(p, { cache: 'no-store' });
+                if (mf.ok) { const mj = await mf.json().catch(() => null); if (mj && mj.js && mj.version) { manifestOk = true; break; } }
+            } catch (e) { }
+        }
         if (!manifestOk) {
             if (btn) { btn.disabled = false; btn.textContent = '⬆ 可更新'; }
             try { toastr.error('更新完成但 manifest 校验失败（文件可能受损）。为避免扩展消失，未自动刷新。<br>请到「管理扩展」删除本插件后用 https://gitee.com/satosaki/st-kimi-reasoning-injector.git 重装', null, { escapeHtml: false, timeOut: 10000 }); } catch (e2) { }
@@ -2794,20 +2804,33 @@ function updateComboFloat() {
     function setExpanded(on) {
         expanded = on;
         const h = on ? rowCount * ITEM : 0;
-        // v1.37.30 展开 = 玻璃珠 + 一体磨砂玻璃卡（无描边线）：毛玻璃在卡上，卡顶自然衔接珠子
-        const isLight = (() => {
+        // v1.37.31 展开 = 玻璃珠 + 一体磨砂玻璃卡。磨砂底色取当前主题色（不硬编码偏蓝灰）：
+        // 从 ST 主题变量 SmartThemeBlurTintColor/背景色解析出 RGB，再叠白做玻璃质感。
+        const themeRgb = (() => {
+            try {
+                const st = getComputedStyle(document.documentElement);
+                let v = st.getPropertyValue('--SmartThemeBlurTintColor').trim();
+                if (!v || v === 'transparent') v = getComputedStyle(document.body).backgroundColor;
+                const m = v.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
+                if (m) return [Math.round(+m[1]), Math.round(+m[2]), Math.round(+m[3])];
+                return null;
+            } catch (e) { return null; }
+        })();
+        const isLight = themeRgb ? ((themeRgb[0] + themeRgb[1] + themeRgb[2]) / 3 > 150) : (() => {
             try {
                 const cs = getComputedStyle(document.body);
                 const m = cs.backgroundColor.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
                 return m ? (Number(m[1]) + Number(m[2]) + Number(m[3])) / 3 > 150 : false;
             } catch (e) { return false; }
         })();
+        const [tr, tg, tb] = themeRgb || (isLight ? [245, 246, 248] : [30, 32, 38]);
+        // 磨砂 = 主题色低透明渐变 + 强 blur；浅色主题叠白提亮，深色主题直接主题色
         const glassBg = isLight
-            ? 'linear-gradient(180deg, rgba(255,255,255,0.68), rgba(255,255,255,0.42))'
-            : 'linear-gradient(180deg, rgba(44,50,62,0.62), rgba(26,29,38,0.46))';
+            ? `linear-gradient(180deg, rgba(${tr},${tg},${tb},0.30), rgba(${Math.min(tr + 10, 255)},${Math.min(tg + 10, 255)},${Math.min(tb + 10, 255)},0.12))`
+            : `linear-gradient(180deg, rgba(${Math.min(tr + 14, 255)},${Math.min(tg + 16, 255)},${Math.min(tb + 20, 255)},0.42), rgba(${tr},${tg},${tb},0.30))`;
         const cardShadow = isLight
             ? '0 0 0 1px rgba(0,0,0,0.05), 0 10px 26px rgba(0,0,0,0.14)'
-            : '0 0 0 1px rgba(255,255,255,0.07), 0 12px 30px rgba(0,0,0,0.35)';
+            : '0 0 0 1px rgba(255,255,255,0.06), 0 12px 30px rgba(0,0,0,0.35)';
         // 珠子区域保持透明（珠子画在页面上），下方整卡一体磨砂
         $box.css(on ? {
             'background': 'transparent',
