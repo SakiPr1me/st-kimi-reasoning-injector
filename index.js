@@ -2,7 +2,6 @@ import { extension_settings } from "../../../extensions.js";
 import { saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, stopGeneration, Generate, getRequestHeaders, is_send_press } from "../../../../script.js";
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
 import { toggleDrawer } from "../../../utils.js";
-import { power_user } from "../../../power-user.js"; // v1.37.36 流式帧速率滑条（官方用户设置同一对象）
 import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
@@ -1927,7 +1926,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.36'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.37'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -4557,7 +4556,7 @@ ${t('mutterSound')}
 <label class="kimi-label" for="${extensionName}_autostop_marker">${t('autoStopMarkerLabel')}</label>
 <input id="${extensionName}_autostop_marker" type="text" class="text_pole" style="width:100%;box-sizing:border-box" value="${autoStopMarkerHtml}"/>
 </div>
-<!-- v1.37.36 截断失败自查：提示 + 官方流式帧速率滑条（power_user.streaming_fps 同一对象，与官方双向同步） -->
+<!-- v1.37.37 截断失败自查：提示 + 官方流式帧速率滑条的镜像（值与官方同一：初始即官方当前值，拖动=拖官方滑条，插件不改任何参数） -->
 <p class="kimi-hint" style="margin-top:6px;color:var(--golden-color,#e0a800)">${t('autostopFailTip')}</p>
 <div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
 <label class="kimi-label" for="kimi_streaming_fps" style="margin:0">${t('streamingFpsLabel')}</label>
@@ -5024,30 +5023,33 @@ partial
         settings.autoStopMarker = $(this).val();
         saveSettingsDebounced();
     });
-    // v1.37.36 流式帧速率滑条：与官方「用户设置」同一 power_user.streaming_fps，双向同步
+    // v1.37.37 流式帧速率滑条：官方滑条的「镜像」——值自动取官方当前(#streaming_fps)，
+    // 拖动本滑条只同步给官方滑条并触发其 input（由官方 handler 落盘 power_user 并更新官方数字框）。
+    // 插件自身不读不写 power_user、不改任何参数；用户要调就拖这里或拖官方，效果等同。
     const $fps = $('#kimi_streaming_fps'), $fpsNum = $('#kimi_streaming_fps_num');
     if ($fps.length) {
-        const fpsVal = () => {
-            const v = Number(power_user && power_user.streaming_fps);
-            return (Number.isFinite(v) && v >= 5) ? v : 30;
-        };
-        const applyFps = (v) => {
+        const syncFpsView = (v) => {
             const n = Math.min(100, Math.max(5, Math.round(Number(v) || 30)));
-            try { if (power_user) power_user.streaming_fps = n; } catch (e) { }
-            $fps.val(n); $fpsNum.val(n);
-            // 同步官方滑条 UI（若存在）
-            const $off = $('#streaming_fps'), $offNum = $('#streaming_fps_counter');
-            if ($off.length && Number($off.val()) !== n) $off.val(n);
-            if ($offNum.length && Number($offNum.val()) !== n) $offNum.val(n);
+            if (Number($fps.val()) !== n) $fps.val(n);
+            if (Number($fpsNum.val()) !== n) $fpsNum.val(n);
         };
-        applyFps(fpsVal());
-        $fps.on('input', function () { applyFps($(this).val()); });
-        $fpsNum.on('input', function () { applyFps($(this).val()); });
-        // 官方滑条改动 → 本滑条跟随（双向；off 防语言重建重复绑定）
+        // 初始显示 = 官方当前值（只读不改；官方滑条未渲染/值非法时显示 30 仅作占位）
+        const offInit = Number($('#streaming_fps').val());
+        syncFpsView(Number.isFinite(offInit) ? offInit : 30);
+        // 拖动本滑条/数字框 → 同步给官方滑条并触发官方 input（官方自己落盘，含 counter）
+        const pushToOfficial = () => {
+            const $off = $('#streaming_fps');
+            if (!$off.length) return;
+            const n = Math.min(100, Math.max(5, Math.round(Number($fps.val()) || 30)));
+            if (Number($off.val()) !== n) $off.val(n);
+            try { $off.trigger('input'); } catch (e) { }
+        };
+        $fps.on('input', function () { syncFpsView($(this).val()); pushToOfficial(); });
+        $fpsNum.on('input', function () { syncFpsView($(this).val()); pushToOfficial(); });
+        // 官方滑条改动 → 镜像回本滑条（off 防语言重建重复绑定）
         $(document).off('input.kimiFps').on('input.kimiFps', '#streaming_fps, #streaming_fps_counter', function () {
             const v = Number($(this).val());
-            if (Number.isFinite(v) && $fps.length && Number($fps.val()) !== v) $fps.val(v);
-            if (Number.isFinite(v) && $fpsNum.length && Number($fpsNum.val()) !== v) $fpsNum.val(v);
+            if (Number.isFinite(v)) syncFpsView(v);
         });
     }
     $("#" + extensionName + "_fix_now").on("click", function () {
