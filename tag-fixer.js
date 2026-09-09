@@ -1496,17 +1496,8 @@ jQuery(async () => {
 		toastr?.success?.('✅ 已重置为默认标签树');
 	});
 
-	// UI 模式切换
-	$(`#${extensionName}_chk_inline`).on('change', function() {
-		settings.showInlineBtn = this.checked;
-		saveSettingsDebounced();
-		updateInlineBtn();
-	});
-	$(`#${extensionName}_chk_menu`).on('change', function() {
-		settings.showMenuBtn = this.checked;
-		saveSettingsDebounced();
-		updateMenuItem();
-	});
+	// 入口开关已统一搬到「余温工具箱·基础设置·快捷入口」面板（v1.37.17），此处只保留各更新函数
+	window.__stTagRefreshEntries = () => { updateInlineBtn(); updateMenuItem(); };
 
 	// 新功能勾选框
 	$(`#${extensionName}_chk_auto`).on('change', function() {
@@ -1605,12 +1596,6 @@ export function stTagMountSettings() {
 <div id="${ext}_warn_wrap" style="display:none;margin-top:5px;font-size:0.72em;color:var(--golden-color,#e0a800);line-height:1.5">${t('tagWarnWrap')}</div>
 
 <div class="kimi-sep"></div>
-
-<label class="kimi-label">${t('tagEntryTitle')}</label>
-<div style="display:flex;gap:12px;align-items:center">
-<label class="checkbox_label"><input type="checkbox" id="${ext}_chk_inline" ${s.showInlineBtn ? 'checked' : ''}> ${t('tagChkInline')}</label>
-<label class="checkbox_label"><input type="checkbox" id="${ext}_chk_menu" ${s.showMenuBtn ? 'checked' : ''}> ${t('tagChkMenu')}</label>
-</div>
 
 <p class="kimi-hint">${t('tagSlashHint')}</p>
 

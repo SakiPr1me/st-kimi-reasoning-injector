@@ -189,6 +189,8 @@ function updateApiMenuItem() {
         await doSwitch(nx);
     });
 }
+// 供余温工具箱「基础设置·快捷入口」面板刷新菜单项（v1.37.17：开关已统一搬去基础设置）
+window.__apiPoolMenuRefresh = updateApiMenuItem;
 
 // ---- 设置卡 UI ----
 let mountedSlot = ''; // 重渲染列表时恢复当前行高亮需知道挂载点
@@ -236,7 +238,6 @@ function poolHTML() {
         <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
             <label class="checkbox_label" style="margin:0"><input type="checkbox" id="kimi_api_enabled" ${settings.enabled ? 'checked' : ''}/> ${t('apiEnabled')}</label>
             <label class="checkbox_label" style="margin:0"><input type="checkbox" id="kimi_api_auto" ${settings.autoSwitch ? 'checked' : ''}/> ${t('apiAuto')}</label>
-            <label class="checkbox_label" style="margin:0"><input type="checkbox" id="kimi_api_menu_entry" ${settings.showMenuBtn ? 'checked' : ''}/> ${t('apiMenuEntry')}</label>
         </div>
         <div style="margin-top:5px">
             <label class="kimi-label" for="kimi_api_keywords">${t('apiKeywords')}</label>
@@ -364,11 +365,6 @@ export function mountApiPoolCard(slotSel) {
     $('#kimi_api_auto').on('change', function () { settings.autoSwitch = this.checked; saveSettingsDebounced(); });
     $('#kimi_api_keywords').on('input', function () { settings.keywords = $(this).val(); saveSettingsDebounced(); });
 
-    $('#kimi_api_menu_entry').on('change', function () {
-        settings.showMenuBtn = this.checked;
-        saveSettingsDebounced();
-        updateApiMenuItem();
-    });
     updateApiMenuItem();
 
     $('#kimi_api_add').on('click', function () {
