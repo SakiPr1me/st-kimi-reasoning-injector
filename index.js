@@ -1926,7 +1926,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.40'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.41'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -4424,18 +4424,18 @@ function initSettingsPanel() {
     <div class="kimi-entry-group-title">${t('floatFuncLabel')}</div>
     <label class="kimi-entry-row">
         <input type="checkbox" id="${extensionName}_float_tagfix" ${settings.floatShowTagFix ? 'checked' : ''}/>
-        <span class="kimi-entry-ico" style="color:#6fce6f">${__kimiSvgIcon('fa-wand-magic-sparkles', '#6fce6f')}</span>
-        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#6fce6f">${t('tagFixNow')}</span>
+        <span class="kimi-entry-ico" style="color:#6fce6f">${__kimiSvgIcon('fa-tag', '#6fce6f')}</span>
+        <span class="kimi-entry-txt" style="color:#6fce6f">${t('tagFixNow')}</span>
     </label>
     <label class="kimi-entry-row">
         <input type="checkbox" id="${extensionName}_float_cline" ${settings.floatShowCline ? 'checked' : ''}/>
         <span class="kimi-entry-ico" style="color:#6fb7f0">${__kimiSvgIcon('fa-route', '#6fb7f0')}</span>
-        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#6fb7f0">${t('floatClineEntry')}</span>
+        <span class="kimi-entry-txt" style="color:#6fb7f0">${t('floatClineEntry')}</span>
     </label>
     <label class="kimi-entry-row">
         <input type="checkbox" id="${extensionName}_float_stop" ${settings.floatShowStopReroll ? 'checked' : ''}/>
         <span class="kimi-entry-ico" style="color:#ef6f6f">${__kimiSvgIcon('fa-pause', '#ef6f6f')}</span>
-        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#ef6f6f">${t('stopRerollName')}</span>
+        <span class="kimi-entry-txt" style="color:#ef6f6f">${t('stopRerollName')}</span>
     </label>
 
     <div class="kimi-sep"></div>
@@ -4453,12 +4453,12 @@ function initSettingsPanel() {
     <label class="kimi-entry-row">
         <input type="checkbox" class="kimi-entry" data-entry="tag_menu" ${(extension_settings.tag_auto_fixer || {}).showMenuBtn === true ? 'checked' : ''}/>
         <span class="kimi-entry-ico" style="color:#6fce6f">${__kimiSvgIcon('fa-tag', '#6fce6f')}</span>
-        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#6fce6f">${t('tagFixNow')}</span>
+        <span class="kimi-entry-txt" style="color:#6fce6f">${t('tagFixNow')}</span>
     </label>
     <label class="kimi-entry-row">
         <input type="checkbox" class="kimi-entry" data-entry="cline_menu" ${settings.clineShowMenuBtn ? 'checked' : ''}/>
         <span class="kimi-entry-ico" style="color:#6fb7f0">${__kimiSvgIcon('fa-route', '#6fb7f0')}</span>
-        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#6fb7f0">${t('clineMenuSwitch')}</span>
+        <span class="kimi-entry-txt" style="color:#6fb7f0">${t('clineMenuSwitch')}</span>
     </label>
     <label class="kimi-entry-row">
         <input type="checkbox" class="kimi-entry" data-entry="api_menu" ${(extension_settings.api_pool || {}).showMenuBtn === true ? 'checked' : ''}/>
@@ -4473,7 +4473,7 @@ function initSettingsPanel() {
     <label class="kimi-entry-row">
         <input type="checkbox" class="kimi-entry" data-entry="stop_menu" ${settings.stopRerollMenuBtn ? 'checked' : ''}/>
         <span class="kimi-entry-ico" style="color:#ef6f6f">${__kimiSvgIcon('fa-pause', '#ef6f6f')}</span>
-        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#ef6f6f">${t('stopRerollName')}</span>
+        <span class="kimi-entry-txt" style="color:#ef6f6f">${t('stopRerollName')}</span>
     </label>
 
     <div class="kimi-sep"></div>
@@ -4481,12 +4481,12 @@ function initSettingsPanel() {
     <label class="kimi-entry-row">
         <input type="checkbox" class="kimi-entry" data-entry="tag_inline" ${(extension_settings.tag_auto_fixer || {}).showInlineBtn === true ? 'checked' : ''}/>
         <span class="kimi-entry-ico" style="color:#6fce6f">${__kimiSvgIcon('fa-tag', '#6fce6f')}</span>
-        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#6fce6f">${t('tagFixNow')}</span>
+        <span class="kimi-entry-txt" style="color:#6fce6f">${t('tagFixNow')}</span>
     </label>
     <label class="kimi-entry-row">
         <input type="checkbox" class="kimi-entry" data-entry="stop_inline" ${settings.stopRerollInlineBtn ? 'checked' : ''}/>
         <span class="kimi-entry-ico" style="color:#ef6f6f">${__kimiSvgIcon('fa-pause', '#ef6f6f')}</span>
-        <span class="kimi-entry-txt kimi-entry-txt-strong" style="color:#ef6f6f">${t('stopRerollName')}</span>
+        <span class="kimi-entry-txt" style="color:#ef6f6f">${t('stopRerollName')}</span>
     </label>
 </div>
 </div>
