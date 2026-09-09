@@ -968,6 +968,7 @@ let rerollBlockedNotified = false;       // 本聊天是否已提示过"预算�
 let lastObservedMesId = -1;              // 本次生成期间 DOM 有变化的消息 id（swipe 空回定位用）
 let emptyRerollTargetId = -1;            // GENERATION_ENDED 判定空回时的目标消息 id（fallback 用）
 let isDryRun = false;                  // 提示词查看器 dry-run 模式（不参与生成状态管理）
+let dryRunSince = 0;                   // v1.37.34 最近一次 dry-run 开始时间：防 dry-run ENDED 缺失残留 true 永久挡检测
 let generationStartLastMes = null;     // GENERATION_STARTED 时最后一条消息的 mes（空回重roll判别：最后一条没变=查看器/无新消息→跳过）
 let genStartAt = 0;                    // 本次真实生成开始时间戳（ms）——判断流式检测目标是否"本次生成的消息"而非历史/静态内容
 let genStartReasoning = null;          // 本次生成开始时最后一条 assistant 的 reasoning 快照——流式英文检测要求 reasoning 本次有新写入才检测（防静态残留误判）
@@ -977,6 +978,8 @@ let lastGenManuallyStopped = false;   // 上一次生成是否为用户手动停
 let earlyRerollHandled = false;            // 流式截断重roll 是否已处理（GENERATION_ENDED 兜底防 MESSAGE_RECEIVED 缺失时双重重roll）
 let rerollFiredThisGen = false;      // 总闸：本次生成是否已触发过自动重roll（一次生成最多一次，封死双触发/连续两楼）
 let pendingSwipeConfirm = -1;        // 最近一次自动 swipe 的目标消息 id：等待真实 GENERATION_STARTED 确认（防 ST Swiping back 假成功导致总闸卡死）
+let autoSwipeBusy = false;           // v1.37.34 自动 swipe 防重入锁：ENDED 兜底与 MESSAGE_RECEIVED 并发触发 triggerAutoSwipe 时，
+                                    // 只执行一次 doSwipe，防止对同一消息连续 swipe → ST "Swipe failed, Swiping back" 回滚 → 新分支开不成 → 检测停摆。
 
 // 注入种子本身是否英文开头（用户手动贴英文模板时，模型跟随英文思考不算夺舍失败）
 function seedIsEnglish() {
@@ -1315,19 +1318,28 @@ async function waitStAbortSettled() {
 }
 
 async function triggerAutoSwipe(messageId) {
+    // v1.37.34 防重入：ENDED 兜底 + MESSAGE_RECEIVED/空回兜底可能并发各调一次，
+    // 同一消息连续 swipe 会让 ST 第二次 "Swiping back" 回滚 → 分支开不成、总闸卡死。
+    if (autoSwipeBusy) {
+        console.log('[余温工具箱] 自动swipe 进行中，跳过重复触发（防双 swipe 回滚）');
+        return;
+    }
+    autoSwipeBusy = true;
+    const releaseBusy = () => { autoSwipeBusy = false; };
     await new Promise(r => setTimeout(r, 300));
     try {
         // 先等上一次 stopGeneration 的 abort 完全收尾，再开新分支（防竞态假成功）
         await waitStAbortSettled();
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const chat = ctx?.chat;
-        if (!chat || chat.length === 0) return;
+        if (!chat || chat.length === 0) { releaseBusy(); return; }
         const lastId = chat.length - 1;
         const lastMsg = chat[lastId];
         // 最后一条是用户消息：AI 没生成出来（用户消息后空回 / regenerate 删了 AI 消息）→ 重新生成
         if (lastMsg && lastMsg.is_user) {
             console.log(`[余温工具箱] 最后一条是用户消息 → 改用 regenerate 重新生成`);
             try { await Generate('regenerate'); } catch (e) { console.warn('[余温工具箱] regenerate 重新生成失败:', e); }
+            releaseBusy();
             return;
         }
         // 否则 swipe 开新分支（目标实时取 chat.length-1）
@@ -1347,9 +1359,9 @@ async function triggerAutoSwipe(messageId) {
         if (targetId >= 0 && settings.enabled && !settings.rerollPaused) {
             pendingSwipeConfirm = targetId;
             setTimeout(() => {
+                releaseBusy(); // 无论确认与否，swipe 流程结束都释放防重入锁
                 if (pendingSwipeConfirm !== targetId) return; // 已被 GENERATION_STARTED 确认
-                pendingSwipeConfirm = -1;
-                // 距 swipe 已超时且从未进入新生成 → 释放本次"已重roll"的总闸，允许再触发
+                pendingSwipeConfirm = -1;                // 距 swipe 已超时且从未进入新生成 → 释放本次"已重roll"的总闸，允许再触发
                 // v1.37.15：已达连续上限时不再复位总闸——复位会让后续检测再次通过、count 继续++，
                 // 造成 31/30、32/30 突破上限的无限循环。上限就是硬停：让 rerollBlockedNotified 提示生效，
                 // 等一条通过检测的消息或用户手动 swipe 把计数归零。
@@ -1378,9 +1390,12 @@ async function triggerAutoSwipe(messageId) {
                     } catch (eW) { console.warn('[余温工具箱] swipe watchdog 兜底失败:', eW); }
                 }
             }, 8000);
+        } else {
+            releaseBusy(); // 无有效目标 / 已暂停 / 已禁用 → 不登记 watchdog，立即解锁
         }
     } catch (e) {
         console.warn('[余温工具箱] 自动重roll失败:', e);
+        releaseBusy();
     }
 }
 
@@ -1902,7 +1917,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.33'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.34'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -3665,6 +3680,14 @@ function applyThinkingFoldInner(messageId) {
 }
 
 eventSource.on(event_types.MESSAGE_RECEIVED, (id) => {
+    // v1.37.34 防 dry-run 残留：提示词查看器的 dry-run STARTED 若没配对 ENDED（半路关预览/中断），
+    // isDryRun 会残留 true → 后续所有 MESSAGE_RECEIVED 被跳过 → "重roll检测停下"。
+    // dry-run 超过 30 秒仍未结束视为残留，强制恢复（真实生成的消息不会等 30 秒才到）。
+    if (isDryRun && dryRunSince && (Date.now() - dryRunSince > 30000)) {
+        console.warn('[余温工具箱] dry-run 状态残留超过 30s，强制恢复重roll检测');
+        isDryRun = false;
+        dryRunSince = 0;
+    }
     if (isDryRun) { console.log('[余温工具箱] MESSAGE_RECEIVED (dry-run，跳过重roll检测)'); return; }
     const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
     const msg = ctx?.chat?.[id];
@@ -3706,10 +3729,15 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id) => {
     // ④ 正常消息：非空 = 生成成功 → 重置连续失败计数；再走夺舍失败检测
     if (isAssistant && !isEmpty) {
         streamGotToken = true; // 实际收到内容（非流式成功也能识别，防 GENERATION_ENDED 误判空回）
-        autoRerollCount = 0;
-        rerollBlockedNotified = false;
-        clearRerollBanner(); // 正常消息已收到 → 收起重roll横幅
-        updateRerollStatus();
+        // v1.37.34：本轮已触发重roll且 swipe 尚未被 GENERATION_STARTED 确认（rerollFiredThisGen 仍 true）时，
+        // 这条"被截断/空回后残留到达的消息"不是新分支的成功输出——不清零计数、不收横幅，
+        // 否则会把 ENDED 兜底的 ++ 互踩清零，且横幅在重roll完成前被提前收起。
+        if (!rerollFiredThisGen) {
+            autoRerollCount = 0;
+            rerollBlockedNotified = false;
+            clearRerollBanner(); // 正常消息已收到 → 收起重roll横幅
+            updateRerollStatus();
+        }
     }
     // 完整生成提醒（声音+震动共用同一时机分支）：
     //   marker = 检测到截断标记才提醒（K3/余温预设，标记=完整）；done = 输出完成即提醒（不用截断标记的模型）
@@ -3752,6 +3780,7 @@ eventSource.on(event_types.MESSAGE_DELETED, () => {
 eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     isDryRun = !!dryRun; // ST 提示词查看器 dry-run（Generate 第三个参数）
     if (isDryRun) {
+        dryRunSince = Date.now(); // v1.37.34 记录 dry-run 开始，MESSAGE_RECEIVED 用它兜底清残留
         isGenerating = false; // dry-run 不是真实生成，清除生成中状态（防残留导致后续 MESSAGE_RECEIVED 误判空回）
         console.log('[余温工具箱] GENERATION_STARTED (dry-run，跳过状态管理)');
         return;
@@ -3759,6 +3788,7 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     console.log('[余温工具箱] GENERATION_STARTED');
     genStartAt = Date.now();        // 记录本次生成开始时间（流式检测只认本次生成的消息）
     pendingSwipeConfirm = -1;    // 已进入真实生成 → 自动 swipe 确认成功（watchdog 不再兜底）
+    autoSwipeBusy = false;       // v1.37.34 真实生成已开始 → 释放自动swipe防重入锁
     lastGenManuallyStopped = false;
     rerollFiredThisGen = false;
     earlyStopTriggered = false;
@@ -3807,7 +3837,7 @@ eventSource.on(event_types.STREAM_TOKEN_RECEIVED, checkAutoStop);
 // 生成结束：本次零 token → 空回（断流/服务器不稳）→ 自动重roll
 eventSource.on(event_types.GENERATION_ENDED, () => {
     lastGenManuallyStopped = false; // 一轮生成彻底结束，清手动停止标记
-    if (isDryRun) { isDryRun = false; return; } // 提示词查看器 dry-run 结束：不判空回
+    if (isDryRun) { isDryRun = false; dryRunSince = 0; return; } // 提示词查看器 dry-run 结束：不判空回
     console.log(`[余温工具箱] ENDED 触发: manualStop=${manualStopClicked} token=${streamGotToken} emptyHandled=${emptyRerollHandled} early=${earlyStopTriggered}`);
     isGenerating = false; // 生成结束无论何种路径都退出"生成中"，防残留导致历史加载误判空回
     startReasoningTimer(1500); // 空闲低频保活（定格秒数仍对抗 ST 重写，开销降 80%）
@@ -3910,6 +3940,7 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
 // 手动停止（用户点 #mes_stop）标记 manualStopClicked，避免误判空回。
 eventSource.on(event_types.GENERATION_STOPPED, () => {
     isDryRun = false;
+    dryRunSince = 0;
     streamGotToken = true;
     isGenerating = false;
     startReasoningTimer(1500); // 空闲低频保活
@@ -3937,6 +3968,7 @@ document.addEventListener('click', (e) => {
     if (t && t.closest && t.closest('.swipe_right, .swipe_left, .swipe_right_stealth, .swipe_left_stealth')) {
         // v1.11.48：点 swipe 无条件恢复自动重roll（即使无连续失败计数，之前 stop 状态必须解除）
         settings.rerollPaused = false;
+        autoSwipeBusy = false;   // v1.37.34 手动 swipe = 用户接管，释放自动swipe锁
         clearRerollBanner(); // 手动 swipe = 新一轮开始 → 收起横幅
         if (autoRerollCount > 0 || rerollBlockedNotified) {
             autoRerollCount = 0;
@@ -3952,6 +3984,7 @@ document.addEventListener('click', (e) => {
     const t = e.target;
     if (t && t.closest && t.closest('#option_regenerate')) {
         settings.rerollPaused = false;
+        autoSwipeBusy = false; // v1.37.34 手动重新生成 = 用户接管，释放自动swipe锁
         clearRerollBanner(); // 重新生成 = 新一轮开始 → 收起横幅
     }
 }, true);
@@ -3959,6 +3992,7 @@ document.addEventListener('click', (e) => {
 // 切换聊天时清掉跨聊天残留的折叠状态/缓存（messageId 在新聊天里会复用）
 eventSource.on(event_types.CHAT_CHANGED, () => {
     isDryRun = false;
+    dryRunSince = 0;
     foldState.clear();
     foldAppliedText.clear();
     foldRenderedCache.clear();
@@ -3966,6 +4000,7 @@ eventSource.on(event_types.CHAT_CHANGED, () => {
     origMesMap.clear();
     wordApplyUndo.clear(); // 换聊天清词汇替换「回退修改」的撤销记录，防跨聊天污染
     autoRerollCount = 0;
+    autoSwipeBusy = false; // v1.37.34 切聊天释放自动swipe锁（防残留挡后续自动重roll）
     clearRerollBanner(); // 切聊天 → 收起重roll横幅
     updateRerollStatus();
     lastAutoRerollMessageId = -1;
