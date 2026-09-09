@@ -1387,6 +1387,15 @@ async function triggerAutoSwipe(messageId) {
                             if (!Array.isArray(lastW.swipes)) lastW.swipes = [lastW.mes ?? ''];
                             console.log('[余温工具箱] 修正消息 swipe_id=' + lastW.swipe_id + '（防 ST 把 swipe 降级为 normal）');
                         }
+                        // v1.37.35：swipe 后若既没有真实 GENERATION_STARTED 也没有新事件（用户场景：
+                        // 关键词重roll 进新分支后分支为空、空回检测从不触发——因为 swipe 切到旧/空分支
+                        // 根本不发起新生成，ENDED/MESSAGE_RECEIVED 全不来，只能靠这里主动续 roll）。
+                        // 检查最后一条 assistant：为空（零 token 占位/未产出）→ 主动补空回重roll。
+                        if (lastW && !lastW.is_user && isEmptyMes(lastW.mes)) {
+                            const lastIdx = chatW.length - 1;
+                            console.log('[余温工具箱] swipe 后最后一条为空占位，主动补空回重roll（消息#' + lastIdx + '）');
+                            handleEmptyReroll(lastIdx);
+                        }
                     } catch (eW) { console.warn('[余温工具箱] swipe watchdog 兜底失败:', eW); }
                 }
             }, 8000);
@@ -1917,7 +1926,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.34'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.35'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
