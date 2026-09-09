@@ -36,7 +36,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.37.14 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v1.37.15 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -1007,7 +1007,7 @@ function checkStreamingAbort(messageId) {
     if (!isGenerating) return; // 流式截断检测只在生成中有效（修正消息触发 observer 时避免误判）
     if (earlyStopTriggered) return;
     if (!settings.rerollOnEnglishThinking && !settings.rerollOnNoThinking && settings.rerollMinThinkingTokens <= 0 && settings.rerollOnKeyword === false) return;
-    // v1.37.14：只检测"本次生成正在写入的新分支"，跳过历史/静态内容——
+    // v1.37.15：只检测"本次生成正在写入的新分支"，跳过历史/静态内容——
     // ① observer 会因 swipe 动画/计数器捕获旧消息 DOM 变化，若旧消息是英文会误触发；
     // ② 用户手动往分支填英文 / 加载历史分支（gen_started 是旧时间）也绝不能触发截断——
     //    那只是查看内容，不是"本次生成输出英文"（模型本次可能根本没输出）。
@@ -1039,7 +1039,7 @@ function checkStreamingAbort(messageId) {
 
         // ① 英文思维链（原生 reasoning 通道；partial 模式思考在 content，用 <scene> 前文本兜底）
         // ① 英文思维链（仅 KIMI 模式：DS We need 起手天然英文、自定义模板用户掌控，均跳过）
-        // v1.37.14：英文检测与关键词检测统一防护——mes 与 reasoning 都与生成开始快照完全相同
+        // v1.37.15：英文检测与关键词检测统一防护——mes 与 reasoning 都与生成开始快照完全相同
         // = 历史/静态内容（用户手动填的英文/CSAM、加载的旧分支），本次模型还没输出 → 跳过；
         // 只有本次新写入（mes 或 reasoning 相对快照有变化）才检测，防静态残留反复误截断死循环。
         if (settings.rerollOnEnglishThinking && settings.injectTarget === 'kimi' && !seedIsEnglish()) {
@@ -1087,9 +1087,9 @@ function checkStreamingAbort(messageId) {
             }
         }
 
-        // v1.37.14：关键词检测——生成内容（含思维链 reasoning + 正文 mes）出现任一关键词
+        // v1.37.15：关键词检测——生成内容（含思维链 reasoning + 正文 mes）出现任一关键词
         //（如 CSAM）→ 立即停止并重roll开新分支。多个用英文逗号分隔，不区分大小写。
-        // v1.37.14：防静态残留误判（同英文思维链 bug）——mes 和 reasoning 都与生成开始快照
+        // v1.37.15：防静态残留误判（同英文思维链 bug）——mes 和 reasoning 都与生成开始快照
         // 完全相同 = 历史/静态内容（用户手动填的 / 加载的旧分支），本次模型还没输出，跳过；
         // 只有本次新写入（mes 或 reasoning 相对快照有变化）才检测关键词。
         if (!stopReason && settings.rerollOnKeyword !== false) {
@@ -1234,7 +1234,7 @@ function checkNativeReroll(messageId) {
                 reason = '生成结束仍无截断标记（半截楼/疑似截断）';
             }
         }
-        // v1.37.14：关键词检测（完成后兜底）——流式中若漏检（如关键词只在末尾出现）在此补上
+        // v1.37.15：关键词检测（完成后兜底）——流式中若漏检（如关键词只在末尾出现）在此补上
         if (!shouldReroll && settings.rerollOnKeyword !== false) {
             const kwRaw2 = String(settings.rerollKeywords ?? '').trim();
             if (kwRaw2) {
@@ -1289,9 +1289,9 @@ function checkNativeReroll(messageId) {
 // 否则 swipe（实时用 chat.length-1，regenerate 删建后缓存 id 会失效）。
 // 等待 ST 的 abort 完全收尾：截断 stopGeneration 后 ST 内部仍在跑 abort 链（onErrorStreaming /
 // finishGenerating / Swiping back），此时立刻 swipe 会 "Generation was aborted" 回滚。
-// v1.37.14 曾用 #mes_stop 显隐判断——但按钮隐藏 ≠ is_send_press 清空（abort 链还在异步收尾），
+// v1.37.15 曾用 #mes_stop 显隐判断——但按钮隐藏 ≠ is_send_press 清空（abort 链还在异步收尾），
 // swipe 时 ST 的 `run_generate && !is_send_press` 不满足 → Generate('swipe') 不执行 → 分支不加。
-// v1.37.14：改为直接等 is_send_press（ST 正在生成标志，import live binding）变 false 才 swipe。
+// v1.37.15：改为直接等 is_send_press（ST 正在生成标志，import live binding）变 false 才 swipe。
 // 最多等 6 秒，期间每 150ms 轮询；超时也继续（不无限阻塞自动重roll）。
 async function waitStAbortSettled() {
     try {
@@ -1330,7 +1330,7 @@ async function triggerAutoSwipe(messageId) {
         console.log(`[余温工具箱] 触发自动重roll：消息#${targetId} 开新分支`);
         await doSwipe(targetId);
         console.log(`[余温工具箱] 自动重roll swipe 完成`);
-        // v1.37.14：swipe 确认 watchdog —— ST 在 abort 竞态下会 "Swipe failed, Swiping back" 回滚
+        // v1.37.15：swipe 确认 watchdog —— ST 在 abort 竞态下会 "Swipe failed, Swiping back" 回滚
         // （doSwipe 的 ctx.swipe.to 不抛错、扩展无法感知），导致没有新分支、rerollFiredThisGen
         // 永远等不到 GENERATION_STARTED 重置 → 后续空回/截断全被总闸挡 → 停在空回。
         // 这里登记等待真实 GENERATION_STARTED；超时未确认 → 判定 swipe 假成功 → 复位总闸 + 各状态，
@@ -1341,7 +1341,7 @@ async function triggerAutoSwipe(messageId) {
                 if (pendingSwipeConfirm !== targetId) return; // 已被 GENERATION_STARTED 确认
                 pendingSwipeConfirm = -1;
                 // 距 swipe 已超时且从未进入新生成 → 释放本次"已重roll"的总闸，允许再触发
-                // v1.37.14：已达连续上限时不再复位总闸——复位会让后续检测再次通过、count 继续++，
+                // v1.37.15：已达连续上限时不再复位总闸——复位会让后续检测再次通过、count 继续++，
                 // 造成 31/30、32/30 突破上限的无限循环。上限就是硬停：让 rerollBlockedNotified 提示生效，
                 // 等一条通过检测的消息或用户手动 swipe 把计数归零。
                 if ((rerollFiredThisGen || earlyRerollHandled || emptyRerollHandled) && autoRerollCount < settings.autoRerollLimit) {
@@ -1351,7 +1351,7 @@ async function triggerAutoSwipe(messageId) {
                     emptyRerollHandled = false;
                     earlyRerollMessageId = -1;
                     lastGenManuallyStopped = false;
-                    // v1.37.14：不再用 regenerate 兜底——regenerate 会删掉最后一条 AI 消息重建，
+                    // v1.37.15：不再用 regenerate 兜底——regenerate 会删掉最后一条 AI 消息重建，
                     // 新消息 swipe_id=undefined，ST 下次 swipe 时会把 swipes 清空（script.js swipe_id
                     // undefined 分支），造成"分支被清成 1 个"、重roll永远进不了新分支的死循环。
                     // 复位总闸后，后续 ENDED/MESSAGE_RECEIVED 的自然事件流会再次触发重roll（swipe 开新分支）。
@@ -1852,7 +1852,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.14'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.15'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -1988,19 +1988,20 @@ async function doSelfUpdate(btn, remoteVer, auto) {
         if (!resp.ok) { lastErr = new Error('HTTP ' + resp.status); continue; }
         const j = await resp.json().catch(() => ({}));
         if (j.isUpToDate) {
-            // 服务端 git 确认已到最新（常见：pull 已把文件拉到新版但返回 isUpToDate:true）——
-            // 必须自动刷新加载新代码，否则页面一直跑旧版（"更新了但看不到变化"）
+            // v1.37.15：git 已是最新时【不自动刷新】——磁盘代码已就位，页面旧是 WebView 缓存所致，
+            // 普通 reload 仍加载缓存 → 又检测到更新 → isUpToDate → 又刷新 → 无限循环（"一直刷新进不去酒馆"）。
+            // 只提示用户手动刷新一次（或等缓存过期）。真 pull 到新代码（非 isUpToDate）才需要自动刷新。
             try {
                 localStorage.setItem('kimi_upd_combo', JSON.stringify(c));
-                localStorage.setItem('kimi_updated_to', String(remoteVer || PLUGIN_VERSION)); // v1.37.14：记录已达版本，防刷新后缓存旧代码重复触发
+                localStorage.setItem('kimi_updated_to', String(remoteVer || PLUGIN_VERSION)); // 记录已达版本
             } catch (e) { }
-            if (btn) btn.textContent = '✅ 已是最新';
-            try { toastr.success('🔥 余温工具箱：已同步到最新，即将自动刷新', null, { timeOut: 3000 }); } catch (e) { }
-            window.__kimiCoordReload(2000);
+            if (btn) { btn.disabled = false; btn.textContent = '✅ 已是最新'; }
+            try { toastr.success('余温工具箱已是最新版本 v' + (remoteVer || PLUGIN_VERSION) + '。若界面仍显示旧版，请手动刷新一次页面', null, { timeOut: 5000 }); } catch (e) { }
+            console.log('[余温工具箱] git 已最新，跳过自动刷新（防缓存导致刷新循环）');
             return;
         }
         if (btn) btn.textContent = '✅ 已更新';
-        // v1.37.14：更新后、刷新前自校验 manifest.json 完好——git pull 若弱网中断可能损坏文件，
+        // v1.37.15：更新后、刷新前自校验 manifest.json 完好——git pull 若弱网中断可能损坏文件，
         // 直接刷新会让 ST 加载不到 manifest → 工具箱消失。校验失败则明确报错不刷新。
         let manifestOk = false;
         try {
@@ -2014,13 +2015,13 @@ async function doSelfUpdate(btn, remoteVer, auto) {
             return;
         }
         try {
-            localStorage.setItem('kimi_updated_to', String(remoteVer || PLUGIN_VERSION)); // v1.37.14：记录已达版本，防刷新后缓存旧代码重复触发
+            localStorage.setItem('kimi_updated_to', String(remoteVer || PLUGIN_VERSION)); // v1.37.15：记录已达版本，防刷新后缓存旧代码重复触发
         } catch (e) { }
         try { toastr.success('🔥 余温工具箱：已更新到 v' + remoteVer + '，即将自动刷新', null, { timeOut: 4000 }); } catch (e) { }
         window.__kimiCoordReload(3000); // 协调刷新：多插件并发更新时由最后完成者统一刷新
         return;
     }
-    // v1.37.14：不再自动 delete+install 重装兜底——曾因 delete 路径/网络中断导致目录残缺，
+    // v1.37.15：不再自动 delete+install 重装兜底——曾因 delete 路径/网络中断导致目录残缺，
     // manifest 损坏 → ST 加载不到扩展 → "工具箱消失"且重装提示已存在（用户群事故）。
     // update 全灭时只明确报错，让用户手动到扩展管理删除后重装（保留 git pull 的安全更新路径）。
     if (btn) { btn.disabled = false; btn.textContent = '⬆ 可更新'; }
@@ -2034,7 +2035,7 @@ async function checkUpdate() {
         if (compareVer(remoteVer, PLUGIN_VERSION) > 0) {
             // 默认自动更新：检测到云端更新直接更新到最新（不弹询问）
             if (settings.autoUpdate) {
-                // v1.37.14：双保险防"更新→刷新→缓存旧码→又更新"死循环（用户反馈一直刷新进不去酒馆）：
+                // v1.37.15：双保险防"更新→刷新→缓存旧码→又更新"死循环（用户反馈一直刷新进不去酒馆）：
                 // ① 已成功更新到某版本（kimi_updated_to）→ 远端不高于它则跳过；
                 // ② 冷却期（5分钟）内不再自动更新（即使刷新后缓存旧代码，也只 pull 一次）。
                 let updatedTo = '';
@@ -3433,7 +3434,7 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
         const ctxStart = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const lastStart = ctxStart?.chat?.[ctxStart.chat.length - 1];
         generationStartLastMes = (lastStart && typeof lastStart.mes === 'string') ? lastStart.mes : null;
-        // v1.37.14：记录最后一条 assistant 的 reasoning 快照——流式英文检测只在 reasoning 本次新增时触发，
+        // v1.37.15：记录最后一条 assistant 的 reasoning 快照——流式英文检测只在 reasoning 本次新增时触发，
         // 防止 extra.reasoning 里的静态残留（如用户测试手动填的 English）在每次生成时被误判成"本次输出英文"。
         genStartReasoning = (lastStart && !lastStart.is_user && lastStart.extra?.reasoning) ? String(lastStart.extra.reasoning) : '';
     } catch (e) { generationStartLastMes = null; genStartReasoning = ''; }
@@ -3579,7 +3580,7 @@ eventSource.on(event_types.GENERATION_STOPPED, () => {
 });
 
 // 手动停止检测：ST 停止按钮 #mes_stop 被点击 = 用户手动停止。
-// v1.37.14：仅信任真实用户点击（isTrusted）。扩展流式截断/自动重roll 的 stopGeneration 竞态下，
+// v1.37.15：仅信任真实用户点击（isTrusted）。扩展流式截断/自动重roll 的 stopGeneration 竞态下，
 // ST 内部会程序化触发 #mes_stop 的 click（isTrusted=false），若误判成"手动停止"会把
 // lastGenManuallyStopped 置 true → 后续所有重roll被豁免 → 正好造成"空回后停住"。
 document.addEventListener('click', (e) => {
@@ -4262,7 +4263,7 @@ partial
     $("#extensions_settings").append(settingsHtml);
 
     // 卡片展开状态记忆（localStorage 按卡片序号存，跨刷新/语言切换保持）
-    // v1.37.14：手风琴——点开任一卡自动关闭其它卡（设置面板不拉太长，免滚轮累）；
+    // v1.37.15：手风琴——点开任一卡自动关闭其它卡（设置面板不拉太长，免滚轮累）；
     // 仅主设置面板内互斥；被移入浮窗的卡不在面板容器内，不受影响。
     const bindCardMemory = () => {
         try {
