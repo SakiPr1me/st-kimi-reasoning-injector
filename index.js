@@ -177,7 +177,7 @@ const UI = {
         foldModeLabel: "折叠识别：", foldStrict: "严格（分隔标记 + 特征词判断）", foldLoose: "宽松（无标记一律折叠，可能误伤普通回复）",
         foldMarkerLabel: "正文分隔标记：", foldMarkerHint: "以此标记为分解，拆分思考/正文，思考渲染成美化",
         autoStopLabel: "检测到结束标记自动截断", autoStopHint: "流式中检测到指定标记，立即停止生成，目前不收费，不知道哪天会修。之前安装过截断插件的可以把那个关掉只用这个就行了。",
-        autoStopMarkerLabel: "截断标记：", autostopFailTip: "截断失败率高？试试：① 把下方「流式帧速率」拉到 30 以下（如 10，自行尝试）；② 将预设里碎碎念（截断）模块改 3000 字以上。", streamingFpsLabel: "流式帧速率（「用户设置」同一滑条，双向同步）",
+        autoStopMarkerLabel: "截断标记：", autostopFailTip: "截断失败率高？试试：① 把下方「流式帧速率」拉到 30 以下（如 10，自行尝试）；② 将预设里碎碎念（截断）模块改 3000 字以上。", streamingFpsLabel: "流式帧速率",
         foldTitle: "自动修正正文换行 &amp; Name 注入", fixLabel: "自动修正正文换行", fixHint: "如果出现只有单换行的情况(没有空行)，插件为其自动补上。可自定义，用逗号分隔。", fixMarkerLabel: "正文修正标记：", fixNow: "修正当前楼层", fixRevert: "修正回退",
         nameLabel: "Name 注入（不知道有没有用总之试试）：", nameEnabled: "启用 Name 注入", nameValueLabel: "Name 值：", nameScopeLabel: "应用到分支：",
         wordEnabled: "启用（生成后自动应用）", wordAdd: "+ 添加规则",
@@ -237,7 +237,7 @@ const UI = {
         foldModeLabel: "Fold Detection: ", foldStrict: "strict (separator + keyword)", foldLoose: "loose (fold everything without marker, may catch normal replies)",
         foldMarkerLabel: "Body Separator Marker: ", foldMarkerHint: "Split thinking/body at this marker; thinking is rendered as beautified fold",
         autoStopLabel: "Auto-Stop on End Marker", autoStopHint: "Stop generation immediately when the marker appears mid-stream. Currently free - might be patched someday. If you had a stop plugin before, disable it and use this one.",
-        autoStopMarkerLabel: "Stop Marker: ", autostopFailTip: "High truncation failure rate? Try: ① pull the \"Streaming FPS\" slider below to under 30 (e.g. 10, experiment); ② set the mutter (truncation) module in the preset to output 3000+ characters.", streamingFpsLabel: "Streaming FPS (same slider as User Settings - two-way synced)",
+        autoStopMarkerLabel: "Stop Marker: ", autostopFailTip: "High truncation failure rate? Try: ① pull the \"Streaming FPS\" slider below to under 30 (e.g. 10, experiment); ② set the mutter (truncation) module in the preset to output 3000+ characters.", streamingFpsLabel: "Streaming FPS",
         foldTitle: "Body Line-Fix &amp; Name Injection", fixLabel: "Auto-fix body line breaks", fixHint: "If only single newlines appear (no blank line), the plugin adds them automatically. Customize with comma-separated values.", fixMarkerLabel: "Body Fix Marker: ", fixNow: "Fix Current Message", fixRevert: "Revert Fix",
         nameLabel: "Name Injection (uncertain, trying anyway): ", nameEnabled: "Enable Name Injection", nameValueLabel: "Name Value: ", nameScopeLabel: "Apply to: ",
         wordEnabled: "Enable (auto-apply after generation)", wordAdd: "+ Add Rule",
@@ -297,7 +297,7 @@ const UI = {
         foldModeLabel: "접기 인식: ", foldStrict: "엄격 (구분 마커 + 특징 단어)", foldLoose: "느슨 (마커 없으면 전부 접기, 일반 응답 오접기 가능)",
         foldMarkerLabel: "본문 구분 마커: ", foldMarkerHint: "이 마커를 기준으로 사고/본문 분리, 사고는 미화로 렌더링",
         autoStopLabel: "종료 마커 감지 시 자동 중단", autoStopHint: "스트리밍 중 지정 마커가 나오면 즉시 생성 중단. 현재 무료지만 언제 고쳐질지 모름. 기존 중단 플러그인이 있으면 끄고 이걸 쓰세요.",
-        autoStopMarkerLabel: "중단 마커: ", autostopFailTip: "차단 실패율이 높은가요? 이렇게 해보세요: ① 아래 「스트리밍 FPS」를 30 미만(예: 10, 직접 시험)으로 낮추기; ② 프리셋의 중얼거림(차단) 모듈을 3000자 이상으로 설정.", streamingFpsLabel: "스트리밍 FPS ('사용자 설정'과 같은 슬라이더, 양방향 동기화)",
+        autoStopMarkerLabel: "중단 마커: ", autostopFailTip: "차단 실패율이 높은가요? 이렇게 해보세요: ① 아래 「스트리밍 FPS」를 30 미만(예: 10, 직접 시험)으로 낮추기; ② 프리셋의 중얼거림(차단) 모듈을 3000자 이상으로 설정.", streamingFpsLabel: "스트리밍 FPS",
         foldTitle: "본문 줄바꿈 보정 &amp; Name 주입", fixLabel: "본문 줄바꿈 자동 보정", fixHint: "단일 줄바꿈만 있는 경우(빈 줄 없음) 자동으로 보충. 쉼표로 구분해 커스터마이즈 가능.", fixMarkerLabel: "본문 보정 마커: ", fixNow: "현재 메시지 보정", fixRevert: "보정 되돌리기",
         nameLabel: "Name 주입 (효과 불확실, 일단 시도): ", nameEnabled: "Name 주입 활성화", nameValueLabel: "Name 값: ", nameScopeLabel: "적용 분기: ",
         wordEnabled: "활성화 (생성 후 자동 적용)", wordAdd: "+ 규칙 추가",
@@ -1926,7 +1926,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.38'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.39'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2454,6 +2454,47 @@ function ensureCardFloat() {
     return w;
 }
 
+// 余温主设置面板是否可见（inline-drawer 展开 且 真实渲染在视口）
+function isKimiSettingsVisible() {
+    const panel = document.getElementById(extensionName + '_settings');
+    if (!panel) return false;
+    try {
+        const content = panel.querySelector('.inline-drawer-content');
+        if (!content || content.style.display !== 'block') return false;
+        // 父级 ST 扩展抽屉可能折叠：用 offsetParent 判真实可见（display:none 链上任一节点为 null）
+        return content.offsetParent !== null || content.getBoundingClientRect().width > 0;
+    } catch (e) { return false; }
+}
+
+// 在主设置面板内展开并滚动到指定卡（面板可见时替代浮窗）
+function openCardInPanel(key) {
+    const def = KIMI_CARD_DEFS.find(d => d.key === key);
+    if (!def) return;
+    const panel = document.getElementById(extensionName + '_settings');
+    if (!panel) return;
+    closeCardFloat(); // 若有浮窗正开着，先把卡移回面板
+    const title = t(def.titleKey);
+    const card = [...panel.querySelectorAll('details.kimi-card')].find(c =>
+        (c.querySelector('summary')?.textContent || '').includes(title));
+    if (!card) return;
+    card.open = true;
+    setTimeout(() => { try { card.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { card.scrollIntoView(); } }, 50);
+}
+
+// 方向②：浮窗开着时打开余温主设置面板 → 自动关浮窗把卡移回（toggleDrawer 会派发 inline-drawer-toggle）
+function watchSettingsOpenClosesFloat() {
+    const panel = document.getElementById(extensionName + '_settings');
+    if (!panel || panel.dataset.kimiFloatWatch) return;
+    panel.dataset.kimiFloatWatch = '1';
+    panel.addEventListener('inline-drawer-toggle', () => {
+        // 展开（content 变 block）且当前有浮窗 → 移回，避免主面板里"缺卡"
+        const content = panel.querySelector('.inline-drawer-content');
+        if (content && content.style.display === 'block' && _kimiCardOpenKey !== null) {
+            closeCardFloat();
+        }
+    });
+}
+
 // 按卡 key 打开浮窗：把主页原版卡 DOM 移进浮窗（jQuery 绑定跟元素走，全部交互原样可用）
 function openCardFloat(key) {
     const def = KIMI_CARD_DEFS.find(d => d.key === key);
@@ -2479,6 +2520,30 @@ function openCardFloat(key) {
     w.style.display = 'flex';
     setTimeout(() => clampToViewport(w), 30); // 打开后钳回视口内（窄屏/移动端防出界）
     _kimiCardOpenKey = key;
+    // v1.37.39 方向②：浮窗开着时用户打开了余温主设置面板 → 自动关浮窗移回卡
+    // （inline-drawer-toggle 事件覆盖"点余温抽屉标题展开"；轮询覆盖经扩展菜单/管理面板打开的路径）
+    startFloatVsSettingsWatch();
+}
+
+let _floatVsSettingsTimer = null;
+function startFloatVsSettingsWatch() {
+    stopFloatVsSettingsWatch();
+    _floatVsSettingsTimer = setInterval(() => {
+        // 浮窗已关或面板不可见 → 无需动作
+        if (_kimiCardOpenKey === null) { stopFloatVsSettingsWatch(); return; }
+        const panel = document.getElementById(extensionName + '_settings');
+        if (!panel) return;
+        const content = panel.querySelector('.inline-drawer-content');
+        const visible = content && content.style.display === 'block'
+            && (content.offsetParent !== null || content.getBoundingClientRect().width > 0);
+        if (visible) {
+            closeCardFloat(); // 主面板可见且浮窗还开着 → 移回卡（面板里不再缺卡）
+            stopFloatVsSettingsWatch();
+        }
+    }, 700);
+}
+function stopFloatVsSettingsWatch() {
+    if (_floatVsSettingsTimer) { clearInterval(_floatVsSettingsTimer); _floatVsSettingsTimer = null; }
 }
 
 function closeCardFloat() {
@@ -2501,6 +2566,7 @@ function closeCardFloat() {
     }
     _kimiCardOrigin = null;
     _kimiCardOpenKey = null;
+    stopFloatVsSettingsWatch(); // v1.37.39 浮窗已关，停掉主面板可见性看门狗
 }
 
 // ===== 整合悬浮入口（所有功能卡的竖向胶囊条）=====
@@ -2910,6 +2976,11 @@ function updateComboFloat() {
         }
         if (_kimiCardOpenKey === act) {
             closeCardFloat(); // 重复点同一 emoji → 关闭
+            return;
+        }
+        // v1.37.39：主设置面板开着时点面板图标 → 不弹浮窗，直接在主面板内展开并滚动到该卡
+        if (isKimiSettingsVisible()) {
+            openCardInPanel(act);
             return;
         }
         openCardFloat(act);
@@ -5422,6 +5493,8 @@ partial
     try { mountApiPoolCard('#kimi_reasoning_injector_api_slot'); } catch (e) { console.warn('[余温工具箱] API池卡挂载失败:', e); }
     // 所有卡挂载完毕后统一恢复展开记忆（含标签卡/API卡）
     if (typeof bindCardMemory === 'function') bindCardMemory();
+    // v1.37.39：浮窗开着时展开本设置面板 → 自动关浮窗（卡移回），避免主面板里"缺卡"
+    if (typeof watchSettingsOpenClosesFloat === 'function') watchSettingsOpenClosesFloat();
 }
 
 // 全局事件只绑定一次（语言切换重渲染 initSettingsPanel 时不会重复监听）
