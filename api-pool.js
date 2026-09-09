@@ -4,9 +4,9 @@
 // ⚠️ 密钥以明文存 settings.json（酒馆 secret 是全局单值，无法存多份，只能在池里各存一份）。
 
 import { extension_settings } from "../../../extensions.js";
-import { saveSettingsDebounced, eventSource, event_types } from "../../../../script.js";
+import { saveSettingsDebounced, eventSource, event_types, getRequestHeaders } from "../../../../script.js";
 import { oai_settings, chat_completion_sources } from "../../../openai.js";
-import { writeSecret } from "../../../secrets.js";
+import { writeSecret, findSecret } from "../../../secrets.js";
 import { t } from "./index.js"; // 三语文案（函数声明循环引用安全，仅运行期调用）
 
 const KEY = 'api_pool';
@@ -204,6 +204,7 @@ function rowHTML(e, i) {
     <div class="kimi-api-row" style="display:block;${curStyle};border-radius:6px;padding:5px 6px;margin-top:5px">
         <div class="kimi-api-l1" style="display:flex;gap:6px;align-items:center;width:100%;min-width:0">
             <input type="text" class="kimi-api-model text_pole" data-i="${i}" value="${escHtml(e.model || '')}" placeholder="${t('apiModel')}" style="width:32%;min-width:60px"/>
+            <button class="kimi-api-fetch kimi-btn kimi-api-btn-sm" data-i="${i}" title="${t('apiFetchModels')}" style="flex:none">📋</button>
             <input type="text" class="kimi-api-url text_pole" data-i="${i}" value="${escHtml(e.url || '')}" placeholder="https://.../v1" style="flex:1;min-width:0"/>
         </div>
         <div class="kimi-api-l2" style="display:flex;gap:6px;align-items:center;width:100%;min-width:0;margin-top:4px">
@@ -212,6 +213,7 @@ function rowHTML(e, i) {
             <button class="kimi-api-switch kimi-btn kimi-api-btn-sm" data-i="${i}" title="${t('apiSwitchTo')}" style="margin-left:auto">⇄</button>
             <button class="kimi-api-del kimi-btn kimi-api-btn-sm" data-i="${i}" title="${t('apiDel')}">✕</button>
         </div>
+        <div class="kimi-api-models" data-i="${i}" style="display:none;margin-top:4px;border:1px solid rgba(128,128,128,.25);border-radius:6px;max-height:180px;overflow-y:auto"></div>
     </div>`;
 }
 
@@ -264,6 +266,84 @@ function refreshCurrentIndicator() {
     // 当前行重渲染（金色边框 + *当前 标记与切换联动；renderList 内部自带边框判定）
     renderList(mountedSlot);
 }
+
+// ===== 「📋 获取可用模型」：按行内 url(+key) 拉模型列表，点选填入模型名 =====
+// 复用 ST 官方 status 接口（与「连接」按钮同一后端）：POST /api/backends/chat-completions/status
+// 返回 { data: [{ id, ... }, ...] }。key 优先用行内填的；没填则回退当前已保存的 custom key。
+async function fetchModelsForRow(i) {
+    const e = settings.pool[i];
+    if (!e) return null;
+    const url = norm(e.url);
+    if (!url) {
+        try { toastr.warning(t('apiModelEmpty'), 'API 额度', { timeOut: 3000 }); } catch (e2) { }
+        return null;
+    }
+    // 行内有 key 且与当前 secret 不同 → 临时写入（拉完恢复，避免污染当前连接）
+    let prevKey = null;
+    try { prevKey = await findSecret('api_key_custom'); } catch (e) { }
+    const needSwap = e.key && String(e.key).trim() && String(e.key).trim() !== String(prevKey || '');
+    if (needSwap) {
+        try { await writeSecret('api_key_custom', e.key, 'Custom API'); } catch (e) { }
+    }
+    try {
+        const data = {
+            chat_completion_source: 'custom',
+            custom_url: url,
+            custom_include_headers: oai_settings?.custom_include_headers || '',
+        };
+        const resp = await fetch('/api/backends/chat-completions/status', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify(data),
+            cache: 'no-cache',
+            signal: AbortSignal.timeout(15000),
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const j = await resp.json().catch(() => null);
+        if (j && Array.isArray(j.data)) {
+            return j.data
+                .map(m => (m && typeof m === 'object') ? (m.id ?? m.name ?? '') : String(m))
+                .map(s => String(s).trim()).filter(Boolean);
+        }
+        return [];
+    } catch (err) {
+        try { toastr.error(String(t('apiModelErr')) + '：' + String(err && err.message || err), 'API 额度', { timeOut: 4000 }); } catch (e2) { }
+        return null;
+    } finally {
+        if (needSwap && prevKey) {
+            try { await writeSecret('api_key_custom', prevKey, 'Custom API'); } catch (e) { }
+        }
+    }
+}
+
+// 展开/刷新某行的模型下拉（不重复请求：已展开且有内容则直接显示）
+async function toggleModelsDropdown(i) {
+    const e = settings.pool[i];
+    if (!e) return;
+    // 收起其它行下拉
+    document.querySelectorAll('.kimi-api-models').forEach(d => { if (Number(d.getAttribute('data-i')) !== i) { d.style.display = 'none'; d.innerHTML = ''; } });
+    const box = document.querySelector(`.kimi-api-models[data-i="${i}"]`);
+    if (!box) return;
+    if (box.style.display === 'block' && box.innerHTML.trim()) { box.style.display = 'none'; box.innerHTML = ''; return; } // 再点收起
+    // 请求中
+    box.style.display = 'block';
+    box.innerHTML = '<div style="padding:6px;opacity:.6;font-size:.85em">' + t('apiModelsLoading') + '</div>';
+    const models = await fetchModelsForRow(i);
+    if (models === null) { box.style.display = 'none'; box.innerHTML = ''; return; } // 错误已 toastr
+    if (!models.length) {
+        box.innerHTML = '<div style="padding:6px;opacity:.6;font-size:.85em">' + t('apiModelEmpty') + '</div>';
+        return;
+    }
+    box.innerHTML = models.map(m =>
+        `<div class="kimi-api-model-opt" data-i="${i}" data-model="${escHtml(m)}" style="padding:3px 8px;cursor:pointer;font-size:.85em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(m)}">${escHtml(m)}</div>`
+    ).join('');
+}
+
+// 收起所有模型下拉（点行外/切换聊天等）
+function closeAllModelsDropdown() {
+    document.querySelectorAll('.kimi-api-models').forEach(d => { d.style.display = 'none'; d.innerHTML = ''; });
+}
+
 
 function renderList(slotSel) {
     // 刷新所有 #kimi_api_list：面板重建会在 slot 挂新卡，而旧卡可能仍被移入悬浮窗 → 两份并存，
@@ -324,11 +404,36 @@ export function mountApiPoolCard(slotSel) {
             renderList(); // 只重渲染列表；整卡重挂是重复绑定的源头，不再使用
         });
     }
+    // 📋 获取可用模型委托——独立命名空间 + off 防重复（不依赖 kimiApiDelegated：
+    // 旧缓存实例可能已设该标志但无 fetch handler → 新实例需总能绑上）。
+    $(document).off('click.kimiApiFetch').on('click.kimiApiFetch', '#kimi_api_list .kimi-api-fetch', function () {
+        const i = Number($(this).attr('data-i'));
+        toggleModelsDropdown(i);
+    });
+    $(document).off('click.kimiApiModelOpt').on('click.kimiApiModelOpt', '#kimi_api_list .kimi-api-model-opt', function () {
+        const i = Number($(this).attr('data-i'));
+        const m = $(this).attr('data-model');
+        const e = settings.pool[i];
+        if (e && m) {
+            e.model = m;
+            saveSettingsDebounced();
+            // 同步该行 model 输入框（不整卡重渲染，避免下拉闪烁/丢焦点）
+            const inp = document.querySelector(`#kimi_api_list .kimi-api-model[data-i="${i}"]`);
+            if (inp) inp.value = m;
+        }
+        closeAllModelsDropdown();
+    });
+    // 点行外任意处收起所有模型下拉
+    $(document).off('click.kimiApiCloseModels').on('click.kimiApiCloseModels', function (ev) {
+        if (ev.target && ev.target.closest && ev.target.closest('.kimi-api-fetch, .kimi-api-models, .kimi-api-model-opt')) return;
+        closeAllModelsDropdown();
+    });
 }
 
 // 调试出口（CDP 测试用）
 window.__apiPoolDebug = { updateApiMenuItem,
   doSwitch, findNext, handleLimitHit, matchKeywords, settings, ageText, renderList,
+  toggleModelsDropdown, fetchModelsForRow, closeAllModelsDropdown,
   setGenerating: (v) => { generating = !!v; },
   simulateLimit: (reason) => { generating = true; handleLimitHit(reason || 'limit reached'); generating = false; },
   currentIndex, isCustomSource,
