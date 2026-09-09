@@ -1902,7 +1902,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.23'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.24'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2524,6 +2524,92 @@ function __kimiSvgIcon(ico, color) {
     return `<svg viewBox="${m.v}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:15px;height:15px;fill:${color || 'currentColor'};flex:none"><path d="${m.d}"/></svg>`;
 }
 
+// ===== 悬浮球火焰粒子（Canvas 2D；v1.37.24） =====
+// 每球一个 rAF 循环；canvas 从 DOM 移除(isConnected=false)即自停；页面切后台浏览器自动暂停 rAF。
+function startFlameBall(cv) {
+    try {
+        const ctx = cv.getContext('2d');
+        if (!ctx) return null;
+        const DPR = 2;
+        const S = 48;
+        cv.width = S * DPR; cv.height = S * DPR;
+        ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+        const CX = 24, CY = 25;      // 球心（略偏下，火苗向上冒）
+        const R = 20;
+        const parts = [];
+        const rand = (a, b) => a + Math.random() * (b - a);
+        let raf = 0;
+        function spawn() {
+            if (parts.length >= 46) return;
+            parts.push({
+                x: CX + rand(-8, 8),
+                y: CY + rand(-2, 7),
+                vx: rand(-0.3, 0.3),
+                vy: rand(-1.15, -0.35),
+                life: 0,
+                max: rand(30, 58),
+                r: rand(0.9, 2.2),
+                hue: rand(16, 52),
+            });
+        }
+        function tick() {
+            if (!cv.isConnected) return; // 球已销毁 → 自停
+            ctx.clearRect(0, 0, S, S);
+            // 球外底部/周围暖光晕（不裁切）
+            let g = ctx.createRadialGradient(CX, CY + 6, 1, CX, CY + 4, R + 8);
+            g.addColorStop(0, 'rgba(255,195,95,.55)');
+            g.addColorStop(0.55, 'rgba(255,130,35,.2)');
+            g.addColorStop(1, 'rgba(255,70,10,0)');
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(CX, CY + 4, R + 8, 0, 6.2832); ctx.fill();
+            // 圆形蒙版内绘制：本体渐变 + 粒子
+            ctx.save();
+            ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832); ctx.clip();
+            const body = ctx.createRadialGradient(CX - 6, CY - 9, 2, CX, CY, R);
+            body.addColorStop(0, '#fff3c0');
+            body.addColorStop(0.35, '#ffc94d');
+            body.addColorStop(0.72, '#ff7a1a');
+            body.addColorStop(1, '#b82608');
+            ctx.fillStyle = body;
+            ctx.fillRect(0, 0, S, S);
+            ctx.globalCompositeOperation = 'lighter';
+            for (let i = parts.length - 1; i >= 0; i--) {
+                const p = parts[i];
+                p.life++;
+                if (p.life >= p.max) { parts.splice(i, 1); continue; }
+                p.x += p.vx + Math.sin(p.life * 0.16 + p.x * 0.1) * 0.06;
+                p.y += p.vy;
+                const k = p.life / p.max;
+                const alpha = Math.sin(Math.PI * Math.min(k * 1.7, 1)) * 0.95;
+                const light = 90 - k * 60;
+                ctx.fillStyle = 'hsla(' + p.hue + ',100%,' + light + '%,' + alpha + ')';
+                ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(p.r * (1 - k * 0.45), 0.4), 0, 6.2832); ctx.fill();
+                if (k < 0.5 && p.r > 1.3) { // 中心白亮核
+                    ctx.fillStyle = 'hsla(45,100%,94%,' + alpha * 0.75 + ')';
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.42, 0, 6.2832); ctx.fill();
+                }
+            }
+            ctx.restore();
+            // 顶部外焰余辉（少量，飘到圆外一点点，增强"在烧"感）
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            for (const p of parts) {
+                if (p.y < CY - R + 3 && p.life > p.max * 0.45) {
+                    const k = p.life / p.max;
+                    ctx.fillStyle = 'hsla(' + p.hue + ',100%,75%,' + Math.sin(Math.PI * k) * 0.18 + ')';
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 1.6, 0, 6.2832); ctx.fill();
+                }
+            }
+            ctx.restore();
+            if (Math.random() < 0.85) spawn();
+            if (Math.random() < 0.35) spawn();
+            raf = requestAnimationFrame(tick);
+        }
+        raf = requestAnimationFrame(tick);
+        return { stop() { if (raf) cancelAnimationFrame(raf); } };
+    } catch (e) { return null; }
+}
+
 function updateComboFloat() {
     window.__kimiComboFloat = {
         showPsnap: !!settings.psnapShowFloat,
@@ -2546,7 +2632,7 @@ function updateComboFloat() {
     try { dockSt = JSON.parse(localStorage.getItem('kimi_combo_dock') || 'null'); } catch (e) { }
 
     const W = 48, HEAD = 48, ITEM = 38;
-    const DOCK_VIS = 26;                 // 吸附时露出的可视宽度（半圆多一点）
+    const DOCK_VIS = 18;                 // 吸附时露出的可视宽度（小把手，藏大半）
     const DOCK_EDGE = Math.round(W * 1.6); // 距边缘多少 px 内松手即吸附
     // 1.35.5 同 st-chat-sync 0.12.81: 恢复/默认位置统一 visual 视口坐标 JS 定位(手机端 CSS right/bottom 会落布局视口外→屏外看不到)
     // v1.37.23 手机悬浮球式边缘吸附：默认贴右靠上、露半截；拖到边缘自动吸住；点开先拉出再展开，收起若在附近再吸回
@@ -2601,11 +2687,15 @@ function updateComboFloat() {
         }
     } catch (e) { }
 
-    // 头部：拖拽把手 + 展开/收起（+ 上游徽标：最近一次实际路由，route-monitor 更新）
-    $box.append(`<div class="kcf-head" style="height:${HEAD}px;display:flex;align-items:center;justify-content:center;gap:2px;cursor:grab;font-size:15px;color:var(--SmartThemeBodyColor,#eee);transition:background .2s ease">
-        <span style="font-size:24px;line-height:1;cursor:pointer;filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))">🔥</span>
+    // 头部：Canvas 粒子火球（v1.37.24）+ 拖拽把手 + 展开/收起
+    $box.append(`<div class="kcf-head" style="position:relative;height:${HEAD}px;display:flex;align-items:center;justify-content:center;gap:2px;cursor:grab;color:var(--SmartThemeBodyColor,#eee)">
+        <canvas class="kcf-flame" width="48" height="48" style="position:absolute;left:0;top:0;width:48px;height:48px;pointer-events:none;display:block"></canvas>
+        <span class="kcf-flame-fallback" style="font-size:22px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))">🔥</span>
     </div>`);
-    setEmojiShift(dockSide); // 初始即吸附时，emoji 挪到露出的可见半区
+    // 火焰粒子启动；canvas 可用则隐藏 fallback emoji
+    const $flameCv = $box.find('.kcf-flame')[0];
+    const flameCtl = startFlameBall($flameCv);
+    if (flameCtl) $box.find('.kcf-flame-fallback').hide();
     let routeBadgeEl = null;
     if (settings.floatRouteBadge) {
         routeBadgeEl = $(`<div class="kcf-route" style="height:14px;display:none;align-items:center;justify-content:center;font-size:9px;line-height:1;opacity:.8;letter-spacing:-.2px;color:var(--SmartThemeQuoteColor,#f0a35e);border-top:1px solid rgba(128,128,128,.28);white-space:nowrap;overflow:hidden">—</div>`).appendTo($box);
@@ -2707,6 +2797,26 @@ function updateComboFloat() {
 
     // 点击头部：展开/收起（吸附态点开先拉回再展开，见 setExpanded）
     $box.find('.kcf-head').on('click.kc', function () { setExpanded(!expanded); });
+    // 桌面悬停把手：滑出整球（不展开）；移开且未展开则缩回吸附（触屏无 hover 不受影响）
+    let hoverDockTimer = null;
+    $box.find('.kcf-head').on('mouseenter.kc', function () {
+        if (hoverDockTimer) { clearTimeout(hoverDockTimer); hoverDockTimer = null; }
+        if (!dockSide || expanded) return;
+        const side = dockSide;
+        const vw = window.innerWidth;
+        const fullX = side === 'right' ? vw - W - 4 : 4;
+        $box.css({ left: fullX + 'px', right: 'auto', bottom: 'auto' });
+    });
+    $box.find('.kcf-head').on('mouseleave.kc', function () {
+        if (hoverDockTimer) { clearTimeout(hoverDockTimer); }
+        hoverDockTimer = setTimeout(() => {
+            hoverDockTimer = null;
+            if (!dockSide || expanded || dragging) return;
+            const side = dockSide;
+            const vw = window.innerWidth;
+            $box.css({ left: (side === 'right' ? vw - DOCK_VIS : -(W - DOCK_VIS)) + 'px', right: 'auto', bottom: 'auto' });
+        }, 450); // 短暂延迟防误缩：用户可能正从把手滑向整球再点
+    });
 
     // 点击条目：功能=直接执行（不折叠，方便连续用）；面板=同卡再点关闭、换卡切窗（保持展开）
     $items.find('.kcf-item').on('click.kc', function () {
