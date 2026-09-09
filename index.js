@@ -1902,7 +1902,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.24'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.25'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2524,85 +2524,96 @@ function __kimiSvgIcon(ico, color) {
     return `<svg viewBox="${m.v}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:15px;height:15px;fill:${color || 'currentColor'};flex:none"><path d="${m.d}"/></svg>`;
 }
 
-// ===== 悬浮球火焰粒子（Canvas 2D；v1.37.24） =====
-// 每球一个 rAF 循环；canvas 从 DOM 移除(isConnected=false)即自停；页面切后台浏览器自动暂停 rAF。
+// ===== 悬浮球：透明玻璃火球（Canvas 2D；v1.37.25） =====
+// 玻璃质感：极淡渐变球体 + 白色细边 + 左上高光 + 底部暖反光，背景透出页面；
+// 火焰粒子只在球内部自下而上燃烧（clip 圆内），球外完全透明。rAF 自停，后台自动暂停。
 function startFlameBall(cv) {
     try {
         const ctx = cv.getContext('2d');
         if (!ctx) return null;
         const DPR = 2;
-        const S = 48;
+        const S = Number(cv.getAttribute('width')) || 40; // 逻辑边长（canvas width 属性）
         cv.width = S * DPR; cv.height = S * DPR;
         ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-        const CX = 24, CY = 25;      // 球心（略偏下，火苗向上冒）
-        const R = 20;
+        const CX = S / 2, CY = S / 2;   // 球心居中
+        const R = S / 2 - 1.5;          // 玻璃半径（留边给描边）
         const parts = [];
         const rand = (a, b) => a + Math.random() * (b - a);
         let raf = 0;
         function spawn() {
-            if (parts.length >= 46) return;
+            if (parts.length >= 40) return;
+            const baseY = CY + R * rand(0.15, 0.55);      // 火从球内下半部起
             parts.push({
-                x: CX + rand(-8, 8),
-                y: CY + rand(-2, 7),
-                vx: rand(-0.3, 0.3),
-                vy: rand(-1.15, -0.35),
+                x: CX + rand(-R * 0.35, R * 0.35),
+                y: baseY,
+                vx: rand(-0.25, 0.25),
+                vy: rand(-1.05, -0.4),
                 life: 0,
-                max: rand(30, 58),
-                r: rand(0.9, 2.2),
-                hue: rand(16, 52),
+                max: rand(26, 52),
+                r: rand(0.7, 1.9),
+                hue: rand(10, 46),       // 红→橙黄 随机
             });
         }
         function tick() {
-            if (!cv.isConnected) return; // 球已销毁 → 自停
+            if (!cv.isConnected) return;
             ctx.clearRect(0, 0, S, S);
-            // 球外底部/周围暖光晕（不裁切）
-            let g = ctx.createRadialGradient(CX, CY + 6, 1, CX, CY + 4, R + 8);
-            g.addColorStop(0, 'rgba(255,195,95,.55)');
-            g.addColorStop(0.55, 'rgba(255,130,35,.2)');
-            g.addColorStop(1, 'rgba(255,70,10,0)');
-            ctx.fillStyle = g;
-            ctx.beginPath(); ctx.arc(CX, CY + 4, R + 8, 0, 6.2832); ctx.fill();
-            // 圆形蒙版内绘制：本体渐变 + 粒子
+            // 1) 玻璃底色（极淡，保持透明感：边缘一圈微白，中间全透）
+            const glass = ctx.createRadialGradient(CX, CY, R * 0.35, CX, CY, R);
+            glass.addColorStop(0, 'rgba(255,255,255,0)');
+            glass.addColorStop(0.85, 'rgba(255,255,255,0.035)');
+            glass.addColorStop(1, 'rgba(255,255,255,0.14)');
+            ctx.fillStyle = glass;
+            ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832); ctx.fill();
+            // 2) 内部火焰（裁在球内，火苗只占中下→上，顶部留透明）
             ctx.save();
-            ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832); ctx.clip();
-            const body = ctx.createRadialGradient(CX - 6, CY - 9, 2, CX, CY, R);
-            body.addColorStop(0, '#fff3c0');
-            body.addColorStop(0.35, '#ffc94d');
-            body.addColorStop(0.72, '#ff7a1a');
-            body.addColorStop(1, '#b82608');
-            ctx.fillStyle = body;
+            ctx.beginPath(); ctx.arc(CX, CY, R - 0.6, 0, 6.2832); ctx.clip();
+            // 底部一点内透火光（很淡，模拟玻璃被火焰照亮）
+            const glow = ctx.createRadialGradient(CX, CY + R * 0.55, 1, CX, CY + R * 0.3, R * 1.05);
+            glow.addColorStop(0, 'rgba(255,150,50,0.10)');
+            glow.addColorStop(1, 'rgba(255,120,30,0)');
+            ctx.fillStyle = glow;
             ctx.fillRect(0, 0, S, S);
             ctx.globalCompositeOperation = 'lighter';
             for (let i = parts.length - 1; i >= 0; i--) {
                 const p = parts[i];
                 p.life++;
                 if (p.life >= p.max) { parts.splice(i, 1); continue; }
-                p.x += p.vx + Math.sin(p.life * 0.16 + p.x * 0.1) * 0.06;
+                p.x += p.vx + Math.sin(p.life * 0.15 + p.x * 0.12) * 0.05;
                 p.y += p.vy;
                 const k = p.life / p.max;
-                const alpha = Math.sin(Math.PI * Math.min(k * 1.7, 1)) * 0.95;
-                const light = 90 - k * 60;
-                ctx.fillStyle = 'hsla(' + p.hue + ',100%,' + light + '%,' + alpha + ')';
-                ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(p.r * (1 - k * 0.45), 0.4), 0, 6.2832); ctx.fill();
-                if (k < 0.5 && p.r > 1.3) { // 中心白亮核
-                    ctx.fillStyle = 'hsla(45,100%,94%,' + alpha * 0.75 + ')';
-                    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.42, 0, 6.2832); ctx.fill();
+                const alpha = Math.sin(Math.PI * Math.min(k * 1.6, 1)) * 0.9;
+                // 底部白黄亮 → 中段橙 → 末端红并淡出，形成火苗纵向渐变
+                const light = k < 0.35 ? 88 - k * 60 : 70 - k * 45;
+                const sat = 100 - k * 15;
+                ctx.fillStyle = 'hsla(' + p.hue + ',' + sat + '%,' + Math.max(light, 15) + '%,' + alpha + ')';
+                ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(p.r * (1 - k * 0.5), 0.35), 0, 6.2832); ctx.fill();
+                if (k < 0.4 && p.r > 1.1) { // 火心白亮
+                    ctx.fillStyle = 'hsla(48,100%,95%,' + alpha * 0.7 + ')';
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.4, 0, 6.2832); ctx.fill();
                 }
             }
             ctx.restore();
-            // 顶部外焰余辉（少量，飘到圆外一点点，增强"在烧"感）
+            // 3) 玻璃描边（细白边，透明球轮廓）
+            ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832);
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            // 4) 左上高光（玻璃反光点）
             ctx.save();
-            ctx.globalCompositeOperation = 'lighter';
-            for (const p of parts) {
-                if (p.y < CY - R + 3 && p.life > p.max * 0.45) {
-                    const k = p.life / p.max;
-                    ctx.fillStyle = 'hsla(' + p.hue + ',100%,75%,' + Math.sin(Math.PI * k) * 0.18 + ')';
-                    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 1.6, 0, 6.2832); ctx.fill();
-                }
-            }
+            ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832); ctx.clip();
+            ctx.fillStyle = 'rgba(255,255,255,0.35)';
+            ctx.beginPath();
+            ctx.ellipse(CX - R * 0.42, CY - R * 0.5, R * 0.2, R * 0.13, -0.6, 0, 6.2832);
+            ctx.fill();
+            // 5) 底部暖反光（玻璃下缘被火映亮的一小弧）
+            const bottom = ctx.createRadialGradient(CX, CY + R * 0.75, 0.5, CX, CY + R * 0.72, R * 0.55);
+            bottom.addColorStop(0, 'rgba(255,170,90,0.16)');
+            bottom.addColorStop(1, 'rgba(255,150,60,0)');
+            ctx.fillStyle = bottom;
+            ctx.fillRect(0, 0, S, S);
             ctx.restore();
-            if (Math.random() < 0.85) spawn();
-            if (Math.random() < 0.35) spawn();
+            if (Math.random() < 0.8) spawn();
+            if (Math.random() < 0.3) spawn();
             raf = requestAnimationFrame(tick);
         }
         raf = requestAnimationFrame(tick);
@@ -2631,8 +2642,8 @@ function updateComboFloat() {
     let dockSt = null;
     try { dockSt = JSON.parse(localStorage.getItem('kimi_combo_dock') || 'null'); } catch (e) { }
 
-    const W = 48, HEAD = 48, ITEM = 38;
-    const DOCK_VIS = 18;                 // 吸附时露出的可视宽度（小把手，藏大半）
+    const W = 40, HEAD = 40, ITEM = 38;   // v1.37.25 球改小（透明玻璃火球）
+    const DOCK_VIS = 16;                 // 吸附时露出的可视宽度（小把手，藏大半）
     const DOCK_EDGE = Math.round(W * 1.6); // 距边缘多少 px 内松手即吸附
     // 1.35.5 同 st-chat-sync 0.12.81: 恢复/默认位置统一 visual 视口坐标 JS 定位(手机端 CSS right/bottom 会落布局视口外→屏外看不到)
     // v1.37.23 手机悬浮球式边缘吸附：默认贴右靠上、露半截；拖到边缘自动吸住；点开先拉出再展开，收起若在附近再吸回
@@ -2689,8 +2700,8 @@ function updateComboFloat() {
 
     // 头部：Canvas 粒子火球（v1.37.24）+ 拖拽把手 + 展开/收起
     $box.append(`<div class="kcf-head" style="position:relative;height:${HEAD}px;display:flex;align-items:center;justify-content:center;gap:2px;cursor:grab;color:var(--SmartThemeBodyColor,#eee)">
-        <canvas class="kcf-flame" width="48" height="48" style="position:absolute;left:0;top:0;width:48px;height:48px;pointer-events:none;display:block"></canvas>
-        <span class="kcf-flame-fallback" style="font-size:22px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))">🔥</span>
+        <canvas class="kcf-flame" width="40" height="40" style="position:absolute;left:0;top:0;width:40px;height:40px;pointer-events:none;display:block"></canvas>
+        <span class="kcf-flame-fallback" style="font-size:18px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))">🔥</span>
     </div>`);
     // 火焰粒子启动；canvas 可用则隐藏 fallback emoji
     const $flameCv = $box.find('.kcf-flame')[0];
