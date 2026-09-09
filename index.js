@@ -1902,7 +1902,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.29'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.30'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2562,8 +2562,8 @@ function startFlameBall(cv) {
             const glass = ctx.createRadialGradient(CX, CY, R * 0.2, CX, CY, R);
             glass.addColorStop(0, 'rgba(215,235,255,0.02)');   // 中心：极淡冷青（玻璃色）
             glass.addColorStop(0.78, 'rgba(215,235,255,0.03)');
-            glass.addColorStop(0.94, 'rgba(225,240,255,0.06)');
-            glass.addColorStop(1, 'rgba(240,248,255,0.10)');   // 外缘：一点点珠光
+            glass.addColorStop(0.94, 'rgba(225,240,255,0.08)');
+            glass.addColorStop(1, 'rgba(245,250,255,0.17)');   // 外缘：冷白折射光（柔和，非描边线）
             ctx.fillStyle = glass;
             ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832); ctx.fill();
             // 2) 内部火焰（裁在球内，火苗只占中下→上，顶部留透明）
@@ -2595,14 +2595,16 @@ function startFlameBall(cv) {
                 }
             }
             ctx.restore();
-            // 3) 玻璃装饰（玻璃珠质感：无描边线，用柔光/高光/暗影表现体积）
+            // 3) 玻璃装饰（玻璃珠质感：无线条，靠柔光/阴影/高光表现体积）
             ctx.save();
             ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.2832); ctx.clip();
-            // 3a) 内侧极柔暗影（贴边缘一圈 2px 的淡影给厚度，弱到只是"珠体感"）
-            ctx.beginPath(); ctx.arc(CX, CY, R - 0.6, 0, 6.2832);
-            ctx.strokeStyle = 'rgba(10,14,22,0.10)';
-            ctx.lineWidth = 1.8;
-            ctx.stroke();
+            // 3a) 下半部柔和体积阴影（非环线，仅底部渐变——给"珠体"感）
+            const sh = ctx.createRadialGradient(CX, CY + R * 0.5, R * 0.2, CX, CY + R * 0.55, R * 1.05);
+            sh.addColorStop(0, 'rgba(20,30,50,0.10)');
+            sh.addColorStop(0.6, 'rgba(20,30,50,0.04)');
+            sh.addColorStop(1, 'rgba(20,30,50,0)');
+            ctx.fillStyle = sh;
+            ctx.beginPath(); ctx.arc(CX, CY, R + 1, 0, 6.2832); ctx.fill();
             // 3b) 主高光：左上椭圆柔光（玻璃珠对光源的反光——小而集中的一团光晕）
             const hl = ctx.createRadialGradient(CX - R * 0.36, CY - R * 0.42, 0.5, CX - R * 0.36, CY - R * 0.42, R * 0.55);
             hl.addColorStop(0, 'rgba(255,255,255,0.42)');
@@ -2792,7 +2794,7 @@ function updateComboFloat() {
     function setExpanded(on) {
         expanded = on;
         const h = on ? rowCount * ITEM : 0;
-        // v1.37.29 磨砂玻璃下拉：毛玻璃只加在条目条(及路由徽标行)上，玻璃珠保持独立透明
+        // v1.37.30 展开 = 玻璃珠 + 一体磨砂玻璃卡（无描边线）：毛玻璃在卡上，卡顶自然衔接珠子
         const isLight = (() => {
             try {
                 const cs = getComputedStyle(document.body);
@@ -2800,28 +2802,20 @@ function updateComboFloat() {
                 return m ? (Number(m[1]) + Number(m[2]) + Number(m[3])) / 3 > 150 : false;
             } catch (e) { return false; }
         })();
-        const glassBg = isLight ? 'rgba(248,249,252,0.55)' : 'rgba(255,255,255,0.07)';
-        const glassLine = isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.12)';
-        $items.css({
-            height: h + 'px', opacity: on ? 1 : 0,
-            transition: 'height .22s ease, opacity .18s ease',
-            background: on ? glassBg : 'transparent',
-            'backdrop-filter': on ? 'blur(18px) saturate(1.35)' : 'none',
-            '-webkit-backdrop-filter': on ? 'blur(18px) saturate(1.35)' : 'none',
-            'border-top': on ? '1px solid ' + glassLine : 'none',
-        });
-        if (routeBadgeEl && routeBadgeEl.length) {
-            routeBadgeEl.css('display', on ? 'flex' : 'none');
-            routeBadgeEl.css(on ? { background: glassBg, 'backdrop-filter': 'blur(18px)', '-webkit-backdrop-filter': 'blur(18px)' } : { background: '', 'backdrop-filter': '', '-webkit-backdrop-filter': '' });
-        }
-        // 盒子本身只提供圆角与投影，不再整块糊毛玻璃
+        const glassBg = isLight
+            ? 'linear-gradient(180deg, rgba(255,255,255,0.68), rgba(255,255,255,0.42))'
+            : 'linear-gradient(180deg, rgba(44,50,62,0.62), rgba(26,29,38,0.46))';
+        const cardShadow = isLight
+            ? '0 0 0 1px rgba(0,0,0,0.05), 0 10px 26px rgba(0,0,0,0.14)'
+            : '0 0 0 1px rgba(255,255,255,0.07), 0 12px 30px rgba(0,0,0,0.35)';
+        // 珠子区域保持透明（珠子画在页面上），下方整卡一体磨砂
         $box.css(on ? {
             'background': 'transparent',
             'backdrop-filter': 'none',
             '-webkit-backdrop-filter': 'none',
-            'border-color': 'var(--SmartThemeBorderColor, rgba(255,255,255,.16))',
-            'box-shadow': '0 8px 26px rgba(0,0,0,.35)',
-            'border-radius': '20px',
+            'border-color': 'transparent',
+            'box-shadow': cardShadow,
+            'border-radius': '16px',
         } : {
             'background': 'transparent',
             'backdrop-filter': 'none',
@@ -2830,6 +2824,18 @@ function updateComboFloat() {
             'box-shadow': 'none',
             'border-radius': '50%',
         });
+        $items.css({
+            height: h + 'px', opacity: on ? 1 : 0,
+            transition: 'height .22s ease, opacity .18s ease',
+            background: on ? glassBg : 'transparent',
+            'backdrop-filter': on ? 'blur(22px) saturate(1.5)' : 'none',
+            '-webkit-backdrop-filter': on ? 'blur(22px) saturate(1.5)' : 'none',
+            'border-radius': on ? '0 0 15px 15px' : '0',
+        });
+        if (routeBadgeEl && routeBadgeEl.length) {
+            routeBadgeEl.css('display', on ? 'flex' : 'none');
+            routeBadgeEl.css(on ? { background: glassBg, 'backdrop-filter': 'blur(22px) saturate(1.5)', '-webkit-backdrop-filter': 'blur(22px) saturate(1.5)' } : { background: '', 'backdrop-filter': '', '-webkit-backdrop-filter': '' });
+        }
         // 1.35.8 cline 渠道(routeBadge)常态收起不可见, 点开才显示
         if (on) {
             pullOutOfDock(); // 吸附着点开 → 先拉回屏内完整，避免展开内容被屏外裁掉
