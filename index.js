@@ -1926,7 +1926,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.42'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.43'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2049,7 +2049,10 @@ async function doSelfUpdate(btn, remoteVer, auto) {
         combos = [mem].concat(combos.filter(c => !(c.n === mem.n && c.g === mem.g)));
     }
     let lastErr = null;
-    for (const c of combos) {
+    // v1.37.43 自动重试: 首次全灭后等 2s 再试一轮(救瞬时抖动/代理短暂不可用), 仍失败才提示
+    for (let __attempt = 0; __attempt < 2; __attempt++) {
+        if (__attempt > 0) { if (btn) btn.textContent = '⏳ 重试中…'; await new Promise((r) => setTimeout(r, 2000)); }
+        for (const c of combos) {
         let resp;
         try {
             resp = await fetch('/api/extensions/update', {
@@ -2084,12 +2087,13 @@ async function doSelfUpdate(btn, remoteVer, auto) {
         try { toastr.success('🔥 余温工具箱：已更新到 v' + remoteVer + '，即将自动刷新', null, { timeOut: 4000 }); } catch (e) { }
         window.__kimiCoordReload(3000); // 协调刷新：多插件并发更新时由最后完成者统一刷新
         return;
+        }
     }
     // v1.37.15：不再自动 delete+install 重装兜底——曾因 delete 路径/网络中断导致目录残缺，
     // manifest 损坏 → ST 加载不到扩展 → "工具箱消失"且重装提示已存在（用户群事故）。
     // update 全灭时只明确报错，让用户手动到扩展管理删除后重装（保留 git pull 的安全更新路径）。
     if (btn) { btn.disabled = false; btn.textContent = '⬆ 可更新'; }
-    const tip = auto ? '<br>将在下次启动时重试' : '<br>若持续失败，请到「管理扩展」删除本插件后用 https://gitee.com/satosaki/st-kimi-reasoning-injector.git 重新安装';
+    const tip = auto ? '<br>常见原因: 开了 VPN/代理时无法访问 Gitee 仓库——请关闭 VPN 后重启酒馆/重试' : '<br>常见原因: 开了 VPN/代理时无法访问 Gitee 仓库——请关闭 VPN 后重启酒馆/重试；仍失败可到「管理扩展」删除本插件后用 https://gitee.com/satosaki/st-kimi-reasoning-injector.git 重装';
     try { toastr.error('自动更新失败' + ((lastErr && lastErr.message) ? '：' + lastErr.message : '') + tip, null, { escapeHtml: false, timeOut: 8000 }); } catch (e2) { }
     console.warn('[余温工具箱] 自动更新失败（未执行重装，避免目录损坏）', lastErr);
 }
