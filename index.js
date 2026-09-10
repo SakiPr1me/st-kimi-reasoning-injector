@@ -161,7 +161,7 @@ const UI = {
         injectLabel: "注入破限：", injectStep1: "step 1：中破限·原生思维链夺舍（reasoning_content注入）", injectStep2: "step 2：强破限·正文输出思维链夺舍（partial注入）",
         injectTitle: "注入", modelTitle: "模型参数", rerollTitle: "自动重Roll/截断", autoStopTitle: "自动截断", beautifyTitle: "思维链美化折叠", fixTitle: "不常用", wordTitle: "替换（清理标签、烦人字）",
         targetLabel: "注入模式：", targetKimi: "KIMI 注入（默认，Meta 起手，<cot> 可注入）", targetDs: "DS 注入（We need 起手，触发 DS 最大思考，无 <cot>）",
-        targetCustom: "自定义", customAdd: "＋ 追加模板", customDel: "删除", customName: "自定义模板", customHint: "选中后可在 Reasoning Content 里直接编辑；切语言不会覆盖自定义内容。",
+        targetCustom: "自定义", customAdd: "＋ 追加模板", customDel: "删除", customName: "自定义模板", customHint: "选中后可在 Reasoning Content 里直接编辑；切语言不会覆盖自定义内容。", customNameLabel: "模板名：", customNamePh: "给这个模板起个名字…",
         rcLabel: "Reasoning Content：",
         usageTitle: "使用方法：", usage1: "· 只打开step 1：原生思维链不进正文，正文质量理论最高。有概率极端内容夺舍失败（AI 道歉），好在出现英文可手动截停，重roll可破，主要看渠道。", usage2: "· 同时打开step 1和step2：思维链放进正文，破限较强，稳定夺舍。有概率在思考完就截断。这种截断在使用无限能源时会扣费！", usage3: "⚠️注意：两种破限方式都需要搭配专用预设，渠道仅测试opencode，其它自测。",
         rerollSectionTitle: "自动重ROLL：", alertSectionTitle: "完成提醒：",
@@ -222,7 +222,7 @@ const UI = {
         injectLabel: "Injection Modes: ", injectStep1: "step 1: medium jailbreak - native CoT takeover (reasoning_content)", injectStep2: "step 2: strong jailbreak - body CoT takeover (partial)",
         injectTitle: "Injection", modelTitle: "Model Settings", rerollTitle: "Auto Reroll / Auto-Stop", autoStopTitle: "Auto-Stop", beautifyTitle: "CoT Fold Beautify", fixTitle: "Uncommon", wordTitle: "Replace (Cleanup Tags & Words)",
         targetLabel: "Injection Target: ", targetKimi: "KIMI Injection (default, Meta opener, <cot> allowed)", targetDs: "DS Injection (We need opener, triggers DS max thinking, no <cot>)",
-        targetCustom: "Custom", customAdd: "+ Add Template", customDel: "Delete", customName: "Custom Template", customHint: "Edit the content in Reasoning Content once selected; language switch won't touch custom content.",
+        targetCustom: "Custom", customAdd: "+ Add Template", customDel: "Delete", customName: "Custom Template", customHint: "Edit the content in Reasoning Content once selected; language switch won't touch custom content.", customNameLabel: "Name:", customNamePh: "Name this template...",
         rcLabel: "Reasoning Content: ",
         usageTitle: "Usage: ", usage1: "· Step 1 only: native CoT stays out of the body - theoretically best body quality. Extreme content may fail takeover (AI apologizes); stop manually if English thinking appears, reroll usually fixes it (depends on the channel).", usage2: "· Step 1 + Step 2: CoT goes into the body - stronger jailbreak, stable takeover. May stop right after thinking. That stop still costs tokens on unlimited-energy plans!", usage3: "⚠️ Both modes need the matching preset. Only tested on opencode channel.",
         rerollSectionTitle: "AUTO REROLL:", alertSectionTitle: "COMPLETION ALERT:",
@@ -282,7 +282,7 @@ const UI = {
         injectLabel: "주입 모드: ", injectStep1: "step 1: 중간 탈옥·네이티브 CoT 탈취 (reasoning_content)", injectStep2: "step 2: 강한 탈옥·본문 CoT 탈취 (partial)",
         injectTitle: "주입", modelTitle: "모델 설정", rerollTitle: "자동 reroll/자동 중단", autoStopTitle: "자동 중단", beautifyTitle: "CoT 접기 미화", fixTitle: "비상용", wordTitle: "치환 (태그·거슬리는 단어 정리)",
         targetLabel: "주입 대상: ", targetKimi: "KIMI 주입 (기본, Meta 시작, <cot> 가능)", targetDs: "DS 주입 (We need 시작, DS 최대 사고 유발, <cot> 없음)",
-        targetCustom: "커스텀", customAdd: "＋ 템플릿 추가", customDel: "삭제", customName: "커스텀 템플릿", customHint: "선택 후 Reasoning Content에서 직접 편집 가능. 언어 전환 시 커스텀 내용은 덮어쓰지 않습니다.",
+        targetCustom: "커스텀", customAdd: "＋ 템플릿 추가", customDel: "삭제", customName: "커스텀 템플릿", customHint: "선택 후 Reasoning Content에서 직접 편집 가능. 언어 전환 시 커스텀 내용은 덮어쓰지 않습니다.", customNameLabel: "템플릿 이름:", customNamePh: "이 템플릿 이름 지정...",
         rcLabel: "Reasoning Content: ",
         usageTitle: "사용법: ", usage1: "· step 1만: 네이티브 CoT가 본문에 안 들어가서 본문 품질이 이론상 최고. 극단적 내용은 탈취 실패(AI 사과) 가능성이 있고, 영어 사고가 나오면 수동 중단 + reroll로 해결(채널에 따라 다름).", usage2: "· step 1+2 동시: CoT가 본문에 들어가 탈옥이 강하고 안정적. 사고 직후 끊길 수 있음. 무제한 에너지 요금제에서는 이 끊김이 과금될 수 있음!", usage3: "⚠️ 두 방식 모두 전용 프리셋 필요. opencode 채널에서만 테스트됨.",
         rerollSectionTitle: "자동 REROLL:", alertSectionTitle: "완료 알림:",
@@ -1926,7 +1926,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.43'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.44'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -4564,6 +4564,10 @@ ${(settings.customPresets || []).map(p => {
 <button id="${extensionName}_add_custom" type="button" class="kimi-btn">${t('customAdd')}</button>
 <span class="kimi-hint">${t('customHint')}</span>
 </div>
+<div id="${extensionName}_custom_name_row" style="margin-top:5px;display:none;align-items:center;gap:6px">
+<label class="kimi-label" for="${extensionName}_custom_name" style="margin:0;white-space:nowrap">${t('customNameLabel')}</label>
+<input id="${extensionName}_custom_name" type="text" class="text_pole" style="flex:1;min-width:0" placeholder="${t('customNamePh')}"/>
+</div>
 
 <div class="kimi-sep"></div>
 
@@ -5335,32 +5339,74 @@ partial
         // 立即刷新预解析种子缓存：切模式后 seedResolved 与 settings.reasoningContent 同步，
         // 防止下次生成走「非标准路径」时注入旧种子（如 KIMI 种子残留）
         try { refreshSeed(); } catch (e) { console.warn('[余温工具箱] refreshSeed 失败:', e); }
+        try { customNameRowSync(); } catch (e) { } // 选中自定义模板 → 显示名字框；切走 → 隐藏
         saveSettingsDebounced();
         console.log("[余温工具箱] 注入模式切换为:", target, "| Reasoning Content 已更新");
     }
     // 事件委托：radio 组（含动态追加的自定义模板）；命名空间防重渲染重复绑定
     $(document).off('change.kimiTarget').on('change.kimiTarget', `input[name="${extensionName}_inject_target"]`, onInjectTargetChange);
 
+    // ===== 自定义模板命名（v1.37.44）：选中自定义模板时显示名字输入框，改名实时更新 radio 标签 =====
+    function selectedCustomId() {
+        const tgt = String(settings.injectTarget || '');
+        return tgt.startsWith('custom:') ? Number(tgt.slice(7)) : null;
+    }
+    function customNameRowSync() {
+        const row = document.getElementById(extensionName + '_custom_name_row');
+        const inp = document.getElementById(extensionName + '_custom_name');
+        if (!row || !inp) return;
+        const pid = selectedCustomId();
+        if (pid === null) { row.style.display = 'none'; return; }
+        const preset = (settings.customPresets || []).find(p => p.id === pid);
+        if (!preset) { row.style.display = 'none'; return; }
+        row.style.display = 'flex';
+        inp.value = String(preset.name || '');
+    }
+    // 渲染 radio 组的统一函数（追加/删除/改名后复用，避免三处重复模板串）
+    function renderTargetRadios() {
+        const radios = document.getElementById(extensionName + "_target_radios");
+        if (!radios) return;
+        const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        radios.innerHTML = [
+            `<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="kimi" ${settings.injectTarget === 'kimi' ? 'checked' : ''}/>KIMI</label>`,
+            `<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="ds" ${settings.injectTarget === 'ds' ? 'checked' : ''}/>DS</label>`,
+            ...(settings.customPresets || []).map(p => `<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="${extensionName}_inject_target" value="custom:${p.id}" ${settings.injectTarget === 'custom:' + p.id ? 'checked' : ''}/>${esc(String(p.name || t('customName')))} <span class="kimi-custom-del" data-id="${p.id}" title="${t('customDel')}">✕</span></label>`)
+        ].join('');
+        customNameRowSync();
+    }
+    // 模板名输入：写回 preset.name 并即时刷新 radio 标签
+    $("#" + extensionName + "_custom_name").on("input", function () {
+        const pid = selectedCustomId();
+        if (pid === null) return;
+        const preset = (settings.customPresets || []).find(p => p.id === pid);
+        if (!preset) return;
+        preset.name = $(this).val();
+        // 只更新对应 radio 标签文字，避免输入时重建导致失焦
+        const $lab = $(`input[name="${extensionName}_inject_target"][value="custom:${pid}"]`).closest('label');
+        const raw = String(preset.name || t('customName'));
+        const safe = raw.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        // 删掉旧文本节点（保留 input 与删除按钮），再把新名插到 input 之后
+        $lab.contents().filter(function () { return this.nodeType === 3; }).remove();
+        const $radio = $lab.find('input[type="radio"]');
+        if ($radio.length) $radio.after(document.createTextNode(' ' + safe + ' '));
+        else $lab.prepend(document.createTextNode(safe + ' '));
+        saveSettingsDebounced();
+    });
+
     // ===== 追加自定义模板：空白内容，选中后可自行填写 =====
     $("#" + extensionName + "_add_custom").on("click", function () {
         const customs = Array.isArray(settings.customPresets) ? settings.customPresets : [];
         const id = Date.now();
-        customs.push({ id: id, name: t('customName') + ' ' + (customs.length + 1), content: '' });
+        customs.push({ id: id, name: '', content: '' }); // 名字留空占位，由用户命名
         settings.customPresets = customs;
         settings.injectTarget = 'custom:' + id;
         settings.reasoningContent = '';
         $("#" + extensionName + "_reasoning_value").val('');
-        // 局部重渲染 radio 组（保持面板展开）
-        const radios = document.getElementById(extensionName + "_target_radios");
-        if (radios) {
-            radios.innerHTML = [
-                `<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="kimi" ${settings.injectTarget === 'kimi' ? 'checked' : ''}/>KIMI</label>`,
-                `<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="ds" ${settings.injectTarget === 'ds' ? 'checked' : ''}/>DS</label>`,
-                ...customs.map(p => `<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="${extensionName}_inject_target" value="custom:${p.id}" ${settings.injectTarget === 'custom:' + p.id ? 'checked' : ''}/>${String(p.name || t('customName')).replace(/</g, '&lt;')} <span class="kimi-custom-del" data-id="${p.id}" title="${t('customDel')}">✕</span></label>`)
-            ].join('');
-        }
+        renderTargetRadios();
         saveSettingsDebounced();
-        try { toastr.success('已追加空白模板，请在 Reasoning Content 中填写', '余温工具箱', { timeOut: 3000 }); } catch (e) {}
+        try { toastr.success('已追加空白模板，请先命名并填写 Reasoning Content', '余温工具箱', { timeOut: 3000 }); } catch (e) {}
+        // 聚焦名字框，方便立即命名
+        setTimeout(() => { try { document.getElementById(extensionName + '_custom_name')?.focus(); } catch (e) {} }, 50);
         // 追加后 content 为空：立即清掉种子缓存，避免注入旧种子
         try { refreshSeed(); } catch (e) { console.warn('[余温工具箱] refreshSeed 失败:', e); }
     });
@@ -5377,11 +5423,7 @@ partial
         }
         const radios = document.getElementById(extensionName + "_target_radios");
         if (radios) {
-            radios.innerHTML = [
-                `<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="kimi" ${settings.injectTarget === 'kimi' ? 'checked' : ''}/>KIMI</label>`,
-                `<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="ds" ${settings.injectTarget === 'ds' ? 'checked' : ''}/>DS</label>`,
-                ...(settings.customPresets || []).map(p => `<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="${extensionName}_inject_target" value="custom:${p.id}" ${settings.injectTarget === 'custom:' + p.id ? 'checked' : ''}/>${String(p.name || t('customName')).replace(/</g, '&lt;')} <span class="kimi-custom-del" data-id="${p.id}" title="${t('customDel')}">✕</span></label>`)
-            ].join('');
+            renderTargetRadios();
         }
         saveSettingsDebounced();
         // 删除模板后立即刷新种子缓存（若删的是当前选中模板，内容已回退 KIMI）
@@ -5622,6 +5664,7 @@ partial
     if (typeof bindCardMemory === 'function') bindCardMemory();
     // v1.37.39：浮窗开着时展开本设置面板 → 自动关浮窗（卡移回），避免主面板里"缺卡"
     if (typeof watchSettingsOpenClosesFloat === 'function') watchSettingsOpenClosesFloat();
+    try { customNameRowSync(); } catch (e) { } // v1.37.44 初始：当前若选中自定义模板则显示名字框
 }
 
 // 全局事件只绑定一次（语言切换重渲染 initSettingsPanel 时不会重复监听）
