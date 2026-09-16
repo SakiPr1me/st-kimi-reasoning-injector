@@ -37,7 +37,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-const PLUGIN_VERSION = '1.37.54'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.37.55'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -1529,11 +1529,13 @@ function handleEmptyReroll(messageId) {
 }
 
 // 刷新设置区「自动重roll」状态行（常驻显示连续次数，不弹窗）
-let judgedBranchKey = '';   // v1.37.54：同一条分支只判一次（防 ST 重渲染反复触发）
+let judgedBranchKey = '';   // v1.37.54：同一条分支只判一次（防 ST 重渲染反复触发）
+let deleteGuardUntil = 0;   // v1.37.55：删除分支/删除消息后的抑制窗口（删除不进入重roll判定，用户要求）
 // 判定「当前显示的这一条分支」（手动点分支 / 编辑后触发）：命中任一已勾选规则 → 发起重roll。
 // 与流式检测的区别：流式只判「本次新增的思维链」（避免旧内容误杀），这里判「这条分支的完整内容」——
 // 目的就是「用户看到的任何一条分支都不允许是英文思维链/无思维链/空回/半截楼/关键词」。
-function judgeDisplayedBranch(messageId) {
+function judgeDisplayedBranch(messageId) {
+if (Date.now() < deleteGuardUntil) return; // v1.37.55 删除后的抑制窗口内不做重roll判定
     if (!settings.enabled || settings.rerollPaused) return;
     if (isGenerating) return; // 生成中由流式检测负责
     try {
@@ -4077,7 +4079,8 @@ eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => { applyThinkingFo
 // 思维链美化折叠和 tps 会丢失 → 补刷新钩子
 eventSource.on(event_types.MESSAGE_SWIPED, (id) => { applyThinkingFold(id); showTpsForMessage(id); try { judgeDisplayedBranch(id); } catch (e) { } }); // v1.37.54 切分支后判定这条分支
 eventSource.on(event_types.MESSAGE_EDITED, (id) => { applyThinkingFold(id); showTpsForMessage(id); try { judgeDisplayedBranch(id); } catch (e) { } }); // v1.37.54
-eventSource.on(event_types.MESSAGE_DELETED, () => {
+eventSource.on(event_types.MESSAGE_DELETED, () => {
+deleteGuardUntil = Date.now() + 3000; judgedBranchKey = ''; // v1.37.55 删除分支/消息 → 3 秒内不做重roll判定（ST 删分支会切分支发 MESSAGE_SWIPED）
     // 删除后 ST 重渲染全部消息：逐个补折叠 + tps
     document.querySelectorAll('#chat .mes').forEach(mesEl => {
         const mesid = mesEl.getAttribute('mesid');
