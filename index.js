@@ -4,7 +4,8 @@ import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../
 import { toggleDrawer } from "../../../utils.js";
 import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js";
-import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
+i
+import { createRerollGuard } from "./reroll-guard.js"; // v1.37.52
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 
 
@@ -36,7 +37,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-const PLUGIN_VERSION = '1.37.51'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.37.52'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -972,7 +973,10 @@ let autoRerollCount = 0;
 let lastAutoRerollMessageId = -1;
 let lastAutoRerollTime = 0;
 let earlyStopTriggered = false;      // 流式中已触发截断（防重复 stopGeneration）
-let earlyRerollMessageId = -1;       // 已被流式截断、需要强制重roll的消息id
+l
+let rerollGuard = createRerollGuard();   // v1.37.52：截断后「待新分支」状态（确认进入分支后一直等，不盲等出字）
+function curChatKey() { try { const c = (typeof window !== "undefined" && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null; return String(c?.chatId || c?.chat?.length || ""); } catch (e) { return ""; } }
+setInterval(() => { try { const __id = rerollGuard.shouldFallback(Date.now(), curChatKey()); if (__id < 0) return; if (!settings.enabled || settings.rerollPaused) return; if (autoRerollCount >= settings.autoRerollLimit) return; if (rerollFiredThisGen) return; rerollFiredThisGen = true; autoRerollCount++; try { updateRerollStatus(); } catch (e) { } try { console.log("[余温工具箱] 截断后未进入新分支（无自动重roll事件）→ 兜底触发一次 swipe，消息#" + __id); } catch (e) { } triggerAutoSwipe(__id); } catch (e) { } }, 500);
 let streamGotToken = false;          // 本次生成是否收到过 token（空回检测用）
 let manualStopClicked = false;       // 用户点了 ST 停止按钮（#mes_stop）→ 手动停止，不判空回
 let isGenerating = false;           // 是否正在生成（防止历史加载 MESSAGE_RECEIVED 误判空回）
@@ -1144,8 +1148,8 @@ function checkStreamingAbort(messageId) {
             try { stopped = stopGeneration(); } catch (e) { console.warn('[余温工具箱] 截断失败:', e); }
             if (stopped) {
                 earlyStopTriggered = true;
-                earlyRerollMessageId = messageId;
-                earlyRerollHandled = false;
+                e
+                try { rerollGuard.arm(messageId, curChatKey(), Date.now(), 2500); } catch (e) { }
                 console.log(`[余温工具箱] 流式中${stopReason} → 截断生成`);
                 // 保险：若截断后 MESSAGE_RECEIVED 没触发（异常情况），10 秒后清标记
                 setTimeout(() => { earlyStopTriggered = false; earlyRerollMessageId = -1; }, 10000);
@@ -4020,7 +4024,8 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     }
     console.log('[余温工具箱] GENERATION_STARTED');
     genStartAt = Date.now();        // 记录本次生成开始时间（流式检测只认本次生成的消息）
-    pendingSwipeConfirm = -1;    // 已进入真实生成 → 自动 swipe 确认成功（watchdog 不再兜底）
+    p
+    try { rerollGuard.confirmBranch(); } catch (e) { } // v1.37.52 真实生成开始 = 已进入新分支
     autoSwipeBusy = false;       // v1.37.34 真实生成已开始 → 释放自动swipe防重入锁
     lastGenManuallyStopped = false;
     rerollFiredThisGen = false;
