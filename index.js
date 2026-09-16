@@ -4,8 +4,8 @@ import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../
 import { toggleDrawer } from "../../../utils.js";
 import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js";
-i
-import { createRerollGuard } from "./reroll-guard.js"; // v1.37.52
+import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
+import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 
 
@@ -37,7 +37,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-const PLUGIN_VERSION = '1.37.53'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.37.54'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -973,8 +973,8 @@ let autoRerollCount = 0;
 let lastAutoRerollMessageId = -1;
 let lastAutoRerollTime = 0;
 let earlyStopTriggered = false;      // 流式中已触发截断（防重复 stopGeneration）
-l
-let rerollGuard = createRerollGuard();   // v1.37.52：截断后「待新分支」状态（确认进入分支后一直等，不盲等出字）
+let earlyRerollMessageId = -1;       // 已被流式截断、需要强制重roll的消息id
+let rerollGuard = createRerollGuard();   // v1.37.54：截断后「待新分支」状态（确认进入分支后一直等，不盲等出字）
 function curChatKey() { try { const c = (typeof window !== "undefined" && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null; return String(c?.chatId || c?.chat?.length || ""); } catch (e) { return ""; } }
 setInterval(() => { try { const __id = rerollGuard.shouldFallback(Date.now(), curChatKey()); if (__id < 0) return; if (!settings.enabled || settings.rerollPaused) return; if (autoRerollCount >= settings.autoRerollLimit) return; if (rerollFiredThisGen) return; rerollFiredThisGen = true; autoRerollCount++; try { updateRerollStatus(); } catch (e) { } try { console.log("[余温工具箱] 截断后未进入新分支（无自动重roll事件）→ 兜底触发一次 swipe，消息#" + __id); } catch (e) { } triggerAutoSwipe(__id); } catch (e) { } }, 500);
 let streamGotToken = false;          // 本次生成是否收到过 token（空回检测用）
@@ -1148,8 +1148,9 @@ function checkStreamingAbort(messageId) {
             try { stopped = stopGeneration(); } catch (e) { console.warn('[余温工具箱] 截断失败:', e); }
             if (stopped) {
                 earlyStopTriggered = true;
-                e
-                try { rerollGuard.arm(messageId, curChatKey(), Date.now(), 2500); } catch (e) { }
+                earlyRerollMessageId = messageId;
+                try { rerollGuard.arm(messageId, curChatKey(), Date.now(), 2500); } catch (e) { } // v1.37.54
+                earlyRerollHandled = false;
                 console.log(`[余温工具箱] 流式中${stopReason} → 截断生成`);
                 // 保险：若截断后 MESSAGE_RECEIVED 没触发（异常情况），10 秒后清标记
                 setTimeout(() => { earlyStopTriggered = false; earlyRerollMessageId = -1; }, 10000);
@@ -1301,9 +1302,9 @@ function checkNativeReroll(messageId) {
                 lastAutoRerollTime = now;
                 console.log(`[余温工具箱] 检测到${reason}，自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${messageId}`);
                 rerollFiredThisGen = true;
-                notifyReroll(`🔄 自动重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}（${reason}）`);
+                notifyReroll(`🔄 自动重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}（${reason}）`);
+                try { rerollGuard.arm(messageId, curChatKey(), Date.now(), 2500); } catch (e) { } // v1.37.54
                 updateRerollStatus();
-                try { rerollGuard.arm(messageId, curChatKey(), Date.now(), 2500); } catch (e) { } // v1.37.53
                 triggerAutoSwipe(messageId);
             } else {
                 // 达到连续上限：暂停（不重置计数，避免反复刷）；等一条通过检测的消息把计数归零
@@ -1521,13 +1522,82 @@ function handleEmptyReroll(messageId) {
     lastAutoRerollMessageId = messageId;
     lastAutoRerollTime = Date.now();
     console.log(`[余温工具箱] 空回（零token）→ 自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${messageId}`);
-    notifyReroll(`🔄 空回自动重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
+    notifyReroll(`🔄 空回自动重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
+    try { rerollGuard.arm(messageId, curChatKey(), Date.now(), 2500); } catch (e) { } // v1.37.54
     updateRerollStatus();
-    try { rerollGuard.arm(messageId, curChatKey(), Date.now(), 2500); } catch (e) { } // v1.37.53
     triggerAutoSwipe(messageId);
 }
 
 // 刷新设置区「自动重roll」状态行（常驻显示连续次数，不弹窗）
+let judgedBranchKey = '';   // v1.37.54：同一条分支只判一次（防 ST 重渲染反复触发）
+// 判定「当前显示的这一条分支」（手动点分支 / 编辑后触发）：命中任一已勾选规则 → 发起重roll。
+// 与流式检测的区别：流式只判「本次新增的思维链」（避免旧内容误杀），这里判「这条分支的完整内容」——
+// 目的就是「用户看到的任何一条分支都不允许是英文思维链/无思维链/空回/半截楼/关键词」。
+function judgeDisplayedBranch(messageId) {
+    if (!settings.enabled || settings.rerollPaused) return;
+    if (isGenerating) return; // 生成中由流式检测负责
+    try {
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        const msg = ctx?.chat?.[messageId];
+        if (!msg || msg.is_user || msg.is_system) return;
+        const mes = String(msg.mes ?? '');
+        const reasoning = String(msg.extra?.reasoning ?? '').trim();
+        const key = messageId + '|' + (msg.swipe_id ?? 0) + '|' + ((msg.swipes && msg.swipes.length) || 0) + '|' + mes.length + '|' + reasoning.length;
+        if (judgedBranchKey === key) return; // 同一条分支已判过，不重复触发
+        const modes = Array.isArray(settings.injectModes) ? settings.injectModes : [];
+        const marker = settings.foldMarker || '<scene>';
+        if (settings.rerollOnEmpty && (mes.trim() === '' || mes.trim() === '...')) {
+            judgedBranchKey = key;
+            console.log('[余温工具箱] 切分支判定：该分支为空回 → 重roll（消息#' + messageId + '）');
+            maybeRerollBranch(messageId);
+            return;
+        }
+        if (settings.rerollOnEnglishThinking && settings.injectTarget === 'kimi' && !seedIsEnglish() && reasoning.length > 0 && startsWithEnglish(reasoning)) {
+            judgedBranchKey = key;
+            console.log('[余温工具箱] 切分支判定：该分支思维链是英文 → 重roll（消息#' + messageId + '）');
+            maybeRerollBranch(messageId);
+            return;
+        }
+        if (settings.rerollOnNoThinking && (modes.includes('reasoning_content') || modes.includes('partial')) && reasoning.length === 0 && mes.length > 0 && mes.lastIndexOf(marker) === 0) {
+            judgedBranchKey = key;
+            console.log('[余温工具箱] 切分支判定：无思维链直接出正文 → 重roll（消息#' + messageId + '）');
+            maybeRerollBranch(messageId);
+            return;
+        }
+        const stopMarker = String(settings.autoStopMarker || '').trim();
+        if (settings.rerollOnNoMutter && stopMarker && mes.length > 0 && !mes.includes(stopMarker)) {
+            judgedBranchKey = key;
+            console.log('[余温工具箱] 切分支判定：无截断标记（半截楼）→ 重roll（消息#' + messageId + '）');
+            maybeRerollBranch(messageId);
+            return;
+        }
+        if (settings.rerollOnKeyword !== false) {
+            const kwRaw = String(settings.rerollKeywords ?? '').trim();
+            if (kwRaw) {
+                const kws = kwRaw.split(',').map(k => k.trim()).filter(Boolean);
+                const hay = (reasoning + '\n' + mes).toLowerCase();
+                const hitKw = kws.find(k => k && hay.includes(k.toLowerCase()));
+                if (hitKw) {
+                    judgedBranchKey = key;
+                    console.log('[余温工具箱] 切分支判定：命中关键词「' + hitKw + '」→ 重roll（消息#' + messageId + '）');
+                    maybeRerollBranch(messageId);
+                    return;
+                }
+            }
+        }
+    } catch (e) { }
+}
+function maybeRerollBranch(messageId) {
+    if (!settings.enabled || settings.rerollPaused) return;
+    if (autoRerollCount >= settings.autoRerollLimit) return;
+    autoRerollCount++;
+    lastAutoRerollMessageId = messageId;
+    lastAutoRerollTime = Date.now();
+    rerollFiredThisGen = true;
+    try { updateRerollStatus(); } catch (e) { }
+    try { rerollGuard.arm(messageId, curChatKey(), Date.now(), 2500); } catch (e) { }
+    triggerAutoSwipe(messageId);
+}
 function updateRerollStatus() {
     const el = document.getElementById(`${extensionName}_reroll_status`);
     if (!el) return;
@@ -4005,8 +4075,8 @@ eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => { applyThinkingFo
 
 // v1.12.3：手动 swipe / 编辑 / 删除后的重渲染不触发 CHARACTER_MESSAGE_RENDERED，
 // 思维链美化折叠和 tps 会丢失 → 补刷新钩子
-eventSource.on(event_types.MESSAGE_SWIPED, (id) => { applyThinkingFold(id); showTpsForMessage(id); });
-eventSource.on(event_types.MESSAGE_EDITED, (id) => { applyThinkingFold(id); showTpsForMessage(id); });
+eventSource.on(event_types.MESSAGE_SWIPED, (id) => { applyThinkingFold(id); showTpsForMessage(id); try { judgeDisplayedBranch(id); } catch (e) { } }); // v1.37.54 切分支后判定这条分支
+eventSource.on(event_types.MESSAGE_EDITED, (id) => { applyThinkingFold(id); showTpsForMessage(id); try { judgeDisplayedBranch(id); } catch (e) { } }); // v1.37.54
 eventSource.on(event_types.MESSAGE_DELETED, () => {
     // 删除后 ST 重渲染全部消息：逐个补折叠 + tps
     document.querySelectorAll('#chat .mes').forEach(mesEl => {
@@ -4026,8 +4096,8 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     }
     console.log('[余温工具箱] GENERATION_STARTED');
     genStartAt = Date.now();        // 记录本次生成开始时间（流式检测只认本次生成的消息）
-    p
-    try { rerollGuard.confirmBranch(); } catch (e) { } // v1.37.52 真实生成开始 = 已进入新分支
+    pendingSwipeConfirm = -1;    // 已进入真实生成 → 自动 swipe 确认成功（watchdog 不再兜底）
+try { rerollGuard.confirmBranch(); } catch (e) { } // v1.37.54 真实生成开始 = 已进入新分支
     autoSwipeBusy = false;       // v1.37.34 真实生成已开始 → 释放自动swipe防重入锁
     lastGenManuallyStopped = false;
     rerollFiredThisGen = false;
