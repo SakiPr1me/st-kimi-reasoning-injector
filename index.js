@@ -992,7 +992,8 @@ let rerollFiredThisGen = false;      // 总闸：本次生成是否已触发过�
 let pendingSwipeConfirm = -1;
 // v1.37.47 伪重roll 闸门：记录"上一次 swipe 前"的分支状态；下一次重roll 前必须核验"真的开出了新分支"，
 // 没有（伪重roll）→ 不再重复重roll，杜绝"没进新分支却反复检测同一条"的无限空转。
-let swipeBranchGate = null; // { msgId, swipes, swipeId }        // 最近一次自动 swipe 的目标消息 id：等待真实 GENERATION_STARTED 确认（防 ST Swiping back 假成功导致总闸卡死）
+let swipeBranchGate = null; // { msgId, swipes, swipeId }
+let fakeSwipeStreak = 0;    // v1.37.48 连续伪重roll 次数：伪重roll 时自动重试 swipe，连续达上限才暂停（不叫用户手动）        // 最近一次自动 swipe 的目标消息 id：等待真实 GENERATION_STARTED 确认（防 ST Swiping back 假成功导致总闸卡死）
 let autoSwipeBusy = false;           // v1.37.34 自动 swipe 防重入锁：ENDED 兜底与 MESSAGE_RECEIVED 并发触发 triggerAutoSwipe 时，
                                     // 只执行一次 doSwipe，防止对同一消息连续 swipe → ST "Swipe failed, Swiping back" 回滚 → 新分支开不成 → 检测停摆。
 
@@ -1344,11 +1345,20 @@ async function triggerAutoSwipe(messageId) {
             const advanced = !!gm && (nowN > g.swipes || nowId !== g.swipeId);
             swipeBranchGate = null;
             if (!advanced) {
-                console.log('[余温工具箱] 上一轮 swipe 未真正开出新分支（伪重roll）→ 停止重复重roll（等新分支 / 请手动切一次分支）');
+                // 伪重roll：不占额度、并且"自己想办法进去"——自动重试 swipe（带间隔 + 连续上限，防真·死循环）
                 if (autoRerollCount > 0) { autoRerollCount--; } // 伪重roll 不占额度
-                if (!rerollBlockedNotified) { rerollBlockedNotified = true; try { notifyReroll('⚠ 上一轮重roll没换成新分支，已停止自动重roll（请手动切一次分支或检查渠道）', 'error'); } catch (e) { } }
+                fakeSwipeStreak++;
+                console.log('[余温工具箱] 上一轮 swipe 未真正开出新分支（伪重roll）→ 自动重试 swipe（连续伪重roll ' + fakeSwipeStreak + '/8）');
                 try { updateRerollStatus(); } catch (e) { }
-                return;
+                if (fakeSwipeStreak >= 8) {
+                    fakeSwipeStreak = 0;
+                    console.log('[余温工具箱] 连续 8 次伪重roll → 暂停自动重roll（等下一轮真实生成/渠道恢复）');
+                    try { notifyReroll('⚠ 连续 8 次重roll都没能开出新分支，已暂停自动重roll（渠道/ST 状态异常时可能如此）', 'error'); } catch (e) { }
+                    return;
+                }
+                await new Promise(function (r) { setTimeout(r, 700); }); // 等 ST 收尾后重试
+            } else {
+                fakeSwipeStreak = 0;
             }
         } catch (e) { swipeBranchGate = null; }
     }
@@ -1963,7 +1973,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.47'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.48'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
