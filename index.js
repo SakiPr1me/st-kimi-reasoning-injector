@@ -37,7 +37,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-const PLUGIN_VERSION = '1.37.57'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.37.58'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -1386,6 +1386,20 @@ async function triggerAutoSwipe(messageId) {
             return;
         }
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        // v1.37.58：ST 正在做 swipe 动画（或正在编辑消息）时绝不插队 ——
+        // 用户手动左滑查看旧分支的动画期间（MESSAGE_SWIPED 就是在这期间发出的）插件若发 swipe，
+        // 会覆盖用户这次切换（现象：点了上一条分支，界面立刻被顶回下一条）。
+        // ST 状态机：ctx.swipe.state() 取值 none / swiping / editing（constants.js SWIPE_STATE）。
+        try {
+            const swState = (ctx && ctx.swipe && typeof ctx.swipe.state === 'function') ? ctx.swipe.state() : '';
+            if (swState && swState !== 'none') {
+                console.log('[余温工具箱] ST 正在 swipe/编辑中（state=' + swState + '）→ 取消本次自动 swipe（不插队）');
+                try { rerollGuard.clear(); } catch (e) { }
+                rerollFiredThisGen = false;
+                releaseBusy();
+                return;
+            }
+        } catch (e) { }
         const chat = ctx?.chat;
         if (!chat || chat.length === 0) { releaseBusy(); return; }
         const lastId = chat.length - 1;
@@ -1588,18 +1602,16 @@ if (Date.now() < deleteGuardUntil) return; // v1.37.55 删除后的抑制窗口�
     // v1.37.56（根因修复）：只判定「数据上真的是这一条分支」的时候。
     // 依据（ST 1.19 script.js 10271-10324 animateSwipe）：
     //   MESSAGE_SWIPED 是在【新分支 load 之前、Generate 之前】就发出的（10315 行 emit，10319 行才 Generate）。
-    //   此时 chat[id] 还是上一条分支的内容、swipe_id 已指向"尚未创建的槽"（swipe_id === swipes.length）。
-    // 若在这时候判定，就会把上一条分支（例如刚被截断的关键词分支）当成"当前显示的分支"再开一次重roll，
-    // 造成：多开分支 / 等用户这次生成跑完再补一刀 swipe（用户现象"卡一会然后自动终止回复"）/
-    //      新分支被 Swiping back 冲成空回而且不再重roll。
-    // 切到"已存在的分支"时 ST 会先 loadFromSwipeId（swipe_id 落在 swipes 范围内），因此不受影响。
+    //   此时 chat[id] 还是上一条分支的内容、swipe_id 已指向「尚未创建的槽」（swipe_id === swipes.length）。
+    // 若在这时候判定，就会把上一条分支（例如刚被截断的关键词分支）当成「当前显示的分支」再开一次重roll。
+    // 切到「已存在的分支」时 ST 会先 loadFromSwipeId（swipe_id 落在 swipes 范围内），因此不受影响。
     try {
         const ctx0 = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const m0 = ctx0?.chat?.[messageId];
         if (!m0 || m0.is_user || m0.is_system) return;
         const sw = Array.isArray(m0.swipes) ? m0.swipes : null;
         const sid = (typeof m0.swipe_id === 'number') ? m0.swipe_id : -1;
-        if (!sw || sid < 0 || sid >= sw.length) return; // 新分支槽还没建/正在动画 → 现在判的不是"这条分支"
+        if (!sw || sid < 0 || sid >= sw.length) return; // 新分支槽还没建/正在动画 → 现在判的不是「这条分支」
     } catch (e) { }
     if (is_send_press) return; // ST 正在生成（本次 swipe 会开新生成）→ 交给流式检测，绝不在此发起 swipe
     try {
@@ -1609,60 +1621,46 @@ if (Date.now() < deleteGuardUntil) return; // v1.37.55 删除后的抑制窗口�
         const mes = String(msg.mes ?? '');
         const reasoning = String(msg.extra?.reasoning ?? '').trim();
         const key = messageId + '|' + (msg.swipe_id ?? 0) + '|' + ((msg.swipes && msg.swipes.length) || 0) + '|' + mes.length + '|' + reasoning.length;
-        if (judgedBranchKey === key) return; // 同一条分支已判过，不重复触发
+        if (judgedBranchKey === key) return; // 同一条分支已判过/已提示过，不重复
         const modes = Array.isArray(settings.injectModes) ? settings.injectModes : [];
         const marker = settings.foldMarker || '<scene>';
-        if (settings.rerollOnEmpty && (mes.trim() === '' || mes.trim() === '...')) {
-            judgedBranchKey = key;
-            console.log('[余温工具箱] 切分支判定：该分支为空回 → 重roll（消息#' + messageId + '）');
-            maybeRerollBranch(messageId);
-            return;
-        }
+        const stopMarker0 = String(settings.autoStopMarker || '').trim();
+        // v1.37.58（用户拍板）：判定规则不变，但**只提示、不自动动**。
+        // 现象：停止重roll 后点开上一条分支查看，旧逻辑命中即发一次右滑 → 界面被顶回下一条分支。
+        // 规格：楼已经出完时「换不换」由用户决定（点「开新分支」/「重新生成」），插件只把问题指出来。
+        let hitReason = '';
         if (settings.rerollOnEnglishThinking && settings.injectTarget === 'kimi' && !seedIsEnglish() && reasoning.length > 0 && startsWithEnglish(reasoning)) {
-            judgedBranchKey = key;
-            console.log('[余温工具箱] 切分支判定：该分支思维链是英文 → 重roll（消息#' + messageId + '）');
-            maybeRerollBranch(messageId);
-            return;
-        }
-        if (settings.rerollOnNoThinking && (modes.includes('reasoning_content') || modes.includes('partial')) && reasoning.length === 0 && mes.length > 0 && mes.lastIndexOf(marker) === 0) {
-            judgedBranchKey = key;
-            console.log('[余温工具箱] 切分支判定：无思维链直接出正文 → 重roll（消息#' + messageId + '）');
-            maybeRerollBranch(messageId);
-            return;
-        }
-        const stopMarker = String(settings.autoStopMarker || '').trim();
-        if (settings.rerollOnNoMutter && stopMarker && mes.length > 0 && !mes.includes(stopMarker)) {
-            judgedBranchKey = key;
-            console.log('[余温工具箱] 切分支判定：无截断标记（半截楼）→ 重roll（消息#' + messageId + '）');
-            maybeRerollBranch(messageId);
-            return;
-        }
-        if (settings.rerollOnKeyword !== false) {
+            hitReason = '的思维链是英文（夺舍失败）';
+        } else if (settings.rerollOnNoThinking && (modes.includes('reasoning_content') || modes.includes('partial')) && reasoning.length === 0 && mes.length > 0 && mes.lastIndexOf(marker) === 0) {
+            hitReason = '没有思维链就直接出正文';
+        } else if (settings.rerollOnNoMutter && stopMarker0 && mes.length > 0 && !mes.includes(stopMarker0)) {
+            hitReason = '没有收尾标记（可能是半截楼）';
+        } else if (settings.rerollOnKeyword !== false) {
             const kwRaw = String(settings.rerollKeywords ?? '').trim();
             if (kwRaw) {
                 const kws = kwRaw.split(',').map(k => k.trim()).filter(Boolean);
                 const hay = (reasoning + '\n' + mes).toLowerCase();
                 const hitKw = kws.find(k => k && hay.includes(k.toLowerCase()));
-                if (hitKw) {
-                    judgedBranchKey = key;
-                    console.log('[余温工具箱] 切分支判定：命中关键词「' + hitKw + '」→ 重roll（消息#' + messageId + '）');
-                    maybeRerollBranch(messageId);
-                    return;
-                }
+                if (hitKw) hitReason = '命中了关键词「' + hitKw + '」';
             }
+        }
+        if (!hitReason && settings.rerollOnEmpty && (mes.trim() === '' || mes.trim() === '...')) hitReason = '是空回（没有正文）';
+        if (hitReason) {
+            judgedBranchKey = key; // 同一条分支只提示一次
+            console.log('[余温工具箱] 切分支判定：这条分支' + hitReason + ' → 只提示、不自动重roll（要换掉它请点「开新分支」或「重新生成」）');
+            showBranchHint(hitReason);
         }
     } catch (e) { }
 }
-function maybeRerollBranch(messageId) {
-    if (!settings.enabled || settings.rerollPaused) return;
-    if (autoRerollCount >= settings.autoRerollLimit) return;
-    autoRerollCount++;
-    lastAutoRerollMessageId = messageId;
-    lastAutoRerollTime = Date.now();
-    rerollFiredThisGen = true;
-    try { updateRerollStatus(); } catch (e) { }
-    try { rerollGuard.arm(messageId, curChatKey(), Date.now(), 2500); } catch (e) { }
-    triggerAutoSwipe(messageId);
+// v1.37.58：手动切分支 → 只弹提示横幅，绝不自己 swipe（旧行为会把用户顶回下一条分支）。
+// 想恢复「切分支自动重roll」：把上面 showBranchHint(hitReason) 换成 maybeRerollBranch(messageId)，
+// 旧实现见 git 历史 fcb245c 的 index.js。
+function showBranchHint(reason) {
+    try { notifyReroll('⚠️ 这条分支' + reason + '，要换掉它请点「开新分支」或「重新生成」', 'info'); } catch (e) { }
+    try {
+        if (rerollBannerHideTimer) clearTimeout(rerollBannerHideTimer);
+        rerollBannerHideTimer = setTimeout(() => { rerollBannerHideTimer = null; clearRerollBanner(); }, 9000);
+    } catch (e) { }
 }
 function updateRerollStatus() {
     const el = document.getElementById(`${extensionName}_reroll_status`);
