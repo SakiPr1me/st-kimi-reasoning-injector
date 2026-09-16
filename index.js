@@ -37,7 +37,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-const PLUGIN_VERSION = '1.37.52'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.37.53'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -1303,6 +1303,7 @@ function checkNativeReroll(messageId) {
                 rerollFiredThisGen = true;
                 notifyReroll(`🔄 自动重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}（${reason}）`);
                 updateRerollStatus();
+                try { rerollGuard.arm(messageId, curChatKey(), Date.now(), 2500); } catch (e) { } // v1.37.53
                 triggerAutoSwipe(messageId);
             } else {
                 // 达到连续上限：暂停（不重置计数，避免反复刷）；等一条通过检测的消息把计数归零
@@ -1522,6 +1523,7 @@ function handleEmptyReroll(messageId) {
     console.log(`[余温工具箱] 空回（零token）→ 自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${messageId}`);
     notifyReroll(`🔄 空回自动重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
     updateRerollStatus();
+    try { rerollGuard.arm(messageId, curChatKey(), Date.now(), 2500); } catch (e) { } // v1.37.53
     triggerAutoSwipe(messageId);
 }
 
