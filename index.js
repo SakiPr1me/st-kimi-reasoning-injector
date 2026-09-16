@@ -36,7 +36,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-const PLUGIN_VERSION = '1.37.50'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.37.51'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -1072,7 +1072,12 @@ function checkStreamingAbort(messageId) {
             if (mesChangedEn || rsChangedEn) {
                 let sample = '';
                 if (reasoning.length > 0) {
-                    sample = reasoning.slice(0, 120);
+                    // v1.37.51：只检测「本次新增的思维链」——swipe 开新分支时 reasoning 会保留上一分支的英文
+                    //（ST 的 extra.reasoning 跟随消息、不随分支清空），旧逻辑取整段开头 → 每次都判英文 → 死循环。
+                    // 现改为与「生成开始快照」对比、只取增量；本次还没产出新思维链（增量为空）→ 跳过检测。
+                    const _oldRs = String(genStartReasoning ?? '');
+                    sample = (_oldRs && reasoning.startsWith(_oldRs)) ? reasoning.slice(_oldRs.length) : reasoning;
+                    sample = sample.trim().slice(0, 120);
                 } else {
                     // partial：思考在 content（mes）里，取 <scene> 前的正文开头检测
                     // 边界取最后一个 marker（与折叠边界一致）：思考里可能打出 <scene> 字样，取第一个会误切
@@ -1239,9 +1244,14 @@ function checkNativeReroll(messageId) {
         let shouldReroll = false;
         let reason = '';
 
-        if (canNativeDetect && settings.rerollOnEnglishThinking && reasoning.length > 0 && startsWithEnglish(reasoning)) {
-            shouldReroll = true;
-            reason = '思维链开头是英文（夺舍失败）';
+        if (canNativeDetect && settings.rerollOnEnglishThinking && reasoning.length > 0) {
+            // v1.37.51：同流式检测——只看「本次新增的思维链」，避免拿上一分支残留的英文反复判重roll（死循环）
+            const _oldRs2 = String(genStartReasoning ?? '');
+            const _newRs2 = (_oldRs2 && reasoning.startsWith(_oldRs2)) ? reasoning.slice(_oldRs2.length) : reasoning;
+            if (_newRs2.trim() && startsWithEnglish(_newRs2)) {
+                shouldReroll = true;
+                reason = '思维链开头是英文（夺舍失败）';
+            }
         } else if (canNativeDetect && settings.rerollOnNoThinking && reasoning.length === 0 && mes.length > 0 && mes.lastIndexOf(marker) === 0) {
             // 无原生思维链 + 正文直接从 <scene> 开始（真·直接出正文）；
             // 被迫partial（思考在 content 里，idx>0）不算——用户接受那种
