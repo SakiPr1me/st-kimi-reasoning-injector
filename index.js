@@ -36,7 +36,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-console.log("[余温工具箱] v1.37.15 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -989,11 +989,7 @@ let autoStopTriggered = false;             // 本次生成是否已触发自动�
 let lastGenManuallyStopped = false;   // 上一次生成是否为用户手动停止（手动停的半截楼不做“无标记重roll”）
 let earlyRerollHandled = false;            // 流式截断重roll 是否已处理（GENERATION_ENDED 兜底防 MESSAGE_RECEIVED 缺失时双重重roll）
 let rerollFiredThisGen = false;      // 总闸：本次生成是否已触发过自动重roll（一次生成最多一次，封死双触发/连续两楼）
-let pendingSwipeConfirm = -1;
-// v1.37.47 伪重roll 闸门：记录"上一次 swipe 前"的分支状态；下一次重roll 前必须核验"真的开出了新分支"，
-// 没有（伪重roll）→ 不再重复重roll，杜绝"没进新分支却反复检测同一条"的无限空转。
-let swipeBranchGate = null; // { msgId, swipes, swipeId }
-let fakeSwipeStreak = 0;    // v1.37.48 连续伪重roll 次数：伪重roll 时自动重试 swipe，连续达上限才暂停（不叫用户手动）        // 最近一次自动 swipe 的目标消息 id：等待真实 GENERATION_STARTED 确认（防 ST Swiping back 假成功导致总闸卡死）
+let pendingSwipeConfirm = -1;        // 最近一次自动 swipe 的目标消息 id：等待真实 GENERATION_STARTED 确认（防 ST Swiping back 假成功导致总闸卡死）
 let autoSwipeBusy = false;           // v1.37.34 自动 swipe 防重入锁：ENDED 兜底与 MESSAGE_RECEIVED 并发触发 triggerAutoSwipe 时，
                                     // 只执行一次 doSwipe，防止对同一消息连续 swipe → ST "Swipe failed, Swiping back" 回滚 → 新分支开不成 → 检测停摆。
 
@@ -1334,34 +1330,6 @@ async function waitStAbortSettled() {
 }
 
 async function triggerAutoSwipe(messageId) {
-    // ── 伪重roll 闸门（所有重roll路径的唯一出口）：上一次 swipe 若没真正开出新分支 → 不再重复重roll ──
-    if (swipeBranchGate) {
-        try {
-            const g = swipeBranchGate;
-            const _cx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-            const gm = _cx?.chat?.[g.msgId];
-            const nowN = (gm && Array.isArray(gm.swipes)) ? gm.swipes.length : 0;
-            const nowId = gm ? gm.swipe_id : undefined;
-            const advanced = !!gm && (nowN > g.swipes || nowId !== g.swipeId);
-            swipeBranchGate = null;
-            if (!advanced) {
-                // 伪重roll：不占额度、并且"自己想办法进去"——自动重试 swipe（带间隔 + 连续上限，防真·死循环）
-                if (autoRerollCount > 0) { autoRerollCount--; } // 伪重roll 不占额度
-                fakeSwipeStreak++;
-                console.log('[余温工具箱] 上一轮 swipe 未真正开出新分支（伪重roll）→ 自动重试 swipe（连续伪重roll ' + fakeSwipeStreak + '/8）');
-                try { updateRerollStatus(); } catch (e) { }
-                if (fakeSwipeStreak >= 8) {
-                    fakeSwipeStreak = 0;
-                    console.log('[余温工具箱] 连续 8 次伪重roll → 暂停自动重roll（等下一轮真实生成/渠道恢复）');
-                    try { notifyReroll('⚠ 连续 8 次重roll都没能开出新分支，已暂停自动重roll（渠道/ST 状态异常时可能如此）', 'error'); } catch (e) { }
-                    return;
-                }
-                await new Promise(function (r) { setTimeout(r, 700); }); // 等 ST 收尾后重试
-            } else {
-                fakeSwipeStreak = 0;
-            }
-        } catch (e) { swipeBranchGate = null; }
-    }
     // v1.37.34 防重入：ENDED 兜底 + MESSAGE_RECEIVED/空回兜底可能并发各调一次，
     // 同一消息连续 swipe 会让 ST 第二次 "Swiping back" 回滚 → 分支开不成、总闸卡死。
     if (autoSwipeBusy) {
@@ -1393,8 +1361,6 @@ async function triggerAutoSwipe(messageId) {
             console.log(`[余温工具箱] 重roll目标修正：消息#${messageId} → #${lastId}（regenerate 删建后索引变化）`);
         }
         console.log(`[余温工具箱] 触发自动重roll：消息#${targetId} 开新分支`);
-        // v1.37.47：记下"swipe 前"的分支状态 → 下次重roll 前核验是否真的开出了新分支（伪重roll 闸门用）
-        try { const _cm = chat[targetId]; swipeBranchGate = _cm ? { msgId: targetId, swipes: Array.isArray(_cm.swipes) ? _cm.swipes.length : 0, swipeId: _cm.swipe_id } : null; } catch (e) { swipeBranchGate = null; }
         await doSwipe(targetId);
         console.log(`[余温工具箱] 自动重roll swipe 完成`);
         // v1.37.15：swipe 确认 watchdog —— ST 在 abort 竞态下会 "Swipe failed, Swiping back" 回滚
@@ -1973,7 +1939,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.48'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.49'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
