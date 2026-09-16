@@ -1135,7 +1135,8 @@ function autoScanMessage(ctx, messageId, result) {
 
 function registerAutoFix() {
 	eventSource.on(event_types.MESSAGE_RECEIVED, async (messageId) => {
-		if (!settings.autoFixEnabled && !settings.autoScanEnabled) return;
+		if (window.__kimiMasterOn === false) return; // 主插件总开关关闭 → 自动修复/扫描整体停
+        if (!settings.autoFixEnabled && !settings.autoScanEnabled) return;
 		try {
 			const ctx = getContext();
 			if (!ctx?.chat?.length) return;

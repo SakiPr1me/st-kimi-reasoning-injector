@@ -471,6 +471,7 @@ eventSource.on(event_types.GENERATION_STARTED, () => { try { healTruncatedPreset
 // KIMI/DS 为固定内置预设（不可修改）：启动即以「当前模式+语言」的代码预设为准 →
 //   ① 文本框在界面上 readonly；② 以后改代码预设，老用户升级后也自动生效（无需迁移）。
 try {
+    window.__kimiMasterOn = settings.enabled !== false; // 供 tag-fixer 等独立模块读取"总开关"
     const __isCustom = typeof settings.injectTarget === 'string' && settings.injectTarget.startsWith('custom:');
     if (!__isCustom) {
         const __p = currentPresets();
@@ -1938,7 +1939,7 @@ async function renderUpstream(force) {
 // ===== 配置快照：保存/一键恢复行为设置组合（v1.28.0）=====
 // 纳入白名单的行为设置（不含模板库/自定义提供商/优先序列等资产性数据）
 // ===== 自动更新（复刻 st-chat-sync：远端 manifest 版本比对 + 酒馆官方更新接口）=====
-const PLUGIN_VERSION = '1.37.45'; // 与 manifest.json version 同步
+const PLUGIN_VERSION = '1.37.46'; // 与 manifest.json version 同步
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
@@ -2773,7 +2774,7 @@ function updateComboFloat() {
         initPos = { x: window.innerWidth - DOCK_VIS, y: Math.max(2, Math.round(window.innerHeight * 0.16)) };
     }
     const $box = $(`<div id="kimi_combo_float" style="
-        position:fixed;z-index:9600;width:${W}px;overflow:hidden;
+        position:fixed;z-index:9600;width:${W}px;overflow:hidden;display:${settings.enabled === false ? 'none' : ''};
         border:1px solid transparent;border-radius:50%;
         background:transparent;
         box-shadow:none;user-select:none;transition:background .2s ease,border-color .2s ease,box-shadow .2s ease,border-radius .2s ease,backdrop-filter .2s ease,-webkit-backdrop-filter .2s ease;
@@ -3592,7 +3593,7 @@ const KIMI_SETTINGS_CSS = `
 
 // 楼层 token 数旁显示生成速度（t/s）：token_count ÷ (gen_finished - gen_started)
 function showTpsForMessage(messageId) {
-    if (!settings.showTps) return;
+    if (!settings.enabled || !settings.showTps) return;
     try {
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const msg = ctx?.chat?.[messageId];
@@ -3627,7 +3628,7 @@ function fmtThinkingTime(ms, live) {
 }
 
 function reasoningTimerTick() {
-    if (!settings.reasoningTimer) return;
+    if (!settings.enabled || !settings.reasoningTimer) return;
     try {
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         // 性能关键：生成中只精修最后一楼（正在思考的那个）——全量遍历所有楼会随楼层数线性变卡；
@@ -3687,7 +3688,7 @@ function reasoningTimerTick() {
 
 let reasoningTimerRate = 0;
 function startReasoningTimer(rate = 300) {
-    if (!settings.reasoningTimer) return;
+    if (!settings.enabled || !settings.reasoningTimer) return;
     if (reasoningTimerInterval && reasoningTimerRate === rate) return;
     if (reasoningTimerInterval) { clearInterval(reasoningTimerInterval); reasoningTimerInterval = null; }
     reasoningTimerInterval = setInterval(reasoningTimerTick, rate);
@@ -3978,7 +3979,7 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id) => {
             }
         }
     }
-    if (settings.fixMesOnGenerate !== false && isAssistant && !isEmpty) fixMesForMessage(id);
+    if (settings.enabled && settings.fixMesOnGenerate !== false && isAssistant && !isEmpty) fixMesForMessage(id);
     checkNativeReroll(id);
     applyThinkingFold(id);
     showTpsForMessage(id);
@@ -4241,7 +4242,7 @@ eventSource.on(event_types.CHAT_CHANGED, () => {
     abortCheckAt.clear();
     // 切换聊天后 ST 重渲染全部消息：折叠由 MutationObserver 覆盖，tps 需要手动补（等渲染完成）
     setTimeout(() => {
-        if (!settings.showTps && !settings.reasoningTimer) return;
+        if (!settings.enabled || (!settings.showTps && !settings.reasoningTimer)) return;
         try {
             document.querySelectorAll('#chat .mes').forEach(mesEl => {
                 const mesid = mesEl.getAttribute('mesid');
@@ -4966,6 +4967,8 @@ ${t('keepScrollLabel')}
 
     $("#" + extensionName + "_enabled").on("change", function () {
         settings.enabled = $(this).is(":checked");
+        try { $('#kimi_combo_float').toggle(settings.enabled !== false); } catch (e) { } // 总开关关闭 → 隐藏悬浮球
+        window.__kimiMasterOn = settings.enabled !== false;
         saveSettingsDebounced();
         // 启用总开关：关掉时还原所有折叠，打开时重新折叠
         if (settings.enabled) {
