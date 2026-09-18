@@ -10,3 +10,9 @@ WORK_HANDOFF.md
 
 # 迭代前代码快照（本地保留，不入库）
 *.pre-*
+
+# ★预设更新器：还没做完，不进仓库（用户拿到的包里没有 → 卡片不出现）
+preset-merge.js
+preset-updater.js
+preset-updater.css
+preset-updater.css.broken

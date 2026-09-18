@@ -37,7 +37,7 @@ async function doSwipe(targetId) {
     return false;
 }
 
-const PLUGIN_VERSION = '1.37.58'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.37.61'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -161,7 +161,7 @@ const UI = {
         dsEffortLabel: "Deepseek思考强度：", dsEffortOff: "off（不注入，用 DeepSeek 默认 high）", dsEffortLow: "low（flash: low / pro: high）", dsEffortHigh: "high（flash: high / pro: high）", dsEffortXhigh: "xhigh（flash: high / pro: max）", dsEffortMax: "max（flash: max / pro: max）",
         k3EffortLabel: "Kimi3 思考强度：", k3EffortOff: "off（不注入，用 K3 默认 max）", k3EffortLow: "low（思考快）", k3EffortHigh: "high", k3EffortMax: "max（思考最久）",
         injectLabel: "注入破限：", injectStep1: "step 1：中破限·原生思维链夺舍（reasoning_content注入）", injectStep2: "step 2：强破限·正文输出思维链夺舍（partial注入）",
-        injectTitle: "注入", modelTitle: "模型参数", rerollTitle: "自动重Roll/截断", autoStopTitle: "自动截断", beautifyTitle: "思维链美化折叠", fixTitle: "不常用", wordTitle: "替换（清理标签、烦人字）",
+        injectTitle: "注入", modelTitle: "模型参数", rerollTitle: "自动重Roll/截断", autoStopTitle: "自动截断", beautifyTitle: "思维链美化折叠", presetUpdTitle: "预设更新器", fixTitle: "不常用", wordTitle: "替换（清理标签、烦人字）",
         targetLabel: "注入模式：", targetKimi: "KIMI 注入（默认，Meta 起手，<cot> 可注入）", targetDs: "DS 注入（We need 起手，触发 DS 最大思考，无 <cot>）",
         targetCustom: "自定义", customAdd: "＋ 追加模板", customDel: "删除", customName: "自定义模板", customHint: "选中后可在 Reasoning Content 里直接编辑；切语言不会覆盖自定义内容。", customNameLabel: "模板名：", customNamePh: "给这个模板起个名字…",
         rcLabel: "Reasoning Content：",
@@ -222,7 +222,7 @@ const UI = {
         dsEffortLabel: "DeepSeek Effort: ", dsEffortOff: "off (no inject, DeepSeek default high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 Effort: ", k3EffortOff: "off (no inject, K3 default max)", k3EffortLow: "low (fast thinking)", k3EffortHigh: "high", k3EffortMax: "max (longest thinking)",
         injectLabel: "Injection Modes: ", injectStep1: "step 1: medium jailbreak - native CoT takeover (reasoning_content)", injectStep2: "step 2: strong jailbreak - body CoT takeover (partial)",
-        injectTitle: "Injection", modelTitle: "Model Settings", rerollTitle: "Auto Reroll / Auto-Stop", autoStopTitle: "Auto-Stop", beautifyTitle: "CoT Fold Beautify", fixTitle: "Uncommon", wordTitle: "Replace (Cleanup Tags & Words)",
+        injectTitle: "Injection", modelTitle: "Model Settings", rerollTitle: "Auto Reroll / Auto-Stop", autoStopTitle: "Auto-Stop", beautifyTitle: "CoT Fold Beautify", presetUpdTitle: "Preset Updater", fixTitle: "Uncommon", wordTitle: "Replace (Cleanup Tags & Words)",
         targetLabel: "Injection Target: ", targetKimi: "KIMI Injection (default, Meta opener, <cot> allowed)", targetDs: "DS Injection (We need opener, triggers DS max thinking, no <cot>)",
         targetCustom: "Custom", customAdd: "+ Add Template", customDel: "Delete", customName: "Custom Template", customHint: "Edit the content in Reasoning Content once selected; language switch won't touch custom content.", customNameLabel: "Name:", customNamePh: "Name this template...",
         rcLabel: "Reasoning Content: ",
@@ -282,7 +282,7 @@ const UI = {
         dsEffortLabel: "DeepSeek 강도: ", dsEffortOff: "off (주입 안 함, DeepSeek 기본 high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 강도: ", k3EffortOff: "off (주입 안 함, K3 기본 max)", k3EffortLow: "low (빠른 사고)", k3EffortHigh: "high", k3EffortMax: "max (가장 긴 사고)",
         injectLabel: "주입 모드: ", injectStep1: "step 1: 중간 탈옥·네이티브 CoT 탈취 (reasoning_content)", injectStep2: "step 2: 강한 탈옥·본문 CoT 탈취 (partial)",
-        injectTitle: "주입", modelTitle: "모델 설정", rerollTitle: "자동 reroll/자동 중단", autoStopTitle: "자동 중단", beautifyTitle: "CoT 접기 미화", fixTitle: "비상용", wordTitle: "치환 (태그·거슬리는 단어 정리)",
+        injectTitle: "주입", modelTitle: "모델 설정", rerollTitle: "자동 reroll/자동 중단", autoStopTitle: "자동 중단", beautifyTitle: "CoT 접기 미화", presetUpdTitle: "프리셋 업데이터", fixTitle: "비상용", wordTitle: "치환 (태그·거슬리는 단어 정리)",
         targetLabel: "주입 대상: ", targetKimi: "KIMI 주입 (기본, Meta 시작, <cot> 가능)", targetDs: "DS 주입 (We need 시작, DS 최대 사고 유발, <cot> 없음)",
         targetCustom: "커스텀", customAdd: "＋ 템플릿 추가", customDel: "삭제", customName: "커스텀 템플릿", customHint: "선택 후 Reasoning Content에서 직접 편집 가능. 언어 전환 시 커스텀 내용은 덮어쓰지 않습니다.", customNameLabel: "템플릿 이름:", customNamePh: "이 템플릿 이름 지정...",
         rcLabel: "Reasoning Content: ",
@@ -976,7 +976,6 @@ let earlyStopTriggered = false;      // 流式中已触发截断（防重复 sto
 let earlyRerollMessageId = -1;       // 已被流式截断、需要强制重roll的消息id
 let rerollGuard = createRerollGuard();   // v1.37.54：截断后「待新分支」状态（确认进入分支后一直等，不盲等出字）
 function curChatKey() { try { const c = (typeof window !== "undefined" && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null; return String(c?.chatId || c?.chat?.length || ""); } catch (e) { return ""; } }
-setInterval(() => { try { const __id = rerollGuard.shouldFallback(Date.now(), curChatKey()); if (__id < 0) return; if (!settings.enabled || settings.rerollPaused) return; if (autoRerollCount >= settings.autoRerollLimit) return; if (rerollFiredThisGen) return; rerollFiredThisGen = true; autoRerollCount++; try { updateRerollStatus(); } catch (e) { } try { console.log("[余温工具箱] 截断后未进入新分支（无自动重roll事件）→ 兜底触发一次 swipe，消息#" + __id); } catch (e) { } triggerAutoSwipe(__id); } catch (e) { } }, 500);
 let streamGotToken = false;          // 本次生成是否收到过 token（空回检测用）
 let manualStopClicked = false;       // 用户点了 ST 停止按钮（#mes_stop）→ 手动停止，不判空回
 let isGenerating = false;           // 是否正在生成（防止历史加载 MESSAGE_RECEIVED 误判空回）
@@ -994,7 +993,10 @@ let autoStopTriggered = false;             // 本次生成是否已触发自动�
 let lastGenManuallyStopped = false;   // 上一次生成是否为用户手动停止（手动停的半截楼不做“无标记重roll”）
 let earlyRerollHandled = false;            // 流式截断重roll 是否已处理（GENERATION_ENDED 兜底防 MESSAGE_RECEIVED 缺失时双重重roll）
 let rerollFiredThisGen = false;      // 总闸：本次生成是否已触发过自动重roll（一次生成最多一次，封死双触发/连续两楼）
-let pendingSwipeConfirm = -1;        // 最近一次自动 swipe 的目标消息 id：等待真实 GENERATION_STARTED 确认（防 ST Swiping back 假成功导致总闸卡死）
+let pendingSwipeConfirm = -1;
+const REROLL_RETRY_BUDGET = 2;   // v1.37.60/61：每代生成最多主动补试几次
+let rerollRetryLeft = REROLL_RETRY_BUDGET;
+let rerollRetryTarget = -1;  // 补试目标消息        // 最近一次自动 swipe 的目标消息 id：等待真实 GENERATION_STARTED 确认（防 ST Swiping back 假成功导致总闸卡死）
 let genStartSeq = 0;                 // v1.37.56 真实生成开始序号：每次真实 GENERATION_STARTED +1。
                                      // 自动 swipe 在"决定要 swipe"时记下序号，执行前若序号变了 = 已有新生成在跑（用户手点/别的路径开的），
                                      // 必须放弃这次 swipe —— 生成中插 swipe 会被 ST 判为"无效 DOM/越界槽"→ Swiping back 回滚 → 把正在生成的分支冲掉
@@ -1110,14 +1112,17 @@ function checkStreamingAbort(messageId) {
                 stopReason = `无思考直接出了<${marker}>`;
             }
         }
-        // v1.11.53：思考太短只检测「思考在 content 的 <scene> 前」的情况——
-        // partial 模式且无原生思考（reasoning 空）；若有原生思维链（reasoning 非空，双开场景），
-        // 思考在 extra.reasoning，mes 的 <scene> 前是场景信息，不应量长度。
-        if (!stopReason && settings.rerollMinThinkingTokens > 0 && modes.includes('partial') && reasoning.length === 0) {
+        // v1.37.59：思考太短判定改为「与模式解耦」——原来写死 modes.includes('partial')，
+        // reasoning_content 用户（模型降智时思维链很短/不出思维链）这条从不触发。
+        // 用户定义：正文（含 <scene>）出现的那一刻，看「<scene> 之前一共有多少思考内容」——
+        //   思考量 = reasoning 通道字数 + content 里 <scene> 前缀字数（合并，哪个有用哪个）。
+        // reasoning_content：思维链在 reasoning 通道，<scene> 出现时它已吐完 → 量 reasoning；
+        // partial：思维链在 content 的 <scene> 前 → 量 content 前缀；双开则两者相加。
+        if (!stopReason && settings.rerollMinThinkingTokens > 0) {
             const markerIdx = mes.lastIndexOf(marker); // 与折叠边界一致（思考里可能打出 marker 字样）
-            if (markerIdx > 0) { // 思考在 content 里（partial）且已出 <scene>
-                const thinkingPart = mes.slice(0, markerIdx);
-                const estTokens = Math.round(thinkingPart.length / 1.5);
+            if (markerIdx >= 0) { // 正文已开始（<scene> 已出现，无论前缀有没有内容）
+                const thinkingPart = reasoning + (markerIdx > 0 ? mes.slice(0, markerIdx) : '');
+                const estTokens = Math.round(thinkingPart.replace(/\s/g, '').length / 1.5);
                 if (estTokens < settings.rerollMinThinkingTokens) {
                     stopReason = `思考只有${estTokens}token就出了<${marker}>`;
                 }
@@ -1270,12 +1275,40 @@ function checkNativeReroll(messageId) {
             // 被迫partial（思考在 content 里，idx>0）不算——用户接受那种
             shouldReroll = true;
             reason = '无思维链直接出正文';
-        } else if (settings.rerollOnNoMutter && stopMarker && !mes.includes(stopMarker)) {
+        }
+        // v1.37.59：完成时补「思维太短」判定（原来只有流式有，完成时漏了）。
+        // 与流式同一基准：<scene> 出现时，reasoning 通道 + content 前缀合并计字数。
+        // 覆盖"模型降智：思维链很短/不出思维链，直接出正文但没出 <scene> 或 <scene> 前思考太短"。
+        if (!shouldReroll && settings.rerollMinThinkingTokens > 0 && mes.length > 0) {
+            const markerIdx2 = mes.lastIndexOf(marker);
+            // 思考量 = reasoning 通道 + content 里 <scene> 前缀（没 <scene> 则前缀为空，只算 reasoning）
+            const thinkingPart2 = reasoning + (markerIdx2 > 0 ? mes.slice(0, markerIdx2) : '');
+            const estTokens2 = Math.round(thinkingPart2.replace(/\s/g, '').length / 1.5);
+            // 出了正文（mes 非空）但思考量太短 → 判太短（无论出没出 <scene>：
+            // 出 <scene>=正文正式开始；没出 <scene> 但直接出正文=降智直出，思考量同样太短）
+            if (estTokens2 < settings.rerollMinThinkingTokens) {
+                shouldReroll = true;
+                reason = markerIdx2 >= 0
+                    ? `思考只有${estTokens2}token就出了${marker}（思维太短）`
+                    : `思考只有${estTokens2}token就出了正文（思维太短/无思维链）`;
+            }
+        }
+        // v1.37.59：半截楼判定从 else-if 链里拆出来——
+        // 根因（用户实机：正文出俩字就断不重roll / 英文思维链卡 1/30）：
+        // 只要「有思维链」（不管中英文），第一个 if 条件 reasoning.length>0 就成立，进入该分支后
+        // 若不是英文则不设 shouldReroll，导致 else-if 的半截楼判定被**短路**、永远不执行。
+        // 现在改成独立补充判定：前面没命中（shouldReroll=false）才查半截楼，思维链有没有都不再短路。
+        if (!shouldReroll && settings.rerollOnNoMutter && stopMarker && !mes.includes(stopMarker)) {
             // 完整性判定：生成结束但全文没有截断标记（<mutter>）＝半截楼
             // （思维链截断：mes 空/占位；正文截断：有 <scene> 但没收尾标记。均命中）
             // 手动停止的楼不roll（lastGenManuallyStopped，用户自己停的可能想留着看）
             if (lastGenManuallyStopped || manualStopClicked) {
                 console.log('[余温工具箱] 半截楼但为手动停止（用户自己停的可能想留着看）→ 豁免重roll');
+            } else if (autoStopTriggered) {
+                // v1.37.59：本次是 autoStop 检测到标记后主动停的——标记已在流里出现过（=条目完整），
+                // 只是 stopGeneration 抢先于标记 chunk 写入 mes，此刻 mes 里可能还没有标记。
+                // 不能据此判半截楼重roll（否则 S11：带标记的干净楼被误判成半截楼重roll）。
+                console.log('[余温工具箱] 本次为 autoStop 主动截断（标记已出现）→ 不判半截楼');
             } else {
                 shouldReroll = true;
                 reason = '生成结束仍无截断标记（半截楼/疑似截断）';
@@ -1306,7 +1339,6 @@ function checkNativeReroll(messageId) {
             }
             if (autoRerollCount < settings.autoRerollLimit) {
                 autoRerollCount++;
-                lastAutoRerollMessageId = messageId;
                 lastAutoRerollTime = now;
                 console.log(`[余温工具箱] 检测到${reason}，自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${messageId}`);
                 rerollFiredThisGen = true;
@@ -1485,6 +1517,26 @@ async function triggerAutoSwipe(messageId) {
                             const lastIdx = chatW.length - 1;
                             console.log('[余温工具箱] swipe 后最后一条为空占位，主动补空回重roll（消息#' + lastIdx + '）');
                             handleEmptyReroll(lastIdx);
+                        } else if (lastW && !lastW.is_user
+                            && rerollRetryLeft > 0
+                            && settings.enabled && !settings.rerollPaused
+                            && autoRerollCount < settings.autoRerollLimit) {
+                            // ★v3.6.2 修"卡住"：swipe 没生效，而这条还挂着**坏内容**
+                            //   （英文思维链 / 只出了两个字的正文 …）——以前这里什么都不做，
+                            //   于是"复位总闸 + 等下一个事件"，而那种情况**根本不会再有事件** → 停在 N/30。
+                            rerollRetryLeft--;
+                            rerollRetryTarget = targetId;
+                            console.log('[余温工具箱] swipe 没生效且这条还挂着坏内容 → 主动再补一次 swipe（还剩 ' + rerollRetryLeft + ' 次），消息#' + targetId);
+                            notifyReroll('🔄 上次没进新分支，正在重试…（剩 ' + rerollRetryLeft + ' 次）');
+                            rerollFiredThisGen = true;   // 补试期间别让自然事件再叠加一次 swipe
+                            setTimeout(() => {
+                                try { if (autoRerollCount < settings.autoRerollLimit && settings.enabled && !settings.rerollPaused) triggerAutoSwipe(targetId); } catch (e) { }
+                            }, 900);
+                        } else if (lastW && !lastW.is_user) {
+                            // ★v1.37.61：补试也打完了、还是没进新分支 → **明确出声**，别让用户对着黄色横幅干等
+                            console.log('[余温工具箱] 自动重roll 试了 ' + REROLL_RETRY_BUDGET + ' 次都没进新分支（ST 在回滚 swipe）→ 请手动点「开新分支」');
+                            notifyReroll('⚠ 自动重roll 没成功（ST 回滚了 swipe）→ 请手动点「开新分支」', 'error');
+                            try { rerollGuard.clear(); } catch (e) { }
                         }
                     } catch (eW) { console.warn('[余温工具箱] swipe watchdog 兜底失败:', eW); }
                 }
@@ -1580,7 +1632,6 @@ function handleEmptyReroll(messageId) {
     }
     rerollFiredThisGen = true;
     autoRerollCount++;
-    lastAutoRerollMessageId = messageId;
     lastAutoRerollTime = Date.now();
     console.log(`[余温工具箱] 空回（零token）→ 自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${messageId}`);
     notifyReroll(`🔄 空回自动重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
@@ -4173,6 +4224,7 @@ eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     genStartSeq++;                  // v1.37.56：真实生成序号 +1（自动 swipe 用它判断"是否已有新生成在跑"）
     pendingSwipeConfirm = -1;    // 已进入真实生成 → 自动 swipe 确认成功（watchdog 不再兜底）
 try { rerollGuard.confirmBranch(); } catch (e) { } // v1.37.54 真实生成开始 = 已进入新分支
+rerollRetryLeft = REROLL_RETRY_BUDGET; rerollRetryTarget = -1;   // 新的一代开始 → 补试预算重置
     autoSwipeBusy = false;       // v1.37.34 真实生成已开始 → 释放自动swipe防重入锁
     lastGenManuallyStopped = false;
     rerollFiredThisGen = false;
@@ -5067,6 +5119,7 @@ ${renderWordReplaceRows()}
 </div>
 </details>
 
+
 <!-- 其他功能已拆分：显示tps →「思维链美化折叠」卡，保持滚动位置 →「不常用」卡 -->
 <!-- ═══ 修正（最不常用，放最下面）═══ -->
 <details class="kimi-card kimi-last">
@@ -5123,6 +5176,43 @@ ${t('keepScrollLabel')}
     `;
 
     $("#extensions_settings").append(settingsHtml);
+    /**
+     * 预设更新器 —— **还没做完，先不给用户**。机制：
+     *   · preset-updater.js / preset-merge.js / preset-updater.css 这三个文件**不进仓库**（.gitignore）；
+     *     用户从更新通道拿到的包里根本没有它们 → 下面这个 import 会失败 → 卡片不出现、也不报错。
+     *   · 开发树里文件在 → import 成功 → 自动建出卡片（位置仍在「不常用」之上），行为跟以前一样。
+     *   · 想发布更新器时：把这三个文件 git add 回来（并删掉 .gitignore 那三行）即可。
+     * ★构建戳：浏览器会缓存扩展的 js/css，改完把下面这个号加一，刷新即生效。
+     */
+    const updaterBuild = 'v3.6.1';
+    import('./preset-updater.js?b=' + updaterBuild)
+        .then(mod => {
+            // 卡片插在「不常用」那张卡之前（和以前静态 HTML 的位置一致）
+            const anchor = document.querySelector('#extensions_settings details.kimi-card.kimi-last');
+            if (anchor && anchor.parentNode) {
+                const det = document.createElement('details');
+                det.className = 'kimi-card';
+                det.innerHTML = '<summary><i class="fa-solid fa-file-import kimi-card-ico" aria-hidden="true"></i>' + t('presetUpdTitle') + '</summary>'
+                    + '<div class="kimi-card-body" id="kimi_presetupd_body"></div>';
+                anchor.parentNode.insertBefore(det, anchor);
+                if (!KIMI_CARD_DEFS.some(d => d.key === 'presetupd')) {
+                    KIMI_CARD_DEFS.splice(Math.max(0, KIMI_CARD_DEFS.length - 1), 0, { key: 'presetupd', ico: 'fa-file-import', titleKey: 'presetUpdTitle' });
+                }
+                mod.mountPresetUpdater(document.getElementById('kimi_presetupd_body'));
+            }
+            // 样式也带戳注入一份（manifest 里的 css 会被缓存，改色看不到就是它）
+            if (!document.getElementById('ywpu-css-' + updaterBuild)) {
+                const l = document.createElement('link');
+                l.id = 'ywpu-css-' + updaterBuild;
+                l.rel = 'stylesheet';
+                l.href = './scripts/extensions/third-party/st-kimi-reasoning-injector/preset-updater.css?b=' + updaterBuild;
+                document.head.appendChild(l);
+            }
+            console.log('[余温工具箱] 预设更新器已挂载（开发版：' + updaterBuild + '）');
+        })
+        .catch(() => {
+            // 发布包里没有这三个文件 = 正常情况（更新器还没发布）→ 静默跳过，不建卡片、不打扰用户
+        });
 
     // 卡片展开状态记忆（localStorage 按卡片序号存，跨刷新/语言切换保持）
     // v1.37.15：手风琴——点开任一卡自动关闭其它卡（设置面板不拉太长，免滚轮累）；
