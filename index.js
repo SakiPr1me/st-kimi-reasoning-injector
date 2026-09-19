@@ -5184,7 +5184,7 @@ ${t('keepScrollLabel')}
      *   · 想发布更新器时：把这三个文件 git add 回来（并删掉 .gitignore 那三行）即可。
      * ★构建戳：浏览器会缓存扩展的 js/css，改完把下面这个号加一，刷新即生效。
      */
-    const updaterBuild = 'v4.1.0';
+    const updaterBuild = 'v4.2.0';
     import('./preset-updater.js?b=' + updaterBuild)
         .then(mod => {
             // 卡片插在「不常用」那张卡之前（和以前静态 HTML 的位置一致）
