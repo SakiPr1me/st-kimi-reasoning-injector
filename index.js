@@ -161,7 +161,7 @@ const UI = {
         dsEffortLabel: "Deepseek思考强度：", dsEffortOff: "off（不注入，用 DeepSeek 默认 high）", dsEffortLow: "low（flash: low / pro: high）", dsEffortHigh: "high（flash: high / pro: high）", dsEffortXhigh: "xhigh（flash: high / pro: max）", dsEffortMax: "max（flash: max / pro: max）",
         k3EffortLabel: "Kimi3 思考强度：", k3EffortOff: "off（不注入，用 K3 默认 max）", k3EffortLow: "low（思考快）", k3EffortHigh: "high", k3EffortMax: "max（思考最久）",
         injectLabel: "注入破限：", injectStep1: "step 1：中破限·原生思维链夺舍（reasoning_content注入）", injectStep2: "step 2：强破限·正文输出思维链夺舍（partial注入）",
-        injectTitle: "注入", modelTitle: "模型参数", rerollTitle: "自动重Roll/截断", autoStopTitle: "自动截断", beautifyTitle: "思维链美化折叠", presetUpdTitle: "预设更新器", fixTitle: "不常用", wordTitle: "替换（清理标签、烦人字）",
+        injectTitle: "注入", modelTitle: "模型参数", rerollTitle: "自动重Roll/截断", autoStopTitle: "自动截断", beautifyTitle: "思维链美化折叠", presetUpdTitle: "预设更新器", presetStoreTitle: "条目商店", fixTitle: "不常用", wordTitle: "替换（清理标签、烦人字）",
         targetLabel: "注入模式：", targetKimi: "KIMI 注入（默认，Meta 起手，<cot> 可注入）", targetDs: "DS 注入（We need 起手，触发 DS 最大思考，无 <cot>）",
         targetCustom: "自定义", customAdd: "＋ 追加模板", customDel: "删除", customName: "自定义模板", customHint: "选中后可在 Reasoning Content 里直接编辑；切语言不会覆盖自定义内容。", customNameLabel: "模板名：", customNamePh: "给这个模板起个名字…",
         rcLabel: "Reasoning Content：",
@@ -222,7 +222,7 @@ const UI = {
         dsEffortLabel: "DeepSeek Effort: ", dsEffortOff: "off (no inject, DeepSeek default high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 Effort: ", k3EffortOff: "off (no inject, K3 default max)", k3EffortLow: "low (fast thinking)", k3EffortHigh: "high", k3EffortMax: "max (longest thinking)",
         injectLabel: "Injection Modes: ", injectStep1: "step 1: medium jailbreak - native CoT takeover (reasoning_content)", injectStep2: "step 2: strong jailbreak - body CoT takeover (partial)",
-        injectTitle: "Injection", modelTitle: "Model Settings", rerollTitle: "Auto Reroll / Auto-Stop", autoStopTitle: "Auto-Stop", beautifyTitle: "CoT Fold Beautify", presetUpdTitle: "Preset Updater", fixTitle: "Uncommon", wordTitle: "Replace (Cleanup Tags & Words)",
+        injectTitle: "Injection", modelTitle: "Model Settings", rerollTitle: "Auto Reroll / Auto-Stop", autoStopTitle: "Auto-Stop", beautifyTitle: "CoT Fold Beautify", presetUpdTitle: "Preset Updater", presetStoreTitle: "Entry Store", fixTitle: "Uncommon", wordTitle: "Replace (Cleanup Tags & Words)",
         targetLabel: "Injection Target: ", targetKimi: "KIMI Injection (default, Meta opener, <cot> allowed)", targetDs: "DS Injection (We need opener, triggers DS max thinking, no <cot>)",
         targetCustom: "Custom", customAdd: "+ Add Template", customDel: "Delete", customName: "Custom Template", customHint: "Edit the content in Reasoning Content once selected; language switch won't touch custom content.", customNameLabel: "Name:", customNamePh: "Name this template...",
         rcLabel: "Reasoning Content: ",
@@ -282,7 +282,7 @@ const UI = {
         dsEffortLabel: "DeepSeek 강도: ", dsEffortOff: "off (주입 안 함, DeepSeek 기본 high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 강도: ", k3EffortOff: "off (주입 안 함, K3 기본 max)", k3EffortLow: "low (빠른 사고)", k3EffortHigh: "high", k3EffortMax: "max (가장 긴 사고)",
         injectLabel: "주입 모드: ", injectStep1: "step 1: 중간 탈옥·네이티브 CoT 탈취 (reasoning_content)", injectStep2: "step 2: 강한 탈옥·본문 CoT 탈취 (partial)",
-        injectTitle: "주입", modelTitle: "모델 설정", rerollTitle: "자동 reroll/자동 중단", autoStopTitle: "자동 중단", beautifyTitle: "CoT 접기 미화", presetUpdTitle: "프리셋 업데이터", fixTitle: "비상용", wordTitle: "치환 (태그·거슬리는 단어 정리)",
+        injectTitle: "주입", modelTitle: "모델 설정", rerollTitle: "자동 reroll/자동 중단", autoStopTitle: "자동 중단", beautifyTitle: "CoT 접기 미화", presetUpdTitle: "프리셋 업데이터", presetStoreTitle: "항목 상점", fixTitle: "비상용", wordTitle: "치환 (태그·거슬리는 단어 정리)",
         targetLabel: "주입 대상: ", targetKimi: "KIMI 주입 (기본, Meta 시작, <cot> 가능)", targetDs: "DS 주입 (We need 시작, DS 최대 사고 유발, <cot> 없음)",
         targetCustom: "커스텀", customAdd: "＋ 템플릿 추가", customDel: "삭제", customName: "커스텀 템플릿", customHint: "선택 후 Reasoning Content에서 직접 편집 가능. 언어 전환 시 커스텀 내용은 덮어쓰지 않습니다.", customNameLabel: "템플릿 이름:", customNamePh: "이 템플릿 이름 지정...",
         rcLabel: "Reasoning Content: ",
@@ -5184,7 +5184,7 @@ ${t('keepScrollLabel')}
      *   · 想发布更新器时：把这三个文件 git add 回来（并删掉 .gitignore 那三行）即可。
      * ★构建戳：浏览器会缓存扩展的 js/css，改完把下面这个号加一，刷新即生效。
      */
-    const updaterBuild = 'v4.4.0';
+    const updaterBuild = 'v4.4.1';
     import('./preset-updater.js?b=' + updaterBuild)
         .then(mod => {
             // 卡片插在「不常用」那张卡之前（和以前静态 HTML 的位置一致）
@@ -5209,6 +5209,48 @@ ${t('keepScrollLabel')}
                 document.head.appendChild(l);
             }
             console.log('[余温工具箱] 预设更新器已挂载（开发版：' + updaterBuild + '）');
+            /**
+             * 云端「条目商店」——**P3 骨架，接本地假后端**，跟更新器走同一套发布隔离：
+             *   · preset-store.js / preset-store.css 也在 .gitignore 里 → 用户从更新通道拿到的包里没有它们
+             *     → import 失败 → **卡片不出现、零报错**；开发树/副本里文件在 → 卡片照常出现。
+             *   · 为什么写在更新器的 .then 里面：商店**依赖同一个内核文件 preset-merge.js**，
+             *     而内核跟更新器是一批发布的 —— 更新器能加载 = 开发文件都在；发布包里更新器就先失败了，
+             *     于是**连试都不用试**（少一条 404 噪声，探针 probe-ship 的"除预期 404 外零报错"才守得住）。
+             *   · 位置 = **卡片列表最前**（用户定的主入口）；标题带未读数：`🛒 条目商店` / `🛒 条目商店（新 3）`
+             *     （标题由 preset-store.js 自己按未读数改，见 updateCardTitle()）。
+             *   · 第二入口 = 更新器窗口的第三个标签（preset-updater.js 里那个标签按钮挂同一个模块）。
+             *   · 想发布时：删掉 .gitignore 里那两行 + `git add -f preset-store.js preset-store.css`。
+             * ★构建戳：改完加号，浏览器才会重新拉一次 js/css。
+             */
+            const storeBuild = 'v1.0.0';
+            import('./preset-store.js?b=' + storeBuild)
+                .then(smod => {
+                    if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();
+                    const panel = document.getElementById(extensionName + '_settings');
+                    const first = panel ? panel.querySelector('details.kimi-card') : null;
+                    if (first && first.parentNode) {
+                        const sdet = document.createElement('details');
+                        sdet.className = 'kimi-card';
+                        sdet.innerHTML = '<summary><i class="fa-solid fa-cart-shopping kimi-card-ico" aria-hidden="true"></i><span id="kimi_presetstore_title">🛒 ' + t('presetStoreTitle') + '</span></summary>'
+                            + '<div class="kimi-card-body" id="kimi_presetstore_body"></div>';
+                        first.parentNode.insertBefore(sdet, first);       // ★插在**第一张卡**前面 = 列表最前
+                        if (!KIMI_CARD_DEFS.some(d => d.key === 'presetstore')) {
+                            KIMI_CARD_DEFS.unshift({ key: 'presetstore', ico: 'fa-cart-shopping', titleKey: 'presetStoreTitle' });
+                        }
+                        smod.mountPresetStore(document.getElementById('kimi_presetstore_body'));
+                    }
+                    if (!document.getElementById('yws-css-' + storeBuild)) {
+                        const l2 = document.createElement('link');
+                        l2.id = 'yws-css-' + storeBuild;
+                        l2.rel = 'stylesheet';
+                        l2.href = './scripts/extensions/third-party/st-kimi-reasoning-injector/preset-store.css?b=' + storeBuild;
+                        document.head.appendChild(l2);
+                    }
+                    console.log('[余温工具箱] 条目商店已挂载（开发版：' + storeBuild + '）');
+                })
+                .catch(() => {
+                    // 发布包里没有这两个文件（商店还没发布）→ 静默跳过：不建卡片、零报错
+                });
         })
         .catch(() => {
             // 发布包里没有这三个文件 = 正常情况（更新器还没发布）→ 静默跳过，不建卡片、不打扰用户

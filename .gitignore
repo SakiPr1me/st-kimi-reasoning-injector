@@ -16,3 +16,7 @@ preset-merge.js
 preset-updater.js
 preset-updater.css
 preset-updater.css.broken
+
+# ★云端「条目商店」：同样还没做完（P3 骨架，接本地假后端）→ 不进仓库
+preset-store.js
+preset-store.css
