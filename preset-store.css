@@ -816,6 +816,17 @@
     content: ''; position: absolute; left: 50%; top: 50%; width: 100%; min-width: 34px; height: 32px;
     transform: translate(-50%, -50%);
 }
+/* ★★W129（作者 2026-10-09）：**整份卡上的「下载本预设」**（挂在「💬 评论」左边，见 JS 的 cardDlBtnHtml）。
+   视觉语言**一个字不新造**：底/框/字色/内边距/最小高与同排的 `.yws-cmbtn`（评论）**逐字同源**
+   （次要动作那一档；主色只留给「缝入」那颗主按钮）⇒ 四档对比度与改动前同源，不会引入新的配色风险。
+   只多一个 `.yws-dlbtn` 身份记号（探测/断言要认得出它，且以后要单独调它时不必动评论那颗）。 */
+.yws-btn.yws-dlbtn {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
+    padding: 1px 9px; min-height: 24px;
+    border-color: var(--yws-line); background: var(--yws-surface); color: var(--yws-txt-2);
+    font-size: var(--yws-fs-xs); white-space: nowrap;
+}
+.yws-btn.yws-dlbtn:hover { border-color: var(--yws-line); background: var(--yws-raise); color: var(--yws-txt); }
 
 /* ================================================================ ★★AA-2（作者第六批反馈）：评论区
    作者要的形态：卡片上「评论 N 条」+ 标题右边「收藏」+ 「缝入记录」旁边「收藏记录」；
@@ -2139,6 +2150,15 @@
 .yws-segbox .yws-btn:first-child { border-radius: var(--yws-r-pill) 0 0 var(--yws-r-pill); margin-left: 0; }
 .yws-segbox .yws-btn:last-child { border-radius: 0 var(--yws-r-pill) var(--yws-r-pill) 0; }
 .yws-segbox .yws-btn.yws-sel { position: relative; z-index: 1; }
+/* ★★W129（作者 2026-10-09）：上传向导「① 选范围」那一排的**手机档断行位** ——
+   `<i class="yws-segbrk">` 插在第 3 颗（整份预设）与第 4 颗（小剧场）之间。
+   · **默认（电脑档 / 任何 ≥721px）= 不显示、不占位** ⇒ 5 颗仍是一行、仍连成一排（外端半圆、中间描边相接）；
+   · 手机档那一段（`@media (max-width: 720px)` 里）把它变成"占满一行的 6px 空档"⇒ 强制在这里换行，
+     并把断点两侧的外端圆角补回来（`.yws-segrow-end` / `.yws-segrow-start`）。
+   ★为什么用元素而不是 `::after`：伪元素在 flex 里同样是 flex item，但**没法在手机上"开关"**
+     （伪元素的 `content` 在媒体查询里换值会牵动 `:last-child` 一类的结构判据，而这些判据正是
+      r12/M6 那几把尺子量"紧贴/同一组"的依据）—— 一个真元素两端都干净：电脑档 `display:none` 即"不存在"。 */
+.yws-segbrk { display: none; }
 .yws-wftx { font-size: var(--yws-fs-xs); }
 
 /* ---- ★D21：待审页展开后的"这条怎么改的" ---- */
@@ -2496,6 +2516,26 @@
 
 /* ---------------------------------------------------------------- 10. 手机（390×844 也量过） */
 @media (max-width: 720px) {
+    /* ★★W129（作者 2026-10-09 · 手机）：「① 选范围」那一排**分两行**——
+       上排 = 部分上传 · 正则 · 整份预设；下排 = 小剧场 · 许愿 / 交流。
+       改前实测（390×844）：5 颗共 311px，行内宽只有 285px ⇒ **横溢 26px**，「许愿 / 交流」右缘伸出容器 26px。
+       改法（HTML 侧只多一个不占位、无动作、不可聚焦的 `<i class="yws-segbrk">`）：
+         · `.yws-segbox` 允许换行（`flex-wrap: wrap`）+ 断行元素占满一行（`flex: 0 0 100%`，高 6px = 两排间距，
+           与组内其它间距同档）⇒ 断点**恰好**落在第 3 颗之后（上排 3 颗共 ~180px，稳放得下）；
+         · 断点两侧补回外端圆角（`.yws-segrow-end` = 整份预设那颗的右端，`.yws-segrow-start` = 小剧场那颗的左端），
+           并把它原来的 `margin-left: -1px` 归零 —— 两排各自都是"两端半圆、中间相接"的同一套分段按钮；
+         · `pointer-events: none`：那 6px 空档连点都点不到它（点击委派本来也找不到动作）。
+       ★为什么不是"让它自然换行"：自然换行的断点随容器宽度浮动（手机上 5 颗挤不下会掉 1~2 颗，
+         宽一点的手机上可能一颗都不掉）—— 作者要的是"**上排这三样 / 下排其余**"这条固定语义。
+       ★★`max-width: 100%` 那一句是**必须的**（改后第一跑实测踩到）：`.yws-segbox` 是 `flex: 0 0 auto`，
+         而**换行不会改变 flex item 的 max-content 宽度** —— 只有 `flex-wrap: wrap` 时它的盒子仍是 312px
+         （5 颗并排的宽度），于是"内容排成两行了、盒子还是 312" ⇒ 行内横溢 27px 照旧存在
+         （读数：`容器宽 312 / 行宽 285 / 行横溢 27`）。`max-width: 100%`（= 父行内容宽 285）
+         把盒子收回可用宽 ⇒ 两行各自在盒内排好、**行横溢归零**。 */
+    .yws-segbox { flex-wrap: wrap; max-width: 100%; }
+    .yws-segbrk { display: block; flex: 0 0 100%; height: 6px; pointer-events: none; }
+    .yws-segbox .yws-seg.yws-segrow-end { border-radius: 0 var(--yws-r-pill) var(--yws-r-pill) 0; }
+    .yws-segbox .yws-seg.yws-segrow-start { border-radius: var(--yws-r-pill) 0 0 var(--yws-r-pill); margin-left: 0; }
     /* ★M15/M22：手机上标签与内容并排会太挤 → 仍然并排，但标签那格收窄一点（两行还是对齐的）
        ★AU-②：同样改成 em（4.6em ≈ 原 52px 那一档）—— 两格永远同宽、字号涨了也不会折行，理由见上面那条注释 */
     .yws-credline > .yws-lbl-t { flex: 0 0 4.6em; }
@@ -2542,6 +2582,13 @@
     }
     .yws-card-f .yws-btn.yws-cmbtn { position: relative; }
     .yws-card-f .yws-btn.yws-cmbtn::after {
+        content: ''; position: absolute; left: 50%; top: 50%; width: 100%; min-width: 34px; height: 32px;
+        transform: translate(-50%, -50%);
+    }
+    /* ★★W129：整份卡上那颗「下载本预设」与「💬 评论」**逐字同源**的 32 热区
+       （可见盒一个像素不动 —— 与 W49-M2 那条同一条手法：绝对定位伪元素不参与 flex 行高、不撑盒）。 */
+    .yws-card-f .yws-btn.yws-dlbtn { position: relative; }
+    .yws-card-f .yws-btn.yws-dlbtn::after {
         content: ''; position: absolute; left: 50%; top: 50%; width: 100%; min-width: 34px; height: 32px;
         transform: translate(-50%, -50%);
     }

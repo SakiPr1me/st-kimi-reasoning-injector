@@ -7752,7 +7752,12 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
 /* ★★W126-b（2026-10-09 · 作者转来的用户报告「没取名就点上传 ⇒ 卡住、临时补救也没用」）：
    商店只改"署名"那一条链（拦在入口诱导去取名 / 装包草稿空则回退设置并回填 / 「确认」落盘顺手回填草稿 /
    向导第②步那颗「去取名」） ⇒ storeBuild v2.2.58 → **v2.2.59**（与 preset-store.js 的 VERSION/BUILD 成对）。 */
-const storeBuild = 'v2.2.59';
+/* ★★W129（2026-10-09 · 作者手机两条）：① 「⬇ 下载最新预设」从工具条第 2 行**整颗下线** ⇒ 改挂到
+   **每张整份预设卡**的「💬 评论」左边（文案「下载本预设」，行为 = 把**这一张**的包另存成新预设；
+   老动作 `get-official` 的路由留着）；② 发布向导「① 选范围」那一排在**手机档分两行**
+   （上排 = 部分上传 · 正则 · 整份预设；下排 = 小剧场 · 许愿 / 交流），电脑档仍是一行。
+   ⇒ storeBuild v2.2.59 → **v2.2.60**（与 preset-store.js 的 VERSION/BUILD 成对）。 */
+const storeBuild = 'v2.2.60';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();

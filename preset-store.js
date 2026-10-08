@@ -118,7 +118,20 @@ const EXT = 'preset_store';
       ⑤ 顺带把那句 5xx 兜底话术改成实话（台账 §XXIX 那次额度事故："等一会儿"→"额度按北京时间早 8 点恢复
          + 别反复点刷新"，指路那颗刷新按钮照旧保留）。
       与下面 BUILD、index.js 的 storeBuild 成对升）。 */
-const VERSION = '2.2.59';
+/* ★★W129 收口（2026-10-09 · 作者手机两条 · 夜间）：v2.2.59 → **v2.2.60**
+   （三处成对：VERSION/BUILD 两处 + index.js 的 storeBuild 一处。只动「条目商店」这一个模块。）
+   ① **甲**：作者原话 ——「**下载最新预设**在手机端的 UI 完全是非常丑的 …… 改一下 **改成 下载本预设**
+      然后在**所有上传的整份预设** 的 **评论左边**」⇒ 工具条第 2 行那颗（`officialBtn()`）
+      **整颗下线**（界面上不再有第二个入口），改挂到**每张整份卡**（`kind === 'ywp-preset'`，官方/用户都挂）
+      的「💬 评论」左边（`cardDlBtnHtml` + `case 'get-card-preset'` → `getCardPreset(id)`）；
+      行为 = **按卡片 id 取那一份**的包另存成新预设（与老那颗共用 `downloadPresetOfCard` 的下半段）；
+      老动作 `get-official`（"取作者最新"）的路由**留着**（界面上没按钮了，探针拿它当正控）。
+   ② **乙**：作者原话 ——「点击发布里 **部分上传直到 许愿/交流 这几个选项 已经超出边框范围了**
+      手机端的话 **分成上下两部分** …… **要美观的**」⇒ 向导「① 选范围」那一排在手机档**分两行**
+      （上排 = 部分上传 · 正则 · 整份预设；下排 = 小剧场 · 许愿 / 交流），靠一个**不占位的断行元素**
+      （`.yws-segbrk`，电脑档 `display:none`）+ 窄屏媒体查询实现；**电脑档仍是一行、形状一个像素不变**。
+      改前读数（真页面 390×844）：那一排 5 颗共 311px vs 行内宽 285px ⇒ **横溢 26px**（许愿/交流 伸出 26px）。 */
+const VERSION = '2.2.60';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -208,7 +221,7 @@ const VERSION = '2.2.59';
    v2.2.58 → **v2.2.59**（VERSION/BUILD 两处 + index.js 的 storeBuild = 三处成对）。
    只改署名这一条链：拦在入口（诱导去取名）/ 装包草稿空则回退设置并回填 / 「确认」落盘顺手回填草稿 /
    向导里那颗「去取名」（与拦入口同一个函数）。 */
-const BUILD = 'v2.2.59';
+const BUILD = 'v2.2.60';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（`https://ywp-store-sakiprime.pages.dev`）：
@@ -3855,7 +3868,12 @@ function toolbar(targetCell) {
                  「这一栏自己的翻页 + 刷新」，与「用户更新」那一行同一套构成（一个动作入口只留一处）。
                · 旧动作名/文字/title **一个字没改**（`data-act="get-official"`、`⬇ 下载最新预设`、
                  "下载作者最新整份预设（另存成一份新预设，不动你现在这份）"）⇒ 点下去的行为与改前逐字相同。 */
-            officialBtn() +
+            /* ★★W129（作者 2026-10-09 · 手机反馈）：这一行原来还挂着 `officialBtn()`（「⬇ 下载最新预设」）——
+               作者原话："**下载最新预设**在手机端的 UI 完全是非常丑的 …… 是否能把这个下载最新预设
+               改一下 **改成 下载本预设** 然后在**所有上传的整份预设** 的 **评论左边**"。
+               ⇒ 那颗**从这一行整颗摘掉**：界面上**不再有第二个入口**（`officialBtn()` 函数本体与 `data-act="get-official"`
+                 那条路由都还留着 = 老动作没丢，但**画在卡片上那一颗**才是唯一入口，见 `cardDlBtnHtml`）。
+               ⇒ 顶部第 2 行因此变短（它就是手机档"被单独挤成一行"的那位）。 */
         '</div>' +
         /* ★★BJ-A 组 3「搜索自己一行」→ ★★W42 第 3 行 = **搜索 + 每页多少条**（作者原话："第 3 行：搜索 +
            每页多少条，搜索框自适应长短"）。搜索框 `flex: 1 1 0`（自适应）、每页那一格 `flex: 0 0 auto`。
@@ -4264,7 +4282,9 @@ function officialSecHtml(official, offiNew, extraRight, total) {
            **是同一个组件、同一个函数**（`refreshBtnHtml()`，动作名/图标/title 一个字没变），不新造第二颗。
            ★★W28-②：这颗旁边原来还挂着 `officialBtn()`（「⬇ 下载最新预设」）—— 它**搬去工具条第 2 行**了
              （作者原话见 `toolbar()` 里那段注释）。这一格现在只剩「本栏翻页 + 刷新」，与「用户更新」
-             那一行（`refreshBtnHtml()` + 分页）同一套构成。 */
+             那一行（`refreshBtnHtml()` + 分页）同一套构成。
+           ★★W129（作者 2026-10-09）：工具条第 2 行那颗也**整颗下线**了（改挂到每张整份卡的「下载本预设」，
+             见 `cardDlBtnHtml`）—— 这一格不受影响（它本来就没有它）。 */
         pagerHtml(null, 'sec', 'official') + (extraRight || '') + refreshBtnHtml() + '</span></summary>';
     return '<div class="yws-sec" data-sec="official" data-offi-new="' + numOf(offiNew.length) + '">' +
         '<details class="yws-secdet" data-offi="1"' + (open ? ' open' : '') + '>' + head +
@@ -5310,15 +5330,30 @@ async function cardAdmDelete(id) {
     }
 }
 
-/** ★W28-②（作者 2026-09-25 白天 · 台账 §GY 第 1 条）：**「⬇ 下载最新预设」那一颗** ——
- *  它现在长在**工具条第 2 行**（`.yws-tbrow-flt`）里、紧跟「全部 / 我缝过 / 没缝过」那一组的右边
- *  （调用点见 `toolbar()` 那段注释里的完整理由）。改动只有两处：
- *   · `.yws-ghost` **去掉**（原来它是个"无底无框的文字按钮"，在分区头那种素底上好看；放进这排按钮中间显轻）
- *     ⇒ 现在与同排的 `.yws-btn.yws-mini` 同底同框、同高（26px PC / 32px 手机）、同圆角；
- *   · 位置从「官方条目」那一行的右端搬到这一行（`officialSecHtml` 里那句已删）。
- *  ★动作名 `get-official` / 文字 / `title` 一个字没改 ⇒ 点下去还是同一个 `getOfficialPreset()`。 */
-function officialBtn() {
-    return '<button class="yws-btn yws-mini yws-offi-dl" data-act="get-official" title="下载作者最新整份预设（另存成一份新预设，不动你现在这份）">⬇ 下载最新预设</button>';
+/** ★W28-②（作者 2026-09-25 白天 · 台账 §GY 第 1 条）：**「⬇ 下载最新预设」那一颗**（W129 起**界面上已下线**）——
+ *  它当年长在**工具条第 2 行**（`.yws-tbrow-flt`）里、紧跟「全部 / 我缝过 / 没缝过」那一组的右边。
+ *  ★★W129（作者 2026-10-09 · 手机反馈）：作者原话 —— "**下载最新预设**在手机端的 UI 完全是非常丑的
+ *     …… 是否能把这个下载最新预设 **改一下 改成 下载本预设** 然后在**所有上传的整份预设** 的 **评论左边**"
+ *     ⇒ 这一颗**整个撤掉**（工具条第 2 行不再画它；`officialBtn()` 函数本体随之删除，
+ *       不再有"第二个入口"），改由**每张整份卡**上的 `cardDlBtnHtml()` 承担（见它自己的注释）。
+ *  ★**行为没丢**：`data-act="get-official"` 那条路由（`case 'get-official'`）与 `getOfficialPreset()`
+ *     一个字没动 —— 它仍是"取**作者最新**那一份整份"那条路，只是**界面上不再有按钮**驱动它
+ *     （探针/老用例仍可从 `__ywstore.getOfficialPreset` 调；W129 的探针拿它当"两条路都对"的正控）。
+ *  ★为什么删函数而不是留着：留着就是死代码，而且它返回的那串文案（「⬇ 下载最新预设」）一旦被谁再画一次，
+ *     就会违背作者这一轮"界面上不许再出现那个入口"的口径。 */
+/** ★★W129（作者 2026-10-09）：**整份预设卡**上那颗「下载本预设」——
+ *  · **只挂整份卡**（`kind === 'ywp-preset'`：官方整份 + 用户上传的整份**都挂**）；
+ *    条目卡 / 正则卡 / 小剧场 / 许愿**一颗都不挂**（判据在 `cardHtml` 的调用点，判一次就够）。
+ *  · **位置** = 「💬 评论」那颗的**左边**（作者原话"的评论左边"）⇒ 调用点写在 `commentBtnHtml(c)` 之前。
+ *  · **行为** = 把**这张卡里那一份**另存成一份新预设（`case 'get-card-preset'` → `getCardPreset(id)`）。
+ *    ★与老「下载最新预设」的区别就在"取哪一张"：老那颗取 `newestOfficialFull()`（作者最新那份），
+ *      这一颗取**按钮上 data-id 指的那一张**；两条路共用 `downloadPresetOfCard()` 的下半段（拉包/确认/另存/切过去）。
+ *  · **视觉语言复用**（铁律 §5）：只用既有 `.yws-btn.yws-mini` + 与 `.yws-cmbtn` 同族的次要动作底/框
+ *    （`.yws-dlbtn` 只加一个身份记号，颜色全走既有令牌）；手机档热区由 CSS 里与 `.yws-cmbtn` **逐字同源**
+ *    的那条 `::after` 补到 32。 */
+function cardDlBtnHtml(c) {
+    return '<button type="button" class="yws-btn yws-mini yws-dlbtn" data-act="get-card-preset" data-id="' + esc(c.id) + '"' +
+        ' title="下载这张卡里的整份预设（另存成一份新预设，不动你现在这份）">下载本预设</button>';
 }
 /** 分区头：小图标 + 名字 + 计数胶囊 + 一条细分隔线（§16：别再是那行朴素文字）；`extra` = 挂在右边的按钮。
  *  ★★W6-A4：`tag` 传 `'summary'` 时画成 `<summary>` —— 给「用户更新」那一区当可折叠的那一行用
@@ -5596,6 +5631,11 @@ function cardHtml(c) {
             (more > 0 ? '<b class="yws-chip yws-chip-more" title="' + esc(names.slice(3, 43).map(mdPlain).join('、') + (names.length > 43 ? ' …等 ' + names.length + ' 个' : '')) + '">+' + numOf(more) + '</b>' : '') +
             '</span>' : '<span class="yws-mnames"></span>') + baseChipOf(c) +
             '<span class="yws-card-f">' +
+                /* ★★W129（作者 2026-10-09）：**整份卡的「下载本预设」** —— 就在「💬 评论」**左边**。
+                   ★判据只写一次（`kind === 'ywp-preset'`）：官方整份 + 用户上传的整份都挂；
+                     条目卡 / 正则卡（都是 `ywp-entry`）/ 小剧场（`ywp-play`）/ 许愿（`ywp-wish`）一颗都不挂。
+                     小剧场与许愿本来就走下面那两个分支（获取剧场 / 许愿那颗"楼"按钮），不受影响。 */
+                (String(c.kind) === 'ywp-preset' ? cardDlBtnHtml(c) : '') +
                 /* ★★W86（作者拍板）：**许愿卡**的回复按钮换一档 —— 复用同一颗 `.yws-cmbtn`（同一个
                    `data-act="comments"` → 同一套评论/盖楼链路），只把字面与配色档提为"这里是楼"的强调档
                    （回复数在这张卡上是核心读数，见 `wishRepBtnHtml`）。其余卡照旧走 `commentBtnHtml`。 */
@@ -8796,8 +8836,23 @@ function scopeRow(w) {
              跟工具条那排**连成一排的分段按钮**（间距 −1 = 描边相接、只有两头是半圆）明显不是一族人。
        改后：**同一套类名/同一套视觉** —— 外层 `.yws-tbgroup`（工具条那排就是这个类），
              每颗加 `yws-mini yws-seg`（跟工具条那排一样高、一样宽的口径）。
-             `.yws-scopebtn` 这个老类名**保留**（ui-audit 与几处断言认它）。 */
-    const bit = (v, txt) => '<button class="yws-btn yws-mini yws-seg yws-scopebtn' + (w.scope === v ? ' yws-sel' : '') + '" data-act="w-scope" data-scope="' + v + '"' +
+             `.yws-scopebtn` 这个老类名**保留**（ui-audit 与几处断言认它）。
+       ★★W129（作者 2026-10-09 · 手机反馈）：作者原话 —— "点击发布里 **部分上传直到 许愿/交流 这几个选项
+         已经超出边框范围了** 手机端的话 **分成上下两部分**好吗 **部分上传 正则 整份预设 放上面 其他放下面**
+         然后**要美观的**"。
+         · 改前实测（真页面 390×844）：这一排 5 颗共 **311px**，而向导那一行的内宽只有 **285px**
+           ⇒ **行内横溢 26px**，「许愿 / 交流」右边 26px 直接伸出容器右缘（截图 `e2e/tmp/w129-yi-390.png`）；
+         · 改法（**HTML 只加一个不占位的断行元素、布局全靠 CSS 媒体查询**）：
+             ① 在**第 3 颗与第 4 颗之间**插一个 `<i class="yws-segbrk">`（本身不带任何语义/动作）；
+             ② 手机档（`@media (max-width: 720px)`）它 = `flex: 0 0 100%; height: 6px` ⇒ **强制在这里断行**，
+                上排 = 部分上传 · 正则 · 整份预设，下排 = 小剧场 · 许愿 / 交流（间距 6px，与组内口径一致）；
+                两排各自的**外端圆角**由 `.yws-segrow-end` / `.yws-segrow-start` 两个记号补齐
+                （不然断点两侧会留着"相接"的直角，看着像被切了一刀）；
+             ③ **电脑档（≥721px）这个元素 `display: none`** ⇒ 5 颗仍是一行、仍连成一排、
+                间距/圆角/尺寸**一个像素都不变**（老断言 `r6-store-probe` 的"全部横排 + 相邻差 ≤2 + 同一组"
+                继续逐字成立）。 */
+    const bit = (v, txt, extraCls) => '<button class="yws-btn yws-mini yws-seg yws-scopebtn' + (w.scope === v ? ' yws-sel' : '') +
+        (extraCls ? ' ' + extraCls : '') + '" data-act="w-scope" data-scope="' + v + '"' +
         (v === 'regex' ? ' title="只传预设里的正则（查找/替换脚本），不传任何条目"'
             /* ★W22（W2b）：第四档那颗的 title —— 与「正则」那颗同一个位置、同一个写法（不新造机制）。 */
             : (v === 'play' ? ' title="把一段写好的文字分享出来 —— 别人点一下就填进他的输入框"'
@@ -8808,7 +8863,12 @@ function scopeRow(w) {
        作者想把"我调好的这几条正则"单独分享出来，只能整份预设传上去（连带私有设定一起公开）。 */
     /* ★W22（W2b）：第四档 = **小剧场**（同族类名 yws-btn yws-mini yws-seg yws-scopebtn，零新增 CSS）。
        ★第一个 .yws-tbgroup 仍是工具条那排（:2556 那条硬口径）—— 这一颗加在**这一组之内**，不动分组。 */
-    return '<span class="yws-tbgroup yws-segbox">' + bit('part', '部分上传') + bit('regex', '正则') + bit('full', '整份预设') + bit('play', '小剧场') + bit('wish', '许愿 / 交流') + '</span>';
+    /* ★★W129：`<i class="yws-segbrk">` = **手机档的断行位**（第 3 颗与第 4 颗之间；电脑档 `display:none`
+       ⇒ 一个像素都不占）。它**没有 data-act、没有 tabindex** ⇒ 点击委派找不到动作、也不会被聚焦
+       （CSS 里另给它 `pointer-events: none`，那 6px 的空档连点都点不到它）。 */
+    return '<span class="yws-tbgroup yws-segbox">' + bit('part', '部分上传') + bit('regex', '正则') + bit('full', '整份预设', 'yws-segrow-end') +
+        '<i class="yws-segbrk" aria-hidden="true"></i>' +
+        bit('play', '小剧场', 'yws-segrow-start') + bit('wish', '许愿 / 交流') + '</span>';
 }
 /** ★F29「编辑并更新」：上传向导顶端那条"我在改哪张卡"的横幅（提交时走 `/update` 全量替换而不是 `/submit`）。
  *  依据：台账 F29（"更改要能直接改条目内容 = 编辑并更新，不是只能撤回重传"）+ F30（"撤回=删除；要的是更新"）。
@@ -12775,6 +12835,9 @@ function onClick(m, ev) {
         case 'sewn-del': sewnDel(id); break;
         /* ★★W10-②：原来这里挂着官方区那颗「看过了」按钮的路由（offi-read）—— 那颗按钮已彻底删除，
            语义换成"官方更新区展开且被看到 ⇒ 静默记为已读"（offiAutoRead，见它自己的注释）。 */
+        /* ★★W129：卡片上那颗「下载本预设」（整份卡专属）—— 把**这一张**的包另存成新预设。
+           ★老那颗 `get-official` 的路由**留着**（界面上已无按钮驱它；探针/老用例仍可驱动 —— 见 getOfficialPreset）。 */
+        case 'get-card-preset': ev.preventDefault(); getCardPreset(id); break;
         case 'get-official': ev.preventDefault(); getOfficialPreset(); break;
         /* ★★★W11-B6（作者拍板）：展开 / 收起官方基准管理面板 —— 就在「待审」页里就地更新，不跳滚动。
            ★它不依赖任何开合状态：这一页本来就只有作者（填过审核密钥）看得到。 */
@@ -13838,12 +13901,39 @@ async function selectPresetNow(name) {
         return { ok: false, why: (e && e.message) || String(e) };
     }
 }
-async function getOfficialPreset() {
-    if (S.officialBusy) return;                        // 连点两下只走一遍（别开两个确认弹窗）
+/** ★★W129（作者 2026-10-09）：**点卡片上那颗「下载本预设」** —— 把**这一张卡**里的那份整份预设另存成
+ *  一份新预设（撞名自动加序号、不覆盖同名、不动他现在的预设）。
+ *  · 拿的是**按钮上 data-id 那一张**的包（`readFullPack(id)` 同一条路，`__ywstore.list` 那一份数据也同一处）；
+ *  · 这张卡不在当前列表里了（刚被撤回 / 刷新过）⇒ 说人话让他刷新，**绝不静默**；
+ *  · 包不完整（服务端没给全 `preset.prompts`）⇒ 同样一句人话（这是"卡在那儿、读不出内容"那一档的安全网）。
+ *  ★连点：与老那颗共用 `S.officialBusy`（同一件事的两条路，别开两个确认弹窗）。 */
+async function getCardPreset(id) {
+    if (S.officialBusy) return;
     S.officialBusy = true;
     try {
         if (S.online === false) {                      // 离线：说清楚"没动你任何东西"（§1.4 不阻塞）
-            toast('warning', '连不上商店（离线），稍后再点或尝试切换节点。「⬇ 下载最新预设」不会动你现有的任何东西。');
+            toast('warning', '连不上商店（离线），稍后再点或尝试切换节点。这一步不会动你现有的任何东西。');
+            return;
+        }
+        const c = (S.cards || []).find(x => String(x.id) === String(id));
+        if (!c) {
+            toast('warning', '这张卡片不在列表里了 —— 点右边那颗刷新按钮刷新一下再来。');
+            return;
+        }
+        await downloadPresetOfCard(c, '下载本预设');
+    } finally { S.officialBusy = false; }
+}
+/** ★★W129：**老那颗「⬇ 下载最新预设」的动作**（界面上已无按钮 · 见 `officialBtn` 那段注释）——
+ *  仍然是"取**作者最新**那一份整份"，然后走**同一条**下载链（`downloadPresetOfCard`）。
+ *  ★保留它的意义：① 行为没丢（老用例 / 探针仍从 `__ywstore.getOfficialPreset()` 驱动；
+ *     W129 探针拿它当"两条路都要正确"的**正控**：卡片那颗按张、这一颗按最新，各说各的那一份）；
+ *  ② 撤回一条动作名会让按动作名驱动的老探针当场炸（§BO-9 那条教训）。 */
+async function getOfficialPreset() {
+    if (S.officialBusy) return;
+    S.officialBusy = true;
+    try {
+        if (S.online === false) {
+            toast('warning', '连不上商店（离线），稍后再点或尝试切换节点。这一步不会动你现有的任何东西。');
             return;
         }
         const c = newestOfficialFull();
@@ -13851,34 +13941,41 @@ async function getOfficialPreset() {
             toast('warning', '作者还没上传整份预设。你可以先用更新器里的「📥 导入更新包文件」把作者发的小更新包导进来。');
             return;
         }
-        // ① 拉最新那份全文（同一个 id 已在内存里就不重复拉）
-        let pack = (S.officialFull && S.officialFull.id === c.id) ? S.officialFull.preset : null;
-        if (!pack) {
-            try { pack = await readFullPack(c.id); S.officialFull = { id: c.id, preset: pack }; }
-            catch (e) { toast('error', '拉取失败：' + (e.message || e)); return; }
-        }
-        if (!pack.preset || !Array.isArray(pack.preset.prompts)) { toast('error', '这一份不是完整的预设（服务端没给全 preset）'); return; }
-        // ② 人话确认（就一句：谁、哪天的、会另存、不动你现在这份）
-        const baseName = String(pack.baseName || c.title || '余温预设');
-        const who = String(c.author || '余温');
-        const day = String(c.updatedAt || '').slice(0, 10);
-        const ok = await askYes('下载作者最新整份预设',
-            '要拿「' + esc(baseName) + '」（作者 ' + esc(who) + '，' + esc(day) + ' 更新）吗？<br>' +
-            '会<b>另存成一份新预设</b>（撞名自动加序号），<b>不动你现在这份</b>，也不覆盖任何同名。',
-            '要，存一份',
-            '要拿「' + baseName + '」（作者 ' + who + '，' + day + ' 更新）吗？\n会另存成一份新预设（撞名自动加序号），不动你现在这份，也不覆盖任何同名。');
-        if (!ok) { toast('info', '好，什么都没动。'); return; }
-        // ③ 另存新名
-        let final = '';
-        try {
-            final = await savePresetNew(baseName + '（云端 ' + nowDay() + '）', pack.preset);
-            S.officialFull = null;
-            S.lastSaved = final;
-        } catch (e) { toast('error', '存盘失败：' + (e.message || e)); warn('写盘失败', e); return; }
-        // ④ 当场切到它
-        const sel = await selectPresetNow(final);
-        toast('success', sel.ok ? ('已导入并切到「' + final + '」，现在就能用') : ('已导入「' + final + '」——到酒馆的预设下拉里选它就能用'));
+        await downloadPresetOfCard(c, '下载作者最新整份预设');
     } finally { S.officialBusy = false; }
+}
+/** ★★W129：两条路共用的下半段（拉包 → 人话确认 → 另存新名 → 当场切过去）——
+ *  原 `getOfficialPreset()` 的主体**一个步骤都没改**，只是"取哪一张"由调用方先定好了。
+ *  @param {object} c      要下载的那张卡（S.cards 里那一项）
+ *  @param {string} header 确认弹窗的标题（「下载本预设」/「下载作者最新整份预设」） */
+async function downloadPresetOfCard(c, header) {
+    // ① 拉那一份全文（同一个 id 已在内存里就不重复拉）
+    let pack = (S.officialFull && S.officialFull.id === c.id) ? S.officialFull.preset : null;
+    if (!pack) {
+        try { pack = await readFullPack(c.id); S.officialFull = { id: c.id, preset: pack }; }
+        catch (e) { toast('error', '拉取失败：' + (e.message || e)); return; }
+    }
+    if (!pack.preset || !Array.isArray(pack.preset.prompts)) { toast('error', '这一份不是完整的预设（服务端没给全 preset）'); return; }
+    // ② 人话确认（就一句：谁、哪天的、会另存、不动你现在这份）
+    const baseName = String(pack.baseName || c.title || '余温预设');
+    const who = String(c.author || '余温');
+    const day = String(c.updatedAt || '').slice(0, 10);
+    const ok = await askYes(header || '下载本预设',
+        '要拿「' + esc(baseName) + '」（作者 ' + esc(who) + '，' + esc(day) + ' 更新）吗？<br>' +
+        '会<b>另存成一份新预设</b>（撞名自动加序号），<b>不动你现在这份</b>，也不覆盖任何同名。',
+        '要，存一份',
+        '要拿「' + baseName + '」（作者 ' + who + '，' + day + ' 更新）吗？\n会另存成一份新预设（撞名自动加序号），不动你现在这份，也不覆盖任何同名。');
+    if (!ok) { toast('info', '好，什么都没动。'); return; }
+    // ③ 另存新名
+    let final = '';
+    try {
+        final = await savePresetNew(baseName + '（云端 ' + nowDay() + '）', pack.preset);
+        S.officialFull = null;
+        S.lastSaved = final;
+    } catch (e) { toast('error', '存盘失败：' + (e.message || e)); warn('写盘失败', e); return; }
+    // ④ 当场切到它
+    const sel = await selectPresetNow(final);
+    toast('success', sel.ok ? ('已导入并切到「' + final + '」，现在就能用') : ('已导入「' + final + '」——到酒馆的预设下拉里选它就能用'));
 }
 async function readFullPack(id) {
     const r = await api.pack(id);           // ★轮5：带 client → 回来的 `liked` 也对
@@ -13944,7 +14041,7 @@ export function initStoreDebug() {
         //   （`openCard` 这个老名字留着 = toggleCard 的别名，e2e/文档里到处是它）
         openCard: toggleCard, toggleCard, toggleRow, retryCard, previewRows, openInUpdater, afterStitched,
         buildPayload, submitPayload, startUpload, stFields, fp8, kindText, fieldRows, changeTagOf, changeBlocks,
-        loadMine, loadPending, credImport, dateText, getOfficialPreset,
+        loadMine, loadPending, credImport, dateText, getOfficialPreset, getCardPreset,
         /* ★★W25A（第 9 条 + 协调者追加）：凭据的**唯一出口** = `credValue()`（就是那一串有效值）。
            ★`credsJson` 这个名字**留一个兼容别名**（指同一个函数）：历史探针/文档里到处是它，
              名字换掉 = 那些探针当场 ReferenceError（本支真踩过：这一行没改，`initStoreDebug()` 一抛，
