@@ -932,6 +932,12 @@
 }
 .ywpu-grp-mine { background: color-mix(in srgb, var(--ywd-del) 30%, transparent); }
 .ywpu-grp-next { background: color-mix(in srgb, var(--ywd-add) 28%, transparent); }
+/* ★W124-乙：「合二为一」里**没改动的那一段**整片可点（点了就原样收进来）—— 它**不是**差异，
+   所以不许穿红/绿去冒充"旧版/新版"：底色走中性（`--ywpu-surface`，与 `.ywpu-k-dim` 同一族的克制感），
+   左侧那条 3px 线在选中时才亮（章照旧盖 `.ywpu-stamp`，只是里面写的是序号 ①②③）。 */
+.ywpu-grp-take { background: var(--ywpu-surface); }
+.ywpu-grp-take.ywpu-on { border-left-color: var(--ywpu-line); }
+.ywpu-grp-take .ywpu-stamp { background: color-mix(in srgb, var(--ywpu-accent) 85%, #000); }
 .ywpu-grp:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 40%, transparent); }
 .ywpu-grp-mine.ywpu-on { border-left-color: var(--ywd-del); }
 .ywpu-grp-next.ywpu-on { border-left-color: var(--ywd-add); }

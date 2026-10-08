@@ -2194,11 +2194,17 @@ export function regexFieldDiff(mine, next) {
  * @param {'next'|'mine'} p.orderMode 顺序骨架跟谁
  * @param {{items?:Array, decisions?:object}} [p.regex] 正则（预设级）的对比结果与逐条决策；省略 = 内核自己按安全口径合
  *        （**默认绝不丢你的正则**：你独有的一条不删、两边不一样的默认保你的，全部记进 report.regex）
+ * @param {string} [p.nextNameSuffix] ★W124-甲：`source:'both'`（保存为两版）时，**留在原位置那条**（= 新版内容）
+ *        的名字要加的后缀（形如 `' by:daphnie'`；空串 = 一个字都不改名，老行为逐字不变）。
+ *        口径（作者 2026-10-08 原话："如果选择 保存为两版 缝入之后**把条目名称改为"原条目名称+by作者"**
+ *        比如 **肘击条目 by:daphnie** 这样好区分"）—— **只管"缝进来那一版"**；另存的那条照旧
+ *        「原名（旧版）」（`makeOldCopyPrompt`），两条因此天然可区分。撞名追加 `（2）`（与（旧版）同一套消重）。
+ *        作者名从哪来是**调用方**的事（更新器侧取 `S.store.author`；没有 ⇒ 传空串 = 不改名）。
  * @returns {{preset:object, report:object}}
  */
-export function buildMerged({ mine, next, items, decisions = {}, params = [], orderMode = 'next', orderOverride = null, extraEntries = [], regex = null }) {
+export function buildMerged({ mine, next, items, decisions = {}, params = [], orderMode = 'next', orderOverride = null, extraEntries = [], regex = null, nextNameSuffix = '' }) {
     const merged = clonePreset(next);
-    const report = { replaced: [], spliced: [], keptMine: [], addedFromMine: [], dropped: [], warnings: [] };
+    const report = { replaced: [], spliced: [], keptMine: [], addedFromMine: [], dropped: [], warnings: [], renamedBoth: [] };
 
     const decOf = (key) => {
         const d = decisions[key];
@@ -2259,6 +2265,32 @@ export function buildMerged({ mine, next, items, decisions = {}, params = [], or
         if (it.mine && it.next && it.renamed && (dec.name === 'mine' || dec.name === 'next')) {
             const nm = String((dec.name === 'mine' ? it.mine.name : it.next.name) ?? '');
             if (nm) merged.prompts[targetIdx] = { ...merged.prompts[targetIdx], name: nm };
+        }
+        /* ★★W124-甲（2026-10-08 · 作者原话）："如果两个人都上传了同个条目…如果选择 保存为两版 缝入之后
+           **把条目名称改为"原条目名称+by作者"** 比如 **肘击条目 by:daphnie** 这样好区分"。
+           口径（最小改动 + 与作者例子逐字对齐）：
+             · **只管"缝进来那一版"** = 留在原位置这条（`src==='both'`）⇒ 名字 = `原条目名称 + suffix`；
+             · **我的版本一个字不改**（另存那条照旧「原名（旧版）」，见 `makeOldCopyPrompt`）⇒ 两条天然可区分；
+             · `suffix` 由**调用方**给（更新器侧 = `' by:' + S.store.author`；没有作者名 ⇒ 传空串 ⇒ 这里一个字都不动）；
+             · `identifier` 绝不换（身份 → 顺序表 / 后续 op 定位都认它，跟上面"名字那一维"同一个口径）；
+             · **撞名**（预设里已经有一条同名）⇒ 追加 `（2）`（与（旧版）副本同一个消重口径）；
+             · 位置放在**"名字那一维"之后**：用户若在名字维里亲手挑了"用旧名字/用新名字"，
+               就在那个名字后面再加后缀（后缀是"这条是谁缝进来的"标记，不该被名字维吃掉）。
+            ★顺带把这件事记进 report（`renamedBoth`）——纯新增字段，老读者一个都不受影响。 */
+        if (src === 'both' && it.mine && String(nextNameSuffix || '')) {
+            const suf = String(nextNameSuffix);
+            const base = String(merged.prompts[targetIdx] && merged.prompts[targetIdx].name != null ? merged.prompts[targetIdx].name : '');
+            if (base) {
+                const taken = new Set(merged.prompts.map((p, i) => (i === targetIdx ? '' : String(p && p.name != null ? p.name : ''))));
+                let nm = base + suf;
+                if (taken.has(nm)) {                       // 撞名 ⇒ 追加（2）（3）…（与（旧版）副本同一个口径）
+                    let n = 2;
+                    while (taken.has(base + suf + '（' + n + '）')) n++;
+                    nm = base + suf + '（' + n + '）';
+                }
+                merged.prompts[targetIdx] = { ...merged.prompts[targetIdx], name: nm };
+                report.renamedBoth.push(base + ' → ' + nm);
+            }
         }
     }
 
