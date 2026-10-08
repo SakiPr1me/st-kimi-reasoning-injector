@@ -1,0 +1,1592 @@
+/* ==========================================================================
+   预设更新器 · 样式表 v4.0（2026-09-20 · 定稿方案 §18「视觉对齐商店」整份重排）
+   —— 和 preset-store.css（v2.0，§16）**同一套设计口径**：
+        低饱和主色 + 中性灰阶 + 圆角 + 描边 + 层级；表面/文字全部由 `--SmartThemeBodyColor`
+        混出来（深色主题"变亮=抬高"、浅色主题"变暗=抬高"，两套主题都不用改一行）。
+      区别只有一个：更新器有自己的**条目状态色**（`--yst-*`，用户逐轮定死的 6 种，别改）
+      和**正文三色**（`--ywd-*`：黄=两边不同 / 绿=新版新增 / 红=新版删掉，用户认这个色）。
+
+   用户这一轮的原话（§18）：
+     · "加一个「缝入当前预设」"（写进你现在用的那份；"必须先自动备份"+"告诉我备份到哪了"）
+     · "导出更新包这个确实没什么必要了"（从底栏拿掉 —— 功能没删，挪进折叠的"离线 / 高级"）
+     · "条目商店提到最前面"（分页顺序：商店 → 条目选择 → 顺序对比；默认仍进"条目选择"）
+     · "整体对齐商店那套视觉口径"+"删掉多余说明文字"
+
+   ★不许动的硬约束（e2e 守着，改了当场红）：
+     ① `--yst-*` / `--ywd-*` 的**默认值**必须和 preset-updater.js 的 COLOR_DEFS 第 4 列一字不差，
+        而且要定义在 **#ywpu-root** 上（run-updater-extras ⑦b 从它上面 getPropertyValue）；
+     ② 条目行左边条 = `.ywpu-item.ywpu-st-* { --stc }` + `border-left: 3px solid var(--stc)`（纯色，不许再混透明）；
+     ③ 徽标 `.ywpu-badge.ywpu-st-{onlyNext,onlyMine,both,switch}` 的 **border-color: color-mix(… 55% …)**、
+        条目行左边条、以及各处**底色**仍然是纯 `--yst-*`（逐字断言，改了当场红）；
+        ★P1-4（2026-09-21 · audit-p12）**改的只有"品牌色当文字色"那一族**：它们现在走 `--yst-*-ink` /
+        `--ywd-*-ink`（= 品牌色混 62% 正文色）—— 裸品牌色当文字在浅色主题上只有 1.41~2.29（实测真问题）。
+        对应地 `run-updater-extras` ⑦b 里"徽标文字色 / 「还没处理」那颗标记的文字色 = 变量解析值"三条断言，
+        改成"= 同一个变量**混 62% 正文色**后的解析值"（**语义没变**：仍然是"界面真实元素跟着状态变量走"，
+        只多了一层跟主题正文色的混合；边框/左边条/底色那几条一个字没动）；
+     ④ 底色块 `.ywpu-k-*`：`border-left` ≥2px 实色 + 背景 alpha > .05（ui-audit 逐块量）；
+     ⑤ 交互语义 / DOM 契约（id、data-act、ywpu- 前缀）一个字没动 —— 这一版**只动长相**。
+
+   守的 UI 铁律（跟商店/更新器同一套）：
+     · 不做内层滚动容器（`#ywpu-body` 那条是唯一滚动区；正文区**不许**有内层滚动条）；
+     · 窄屏：覆盖层写死 `100dvh` + `touch-action: pan-y`（ST 在窄屏给 body 加了 position:fixed）；
+     · 对比度 WCAG ≥4.5（ui-audit 量；三档文字 alpha ≥ .78，主色当文字用要先跟正文色 mix 一道）；
+     · 不改 emoji 语义、动画 ≤150ms、不用外链图片/字体。
+   改完务必跑：node e2e/css-check.js（默认路径就是本文件）+ node e2e/class-check.js + node e2e/ui-audit.js [mobile]
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- 1. 令牌（色板 · 与商店一套） */
+#ywpu-card, #ywpu-root, #ywpu-sheet, #ywpu-cmp, #ywpu-patch {
+    /* —— 文字三档（主 / 次 / 弱）*/
+    --ywpu-txt:   var(--SmartThemeBodyColor, #dcdcd7);
+    --ywpu-txt-2: color-mix(in srgb, var(--ywpu-txt) 88%, transparent);
+    --ywpu-txt-3: color-mix(in srgb, var(--ywpu-txt) 78%, transparent);
+    /* —— 表面三档：页面底 / 卡片底 / 悬浮层（深色里偏亮、浅色里偏暗 = 都是"抬高"）*/
+    --ywpu-bg:      color-mix(in srgb, var(--ywpu-txt) 3%, transparent);
+    --ywpu-surface: color-mix(in srgb, var(--ywpu-txt) 6%, transparent);
+    --ywpu-raise:   color-mix(in srgb, var(--ywpu-txt) 10%, transparent);
+    /* —— 描边两档 */
+    --ywpu-line:   color-mix(in srgb, var(--ywpu-txt) 15%, transparent);
+    --ywpu-line-2: color-mix(in srgb, var(--ywpu-txt) 8%, transparent);
+    --ywpu-soft:   var(--ywpu-bg);
+    --ywpu-soft2:  var(--ywpu-surface);
+    /* —— 主色：低饱和蓝紫（跟商店 --yws-accent 同一个值 = 一家人）
+           `-ink` 只用在**没有底色**的地方；有底色的文字一律用 --ywpu-txt（浅色主题上才够） */
+    --ywpu-accent:      #8b95e8;
+    --ywpu-accent-ink:  color-mix(in srgb, var(--ywpu-accent) 42%, var(--ywpu-txt));
+    --ywpu-accent-bg:   color-mix(in srgb, var(--ywpu-accent) 16%, transparent);
+    --ywpu-accent-line: color-mix(in srgb, var(--ywpu-accent) 44%, transparent);
+    /* —— 官方 = 低饱和暖金（③ 槽位 / "官方"标记）*/
+    --ywpu-offi:      #d9b26a;
+    --ywpu-gold-ink:  color-mix(in srgb, var(--ywpu-offi) 36%, var(--ywpu-txt));
+    --ywpu-gold-bg:   color-mix(in srgb, var(--ywpu-offi) 16%, transparent);
+    --ywpu-gold-line: color-mix(in srgb, var(--ywpu-offi) 46%, transparent);
+    /* —— 几何 / 字号 / 阴影（间距一律 4 的倍数）*/
+    --ywpu-radius: 12px;
+    --ywpu-r-sm: 8px; --ywpu-r-md: 10px; --ywpu-r-pill: 999px;
+    --ywpu-fs-xs: 11px; --ywpu-fs-sm: 12px; --ywpu-fs-md: 13px; --ywpu-fs-lg: 15px;
+    --ywpu-fs-name: 13.5px;
+    --ywpu-s1: 4px; --ywpu-s2: 8px; --ywpu-s3: 12px;
+    --ywpu-shadow-1: 0 1px 2px rgba(0, 0, 0, .16);
+    --ywpu-shadow-2: 0 2px 4px rgba(0, 0, 0, .16), 0 10px 24px rgba(0, 0, 0, .14);
+    --ywpu-ease: cubic-bezier(.2, .6, .3, 1);
+
+    /* —— 条目状态色（徽标 / 左边条 / 筛选标签一一对应）—— v3.8 只留 6 种，不再互相盖色
+       ★改这里必须同步改 preset-updater.js 的 COLOR_DEFS 第 4 列（图例色块取那边；⑦b 逐字断言） */
+    --yst-new: #4ade80;      /* 新版新增 */
+    --yst-renamed: #22d3ee;  /* 改了名字 */
+    --yst-old: #fbbf24;      /* 只有我有 */
+    --yst-both: #a78bfa;     /* 两边不一样（作者改过/你改过/双方都改/两边不同 合并） */
+    --yst-switch: #60a5fa;   /* 开关不同（v4.0 用户：灰色看不清 → 换成蓝）*/
+    --yst-same: #9ca3af;     /* 内容一样（不用管 → 最不显眼，但仍要看得清：ui-audit 对比度 ≥4.5） */
+    --yst-warn: #f87171;     /* 还没处理（全界面唯一的红，专给"要管"的条目） */
+    /* 旧状态色：v3.8 已合并显示，留着只是防止别处还引用到 */
+    --yst-author: #60a5fa;   /* 作者改过 */
+    --yst-mine: #fb923c;     /* 你改过 */
+    --yst-2way: #f472b6;     /* 两边不同（没填基准） */
+    /* 正文里的三种底色 */
+    --ywd-chg: #fbbf24;      /* 黄：两边不一样 */
+    --ywd-add: #4ade80;      /* 绿：新版新增 */
+    --ywd-del: #f87171;      /* 红：新版删掉 */
+
+    /* ★P1-4（audit-p12 · 真问题）：上面这族状态色是**照深色底挑的高亮色** ——
+       拿它**当文字色**用在浅色主题的浅底上必然掉：实测筛选标签 1.44 / 2.21 / 2.06、
+       条目状态标记 1.50、条目徽标 1.41（深色下同一批是 5.08~7.38）。
+       修法与商店那边（`--yws-*-ink`）**同一门手艺**：当文字时先跟**正文色**混一道（38%，见 e2e/p13-ink-math.js 的算法） ——
+       深色主题里正文色是亮的（混完更亮，仍然读得清），浅色主题里正文色是暗的（混完变深，压得住浅底）。
+       ★只动"当文字色"的地方；`--yst-*` 本身（图例色块 / 条目行左边条 / 底色块）**一个字没动**
+         （`run-updater-extras` ⑦b 那几条逐字断言仍然钉着它们）。 */
+    --yst-new-ink:     color-mix(in srgb, var(--yst-new) 38%, var(--ywpu-txt));
+    --yst-renamed-ink: color-mix(in srgb, var(--yst-renamed) 38%, var(--ywpu-txt));
+    --yst-old-ink:     color-mix(in srgb, var(--yst-old) 38%, var(--ywpu-txt));
+    --yst-both-ink:    color-mix(in srgb, var(--yst-both) 38%, var(--ywpu-txt));
+    --yst-switch-ink:  color-mix(in srgb, var(--yst-switch) 38%, var(--ywpu-txt));
+    --yst-same-ink:    color-mix(in srgb, var(--yst-same) 38%, var(--ywpu-txt));
+    --yst-warn-ink:    color-mix(in srgb, var(--yst-warn) 38%, var(--ywpu-txt));
+    --yst-author-ink:  color-mix(in srgb, var(--yst-author) 38%, var(--ywpu-txt));
+    --yst-mine-ink:    color-mix(in srgb, var(--yst-mine) 38%, var(--ywpu-txt));
+    --yst-2way-ink:    color-mix(in srgb, var(--yst-2way) 38%, var(--ywpu-txt));
+    --ywd-chg-ink:     color-mix(in srgb, var(--ywd-chg) 38%, var(--ywpu-txt));
+    --ywd-add-ink:     color-mix(in srgb, var(--ywd-add) 38%, var(--ywpu-txt));
+    --ywd-del-ink:     color-mix(in srgb, var(--ywd-del) 38%, var(--ywpu-txt));
+
+    color: var(--ywpu-txt);
+    line-height: 1.55;
+}
+
+/* 状态色 → 左边条颜色（唯一来源，别的规则不许覆盖它）
+   ★border-left 那条在下面 .ywpu-item 里，颜色必须是 --stc 的**纯色**（⑦b 逐字比 borderLeftColor） */
+.ywpu-item.ywpu-st-onlyNext { --stc: var(--yst-new); }
+.ywpu-item.ywpu-st-authorOnly { --stc: var(--yst-author); }
+.ywpu-item.ywpu-st-renamed { --stc: var(--yst-renamed); }
+.ywpu-item.ywpu-st-onlyMine { --stc: var(--yst-old); }
+.ywpu-item.ywpu-st-mineOnly { --stc: var(--yst-mine); }
+.ywpu-item.ywpu-st-both { --stc: var(--yst-both); }
+.ywpu-item.ywpu-st-mineOnly2way { --stc: var(--yst-2way); }
+.ywpu-item.ywpu-st-same { --stc: var(--yst-same); }
+/* ★第 3 轮复查补：v4.0-5 当时只把「开关不同」的蓝给到了筛选标签/图例，
+   条目行的左边条（--stc）和徽标漏了 → 那一行落在 var(--ywpu-line) 灰上（用户："看不清楚"）。 */
+.ywpu-item.ywpu-st-switch { --stc: var(--yst-switch); }
+
+/* ---------------------------------------------------------------- 2. 基础控件 */
+.ywpu-box {
+    border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-radius);
+    /* ★R9-i（首屏 S2-1 收尾）：上下内边距 12 → 8（首屏第一行距顶是硬指标；这一块本来就是"一摞小结"，
+       8px 的呼吸感在这个密度下够用）。左右仍是 12。 */
+    padding: var(--ywpu-s2) var(--ywpu-s3); margin-bottom: var(--ywpu-s2); background: var(--ywpu-bg);
+}
+/* ★★W106 ④（作者原话："对于标题的 🛒出处：官方发布 · 来自预设 余温V0917-测试版 这个地方 ——
+   为什么后面还有一个框罩着 把这个框删除 又能节约一点空间；然后让这个可以展开的卡片与下面对齐一下位置"）：
+   现场（W106 改前截图 + 读数）：那行**卡片**（`.ywpu-srcbar`，自带描边 + 左侧色条）外面还套着
+   `.ywpu-box` 这层**外壳**（另一圈描边 + 底色 + 8/12 内边距）⇒ 双层框；而且那行因此比下面
+   第一条卡片窄 13px（x 差 13 / 宽差 26）。
+   ⇒ 只把**外层壳**的框去掉（描边 / 底色 / 内边距归零；元素与类名保留 —— 老探针按
+     `#ywpu-summary .ywpu-srcbar` / `.ywpu-box` 取的照旧命中），里层那张卡片一个字节没动 ⇒
+     它与下面第一条 `.ywpu-item` 的 x/width **逐字相同**（W106 读数：改前 13/26 的差 → 改后 0/0）。
+   ★为什么能这么收：这层壳里常驻就那一行（`troubleBarHtml`/`storeBarHtml` 大多数时候返回空串），
+     它自己那圈框纯属多余；去掉顺带省下 ≈18px 竖高（首屏更短）。
+   ★作用域只限对比页（`#ywpu-summary` 是 display:contents，选择器按 DOM 父级命中）——
+     设置页卡片 / 顺序页 / 更新包窗口那几处 `.ywpu-box` 一个字不动。
+   ★margins：壳的 padding 归零后，壳的 margin-bottom 与来源块自己的 margin-bottom 折叠 ⇒ 间距 8px。 */
+#ywpu-summary > .ywpu-box { border: 0; background: transparent; padding: 0; }
+.ywpu-sub { font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt-2); font-weight: 400; }
+.ywpu-dim { color: var(--ywpu-txt-3); }
+.ywpu-note { font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt-2); }
+.ywpu-warn { color: var(--yst-warn-ink); }
+.ywpu-ok { color: var(--ywd-add-ink); }
+.ywpu-none { color: var(--ywpu-txt-3); }
+.ywpu-row { display: flex; flex-wrap: wrap; gap: var(--ywpu-s2); align-items: center; }
+.ywpu-label { font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt-2); }
+.ywpu-flex { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-left: auto; }
+.ywpu-chk { font-size: var(--ywpu-fs-sm); display: flex; gap: 5px; align-items: center; white-space: nowrap; }
+.ywpu-sep { width: 1px; height: 18px; background: var(--ywpu-line); }
+.ywpu-empty { font-size: var(--ywpu-fs-md); color: var(--ywpu-txt-2); padding: 14px 2px; text-align: center; }
+
+.ywpu-input, .ywpu-textarea {
+    font-size: var(--ywpu-fs-md); padding: 5px 9px; border-radius: var(--ywpu-r-sm);
+    border: 1px solid var(--ywpu-line); background: var(--ywpu-raise);
+    color: inherit; min-height: 30px; box-sizing: border-box;
+    transition: border-color .12s var(--ywpu-ease);
+}
+.ywpu-textarea { width: 100%; min-height: 76px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.5; }
+.ywpu-input:hover, .ywpu-textarea:hover { border-color: var(--ywpu-accent-line); }
+.ywpu-input:focus, .ywpu-textarea:focus { outline: none; border-color: var(--ywpu-accent); }
+
+.ywpu-btn {
+    font-size: var(--ywpu-fs-md); padding: 5px 11px; min-height: 30px; border-radius: var(--ywpu-r-sm); cursor: pointer;
+    border: 1px solid var(--ywpu-line); background: transparent; color: inherit;
+    display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+    transition: border-color .12s var(--ywpu-ease), background .12s var(--ywpu-ease), transform .12s var(--ywpu-ease);
+}
+.ywpu-btn:hover { border-color: var(--ywpu-accent); background: var(--ywpu-accent-bg); }
+.ywpu-btn:active { transform: translateY(1px); }
+.ywpu-btn.ywpu-mini { min-height: 26px; padding: 2px 9px; font-size: var(--ywpu-fs-sm); }
+.ywpu-btn.ywpu-primary { background: var(--ywpu-accent-bg); border-color: var(--ywpu-accent-line); font-weight: 600; }
+.ywpu-btn.ywpu-primary:hover { border-color: var(--ywpu-accent); background: color-mix(in srgb, var(--ywpu-accent) 24%, transparent); }
+.ywpu-btn.ywpu-sel { border-color: var(--ywpu-accent); background: var(--ywpu-accent-bg); font-weight: 600; }
+/* ★§18：「缝入当前预设」= 会改用户文件的那一颗 → 金色描边 + 金底，跟"生成新预设"（主色实心）分主次 */
+.ywpu-btn.ywpu-stitch { border-color: var(--ywpu-gold-line); background: var(--ywpu-gold-bg); font-weight: 600; }
+.ywpu-btn.ywpu-stitch:hover { border-color: var(--ywpu-offi); background: color-mix(in srgb, var(--ywpu-offi) 24%, transparent); }
+.ywpu-btn.ywpu-btn-plain { color: var(--ywpu-txt-2); }
+
+.ywpu-chip { font-size: var(--ywpu-fs-xs); padding: 3px 9px; border-radius: var(--ywpu-r-pill); border: 1px solid var(--ywpu-line); color: var(--ywpu-txt-2); white-space: nowrap; }
+.ywpu-chip b { font-size: 12px; color: var(--ywpu-txt); }
+.ywpu-chip.ywpu-c-decide { color: var(--yst-warn-ink); border-color: color-mix(in srgb, var(--yst-warn) 50%, transparent); }
+.ywpu-chip.ywpu-c-same { color: var(--ywd-add-ink); border-color: color-mix(in srgb, var(--ywd-add) 45%, transparent); }
+/* ★Wave K1（2026-09-24 · 作者第 19 批第 6/7 条）：**「还剩 N 条 / 要你看 N 条」要一眼能看见**。
+   作者原话："把「还剩 N 条」做得一眼能看到（加粗/配色，参考既有强调色，**别用会跟危险色冲突的**红）"。
+   · 配色 = **强调色**那一族（`--ywpu-accent*`，跟 `.ywpu-prevnote` / `.ywpu-btn.ywpu-sel` 同一档）；
+     ★**不用** `--yst-warn` 族的红 —— 那颗红是"还没处理"的危险色（全界面唯一的红），用了就撞语义。
+   · 这个类**两处共用**：底栏那颗（`#ywpu-goto-first`，可点 = 一键跳到第一条未选）与正则块那颗
+     （`.ywpu-rxbar` 里的「要你看 N 条」）⇒ 两边长得一模一样 = 作者要的"位置与条目侧一致"。
+   · 加粗 + 大一号的计数（12→13px）+ 指针 + hover：一眼能看到的四个手段都在这；
+     触摸目标由下面手机档那族（`::after` 隐形热区）负责，视觉盒仍是小的。 */
+.ywpu-chip.ywpu-todo {
+    cursor: pointer; font-family: inherit; font-weight: 700;
+    color: var(--ywpu-accent-ink, var(--ywpu-txt));
+    background: var(--ywpu-accent-bg); border-color: var(--ywpu-accent-line);
+}
+.ywpu-chip.ywpu-todo b { font-size: 13px; color: var(--ywpu-accent-ink, var(--ywpu-txt)); }
+.ywpu-chip.ywpu-todo:hover { border-color: var(--ywpu-accent); background: color-mix(in srgb, var(--ywpu-accent) 26%, transparent); }
+
+.ywpu-badge { font-size: var(--ywpu-fs-xs); padding: 1px 8px; border-radius: var(--ywpu-r-pill); border: 1px solid var(--ywpu-line); white-space: nowrap; }
+/* ★P1-4（audit-p12）：徽标的**文字色**换成 -ink 档（混 62% 正文色）——
+   浅色主题上原来只有 1.41（`#4ade80` 压浅底），现在跟筛选标签同一档手艺。
+   底色/边框仍然是 `--yst-*` 原值混出来的（色相与"哪个状态"的语义一个字没变）。 */
+.ywpu-badge.ywpu-st-onlyNext { color: var(--yst-new-ink); border-color: color-mix(in srgb, var(--yst-new) 55%, transparent); background: color-mix(in srgb, var(--yst-new) 14%, transparent); }
+.ywpu-badge.ywpu-st-authorOnly { color: var(--yst-author-ink); border-color: color-mix(in srgb, var(--yst-author) 55%, transparent); background: color-mix(in srgb, var(--yst-author) 14%, transparent); }
+.ywpu-badge.ywpu-st-renamed { color: var(--yst-renamed-ink); border-color: color-mix(in srgb, var(--yst-renamed) 55%, transparent); background: color-mix(in srgb, var(--yst-renamed) 14%, transparent); }
+.ywpu-badge.ywpu-st-onlyMine { color: var(--yst-old-ink); border-color: color-mix(in srgb, var(--yst-old) 55%, transparent); background: color-mix(in srgb, var(--yst-old) 14%, transparent); }
+.ywpu-badge.ywpu-st-mineOnly { color: var(--yst-mine-ink); border-color: color-mix(in srgb, var(--yst-mine) 55%, transparent); background: color-mix(in srgb, var(--yst-mine) 14%, transparent); }
+.ywpu-badge.ywpu-st-both { color: var(--yst-both-ink); border-color: color-mix(in srgb, var(--yst-both) 55%, transparent); background: color-mix(in srgb, var(--yst-both) 14%, transparent); }
+.ywpu-badge.ywpu-st-mineOnly2way { color: var(--yst-2way-ink); border-color: color-mix(in srgb, var(--yst-2way) 55%, transparent); background: color-mix(in srgb, var(--yst-2way) 14%, transparent); }
+.ywpu-badge.ywpu-st-same { color: var(--ywpu-txt-2); }   /* v3.8：原来 opacity .65 太淡（对比度只有 1.3）*/
+/* ★第 3 轮复查补：徽标也一样漏了「开关不同」（以前落到继承色 → 和"一样"的灰分不出来） */
+.ywpu-badge.ywpu-st-switch { color: var(--yst-switch-ink); border-color: color-mix(in srgb, var(--yst-switch) 55%, transparent); background: color-mix(in srgb, var(--yst-switch) 14%, transparent); }
+
+/* ---------------------------------------------------------------- 3. 设置抽屉里的入口卡片 */
+#ywpu-card { background: var(--ywpu-bg); }
+#ywpu-card .ywpu-hint { font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt-2); margin: 6px 0 10px; }
+#ywpu-card .ywpu-hint b { color: var(--ywpu-txt); }
+.ywpu-src {
+    border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-r-md);
+    padding: 9px 11px; margin-bottom: var(--ywpu-s2); background: var(--ywpu-surface);
+    transition: border-color .15s var(--ywpu-ease), background .15s var(--ywpu-ease);
+}
+.ywpu-src.ywpu-hover { border-color: var(--ywpu-accent); background: var(--ywpu-accent-bg); }
+.ywpu-src-t { display: flex; flex-wrap: wrap; gap: var(--ywpu-s2); align-items: center; margin-bottom: 6px; font-size: var(--ywpu-fs-md); }
+.ywpu-src-no {
+    flex: none; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    font-size: var(--ywpu-fs-xs); font-weight: 700; color: var(--ywpu-txt);
+    background: var(--ywpu-raise); border: 1px solid var(--ywpu-line);
+}
+/* ★§BY-B（2026-09-23）：原来"已选：…"自己占一行（`.ywpu-src-state`，12px 行 + 6px 上边距 ≈ 20px/份）
+   → 并进上面那一行的右端（只写条数 / 文件名，名字不再抄一遍）。三份预设一共省 3 行 ≈ 60px。 */
+.ywpu-src-pick { font-size: var(--ywpu-fs-sm); margin-left: auto; white-space: nowrap; }
+/* ★§BY-D（2026-09-23）：卡片上的「离线 / 高级」折叠 —— 离线"导入更新包文件"那颗按钮收在这里
+   （作者："一般不用"）。样式与"条目状态"那个图例折叠同一套（cursor/配色/圆角都取既有档，不新造档）。 */
+.ywpu-cadv { margin-top: var(--ywpu-s2); font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt-2); }
+.ywpu-cadv > summary { cursor: pointer; width: max-content; padding: 1px 2px; border-radius: var(--ywpu-r-sm); color: var(--ywpu-txt-2); }
+.ywpu-cadv > summary:hover { color: var(--ywpu-txt); background: var(--ywpu-raise); }
+.ywpu-cadv .ywpu-row { margin-top: 6px; }
+/* ★§BY-C：下拉列表旁写清"这些名字是从哪儿来的"（作者给的括注，逐字）—— 安静的灰色括注，不抢标题。
+   ★W58-a（作者 2026-09-27）：三处括注**全部删掉**（作者点名）⇒ 这条规则**一起删**（不留孤儿规则）。 */
+/* ★W58-a（作者 2026-09-27 · 第 4 条）：三槽位标题行里的**必选 / 可选**两个小标 —— 作者点名
+   "两种颜色必须不一样"。色/字号**一律走既有档**（不新造平行样式、不硬编码 hex）：
+     · 必选 = 强调色那一族的 ink（--ywpu-accent-ink，与主按钮/待办芯片同一族）—— 蓝调；
+     · 可选 = 全局那枚安静的次要文字色（--ywpu-txt-3，与旁边那些灰括注同族）—— 灰调。
+   字号取 --ywpu-fs-sm（12px，与本块其它小字同一档）、字重 400（**不许抢标题**；
+   标题那一档是 fs-md + 700）。nowrap：标是"（必选）·"这种带标点的短串，绝不折行。
+   两档对比度实测（四档：PC/手机 × 深/真浅）见 waveW58 报告 §1 —— 正文门槛 ≥4.5。
+   ★★类名踩过的坑（W58 四档真界面读数抓到，写在这里防复发）：这两个类**必须以 .ywpu-src- 起头** ——
+     第一版叫 `.ywpu-opt`，而**这个类名早就存在**（第 440 行的**分段控件**：padding 3px 12px、
+     cursor:pointer、手机档还会变 13px/7px 14px）⇒ 两边的声明一撞，③ 那枚小标在**手机档变成 13px、
+     高 31.5px**（PC 档看不出来：那条手机规则只在 ≤720px 生效）—— 四档读数一眼抓出来。
+     ⇒ 现在的名字 .ywpu-src-must / .ywpu-src-opt 与 `.ywpu-src-no` / `.ywpu-src-t` / `.ywpu-src-tip`
+       同一族、且全文件（含商店样式）**零碰撞**。 */
+.ywpu-src-must { font-size: var(--ywpu-fs-sm); font-weight: 400; color: var(--ywpu-accent-ink, var(--ywpu-txt)); white-space: nowrap; }
+.ywpu-src-opt { font-size: var(--ywpu-fs-sm); font-weight: 400; color: var(--ywpu-txt-3); white-space: nowrap; }
+/* ★§18：缝入完留一条"备份在哪"的记录（回分页也看得见） */
+.ywpu-stitchlog {
+    margin-top: 6px; padding: 5px 9px; border-radius: var(--ywpu-r-sm); font-size: var(--ywpu-fs-sm);
+    color: var(--ywpu-txt); background: var(--ywpu-gold-bg); border: 1px solid var(--ywpu-gold-line);
+}
+.ywpu-stitchlog b { font-weight: 700; }
+.ywpu-launch { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
+
+/* ---------------------------------------------------------------- 4. 结果窗口 / 弹窗外壳 */
+/* ★覆盖层写死视口高度：ST 在窄屏给 body 加了 position:fixed;overflow:hidden，inset:0 会塌成 0 */
+#ywpu-root, #ywpu-sheet, #ywpu-cmp, #ywpu-patch {
+    position: fixed; top: 0; left: 0; z-index: 30000;
+    width: 100vw; height: 100vh; height: 100dvh;
+    box-sizing: border-box; padding: var(--ywpu-s3);
+    display: none; align-items: flex-start; justify-content: flex-start;
+    overflow: auto; overscroll-behavior: contain; touch-action: pan-y;
+    background: var(--black70a, rgba(0, 0, 0, .7));   /* ← 跟主题走（ST 自带的半透明黑），别写死 */
+}
+#ywpu-root.ywpu-open, #ywpu-sheet.ywpu-open, #ywpu-cmp.ywpu-open, #ywpu-patch.ywpu-open { display: flex; }
+#ywpu-root > #ywpu-panel, #ywpu-sheet > #ywpu-sheet-card, #ywpu-cmp > #ywpu-cmp-card, #ywpu-patch > #ywpu-patch-card { margin: auto; flex: none; }
+#ywpu-sheet { z-index: 31000; }
+#ywpu-cmp { z-index: 31000; }
+#ywpu-patch { z-index: 31000; }
+#ywpu-panel {
+    position: relative;               /* ★W103-庚 起：给面板内的浮层当定位参照（图例 W106 已搬进头部、改由组件自锚；这条留着给别的浮层兜底） */
+    width: min(1180px, calc(100vw - 24px));
+    height: min(900px, calc(100dvh - 24px));
+    display: flex; flex-direction: column;
+    background: var(--SmartThemeBlurTintColor, #16181d);
+    border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-radius);
+    box-shadow: var(--ywpu-shadow-2); overflow: hidden;
+}
+/* ★W19A ③：头部**两行**（作者："把标题与'缝进…'拆成两行（标题第一行、'缝进'第二行），✕ 恒定在右上角"）。
+   第 1 行 = 标题 + ✕（✕ 靠 `margin-left:auto` 恒定贴右）；第 2 行 = 「缝进什么」（副标题）+ 三个分页。
+   ★为什么必须分两行：改前是"一行 flex + 自动换行"，`.ywpu-tabs`（= `.ywpu-flex`，`flex-wrap:wrap`）在挤的时候
+     会把自己**内部**换行 ⇒ `#ywpu-close` 被排到分页那一行的左边（实测就落在「🛒 条目商店」下面）。
+     现在 ✕ 与分页**不在同一个盒子**里，怎么挤都挤不动它（恒在头部第一行右端）。 */
+#ywpu-head { display: flex; flex-direction: column; gap: 6px; padding: 10px var(--ywpu-s3); border-bottom: 1px solid var(--ywpu-line-2); background: var(--ywpu-surface); }
+#ywpu-head-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* ★W106 ③：`position: relative` = 全标题浮层（`#ywpu-head-full`）的定位参照。 */
+#ywpu-head-row { display: flex; align-items: center; gap: 10px; min-width: 0; position: relative; }
+#ywpu-head .ywpu-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--ywpu-fs-lg); font-weight: 600; white-space: nowrap; letter-spacing: .01em; }
+/* ★W106 ②：标题不再吃满整行 —— 图例条（搬家后紧跟在它右边，见 .ywpu-legend-fold 那段）就贴在它旁边；
+   ✕ 仍靠 `margin-left:auto` 恒定贴右（一个字没动）。标题自己"长了就省略号"的那套也照旧（flex-shrink 留着）。 */
+#ywpu-head-top .ywpu-title { flex: 0 1 auto; }
+#ywpu-head-sub { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt-2); }
+/* ★★W103-己（作者原话）："☁ 来自商店：《…》 · 缝进 X ……而且 来自商店的… 的字体颜色 以及
+   缝进 后面跟着的预设名的字体颜色 **要有所区分**"：
+   · 这一段（"☁ 来自商店：《…》"）走 `--ywpu-accent-ink`（蓝紫那族，既有令牌）；
+   · "缝进"后面那个预设名走 `.ywpu-pname`（既有令牌 `--ywpu-gold-ink`，金那族）
+   ⇒ 两段**色系不同**、都 ≥4.5（W103 探针按 computed color 逐段量）。
+   ★展开（W106 ③ 起）：**点那一行** ⇒ 全标题画在 `#ywpu-head-full` 浮层里（见下面 .ywpu-subfull）；
+     那一行自己**永远保持"单行 + 省略号"**（不再有"整行折行撑高头部"这回事 —— 作者要"原地、不推挤"）。 */
+.ywpu-storeink { color: var(--ywpu-accent-ink); font-weight: 600; }
+/* ★W106 ③：「☁ 来自商店…」那行 = 开关本身（游标 + hover 提亮；非商店路不加这个类 ⇒ 就是一行普通文字）。
+   基规则那条 `#ywpu-head-sub { white-space: nowrap }` 照旧 —— 那一行永远单行省略号，全标题看浮层。 */
+#ywpu-head-sub.ywpu-sub-click { cursor: pointer; }
+#ywpu-head-sub.ywpu-sub-click:hover { color: var(--ywpu-txt); }
+/* ★W106 ③：全标题浮层（"点那行"展开的产物）—— 挂在该行正下方，绝对定位 ⇒ **不推挤、不位移**。
+   底走面板同款（不透明，滚上来的字不透出来），描边/圆角/阴影全用既有令牌。 */
+.ywpu-subfull {
+    position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30;
+    white-space: normal; word-break: break-word; line-height: 1.5;
+    font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt-2);
+    padding: 8px 10px; border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-r-sm);
+    background: var(--SmartThemeBlurTintColor, #16181d); box-shadow: var(--ywpu-shadow-2);
+}
+.ywpu-subfull[hidden] { display: none; }
+#ywpu-close { flex: none; margin-left: auto; width: 32px; height: 32px; border-radius: var(--ywpu-r-sm); cursor: pointer; font-size: 15px; border: 1px solid var(--ywpu-line); background: transparent; color: var(--ywpu-txt-2); transition: color .12s var(--ywpu-ease), border-color .12s var(--ywpu-ease); }
+#ywpu-close:hover { border-color: var(--yst-warn-ink); color: var(--yst-warn); }
+/* 分页（§18：商店在最前，条目选择/顺序对比在后）——选中的那颗 = 主色底 + 主字色
+   ★W19A ③：`flex: 0 0 auto` = 这一排**自己不许被压缩**（改前会被挤到只剩几十像素 ⇒ 内部换行、把 ✕ 甩出去） */
+.ywpu-tabs { flex: 0 0 auto; gap: var(--ywpu-s1); }
+.ywpu-tabs .ywpu-btn { border-color: transparent; color: var(--ywpu-txt-2); }
+.ywpu-tabs .ywpu-btn:hover { border-color: var(--ywpu-line); color: var(--ywpu-txt); background: var(--ywpu-raise); }
+.ywpu-tabs .ywpu-btn.ywpu-sel { border-color: var(--ywpu-accent-line); background: var(--ywpu-accent-bg); color: var(--ywpu-txt); font-weight: 600; }
+#ywpu-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: 0 var(--ywpu-s3) var(--ywpu-s3); scrollbar-width: thin; touch-action: pan-y; }
+/* ★v4.4：顶部内边距从 body 挪到各个视图上 → 顺序页能做到 0（贴着标签栏），条目页照旧 */
+#ywpu-view-items { padding-top: var(--ywpu-s3); }
+#ywpu-body::-webkit-scrollbar { width: 10px; }
+#ywpu-body::-webkit-scrollbar-thumb { background: var(--ywpu-raise); border-radius: 10px; }
+#ywpu-foot { flex: 0 0 auto; padding: 9px var(--ywpu-s3); border-top: 1px solid var(--ywpu-line-2); display: flex; flex-direction: column; gap: 6px; background: var(--ywpu-surface); position: relative; }   /* ★Wave K1：定位基准（基准面板那颗浮层以底栏为准，见下面 .ywpu-lockbody） */
+.ywpu-footline { display: flex; flex-wrap: wrap; gap: var(--ywpu-s2); align-items: center; }
+.ywpu-footline .ywpu-input { flex: 1 1 200px; }
+.ywpu-footacts { gap: var(--ywpu-s3); }
+/* ★§18：底栏"离线 / 高级"折叠（导出更新包搬到这里 —— 不显眼，但功能还在）
+   ★★AU4 ④（评审 §2 条 5）：它现在折成**一颗「…」**并**长在动作行里**（不再自己占一行，改前 19px）；
+   展开的正文**浮在底栏上面**（`bottom: 100%`）⇒ 不撑高动作行、不推走列表。 */
+.ywpu-adv { font-size: var(--ywpu-fs-xs); flex: 0 0 auto; position: relative; }
+.ywpu-adv > summary { cursor: pointer; color: var(--ywpu-txt-3); width: max-content; padding: 3px 8px; border-radius: var(--ywpu-r-pill); border: 1px solid var(--ywpu-line); line-height: 1.5; }
+.ywpu-adv > summary:hover { color: var(--ywpu-txt); background: var(--ywpu-raise); }
+.ywpu-adv-body {
+    position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 5;
+    min-width: 260px; max-width: min(78vw, 420px);
+    display: flex; flex-wrap: wrap; gap: var(--ywpu-s2); align-items: center;
+    padding: 6px 8px; border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-r-sm);
+    background: var(--ywpu-surface); box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+}
+/* ★★AU4 ④：危险提示（`⚠ 覆盖①…`）现在**并进动作行**（贴着那两颗按钮）——
+   它可以被压窄（`flex: 0 1 auto; min-width: 0`）并**省略号收尾**，所以窄屏不换行、行高不涨。
+   ★`.ywpu-footstat` 的 `nowrap + ellipsis` 一个字没动（`r9f` §3-B-4 静态断言量着它）。 */
+.ywpu-stitchnote { flex: 0 1 auto; min-width: 0; font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ywpu-risk { font-size: var(--ywpu-fs-sm); color: var(--yst-warn-ink); border: 1px solid color-mix(in srgb, var(--yst-warn) 45%, transparent); border-radius: var(--ywpu-r-sm); padding: 4px 8px; }
+
+#ywpu-sheet-card, #ywpu-cmp-card, #ywpu-patch-card {
+    width: min(900px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; touch-action: pan-y;
+    padding: var(--ywpu-s3); background: var(--SmartThemeBlurTintColor, #16181d);
+    border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-radius); box-shadow: var(--ywpu-shadow-2);
+}
+#ywpu-sheet-head, #ywpu-cmp-head, #ywpu-patch-head { display: flex; flex-wrap: wrap; gap: var(--ywpu-s2); align-items: center; margin-bottom: var(--ywpu-s2); padding-bottom: var(--ywpu-s2); border-bottom: 1px solid var(--ywpu-line-2); font-size: 14px; }
+#ywpu-sheet-card .ywpu-item { opacity: 1; }
+
+/* ---------------------------------------------------------------- 5. 顶部摘要 / 筛选 / 图例 */
+/* ★★W103-戊（作者原话："既然它控制了所有，就让上面的部分的内容固定在这里（吸顶 / 固定）；
+   既然固定了，那么下面手动选择的部分就变窄……上面部分势必要压缩"）：
+   · `#ywpu-summary` 改成 `display: contents` —— **DOM 结构一个字节没动**（老套件的
+     `#ywpu-summary .ywpu-fbtn` / `.ywpu-legend` 这些后代选择器照旧命中），只是它不再生成盒子；
+     它里面的两坨（`.ywpu-box` 摘要卡 与 `#ywpu-controls` 控制条）变成 #ywpu-view-items 的直接排版子项。
+   · `#ywpu-controls` = 那个**吸顶块**（操作 + 范围开关 + 筛选 chips + 工具条一起钉住）——
+     钉在 `#ywpu-body`（唯一滚动区）顶部，整列滚动时它一直在，列表从它下面过（**不遮内容**：sticky 占位，
+     列表的排版起点在它下方）。背景用面板底色（不透明）⇒ 滚上来的行不会透出来。
+   · ★为什么不是 `#ywpu-summary` 自己吸顶：那样摘要卡（来源块/提示条）也会一起钉住，
+     作者要的是"**上面那排按键**固定"，摘要卡照旧随内容滚走（省高度）。 */
+#ywpu-summary { display: contents; }
+#ywpu-controls {
+    position: sticky; top: 0; z-index: 8;
+    background: var(--SmartThemeBlurTintColor, #16181d);
+    border-radius: 0 0 var(--ywpu-r-sm) var(--ywpu-r-sm);
+    box-shadow: 0 1px 0 var(--ywpu-line-2);
+    padding-top: 2px;
+}
+/* ★W103：PC 档把"操作 + 范围开关 + 筛选"压进**一行**（作者："操作是一行 —— 电脑版就是直接放在后面"）：
+   间隙 6 → 5、chip 左右内边距 10 → 9（这一档 14 个控件的总宽省 ≈33px ⇒ 「空条目 19」不再被挤到第二行）。
+   手机档不受影响（那一档另有 `gap: 4px` / `padding: 3px 6px`，见媒体查询）。 */
+.ywpu-stats { display: flex; flex-wrap: wrap; gap: 5px; }
+.ywpu-brk { display: none; }
+.ywpu-fbtn { cursor: pointer; padding: 3px 9px; background: color-mix(in srgb, currentColor 9%, transparent); border-color: color-mix(in srgb, currentColor 38%, transparent); position: relative; }
+.ywpu-fbtn:hover { border-color: currentColor; }
+/* ★★W103-甲（作者原话："关于最上面的 当前：全部 这个说明删掉" + "每个框的大小就算选了它，
+   它的大小也不要变化 —— 不然每次选择之后所有位置都会微妙的变化，这样不好"）：
+   选中态**只说在自己身上**，而且**一个像素都不许动**：
+     ① 内描边（`box-shadow: inset …` 而不是 border —— 不动几何，零横向溢出风险）；
+     ② 底色仍然 26%（★W101 实测：加到 40% 会把「全部」那颗的正文对比度压到 4.13 < 4.5）；
+     ③ ✓ 走 `::after` + `position:absolute`（**不进排版流** ⇒ 加不加它，盒宽逐字节相同）——
+        改前它是 `::before` 的行内内容（+2 个字符）+ 选中时 `font-weight:700`（粗体更宽）
+        ⇒ 点一下，这一颗和后面每一颗全体右移几像素，正是作者说的"微妙的变化"。 */
+/* ★★W104-丙（作者原话："以及点击某个筛选之后它的效果有点丑，让其好看一点"）：
+   改前那套 = 26% 底 + **双描边**（border + inset 环）+ 角上一枚 "✓" 圆角标。
+   两处毛病（W104 侦察实测 computed）：① 角标 `background: currentColor` 里的 currentColor 被同一行
+   `color: …` 覆盖 ⇒ 底与字**同色**（深色主题下就是一枚看不见勾的深色圆点；浅色主题下是白色圆点）；
+   ② 手机上 `.ywpu-fbtn::after` 那条"隐形热区（height:32px/width:100%）"与角标同抢 ::after ⇒
+   选中那颗的热区被撑成一整块 32px 高的实色板。⇒ 整条 ::after 角标**删掉**（热区归还给手机档那条）。
+   选中态改说在按钮自己身上（**几何一个像素不动**：只动 background / border-color / box-shadow）：
+     · 底：26%（W101 实测 40% 会把「全部」正文压到 4.13 ⇒ 26% 是这一族的安全值，不动）；
+     · 描边：整颗 `currentColor`（与旁边未选中的 38% 淡描边一眼分得开）；
+     · 内底 2px 水位线：`inset 0 -2px 0`（不进布局，像"选中的标签页"）。 */
+.ywpu-fbtn.ywpu-on { background: color-mix(in srgb, currentColor 26%, transparent); border-color: currentColor; box-shadow: inset 0 -2px 0 currentColor; }
+/* ★W103-丁：两颗**范围开关**（预设条目 / 正则条目）—— 复用 `.ywpu-fbtn` 那一族（不新造平行样式），
+   只把字重固定成 600（**恒定**，不随选中变化 ⇒ 几何照样恒定）用来跟"这一块里看哪些"那排区分开。 */
+.ywpu-scope { font-weight: 600; }
+.ywpu-f-all { color: var(--ywpu-txt); }
+/* ★P1-4：筛选标签的字色 = **-ink 档**（品牌色混 38% 正文色）——
+   38% 是**算出来的**（`e2e/p13-ink-math.js`：对每个状态色从 70% 往下试，取两档底
+   —— 浅色模拟 rgb(222,230,227) 与深色条目行 rgb(38,38,40) —— 都 ≥4.5 的**最大**品牌占比；
+   13 个色里最保守那一档就是 38%，跟商店 `-ink` 族的 36~42% 同一个量级）。
+   ★底色/描边改成**品牌色的固定淡底**（不再用 `currentColor` 混）—— 用 currentColor 的话，
+     字色一变深、标签自己的底也跟着变深，两边的对比度一起掉
+     （第一版就是 62% + currentColor 底 → 浅色段实测 2.76，被探针当场抓住）。 */
+.ywpu-f-warn { color: var(--yst-warn-ink); background: color-mix(in srgb, var(--yst-warn) 14%, transparent); border-color: color-mix(in srgb, var(--yst-warn) 45%, transparent); }
+.ywpu-f-new { color: var(--yst-new-ink); background: color-mix(in srgb, var(--yst-new) 14%, transparent); border-color: color-mix(in srgb, var(--yst-new) 45%, transparent); }
+.ywpu-f-author { color: var(--yst-author-ink); background: color-mix(in srgb, var(--yst-author) 14%, transparent); border-color: color-mix(in srgb, var(--yst-author) 45%, transparent); }
+.ywpu-f-renamed { color: var(--yst-renamed-ink); background: color-mix(in srgb, var(--yst-renamed) 14%, transparent); border-color: color-mix(in srgb, var(--yst-renamed) 45%, transparent); }
+.ywpu-f-old { color: var(--yst-old-ink); background: color-mix(in srgb, var(--yst-old) 14%, transparent); border-color: color-mix(in srgb, var(--yst-old) 45%, transparent); }
+.ywpu-f-mine { color: var(--yst-mine-ink); background: color-mix(in srgb, var(--yst-mine) 14%, transparent); border-color: color-mix(in srgb, var(--yst-mine) 45%, transparent); }
+.ywpu-f-both { color: var(--yst-both-ink); background: color-mix(in srgb, var(--yst-both) 14%, transparent); border-color: color-mix(in srgb, var(--yst-both) 45%, transparent); }
+.ywpu-f-switch { color: var(--yst-switch-ink); background: color-mix(in srgb, var(--yst-switch) 14%, transparent); border-color: color-mix(in srgb, var(--yst-switch) 45%, transparent); }
+.ywpu-f-same { color: var(--yst-same-ink); background: color-mix(in srgb, var(--yst-same) 14%, transparent); border-color: color-mix(in srgb, var(--yst-same) 45%, transparent); }
+.ywpu-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-2); }
+.ywpu-legend-t { color: var(--ywpu-txt-3); }
+.ywpu-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+.ywpu-d-new { background: var(--yst-new); } .ywpu-d-author { background: var(--yst-author); }
+.ywpu-d-renamed { background: var(--yst-renamed); } .ywpu-d-old { background: var(--yst-old); }
+.ywpu-d-mine { background: var(--yst-mine); } .ywpu-d-both { background: var(--yst-both); }
+.ywpu-d-switch { background: var(--yst-switch); } .ywpu-d-warn { background: var(--yst-warn); }
+.ywpu-d-chg { background: var(--ywd-chg); } .ywpu-d-add { background: var(--ywd-add); } .ywpu-d-del { background: var(--ywd-del); }
+.ywpu-notices { margin-top: var(--ywpu-s2); font-size: var(--ywpu-fs-sm); }
+/* ★W94（F3 修 C）：对比页的「提示」块 —— 与 `.ywpu-troublebar`（上面那条金框提示）**同一套形态**：
+   折起时**只占一行**（summary 收一行 + 省略号 + ▾/▴ 折叠标），点开才是全文。
+   为什么必须收成一行：首屏第一行距顶是 R9-f/R9-i 的硬指标（PC ≤30% / 手机 ≤40%），
+   这条块的正文（内核那几句 + 隐藏条目点名）可能有 3~5 行 ⇒ 不许常驻。
+   ★没有要给用户看的话时**整块不渲染**（`noticesHtml()` 返回空串）⇒ 常态零成本。 */
+.ywpu-notices > summary {
+    cursor: pointer; list-style: none;
+    padding: 4px 0;                       /* ★W94：热区抬到 26px（= 来源块 summary 同高），过"文字链 ≥24"那一档 */
+    font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt-2); line-height: 1.5;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ywpu-notices > summary::-webkit-details-marker { display: none; }
+.ywpu-notices > summary::after { content: ' ▾'; color: var(--ywpu-txt-3); font-weight: 400; }
+.ywpu-notices[open] > summary::after { content: ' ▴'; }
+.ywpu-notices > .ywpu-note { display: block; margin-top: 5px; color: var(--ywpu-txt-2); line-height: 1.6; }
+/* 商店来的这一趟：一条细边信息条（别跟正文抢）*/
+.ywpu-storebar { align-items: flex-start; margin-bottom: var(--ywpu-s2); padding: 6px 9px; border-radius: var(--ywpu-r-sm); background: var(--ywpu-accent-bg); border: 1px solid var(--ywpu-accent-line); }
+.ywpu-storebar .ywpu-note { color: var(--ywpu-txt); }
+
+/* ---------------------------------------------------------------- 6. 工具条 */
+/* ★W103：上边距 0 → 5（工具条现在紧跟在吸顶块里那一排操作/筛选下面，不留缝会贴在一起）。 */
+.ywpu-tools { display: flex; flex-wrap: wrap; gap: var(--ywpu-s2); align-items: center; margin: 5px 0 var(--ywpu-s2); }
+.ywpu-tools .ywpu-input { flex: 1 1 160px; }
+/* ★S2-1（UI P3-③ + 台账 S2-1）：工具条**吸顶** —— 列表往上滚时"搜索 / 全部展开 / 多条·单条"一直够得着。
+   · 背景写**面板底色同一个值**（`--SmartThemeBlurTintColor`）—— 不然滚动时下面的条目会透上来；
+   · 只在 `#ywpu-body`（唯一滚动区）里 sticky，不新建任何滚动容器（UI 铁律）；
+   · 不写负 margin 去铺满左右（#ywpu-body 的左右内边距在手机档是 10px、PC 是 12px，写死任一个都会横向溢出）。 */
+#ywpu-toolbar {
+    position: static;                 /* ★W103-戊：吸顶上移到 #ywpu-controls（工具条是它的一部分） */
+    border-radius: 0 0 var(--ywpu-r-sm) var(--ywpu-r-sm);
+    box-shadow: none;                 /* 分隔线由 #ywpu-controls 那条兜底阴影负责（不画两道） */
+}
+
+/* ---------------------------------------------------------------- 7. 条目行 */
+.ywpu-list { display: flex; flex-direction: column; gap: 6px; }
+.ywpu-item {
+    border: 1px solid var(--ywpu-line); border-left: 3px solid var(--stc, var(--ywpu-line));
+    border-radius: var(--ywpu-r-md); padding: 7px 10px; background: var(--ywpu-bg);
+    transition: background .12s var(--ywpu-ease), border-color .12s var(--ywpu-ease);
+}
+.ywpu-item:hover { background: var(--ywpu-raise); }
+.ywpu-item.ywpu-need { opacity: 1; }
+/* v4.0 用户："那些一样的就让它看不清、隐下去" → 没变化的压到 .42；已处理的 .65（比"不用管"亮一点） */
+.ywpu-item.ywpu-done { opacity: .65; }
+.ywpu-item.ywpu-done:hover { opacity: 1; }
+.ywpu-item.ywpu-noneed { opacity: .45; }
+.ywpu-item.ywpu-noneed:hover { opacity: 1; }
+.ywpu-item.ywpu-active { opacity: 1; border-color: var(--ywpu-accent-line); border-left-color: var(--stc, var(--ywpu-line)); background: var(--ywpu-raise); }
+.ywpu-item.ywpu-flash { background: var(--ywpu-accent-bg); }
+.ywpu-item-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; cursor: pointer; }
+.ywpu-caret { font-size: 11px; color: var(--ywpu-txt-3); min-width: 10px; }
+/* ★W14 ⑥（作者原话："它会在原来的位置上改变颜色…而且位置不变"）：`○`（未处理）与 `✓`（已处理）
+   两个字在 11px 下的**字宽不一样**（`○` 是 CJK 全宽、`✓` 只有半宽）⇒ 用户一选定，后面所有东西都会**左移**。
+   给这一格钉死最小宽度并居中（`○` 的自然宽度 ≈ 12px）：换了字形，格子宽度不变 ⇒ 不位移。
+   ★`.ywpu-item-head` 是 `display:flex` ⇒ 这个 span 是 flex item（已被块化）⇒ `min-width` 生效。 */
+.ywpu-mark { font-size: 11px; color: var(--ywpu-txt-3); min-width: 12px; text-align: center; }
+/* v3.8：还没处理 = 全界面唯一的红（用户："那个红色完全不会出现"）→ 每条待处理前面都是红圈 ○ */
+.ywpu-item.ywpu-need .ywpu-mark { color: var(--yst-warn-ink); opacity: 1; font-weight: 700; }
+.ywpu-item.ywpu-done .ywpu-mark { color: var(--ywd-add-ink); }
+.ywpu-item-name { font-size: var(--ywpu-fs-name); font-weight: 600; word-break: break-word; }
+.ywpu-metric { font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-2); font-variant-numeric: tabular-nums; }
+.ywpu-metric.ywpu-moved { color: var(--yst-new-ink); }
+/* 改名：用「改了名字」的青色（原来是绿色，和"新版新增"撞色）；箭头单独用普通颜色（用户 v3.8） */
+.ywpu-metric.ywpu-ren { color: var(--yst-renamed-ink); }
+.ywpu-renarrow { color: var(--ywpu-txt); opacity: .55; margin: 0 4px; }
+/* v3.8：选完之后头上显示「已选择」（绿框）+ 这一条用哪边的牌子 */
+.ywpu-badge.ywpu-st-chosen {
+    color: var(--yst-new-ink); opacity: 1;
+    border-color: color-mix(in srgb, var(--yst-new) 75%, transparent);
+    background: color-mix(in srgb, var(--yst-new) 16%, transparent);
+}
+/* v3.9：改名说明挪到第二行（在选项旁边），不再挤标题 */
+.ywpu-rennote { font-size: var(--ywpu-fs-xs); color: var(--yst-renamed-ink); white-space: nowrap; }
+/* v3.9：顺序页里"没打开"的条目淡一点（用户："那些没开的条目让它灰一点、不显眼"）*/
+.ywpu-orow.ywpu-offrow { opacity: .4; }   /* v4.0：用户说"还不够暗" */
+.ywpu-orow.ywpu-offrow:hover, .ywpu-orow.ywpu-offrow.ywpu-selrow { opacity: 1; }
+.ywpu-plus { color: var(--ywd-add-ink); font-weight: 600; }
+.ywpu-minus { color: var(--ywd-del-ink); font-weight: 600; }
+.ywpu-sw { display: inline-block; font-size: 10.5px; padding: 0 6px; border-radius: var(--ywpu-r-pill); border: 1px solid var(--ywpu-line); color: var(--ywpu-txt-2); }
+.ywpu-sw-on { color: var(--ywd-add-ink); border-color: color-mix(in srgb, var(--ywd-add) 45%, transparent); }
+.ywpu-sw-off { color: var(--ywpu-txt-3); }
+.ywpu-swdiff { display: inline-flex; align-items: center; gap: 3px; }
+.ywpu-arrow { opacity: .6; }
+.ywpu-acts { display: flex; flex-wrap: wrap; gap: var(--ywpu-s2); align-items: center; margin-top: 5px; }
+.ywpu-rnote { font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-3); }
+.ywpu-opentip { color: var(--ywpu-txt-3); }
+
+/* 选择：段控件（点文字；再点取消；两个都选 = 两边都要） */
+.ywpu-seg { display: inline-flex; border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-r-pill); overflow: hidden; }
+.ywpu-opt { font-size: var(--ywpu-fs-sm); padding: 3px 12px; cursor: pointer; user-select: none; color: var(--ywpu-txt-2); transition: background .12s var(--ywpu-ease), color .12s var(--ywpu-ease); }
+.ywpu-opt + .ywpu-opt { border-left: 1px solid var(--ywpu-line); }
+.ywpu-opt:hover { color: var(--ywpu-txt); background: var(--ywpu-raise); }
+/* ★对齐商店口径：有底色的文字一律用正文色（浅色主题上白字会糊）→ 靠"底 + 粗"表达选中 */
+.ywpu-opt.ywpu-on { color: var(--ywpu-txt); font-weight: 700; background: color-mix(in srgb, var(--ywpu-accent) 26%, transparent); }
+.ywpu-opthint { font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-3); }
+
+/* 开关拨钮 */
+.ywpu-knobwrap { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; padding: 1px 4px; border-radius: var(--ywpu-r-sm); }
+.ywpu-knobwrap:hover { background: var(--ywpu-raise); }
+.ywpu-knob { width: 30px; height: 16px; border-radius: 999px; background: var(--ywpu-raise); position: relative; transition: background .14s var(--ywpu-ease); flex: none; }
+.ywpu-knob > i { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--ywpu-txt); transition: left .14s var(--ywpu-ease); }
+.ywpu-knob.ywpu-knob-on { background: color-mix(in srgb, var(--ywd-add) 60%, transparent); }
+.ywpu-knob.ywpu-knob-on > i { left: 16px; background: #fff; }
+.ywpu-knob-txt { font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-2); }
+.ywpu-knob-by { color: var(--ywpu-txt-3); }
+
+/* ---------------------------------------------------------------- 8. 展开区：一栏正文 + 底色块 */
+.ywpu-effect { margin-top: 6px; }
+.ywpu-pickbar { display: flex; flex-wrap: wrap; gap: var(--ywpu-s2); align-items: center; margin: 4px 0; }
+/* ★没有 max-height / overflow —— 内层滚动容器被重建时 scrollTop 会归零，就是"跳回最上面"的根因 */
+.ywpu-doc {
+    border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-r-md); padding: 6px 8px;
+    background: var(--ywpu-bg);
+    font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.5;
+}
+.ywpu-doc-head { font-family: inherit; font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-3); margin: 1px 0 4px; }
+.ywpu-doc-plain { padding: 2px 0 6px; white-space: pre-wrap; word-break: break-word; }
+.ywpu-pl { white-space: pre-wrap; word-break: break-word; }
+.ywpu-pl-same { color: var(--ywpu-txt-2); }
+/* 一处不同 = 一个可点的底色块（点一下换边 / 要回来）★border-left 必须是 --ywd-* 纯色（ui-audit 逐块量） */
+.ywpu-patch {
+    display: block; cursor: pointer;
+    margin: var(--ywpu-s1) 0; padding: 3px 8px 4px 6px; border-radius: var(--ywpu-r-sm); border-left: 3px solid transparent;
+    transition: box-shadow .12s var(--ywpu-ease);
+}
+.ywpu-patch:hover { box-shadow: inset 0 0 0 1px var(--ywpu-accent-line); }
+.ywpu-patch-tag { display: inline-block; flex: none; width: auto; text-align: left; font-size: 10px; line-height: 1.5; padding: 0 6px; border-radius: var(--ywpu-r-pill); border: 1px solid currentColor; margin-bottom: 2px; }
+.ywpu-patch-body { flex: 1 1 auto; min-width: 0; }
+.ywpu-k-chg { background: color-mix(in srgb, var(--ywd-chg) 14%, transparent); border-left-color: var(--ywd-chg); }
+.ywpu-k-add { background: color-mix(in srgb, var(--ywd-add) 15%, transparent); border-left-color: var(--ywd-add); }
+.ywpu-k-del { background: color-mix(in srgb, var(--ywd-del) 14%, transparent); border-left-color: var(--ywd-del); }
+.ywpu-k-chg > .ywpu-patch-tag { color: var(--ywd-chg-ink); }
+.ywpu-k-add > .ywpu-patch-tag { color: var(--ywd-add-ink); }
+.ywpu-k-del > .ywpu-patch-tag { color: var(--ywd-del-ink); }
+/* ★★W99-甲（作者原话："两边不同**除了内容，前面还可以插入**：…**选择旧版开关、新版开关**，
+   以及**选择旧版名字还是新版名字**…格式**就跟那个具体内容对比一样**"）：
+   「开关」「名字」这两个维度各占**一块**，骨架与正文对比那几块**逐字同源**（`.ywpu-patch` + 上下两组
+   `.ywpu-grp-mine/grp-next`）；这一块本身**不是**"一处正文差异" ⇒ 底色走中性中性色（不吃 --ywd-chg 的黄），
+   免得一眼看去像"又多了一处正文改动"。两块放在正文对比**前面**（`.ywpu-dims` 容器）。 */
+.ywpu-dims { margin: 0 0 var(--ywpu-s1); }
+.ywpu-k-dim { background: var(--ywpu-bg-2); border-left-color: var(--ywpu-line); cursor: default; }
+.ywpu-k-dim:hover { box-shadow: none; }
+.ywpu-k-dim > .ywpu-patch-tag { color: var(--ywpu-txt-2); }
+.ywpu-k-dim .ywpu-grp { margin: 2px 0; }
+/* 这一处不要（压暗 + 虚线，点一下就能要回来）——★保留各自的颜色：用户认的是"红=新版删掉" */
+.ywpu-patch.ywpu-off .ywpu-patch-body { color: var(--ywpu-txt-3); }   /* 只压暗文字，底色照旧——红就是红 */
+.ywpu-k-chg.ywpu-off { background: color-mix(in srgb, var(--ywd-chg) 12%, transparent); border-left: 3px dashed var(--ywd-chg); }
+.ywpu-k-add.ywpu-off { background: color-mix(in srgb, var(--ywd-add) 12%, transparent); border-left: 3px dashed var(--ywd-add); }
+.ywpu-k-del.ywpu-off { background: color-mix(in srgb, var(--ywd-del) 16%, transparent); border-left: 3px dashed var(--ywd-del); }
+/* 只改了少量字时，把改了的那几个字再刷一层更深的底色（仍是底色，不染字色） */
+.ywpu-hl { background: color-mix(in srgb, var(--ywd-chg) 45%, transparent); border-radius: 2px; }
+.ywpu-k-add .ywpu-hl { background: color-mix(in srgb, var(--ywd-add) 45%, transparent); }
+.ywpu-k-del .ywpu-hl { background: color-mix(in srgb, var(--ywd-del) 45%, transparent); }
+/* 折叠块（自己改文字 / 看两版原文 / 没改动的行） */
+.ywpu-fold { margin: 4px 0 0; font-size: var(--ywpu-fs-sm); }
+.ywpu-fold > summary { cursor: pointer; color: var(--ywpu-txt-3); font-size: var(--ywpu-fs-xs); padding: 1px 2px; border-radius: var(--ywpu-r-sm); }
+.ywpu-fold > summary:hover { color: var(--ywpu-txt); background: var(--ywpu-raise); }
+.ywpu-fold .ywpu-note { margin-top: 4px; }
+.ywpu-fold-same { margin: 1px 0; }
+.ywpu-fold-same > summary { color: var(--ywpu-txt-3); }
+
+/* ---------------------------------------------------------------- 9. 全局参数 */
+.ywpu-paramsbox { margin: 6px 0 var(--ywpu-s3); font-size: var(--ywpu-fs-sm); }
+.ywpu-paramsbox summary { cursor: pointer; color: var(--ywpu-txt-2); }
+.ywpu-pitem { display: flex; flex-wrap: wrap; gap: var(--ywpu-s2); align-items: center; padding: 3px 0; border-top: 1px solid var(--ywpu-line-2); }
+.ywpu-pitem:first-of-type { border-top: none; }
+
+/* ---------------------------------------------------------------- 9.5 预设级正则（R8 · 结构化预留）
+   ★这一块**挂在 #ywpu-params 里面**（= 条目列表下面），所以不动条目那套的几何。
+   默认收起（只有一行标题），点标题才展开 —— 不给老套件的几何断言添乱。
+   ★UI 铁律：这里**不许有内层滚动条**（展开后整页跟着长，跟别处一致）。 */
+.ywpu-rxbox { margin: 6px 0 var(--ywpu-s3); font-size: var(--ywpu-fs-sm); }
+/* ★Wave H₂ ①：标题那一行 = 「▾ 正则 N 条…」那颗开关 + 筛选 chip「仅看需要更改的」并排。
+   flex + wrap ⇒ 窄屏（手机 390）**换行不横溢**；开关那颗走 `.ywpu-btn.ywpu-mini`、chip 走 `.ywpu-fbtn`
+   —— 两族都已经在手机档的"热区抬到 32"名单里（见本文件 ② 那一段）⇒ 可点高度 ≥32、可见盒一个字不动。
+   ★这里**不许**加内层滚动（沿用 .ywpu-rxbox 那条铁律）。 */
+.ywpu-rxbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* ★W103-丙：两侧"收起来"用的**同一条折叠条**（条目侧与正则侧共用这个外形：行首 ▸ + 名称 + 计数）。 */
+.ywpu-scopebar { margin-top: 2px; }
+.ywpu-rxtoggle { cursor: pointer; text-align: left; }
+/* ★Wave H₂ ①：「第 N 位」徽标（复用 .ywpu-of 家族的形状与配色，只给它一档中性色） */
+.ywpu-of-pos { color: var(--ywpu-txt-2); border-color: var(--ywpu-line); cursor: help; }
+.ywpu-rxlist { margin-top: 4px; display: block; }
+/* ★★W95 ④（作者 2026-10-06 原话，逐字）：
+   "我觉得**底下那个层旁边还有一个弧形 这个样式不是很好看、也不是很清楚** —— 是否可以像上面的那些提示词条目一样：
+    不点进去时不显示里边的更改内容；里边的更改内容**上下对比**，标注好旧版、也标注好新版；
+    特别是长的内容（查找/替换那些具体的）不要显示在外面，太占空间，只有点开才显示；
+    不点开只显示大标题 + 下面那排选择（用我的 / 两边都留 / 用新版）"
+   ⇒ 这一行（`.ywpu-rxrow`）改了三处：
+   ① **左侧那条弧形的状态条拿掉**（改前 = `border-left: 3px solid var(--stc)` + `border-radius`
+      一起画出来的**圆角竖条**；行越高越像一条 `(` 弧）。状态改由行首那枚徽标（`两边不同` 等）承担
+      —— 那本来就是条目侧的说法，也是作者要的"大标题"的一部分。
+   ② **每一行自己可收起**：`▸/▾` 只在大标题行里，点大标题 = 展开/收起（见下面那组 `.ywpu-rxclosed` 规则）。
+   ③ 字段值**不再是小药丸**（红/绿各带一条 2px 圆角左边条 = 同一族的"弧形"），改成
+      上下两组（`.ywpu-grp-mine` / `.ywpu-grp-next`，跟条目侧 `.ywpu-grp` 一套骨架）。 */
+.ywpu-rxrow { padding: 6px 8px; margin: 4px 0; border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-radius); background: var(--ywpu-bg); }
+/* 危险那一行照旧要显眼（红框整圈，不再只染左边那条） */
+.ywpu-rxrow.ywpu-rxbad { border-color: var(--yst-warn); }
+/* 大标题那一行：整行可点（`▸/▾` + 悬停反馈，跟条目侧 `.ywpu-item-head` 同一个手法） */
+.ywpu-rxhead2 { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; cursor: pointer; }
+.ywpu-rxhead2:hover .ywpu-rxtgl-t { color: var(--ywpu-txt); }
+.ywpu-rxtgl-t { margin-left: auto; flex: none; font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-3); white-space: nowrap; }
+/* ★W95 ④：**收起态**（默认）= 只留大标题 + 那排选择 —— 更改内容一个字都不画在屏幕上。
+   ★口径说明（探针按这个量）：这里用的是 `display:none`（真没显示），不是"画出来再压扁"；
+   收起时这几块**在 DOM 里仍在**（所以 `textContent` 类断言照读得到，`probe-regex-core.js` 那套
+   "抽源码真编译 + 查串"的老断言一条不受影响）⇒ "收起态不显示长内容"这条读数按
+   ① `#ywpu-params` 的 `innerText`（不含被 `display:none` 的文本）与 ② 每个 `.ywpu-rxdiff` 的
+   `getBoundingClientRect().height === 0` **两项一起**量。 */
+.ywpu-rxrow.ywpu-rxclosed .ywpu-rxmeta,
+.ywpu-rxrow.ywpu-rxclosed .ywpu-opthint,
+.ywpu-rxrow.ywpu-rxclosed .ywpu-rxwhy,
+.ywpu-rxrow.ywpu-rxclosed .ywpu-pickbar,
+.ywpu-rxrow.ywpu-rxclosed .ywpu-rxdiff,
+.ywpu-rxrow.ywpu-rxclosed .ywpu-dims,
+.ywpu-rxrow.ywpu-rxclosed .ywpu-pospick { display: none; }
+/* ★W101-乙⑦（作者原话："正则部分**里面的选择逻辑 根本没有实现** —— 要可以**直接点选**啊，
+   而且**点选逻辑要和条目一样**啊，**要学习全套**"）：这里原来有三行**把交互关掉**的规则
+   （`cursor: default` + 悬停不描边 + 未选不变暗，Wave W95 ④ 定的"正则的选择只在那排按钮上"）——
+   **本波整组删掉**：正则侧那两组现在**真的可点**（`data-rxuse`，事件在 `renderRegexBox()` 里绑），
+   于是"光标 / 悬停描边 / 未选变暗"三样都要跟条目侧 `.ywpu-grp` 逐字一样（同一套视觉反馈）。 */
+.ywpu-rxgrp .ywpu-grp-lab { align-self: flex-start; }
+/* ★W95（真量出来的读数换来的，不是"我觉得"）：上面那两枚 `--ywd-del-ink` / `--ywd-add-ink`
+   跟条目侧"**没被选中的那一组故意调暗**"那条设计口径共用同一个令牌 ⇒ 被产品的对比兜底层
+   归进了**装饰档（判 3.0）**。浅色主题模拟实测：**条目侧 2.95 / 正则侧 4.34**（都够不着正文的 4.5）。
+   作者这条要求的原话是"**标注好旧版、也标注好新版**" ⇒ 它是**正文**，按 4.5 判。
+   修法只用既有令牌：标签改走 `--ywpu-txt`（正文色 —— 兜底层对它按 4.5 那一档兜，
+   浅色/深色/真主题三种情况下都稳过）；红/绿的语义**一个字没动**（由那一组的底色承担）。
+   选择器写三档（`.ywpu-grp.ywpu-rxgrp > .ywpu-grp-lab`）是因为令牌规则在文件里**排在后面**，
+   两档打平会输给"后来居上"（实测：两档写法不生效）。 */
+.ywpu-grp.ywpu-rxgrp > .ywpu-grp-lab { color: var(--ywpu-txt); }
+/* ★W101-乙⑦：右下角那枚圆勾章要地方 —— 与条目侧 `.ywpu-grp-rows { padding-right: 20px }` 对齐
+   （改前是 0：正则那两组只读、不盖章，所以不用留位；现在可点可选、会盖章）。 */
+.ywpu-rxgrp .ywpu-grp-rows { padding-right: 20px; }
+.ywpu-rxname { font-weight: 600; color: var(--ywpu-txt); min-width: 0; overflow-wrap: anywhere; }
+.ywpu-rxwarn { font-size: var(--ywpu-fs-xs); color: var(--yst-warn-ink); border: 1px solid var(--yst-warn); border-radius: var(--ywpu-r-sm); padding: 0 5px; cursor: help; }
+.ywpu-rxmeta { margin-top: 3px; font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-2); }
+.ywpu-rxwhy { margin-top: 2px; font-size: var(--ywpu-fs-xs); color: var(--yst-warn-ink); }
+.ywpu-rxdiff { margin: 3px 0; }
+.ywpu-rxline { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; padding: 1px 0; }
+.ywpu-rxkey { flex: 0 0 auto; color: var(--ywpu-txt-2); font-size: var(--ywpu-fs-xs); min-width: 96px; }
+/* 红=你的（旧）/ 绿=新版 —— ★W95 ④：**这两条里那个 `border-left` + `border-radius` 的组合就是作者说的"弧形"**
+   （2px 圆角左边条 = 小括号），整条删掉；底色交给外面那层 `.ywpu-grp-mine/next`（条目侧同一套色）。
+   类名照旧产出（`probe-regex-core.js` 按它们取"你的（红）/ 新版（绿）"，语义一个字没变）。 */
+.ywpu-rxold { overflow-wrap: anywhere; }
+.ywpu-rxnew { overflow-wrap: anywhere; }
+.ywpu-rxval { color: var(--ywpu-txt); overflow-wrap: anywhere; }
+.ywpu-rxwrap { white-space: pre-wrap; word-break: break-all; }
+.ywpu-rxpick { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; }
+.ywpu-rxpick .ywpu-btn.ywpu-sel { border-color: var(--ywpu-accent-line); }
+/* ★W100-戊：这里原来有一条 `.ywpu-rxrow.ywpu-rxsw { border-color: var(--yst-switch); }` ——
+   "开关两边不同的那一行"整圈染成蓝色（Wave G ③ 加的）。作者实测点开一个缝入包时看到
+   "有一个正则条目有一个蓝框包裹？"—— 这圈颜色**没写它是什么**，看着莫名其妙。
+   现在删掉这圈颜色，语义改由行里那枚**「改了开关」徽标**承担（同一个判据 `data-rxdiff="1"`，
+   按钮那一排的 `data-rxen` 一个字节没动）。 */
+/* ★Wave G ⑤：位置待定的行 → 「插在哪一条正则后面」那一块（跟条目侧 .ywpu-pospick 同一个组件/同一套样式） */
+.ywpu-rxpospick { margin: 4px 0 2px 0; }
+.ywpu-of-set { color: var(--ywpu-accent-ink, var(--ywpu-txt-2)); }
+/* ★Wave G ⑥：正则块里"两边一样"那一批折成一行（点开照旧逐条都在） */
+.ywpu-rx-same { margin-top: 5px; }
+/* ★W108-①-3(c)（R22 裁定）：这枚折的 summary PC 档只有 21px（<24 文字链口径）⇒ 加 min-height: 24px（手机档
+   下面那条 min-height: 32 覆盖它，读数不变）；只抬可点盒、文字位置不动。判据锚点：summary 高 ≥24。 */
+.ywpu-rx-same > summary { cursor: pointer; font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-2); padding: 2px 4px; min-height: 24px; }
+.ywpu-rx-same > summary:hover { color: var(--ywpu-txt); }
+/* ★Wave G ①："条目一条都不用你选" → 列表收成一句话 + 一颗展开按钮（内容一条没删） */
+.ywpu-allsame { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ywpu-allsame .ywpu-note { display: block; }
+/* ★Wave G ②：这一排"没有可选项"时的那句人话（原来那个位置站着两颗点了没用的"一键"） */
+.ywpu-nochoice { margin-left: 2px; }
+
+/* ---------------------------------------------------------------- 10. 顺序页 */
+.ywpu-ocols { display: flex; gap: var(--ywpu-s3); align-items: flex-start; }
+.ywpu-ocols-one { display: block; }
+.ywpu-ocol { flex: 1 1 0; min-width: 0; border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-radius); overflow: hidden; background: var(--ywpu-bg); }
+.ywpu-ocol-merged { border-color: var(--ywpu-accent-line); }
+.ywpu-ocol-t { font-size: var(--ywpu-fs-md); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--ywpu-line-2); background: var(--ywpu-surface); }
+.ywpu-ocol-body { padding: 3px 4px; max-height: 58vh; overflow-y: auto; scrollbar-width: thin; touch-action: pan-y; }
+.ywpu-ocol-body-tall { max-height: 62vh; }
+.ywpu-orow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px; font-size: var(--ywpu-fs-sm); padding: 2px 5px; border-radius: var(--ywpu-r-sm); }
+.ywpu-orow-big { padding: 5px 8px; gap: var(--ywpu-s2); }
+/* ★v4.3：右边一块 = 三列（挪动 / 开关变化 / 状态字）+ 拨钮 + 标记，靠右对齐、列宽固定 →
+   每行的状态字都在同一条竖线上（用户："整齐为主，状态字放同一列，左边才是开关怎么变的"） */
+.ywpu-oright { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px 5px; margin-left: auto; flex: 0 0 auto; }
+.ywpu-oright .ywpu-ocell { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; white-space: nowrap; }
+/* ★v4.4 用户："右边再紧凑一点；不过 On→Off 只能看到一半（前面被切了）" → 三列重新量过：
+   开关列必须放得下 "Off → On"（≈70px）、状态字 4 个字（≈66px）、挪动信息最窄要放得下"① 从第10位挪来" */
+.ywpu-ocell-pos { width: 96px; }
+.ywpu-ocell-sw { width: 72px; }
+.ywpu-ocell-badge { width: 70px; }
+/* 单元格里的小东西（开关胶囊）内边距收一点，省下的宽度都还给条目名 */
+.ywpu-oright .ywpu-sw { padding: 0 4px; }
+.ywpu-oright .ywpu-ofrom, .ywpu-oright .ywpu-ono { font-size: var(--ywpu-fs-xs); }
+/* ★v4.3/4.4 用户："上面标题都删了，这一块应该直接贴着上面的标签栏" → 顺序页顶部一点留白都不留 */
+#ywpu-view-order { padding-top: 0; }
+#ywpu-view-order .ywpu-box { padding-top: 2px; }
+#ywpu-view-order .ywpu-batchbar { margin-top: 0; }
+/* ★★F6（V6 疑红 2 · 2026-09-22）：顺序页的落点线**贴住滚动可视区上边** ——
+   拖到列表最顶、自动滚动还在往回滚的那几秒里，落点线（和占位块）会被"一格一格往上走"带着
+   **滑出滚动可视区上边**（真浏览器实测：被裁 7 / 12 / 13 / 18 / 23 / 34 / 39 / 42px，来回闪），
+   而线的自然位置在可视区内时**一个像素都不动**（sticky 不生效）⇒ 观感零变化、只在快看不见时救住它。
+   · `top: 4px`：那颗 6px 的圆点画在 `top:-4px` 上，留出这点才整颗看得见；
+   · 只加在**顺序页**这条线上：条目编辑页那条（`#ywpu-list .ywpu-dropline`）是老口径、另有断言守着；
+   · 不动拖动的手势/语义（插位、占位块、自动滚动一律照旧 —— 这里只改"画在哪"）。
+   ★改前那一段（没有这条）的读数见 `e2e/tmp/af6-drag-top.log`。 */
+#ywpu-view-order .ywpu-dropline { position: sticky; top: 4px; z-index: 6; }
+@media (max-width: 720px) {
+    /* ★W19A ③（作者第 24 批）：**手机档整行重排** —— 原话"把每行的冗余信息另起一行竖排，且列要对齐
+       （每一个竖行它的内容应该都是这种相关内容，比如说那个拨钮，就是一竖行下来全都是那个拨钮）"。
+       改前的问题（实测读数见 e2e/tmp/w19a-geom-before-m.log）：
+         · `.ywpu-oright` 还是个 `inline-flex + wrap` 的行内块 ⇒ 有富余就挤在名字那一行、没富余就自己折，
+           两行的行高不一致（28 / 57 混排 = "整个界面是乱的"），同类控件 x 也不一致（拨钮 308 / 251 两种）；
+         · `.ywpu-plain` 把「两边一样」徽标与行尾标记**整个藏了**（151 行只靠一颗 6px 小圆点）——
+           作者这一轮明确说"那些两边一样的标识也消失了"，所以**撤销那次收边**：标识回到行上。
+       现在：整块 `.ywpu-oright` 独占一行（`flex: 1 1 100%`）⇒ **冗余信息另起一行**；
+         它内部是 **5 条固定宽度的网格轨道**：位次 / 开关变化 / 状态字 / 拨钮 / 行尾标记
+         ⇒ 同类控件在每一行都落在**同一个 x**（列对齐，几何可量），行高也统一。
+       ★"两边不同 / 开关不同"这类状态字本来就排在拨钮**左边**（DOM 顺序 pos → sw → badge → 拨钮 → 标记），
+         这一条一个字没动，只是把它钉进了第 3 条轨道。 */
+    .ywpu-orow-big .ywpu-oright {
+        flex: 1 1 100%; margin-left: 0;
+        display: grid;
+        grid-template-columns: 68px 72px minmax(0, 1fr) 62px 72px;
+        align-items: center; justify-content: end; gap: 3px 6px;
+    }
+    .ywpu-orow-big .ywpu-oright > * { grid-row: 1; }
+    .ywpu-orow-big .ywpu-ocell-pos   { grid-column: 1; }
+    .ywpu-orow-big .ywpu-ocell-sw    { grid-column: 2; }
+    .ywpu-orow-big .ywpu-ocell-badge { grid-column: 3; }
+    .ywpu-orow-big .ywpu-knobwrap    { grid-column: 4; }
+    .ywpu-orow-big .ywpu-xbtn        { grid-column: 4; }
+    .ywpu-orow-big .ywpu-omark       { grid-column: 5; }
+    /* 列宽由轨道给 ⇒ 单元格自己的固定宽度在这儿必须让开（不然 78/72/64 会顶破轨道） */
+    .ywpu-orow-big .ywpu-ocell { width: auto; min-width: 0; }
+    .ywpu-orow-big .ywpu-ocell > * { min-width: 0; }
+    .ywpu-ocell-pos { width: 78px; }
+    .ywpu-ocell-sw { width: 72px; }   /* v4.5：66px 装不下 69px 的 Off→On（探进列间距，肉眼看不到但别留着） */
+    .ywpu-ocell-badge { width: 64px; }
+    /* 「没事发生」的行（S2-3 那一族）在手机上**只收内边距**，不再藏标识 —— 见上面那段 */
+    .ywpu-orow.ywpu-plain { padding: 3px 7px; gap: 3px 6px; }
+    .ywpu-orow.ywpu-plain .ywpu-oname { font-size: var(--ywpu-fs-sm); }
+}
+.ywpu-orow-big .ywpu-oname { font-size: var(--ywpu-fs-md); flex: 1 1 120px; }
+.ywpu-orow.ywpu-moved { background: color-mix(in srgb, var(--yst-new) 12%, transparent); }
+.ywpu-orow.ywpu-newrow { background: color-mix(in srgb, var(--yst-old) 10%, transparent); }
+.ywpu-orow.ywpu-dimrow { opacity: .35; }
+.ywpu-orow.ywpu-selrow { background: color-mix(in srgb, var(--ywpu-accent) 18%, transparent); box-shadow: inset 3px 0 0 var(--ywpu-accent); }
+.ywpu-orow.ywpu-flash { background: color-mix(in srgb, var(--ywpu-accent) 26%, transparent); }
+.ywpu-orow.ywpu-dragging { opacity: .5; }
+.ywpu-orow.ywpu-lastrow { background: transparent; box-shadow: inset 3px 0 0 var(--ywpu-accent); }
+.ywpu-ocol-merged .ywpu-orow { cursor: grab; }
+.ywpu-orow[data-key]:hover, .ywpu-orow[data-extra]:hover { background: var(--ywpu-raise); }
+.ywpu-grab { cursor: grab; color: var(--ywpu-txt-3); }
+.ywpu-onum { min-width: 22px; text-align: right; font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-3); font-variant-numeric: tabular-nums; }
+.ywpu-oname { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ywpu-of { font-size: 10.5px; padding: 0 6px; border-radius: var(--ywpu-r-pill); border: 1px solid currentColor; white-space: nowrap; }
+.ywpu-of-new { color: var(--yst-new-ink); }
+.ywpu-of-only { color: var(--yst-old-ink); }
+.ywpu-ono { min-width: 16px; text-align: center; font-size: 10.5px; border-radius: var(--ywpu-r-pill); padding: 0 5px; color: var(--yst-new-ink); border: 1px solid var(--yst-new); }
+.ywpu-ofrom { font-size: 10.5px; color: var(--yst-new-ink); white-space: nowrap; }
+/* ★W19A ③：行尾那颗状态字**固定宽度**（72px = 放得下 5 个汉字 + 内边距）。
+   为什么必须固定：这一块是"靠右对齐的一整块"（`.ywpu-oright{margin-left:auto}`），
+   改前所有行都是 4 个字（「无需处理」/「点我处理」）宽度刚好一样 ⇒ 看不出问题；
+   这一轮文案变成 5 个字的「无需做处理」后，**同一屏里 4 字与 5 字混排**，
+   宽的那几行会把整块右对齐内容**往左顶 10px**（= 作者最恨的"谁有变化谁就把状态字挤歪"，
+   v4.3 的老毛病）。固定宽度 + 文字居中 ⇒ 每一行的"状态字/拨钮/徽标"三列**永远在同一条竖线上**。
+   超长的那一种（「挑到一半（还差 N 处）」）走省略号，全句在 `title` 里（鼠标停一下就能看全）。 */
+.ywpu-omark { width: 72px; box-sizing: border-box; text-align: center; overflow: hidden; text-overflow: ellipsis; font-size: 10.5px; padding: 0 6px; border-radius: var(--ywpu-r-pill); border: 1px solid var(--ywpu-line); color: var(--ywpu-txt-2); white-space: nowrap; }
+.ywpu-m-pend { color: var(--yst-warn-ink); border-color: var(--yst-warn); }
+.ywpu-m-next { color: var(--yst-old-ink); border-color: var(--yst-old); }
+.ywpu-m-mine { color: var(--yst-mine-ink); border-color: var(--yst-mine); }
+.ywpu-m-both { color: var(--yst-both-ink); border-color: var(--yst-both); }
+.ywpu-m-drop { color: var(--ywpu-txt-3); }
+.ywpu-m-ok { color: var(--ywd-add-ink); border-color: color-mix(in srgb, var(--ywd-add) 55%, transparent); }
+.ywpu-m-same { color: var(--yst-same-ink); border-color: color-mix(in srgb, var(--yst-same) 60%, transparent); }
+.ywpu-m-extra { color: var(--yst-old-ink); border-color: var(--yst-old); }
+.ywpu-m-last, .ywpu-omark.ywpu-m-last { color: var(--ywpu-accent-ink); border-color: var(--ywpu-accent-line); }
+.ywpu-orow .ywpu-omark { cursor: pointer; }
+.ywpu-orow .ywpu-omark:hover { border-color: var(--ywpu-accent); color: var(--ywpu-accent-ink); background: var(--ywpu-accent-bg); }
+.ywpu-orow .ywpu-grab { cursor: grab; }
+/* 拖动落点：一条细横线（不是虚线框） */
+.ywpu-dropline { height: 0; margin: 0 2px; border-top: 2px solid var(--ywpu-accent); box-shadow: 0 0 5px var(--ywpu-accent-line); position: relative; }
+.ywpu-dropline::after { content: ''; position: absolute; left: -3px; top: -4px; width: 6px; height: 6px; border-radius: 50%; background: var(--ywpu-accent); }
+.ywpu-ghost {
+    position: fixed; z-index: 32000; pointer-events: none; padding: 3px 10px; font-size: var(--ywpu-fs-sm);
+    border-radius: var(--ywpu-r-sm); background: var(--SmartThemeBlurTintColor, #16181d); color: var(--ywpu-txt);
+    border: 1px solid var(--ywpu-accent); box-shadow: var(--ywpu-shadow-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* 拖动期间：不要悬停/选中底色，只留那条落点横线 */
+.ywpu-dragmode .ywpu-orow:hover { background: none; }
+.ywpu-dragmode .ywpu-orow.ywpu-selrow { outline: none; background: none; box-shadow: none; }
+.ywpu-dragmode .ywpu-ocol-body-tall { cursor: grabbing; }
+/* 总览页的多选 / 批量条 / 新建条目 */
+.ywpu-ocheck { width: 15px; height: 15px; flex: none; accent-color: var(--ywpu-accent); cursor: pointer; }
+/* ★W19A-3 ②（作者拍板"修"，AGENTS §5 的"**视觉可小、热区 ≥32**"）：
+   总览页每行那颗勾选框与行尾状态字，**可见盒**只有 15~20px ⇒ 手机上点不中。
+   手法：各包一层外套（`.ywpu-ocheckwrap` / `.ywpu-omarkwrap`），**外套**用内边距撑到 32×32，
+   `margin` 等量抵消 ⇒ 行内几何一个像素都不动；里层那两件**尺寸/长相一个字不改**。
+   · `label` 包 checkbox 是原生语义（点外套 = 点勾选框），不需要 JS；
+   · 行尾标记那条点击绑定已经挪到外套上（见 `renderOrderView` 末尾），
+     两件外套也都在"行点击/拖动忽略名单"里（不然点热区会变成选中/拖这一行）。 */
+/* ★W19A-3 ②：两件外套的**基础**形态 —— 只做"居中壳"，**一个像素都不加**（PC 几何/命中判定与改前逐字节相同）。
+   撑热区的那点内边距**只在手机档**给（见 §14 手机档那两条）：PC 不需要 32，也不该多出可点区域。 */
+.ywpu-ocheckwrap, .ywpu-omarkwrap { display: inline-flex; align-items: center; justify-content: center; }
+.ywpu-xbtn { padding: 0 7px; min-height: 22px; color: var(--ywpu-txt-3); }
+.ywpu-xbtn:hover { border-color: var(--yst-warn-ink); color: var(--yst-warn); background: transparent; }
+.ywpu-batchbar {
+    display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: var(--ywpu-fs-sm);
+    margin-top: var(--ywpu-s2); padding: 6px 8px; border-radius: var(--ywpu-r-md);
+    border: 1px solid var(--ywpu-accent-line); background: var(--ywpu-accent-bg);
+}
+.ywpu-batchbar b { font-size: 13px; }
+.ywpu-batchbar .ywpu-btn.ywpu-mini { opacity: .95; }
+.ywpu-batchbar-idle { border-style: dashed; border-color: var(--ywpu-line); background: transparent; color: var(--ywpu-txt-3); }
+.ywpu-batchbar-idle b { font-size: 12px; }
+/* ★S2-4（UI P12 + 文案 §C8）：**没勾选**时只留"导航两颗 + 新建 + 全选"（一行）；
+   批量动作（`.ywpu-bulk`：用我的 / 用新版 / 复制 / 开 / 关 / 取消选择）**由 CSS 收起** ——
+   DOM 里十颗按钮一颗不少（程序化 `.click()` 与老断言照旧命中），只是看不见。 */
+.ywpu-batchbar-idle .ywpu-bulk { display: none; }
+.ywpu-batchhint {
+    /* ★R9-i（S2-4 收尾）：`flex-basis` 必须是 **0**，不能是 `auto`。
+       flex 的换行判定是**先按 basis（不自缩）算够不够、再决定在哪断行** —— basis:auto 时
+       提示句按自己的文字宽（~120px）参与计算，于是"提示 + 4 颗按钮"在手机上超宽 → 提示独占一行、
+       按钮被挤到第二行（r9h 实测手机 73px / 3 行）。basis:0 时它不参与换行计算，只**吃剩下的空间**：
+       宽就整句显示、窄就省略号，永远跟按钮同排。 */
+    flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: var(--ywpu-txt-3); font-size: var(--ywpu-fs-xs);
+}
+/* ★Wave W9-5（2026-09-24 · W9 查问题兵静态核查）：勾着的条目里**被「筛选有变化的」挡住、现在看不见**的那几条
+   —— 紧跟在「已选 N 条」后面的一句弱色小字（只在这真有这种情况时才画；平时一个节点都没有）。
+   字号/颜色跟 `.ywpu-batchhint` 同一档（它是提示句的续写，不该比提示更抢眼）；
+   不许换行、缩省略：绝不能因此把动作按钮挤到第二行（手机档那条 1 行硬指标）。 */
+.ywpu-batchhide { color: var(--ywpu-txt-3); font-weight: 400; font-size: var(--ywpu-fs-sm); white-space: nowrap; }
+.ywpu-extra-form {
+    margin-top: var(--ywpu-s2); padding: var(--ywpu-s2); display: flex; flex-direction: column; gap: 6px;
+    border: 1px dashed var(--ywpu-line); border-radius: var(--ywpu-r-md); background: var(--ywpu-surface);
+}
+.ywpu-extra-form .ywpu-input, .ywpu-extra-form .ywpu-textarea { width: 100%; }
+.ywpu-opt-mini { font-size: var(--ywpu-fs-xs); padding: 1px 8px; border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-r-pill); }
+.ywpu-colors { margin-top: 6px; font-size: var(--ywpu-fs-sm); }
+.ywpu-colors > summary { cursor: pointer; color: var(--ywpu-txt-2); }
+.ywpu-colorlist { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 6px 0; }
+.ywpu-coloritem { display: inline-flex; align-items: center; gap: 4px; font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-2); cursor: pointer; }
+.ywpu-coloritem input[type=color] { width: 26px; height: 18px; padding: 0; border: 1px solid var(--ywpu-line); border-radius: 4px; background: transparent; cursor: pointer; }
+/* 图例色块（点它就能改颜色 —— 用户 v3.7 点名要的入口，别收进折叠里）*/
+.ywpu-lgd {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-2); cursor: pointer;
+    padding: 0 2px; border-radius: var(--ywpu-r-sm);
+}
+.ywpu-lgd:hover { background: var(--ywpu-raise); }
+.ywpu-lgd input[type=color] {
+    width: 14px; height: 14px; padding: 0; border: 1px solid var(--ywpu-line);
+    border-radius: 4px; background: transparent; cursor: pointer; flex: none;
+}
+.ywpu-lgd-plain { font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-3); }
+
+/* ---------------------------------------------------------------- 11. 展开区里的选择控件（v3.1~v3.6 保留） */
+/* 一处不同：主行＝结果里用的这一版；副行＝另一版（压暗，点它就用它） */
+.ywpu-pl-alt { color: var(--ywpu-txt-3); }
+.ywpu-patch:hover .ywpu-pl-alt { color: var(--ywpu-txt-2); }
+.ywpu-pl-act { padding: 2px 3px 3px; }
+.ywpu-alt-chip {
+    font-size: 10px; padding: 0 6px; margin-left: 6px; border-radius: var(--ywpu-r-pill);
+    border: 1px dashed currentColor; color: var(--ywpu-txt-2); white-space: nowrap;
+}
+/* 结果预览（直接看得见，可直接改） */
+.ywpu-result { margin-top: 6px; }
+.ywpu-result .ywpu-textarea { min-height: 96px; font-size: 12px; }
+.ywpu-backrow { margin-top: var(--ywpu-s2); }
+.ywpu-backbtn {
+    width: 100%; justify-content: center; min-height: 40px; font-size: var(--ywpu-fs-md);
+    font-weight: 600; border-style: dashed; color: var(--ywpu-txt-2);
+}
+.ywpu-backbtn:hover { border-style: solid; color: var(--ywpu-txt); }
+/* 每一处的两组：旧版=红底 / 新版=绿底（用户："我要看到旧的 也要看到新的"）*/
+.ywpu-grp {
+    position: relative; display: flex; gap: 4px; align-items: flex-start; cursor: pointer;
+    padding: 3px 6px 3px 5px; margin: 2px 0; border-radius: 5px; border-left: 3px solid transparent;
+    transition: box-shadow .12s var(--ywpu-ease);
+}
+.ywpu-grp-mine { background: color-mix(in srgb, var(--ywd-del) 30%, transparent); }
+.ywpu-grp-next { background: color-mix(in srgb, var(--ywd-add) 28%, transparent); }
+.ywpu-grp:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 40%, transparent); }
+.ywpu-grp-mine.ywpu-on { border-left-color: var(--ywd-del); }
+.ywpu-grp-next.ywpu-on { border-left-color: var(--ywd-add); }
+.ywpu-grp-lab { flex: none; width: 30px; text-align: left; font-size: 10px; line-height: 1.7; white-space: nowrap; color: var(--ywpu-txt-2); }
+/* ★C7（2026-09-23）：这两条原来写的是 `color-mix(in srgb, var(--ywd-del/add) 40%, var(--ywpu-txt))` ——
+   **算出来的值不在自动取色的令牌族里**（`preset-updater.js` 的 `INK_TOKENS` 只认"元素计算色 == 某个令牌的解析值"），
+   于是它拿不到"整族兜到 ≥4.5"那道保险：实测浅色档从 8.39 掉到 4.28（真主题 Azure 3.09 / 双色盒子-浅色 3.60）。
+   改用**既有的** `-ink` 令牌（38% 品牌色 + 正文色，色相与 40% 那一版几乎一样）——它本来就在令牌族里，
+   红/绿语义一个字没变，兜底层会自动把它跟同一族一起抬到达标。 */
+.ywpu-grp-mine > .ywpu-grp-lab { color: var(--ywd-del-ink); }
+.ywpu-grp-next > .ywpu-grp-lab { color: var(--ywd-add-ink); }
+.ywpu-grp-rows { flex: 1 1 auto; min-width: 0; padding-right: 20px; }
+.ywpu-grp-state { display: none; }   /* 老的状态文字（已不用，留着防止旧缓存里出现）*/
+.ywpu-grp-state.ywpu-on { }
+.ywpu-grp-act { background: transparent; }
+.ywpu-grp-act .ywpu-grp-rows { color: var(--ywpu-txt-2); }
+.ywpu-metric.ywpu-nopos { color: var(--yst-switch-ink); }
+/* 没选中的那一组：变暗（还看得清，但一眼知道不是它） */
+.ywpu-grp:not(.ywpu-on):not(.ywpu-grp-act) { opacity: .55; }
+.ywpu-grp:not(.ywpu-on):not(.ywpu-grp-act):hover { opacity: .95; }
+.ywpu-patch[data-decided="0"] .ywpu-grp { opacity: 1; }        /* 没定过：两组一样亮，谁都没章 */
+/* ★W101-乙⑦：正则侧"更改内容"那两组同一个口径（没选过 `use` ⇒ 两组一样亮）——
+   改前这两组是只读的（上面那三条"关交互"的规则本波删了），所以这条要跟着补上。 */
+.ywpu-rxdiff[data-decided="0"] .ywpu-grp { opacity: 1; }
+/* 选中的那一组：盖一个圆勾印章（右下角，歪一点；图形不用文字） */
+.ywpu-grp-on-mark, .ywpu-stamp { }
+.ywpu-stamp {
+    position: absolute; right: 3px; bottom: 3px;
+    width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; line-height: 1;
+    color: #fff; border: 2px solid #fff;
+    background: color-mix(in srgb, var(--ywd-add) 85%, #000);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+    transform: rotate(-12deg);
+    opacity: .82;
+    pointer-events: none;
+}
+.ywpu-grp-mine .ywpu-stamp { background: color-mix(in srgb, var(--ywd-del) 85%, #000); }
+.ywpu-pl-none { color: var(--ywpu-txt-3); font-style: italic; }
+.ywpu-pl-grp { white-space: pre-wrap; word-break: break-word; }
+.ywpu-grp-empty .ywpu-grp-rows { min-height: 18px; display: flex; align-items: center; }
+.ywpu-old-hint, .ywpu-grp-mine .ywpu-pl-none { color: var(--ywd-del-ink); }
+.ywpu-grp-next .ywpu-pl-none { color: var(--ywd-add-ink); }
+.ywpu-hl-add { background: color-mix(in srgb, var(--ywd-add) 55%, transparent); border-radius: 2px; }
+.ywpu-hl-del { background: color-mix(in srgb, var(--ywd-del) 50%, transparent); border-radius: 2px; }
+
+/* ---------------------------------------------------------------- 12. P1 更新包（导出 / 逐条确认页） */
+/* 按钮"亮着"= 当前这一条选的是它（跟条目页的三颗按钮一个观感） */
+.ywpu-btn.ywpu-on { border-color: var(--ywpu-accent); background: var(--ywpu-accent-bg); font-weight: 700; }
+.ywpu-btn[disabled] { opacity: .45; cursor: not-allowed; }
+.ywpu-btn[disabled]:hover { border-color: var(--ywpu-line); background: transparent; }
+#ywpu-patch-foot { padding-top: var(--ywpu-s2); margin-top: var(--ywpu-s2); border-top: 1px solid var(--ywpu-line-2); }
+.ywpu-patchbox { display: flex; flex-direction: column; gap: 5px; }
+.ywpu-prow {
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    padding: 6px 8px; border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-r-sm); background: var(--ywpu-bg);
+}
+.ywpu-prow.ywpu-offrow { opacity: .5; }
+.ywpu-prow.ywpu-prow-conf { border-color: color-mix(in srgb, var(--yst-both) 60%, transparent); }
+.ywpu-prow-name { font-weight: 600; }
+.ywpu-prow-note { font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt-2); }
+.ywpu-prow-acts { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.ywpu-prow-pick { flex: 1 1 100%; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--ywpu-line); }
+.ywpu-pblock { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 4px 6px; border-left: 2px solid var(--ywd-chg); background: var(--ywpu-surface); border-radius: var(--ywpu-r-sm); }
+.ywpu-pblock .ywpu-prow-note { flex: 1 1 240px; }
+.ywpu-ptag { font-size: var(--ywpu-fs-xs); padding: 0 6px; border-radius: var(--ywpu-r-pill); border: 1px solid currentColor; white-space: nowrap; }
+.ywpu-ptag-add { color: var(--yst-new-ink); }
+.ywpu-ptag-update { color: var(--yst-both-ink); }
+.ywpu-ptag-remove { color: var(--yst-warn-ink); }
+.ywpu-ptag-switch { color: var(--yst-switch-ink); }
+.ywpu-ptag-warn { color: var(--yst-warn-ink); }
+.ywpu-ptag-conf { color: var(--yst-both-ink); background: color-mix(in srgb, var(--yst-both) 22%, transparent); font-weight: 700; }
+@media (max-width: 720px) {
+    .ywpu-prow-acts { margin-left: 0; }
+    .ywpu-prow-acts .ywpu-btn { min-height: 32px; }
+    .ywpu-ptag { font-size: var(--ywpu-fs-sm); }
+}
+
+/* ---------------------------------------------------------------- 14. 手机端 */
+@media (max-width: 720px) {
+    #ywpu-root, #ywpu-sheet, #ywpu-cmp, #ywpu-patch { padding: 0; }
+    #ywpu-panel { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border: none; }
+    #ywpu-sheet-card, #ywpu-cmp-card, #ywpu-patch-card { width: 100vw; max-height: 100dvh; border-radius: 0; }
+    #ywpu-head { padding: 8px 10px; gap: var(--ywpu-s2); flex-wrap: wrap; }
+    #ywpu-head .ywpu-title { font-size: 14px; }
+    #ywpu-head-sub { display: none; }
+    #ywpu-head-full { display: none; }     /* ★W106 ③：整行都藏了 ⇒ 全标题浮层也没得开（屏幕转窄的兜底） */
+    /* ★W103-己：窄屏翻转"桌面 / 手机二选一"的那两处拷贝（见基规则里 `.ywpu-src-mobonly` 那段）。 */
+    .ywpu-src-deskonly { display: none !important; }
+    .ywpu-src-mobonly { display: block; }
+    .ywpu-src-h .ywpu-src-mobonly { display: inline; }
+    /* ★W103-乙（作者原话："电脑版就是直接放在后面；但是手机版的话，后面那些筛选另起一行"）：
+       `#ywpu-brk` 这个零高盒子（flex-basis:100%）就是那个**换行点** —— 手机档才生效
+       （PC 档 `display:none`，见基规则）。负外边距抵掉它自己占的那半个 gap，行距不变。 */
+    .ywpu-brk { display: block; flex-basis: 100%; height: 0; margin: -2px 0; }
+    .ywpu-tabs { margin-left: 0; width: 100%; }
+    #ywpu-body { padding: 0 10px 10px; }
+    #ywpu-view-items { padding-top: 10px; }
+    #ywpu-foot { padding: 8px 10px; }
+    #ywpu-foot .ywpu-flex { margin-left: 0; width: 100%; }
+    /* ★★AU4 ④：名字框在手机上**照旧独占一行**（见下面 `.ywpu-namein` 那条注释） */
+    #ywpu-foot #ywpu-name { flex: 1 1 100%; }
+    #ywpu-foot #ywpu-generate { flex: 1 1 auto; min-height: 40px; justify-content: center; }
+    #ywpu-foot #ywpu-stitch { flex: 1 1 auto; min-height: 40px; justify-content: center; }
+    .ywpu-btn { min-height: 34px; }
+    .ywpu-btn.ywpu-mini { min-height: 30px; }
+    .ywpu-opt { padding: 7px 14px; font-size: var(--ywpu-fs-md); }
+    .ywpu-item { padding: var(--ywpu-s2); }
+    /* ★R9-i（首屏 S2-1 收尾）：390 档工具条**收成一行** —— 老写法 `flex: 1 1 100%` 让搜索框独占一行，
+       加上下面那 4 颗（全部展开/全部收起/多条/单条）就是 **2 行 ≈ 90px**，而首屏第一行距顶要 ≤40%。
+       现在搜索框只要 88px 起步、能被压到 80 上下，跟那 4 颗同排（合计 ≈ 310px < 370px 面板宽）。
+       字号/对比度一个都没动（`ui-audit` 那把尺只认字号 ≥10px 与对比度 ≥4.5）。 */
+    .ywpu-tools .ywpu-input { flex: 1 1 88px; min-width: 88px; }
+    /* 同理：筛选/统计那排 chip 在 390 档会折 2 行 → 只收内边距（**不动字号**，别碰 ui-audit 的 ≥10px 尺） */
+    .ywpu-stats { gap: 4px; }
+    .ywpu-stats .ywpu-chip { padding: 3px 6px; }
+    .ywpu-patch { padding: 5px 6px; }
+    .ywpu-patch-tag { font-size: 10px; }
+    .ywpu-doc { font-size: 12.5px; padding: 6px; }
+    .ywpu-ocols { flex-direction: column; }
+    .ywpu-ocol { flex: 0 0 auto; width: 100%; }
+    .ywpu-ocol-body, .ywpu-ocol-body-tall { max-height: 52vh; }
+    .ywpu-knob { width: 36px; height: 20px; }
+    .ywpu-knob > i { width: 16px; height: 16px; }
+    .ywpu-knob.ywpu-knob-on > i { left: 18px; }
+    /* ★W19A-3 ②：行底多留 9px 内边距（原来是 6）—— 给行尾状态字那条 32px 热区的**下沿**留地方，
+       不然它会探进下一行、命中被下一行抢走（探针实测：不给就只有 30px、有的行只剩 1px）。 */
+    .ywpu-orow-big { gap: 3px 6px; padding: 6px 7px 15px; }
+    .ywpu-orow-big .ywpu-badge { font-size: 10px; padding: 0 6px; }
+    .ywpu-ocheck { width: 20px; height: 20px; }
+    /* ★W19A-3 ②：手机档 —— 两件外套用**内边距 + 等量负外边距**把"能点到的范围"撑到 32，
+       布局盒尺寸一个像素都不动（行高/列位/行内几何零变化）；里层那两件（勾选框 / 状态字胶囊）尺寸一个字没改。
+       ★方向是**量出来的**（探针 `w19a-order-geom.js` 的"实测热区高"：从控件中心逐像素走、
+         用 elementFromPoint 看还归不归它）：
+         · 勾选框：可见盒 11~20px ⇒ 主补**上方**（上边是本行外框/上一行区域，本行后画 ⇒ 命中归本行），
+           下方只补 6（下边紧邻"信息行"，补多了会被信息行抢走命中）；
+         · 行尾状态字：上下各 7（可见 18 ⇒ 32）；行底再加 9px 内边距，给它那 32px 热区的下沿留地方。 */
+    .ywpu-ocheckwrap { padding: 15px 11px 6px 11px; margin: -15px -11px -6px -11px; }
+    .ywpu-omarkwrap { padding: 7px 0; margin: -7px 0; }
+    .ywpu-alt-chip { margin-left: 4px; }
+    .ywpu-grp { padding: 5px 6px; }
+    .ywpu-grp-lab { width: 28px; font-size: 9.5px; }
+    .ywpu-grp-state { font-size: 9.5px; }
+    .ywpu-stamp { width: 22px; height: 22px; font-size: 14px; }
+    .ywpu-backbtn { min-height: 46px; }
+    .ywpu-src-no { width: 22px; height: 22px; }
+    /* ★S2-2：底栏那两行说明在手机上压到最小（状态句 ellipsis 已经保证一行；勾选框已经搬进确认框）
+       ★★AU4 ④（评审 §2 条 5）：**状态句不再独占一行** —— 它跟「还剩 N 条要处理 / 上一条 / 下一条 / …」
+       **同一行**（基尺寸 0 + `min-width: 0` ⇒ 既不参与换行判断、又能缩到省略号；见上面基规则那条注释）。 */
+    /* ★★AU4 ④（评审 §2 条 5）：危险提示**并进动作行**（贴着那两颗按钮）—— 手机上给它**固定 40px**
+       （"⚠ 覆…" 那一小截，全文在 title 与确认框里），这样它不挤走按钮、也不独占一行（改前 17px 一行）。
+       ★手机上它会缩成一枚"⚠"小角标：这是**故意**的取舍（评审"并入动作行"的口径 + 手机那 350px 放不下
+         一长句；真正的门是点「缝入」后的确认框，那里写着「要覆盖①…」+ 备份勾选框）。 */
+    .ywpu-stitchnote { flex: 0 0 40px; min-width: 40px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* ★S2-4：批量条在手机上要**一行**放下（没勾选时只剩 4 颗 + 一句提示；勾了才展开批量动作） */
+    .ywpu-batchbar { gap: 3px 4px; padding: 4px 6px; }
+    .ywpu-batchbar .ywpu-btn.ywpu-mini { padding: 0 7px; }
+    /* ★R9-i：390 档连那句提示一起让位 —— 只留 4 颗按钮（勾选状态自己会说"已选 N 条"，提示进 title）。
+       宁可少一句废话，也不许它把按钮挤到第二行（r9h 实测：带提示 = 3 行 73px，去掉 = 1 行）。 */
+    .ywpu-batchbar-idle .ywpu-batchhint { display: none; }
+}
+
+/* ==========================================================================
+   15. ★§22 来源块 + 「位置待定」（2026-09-21 · 非余温预设的缝入）
+   两件事：① 页顶说清"正在缝的是什么"（卡片标题 / 用途备注 / 出处）；
+          ② 结构对不上时：明说 + 把新条目放最上面 + 允许用户自己选位置 / 拖动。
+   注意（跟 §1 同一套令牌）：不引入内层滚动条；长文本用 line-clamp 限行 + <details> 展全文。
+   ★例外（Wave W5 ①）：来源块那条**用途备注**不再限行 —— 点开来源块就是全文（见下面 `.ywpu-src-why`）。
+   ========================================================================== */
+
+/* —— 来源块（商店 / 更新包文件 / 云端更新三处共用同一个组件）
+   ★S2-1（2026-09-21 R9）：整块做成 `<details>`（为了首屏瘦身：常驻只剩 summary 那一行）。
+   ★U14（2026-09-22 深夜 · 台账 §BO-7 的裁决点**改了口径**）：**默认收起不变**，改成在收起态写一句
+   提示「展开」（★W95 ②：作者要求把原句缩成两个字）（`.ywpu-src-tip`，见下面那条规则；开关在 `preset-updater.js` 的 `srcBarHtml`）。
+   一度按 BO-7 原文改成"默认展开"，但那样超首屏硬指标（PC 首行距顶 35.5~40.6% / 手机 48.2~53.6%）⇒ **已回退**。
+   这儿的 CSS **不管默认态**（默认就是没有 `open`）；`[open]` 只有两处用途：
+   ① 把右边那颗 ▾ 转 180°；② 收起态那句提示**展开后消失**（用户已经看到说明了，不需要再被提示）。
+   里层那层「看完整用途说明」折叠**Wave W2 ③ 已按作者要求整块删掉**；★Wave W5 ① 再把剩下的半截补完 ——
+   备注**一律画全**（`.ywpu-src-why` 的 `-webkit-line-clamp:3` 已删，不再按"纯字数 > 160"分档）。 */
+.ywpu-srcbar {
+    display: flex; flex-direction: column; gap: 3px;
+    padding: var(--ywpu-s2) 10px; margin-bottom: var(--ywpu-s2);
+    border: 1px solid var(--ywpu-line); border-left: 3px solid var(--ywpu-accent);
+    border-radius: var(--ywpu-r-md); background: var(--ywpu-surface);
+}
+.ywpu-srcbar.ywpu-srcbar-store { border-left-color: var(--ywpu-offi); }
+.ywpu-src-h { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; cursor: pointer; list-style: none; }
+.ywpu-src-h::-webkit-details-marker { display: none; }          /* 自带的三角会被 flex 挤歪 → 自己去画 */
+.ywpu-src-h::after {
+    content: '▾'; flex: none; margin-left: auto; color: var(--ywpu-txt-3); font-size: 11px;
+    transition: transform .12s var(--ywpu-ease);
+}
+.ywpu-srcbar[open] > .ywpu-src-h::after { transform: rotate(180deg); }
+/* ★W103-己：来源块里那几处"按屏宽二选一"的拷贝（桌面 / 手机各显示一份，同一时刻只看见一处）：
+   · `.ywpu-src-deskonly` = 桌面档显示（手机的窗口头那一行是隐藏的，所以手机档要看卡上的标题）；
+   · `.ywpu-src-mobonly`  = 手机档显示（桌面档已经有窗口头那一行了）。
+   见 `srcModel()` / `srcBarHtml()` 的 W103-己 注释；手机档的翻转规则在下面的媒体查询里。 */
+.ywpu-src-mobonly { display: none; }
+.ywpu-src-ic { flex: none; font-size: var(--ywpu-fs-md); line-height: 1.2; }
+.ywpu-src-t { font-size: var(--ywpu-fs-lg); font-weight: 700; color: var(--ywpu-txt); line-height: 1.35; word-break: break-word; }
+/* ★W95 ③（作者 2026-10-06）：原来这里长着一枚「作者备注」小标 —— 作者原话"这是什么？**删掉**"。
+   JS 侧**已不再产出**（`srcBarHtml` 里那一行整条删掉）；备注正文一个字没动（还在 `.ywpu-src-why` 里，
+   点开来源块就看得到）。规则**留着**（跟 `.ywpu-src-fold` 那几个老类名同一条纪律：老截图/老断言引到它
+   时不该"找不到规则"），现在它只是个空操作。 */
+.ywpu-src-hint {
+    flex: none; font-size: 10px; padding: 0 6px; border-radius: var(--ywpu-r-pill);
+    border: 1px dashed var(--ywpu-line); color: var(--ywpu-txt-2); white-space: nowrap; align-self: center;
+}
+/* ★U14（台账 §BO-7 裁决点改口径 · 2026-09-22 深夜）：**收起态**在 summary 行右侧写一句
+   「展开」（★W95 ②：原为「不懂用法？点此展开看说明」，作者要求缩成「展开」） —— 作者原话："不要做成按钮，就是卡上的一行字，要美观"。
+   · **不是按钮**：纯文字，无边框、无底色、无 padding、不绑任何事件；它就在 `<summary>` 里，
+     点它天然等于点 summary（不做 stopPropagation）⇒ 点了就展开。
+   · 色/字号**走既有档**（不新造档、不硬编码 hex）：`--ywpu-fs-sm`（12px，与本块 `.ywpu-src-m` /
+     `.ywpu-src-why` 同一档）+ `--ywpu-txt-2`（就是旁边那枚「作者备注」小标的色）；行高取标题那一档 1.35。
+   · `flex: 1 0 auto` + `text-align: right`：把这一行**剩下的空间全吃掉、文字贴右** ⇒ 提示紧挨着右边那颗 ▾；
+     `flex-shrink: 0` + `nowrap` ⇒ 它永远不压缩、不折行（挤不下才整块落到下一行，见 U14 报告里的宽度读数）；
+     又因为它是同一行里的 flex 项（与标题同基线、行高 ≤ 标题），**收起态的块高一个字不涨**（首屏指标不受影响）。
+   · 展开后它自己消失（下面 `[open]` 那条）：用户已经看到说明了，不需要再被提示。 */
+.ywpu-src-tip {
+    flex: 1 0 auto; text-align: right; white-space: nowrap;
+    font-size: var(--ywpu-fs-sm); line-height: 1.35; color: var(--ywpu-txt-2);
+}
+.ywpu-srcbar[open] > .ywpu-src-h > .ywpu-src-tip { display: none; }
+.ywpu-src-m { font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt-2); line-height: 1.5; }
+/* ★Wave W5 ①（2026-09-24 夜 · V11 复验：既有缺陷 + 被 W2 ③ 放大）：**限高整条删掉** ——
+   点开来源块就是**完整**用途说明（作者："点开就是可以直接看完就好了…只要点开它就是完整用途说明，
+   用户不想看会自己滑上去"）。
+   · 为什么删（而不是"只在真超 3 行时才给个展开"）：① 作者**明确不要**多一层折叠（W2 ③ 才刚把内层
+     `<details>` 删掉），再加一层等于把删掉的东西换个名字装回来；② "真超行"只能在**渲染后**量
+     （同一段字：PC 2 行 / 手机 5 行 ⇒ 任何"按字数"的判据都必然错配 —— 原来那条"纯字数 > 160"
+     就是这么漏的：手机上 88~160 字那一档被裁、而"超长"那一档才不限高 ⇒ 那一段没有任何入口看全文）；
+     ③ 这块本身是 `<details>`、**默认收起** ⇒ 首屏 / 底栏读数不受影响（W5 四档真界面读数在报告里）。
+   · 短备注（≤3 行）删前删后**逐像素相同**：`-webkit-line-clamp` 只裁"第 3 行之后"的部分，
+     没超就没有任何视觉差（`display:-webkit-box` 与 `block` 在 .ywpu-srcbar 这个 flex 列里同宽等高）；
+   · ≥4 行的那一档现在自然变高（用户自己滑 —— 正是作者要的"能看完"）。 */
+.ywpu-src-why {
+    font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt-2); line-height: 1.55;
+}
+/* ★Wave W2 ③ 那一档的类名（`.ywpu-src-why-full`）**保留在 CSS 里**、但 JS 侧 W5 起**不再产出**：
+   现在它是**空操作**（上面那条已经没有限高了，它解不解都一样）—— 留着是给老截图/老断言当锚点用。 */
+.ywpu-src-why-full { display: block; -webkit-line-clamp: unset; overflow: visible; white-space: pre-wrap; }
+/* —— 下面两条是**改前那层内层折叠**留下的类名（JS 已不再产出）：规则留着不留孤儿，老截图/老断言引到也不会找不到 */
+.ywpu-src-fold { margin-top: 2px; }
+.ywpu-src-whyfull { font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt-2); line-height: 1.55; white-space: pre-wrap; margin-top: 4px; }
+
+/* —— 「结构差得多 / 位置待定」那条人话提示（比普通提示更显眼，但不用红 = 红留给"还没处理"） */
+.ywpu-troublebar {
+    /* ★W100-甲：原来这里带 `margin-bottom: var(--ywpu-s2)` —— 挪到外层 `.ywpu-tbwrap` 上了：
+       否则 flex 行高会把这 8px 外边距算进去 ⇒ 同排的「跳过去」比提示块**高 8px**（实测 44 vs 36）。 */
+    display: block; padding: var(--ywpu-s2) 10px;
+    border: 1px solid var(--ywpu-gold-line); border-left: 3px solid var(--ywpu-offi);
+    border-radius: var(--ywpu-r-md); background: var(--ywpu-gold-bg);
+}
+/* ★R9-i（首屏 S2-1 收尾）：整块是 `<details>`，**默认收起** —— 常驻只剩 summary 那一行。
+   为什么可以折：① 它说的是"有 N 条找不到位置"，而行里已经标了「位置待定」徽标、总览页也看得见；
+   ② 首屏第一行距顶是这一批的硬指标（PC ≤30% / 手机 ≤40%），这块是首屏最大的一块（PC 2 行 / 手机 4~5 行）。
+   summary 里放的是**第一句正文**（最重要那句），CSS 收成一行 + 省略号；展开后 `.ywpu-note` 全文照旧。 */
+.ywpu-troublebar > summary {
+    cursor: pointer; list-style: none; padding: 0;
+    font-size: var(--ywpu-fs-sm); font-weight: 600; color: var(--ywpu-txt); line-height: 1.5;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ywpu-troublebar > summary::-webkit-details-marker { display: none; }
+.ywpu-troublebar > summary::after { content: ' ▾'; color: var(--ywpu-txt-3); font-weight: 400; }
+.ywpu-troublebar[open] > summary::after { content: ' ▴'; }
+.ywpu-troublebar > .ywpu-note { display: block; margin-top: 5px; }
+/* ★W95 ①（作者："不应该是下面直接跳到那个位置吗？"）：
+   提示条外层多一个 `.ywpu-tbwrap`（**弹性行**：提示块占满、右边挂一颗「跳过去 ▸」）。
+   ★为什么把按钮放在 `.ywpu-troublebar` **外面**：ui-audit 的"新块字号/对比度受检表"是按
+     `#ywpu-summary .ywpu-troublebar` **连后代一起**取的 —— 按钮挂在里面会把"块内最小字号"那档拖进来；
+     放在外面 ⇒ 那块的两条读数（字号 ≥10 / 对比度 ≥4.5）与改前**同一口径**，能逐字对比。
+   `align-items: flex-start` ⇒ 提示块该几行就几行，按钮不会把它拉高。 */
+.ywpu-tbwrap { display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--ywpu-s2); margin-bottom: var(--ywpu-s2); }
+.ywpu-tbwrap > .ywpu-troublebar { flex: 1 1 240px; min-width: 0; }
+/* 「跳过去 ▸」：可见盒 26px（= 同排其它 mini 按钮同高），手机上由既有的
+   `@media (max-width:720px) .ywpu-btn.ywpu-mini::after` 那条补到 32px 隐形热区（不另造一套）。 */
+/* ★W100-甲：外层「跳过去」的高度 = 那条黄条的高度（作者点名要的几何）——
+   `align-self: stretch` 让它跟同行那颗提示块走平（`.ywpu-tbwrap` 改成 align-items: stretch）。 */
+.ywpu-tbjump { flex: none; align-self: stretch; }
+.ywpu-troublebar .ywpu-note { color: var(--ywpu-txt); font-size: var(--ywpu-fs-sm); line-height: 1.6; white-space: pre-wrap; }
+
+/* —— 行里的「位置待定」小标记（总览页行尾 / 条目编辑页行头） */
+.ywpu-of-pend {
+    border-color: var(--ywpu-gold-line); color: var(--ywpu-gold-ink); background: var(--ywpu-gold-bg);
+    cursor: pointer;
+}
+.ywpu-of-pend:hover { border-color: var(--ywpu-offi); }
+.ywpu-orow.ywpu-pendrow, .ywpu-item.ywpu-pendrow { border-left-color: var(--ywpu-offi); }
+
+/* —— 「插在哪一条后面」那一块（顺序页行尾 / 条目编辑页展开区 / 更新包页行尾都用它） */
+.ywpu-pospick, .ywpu-posprow {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin: 2px 0 var(--ywpu-s2) 26px; padding: 5px 8px;
+    border: 1px dashed var(--ywpu-gold-line); border-radius: var(--ywpu-r-sm);
+    background: var(--ywpu-gold-bg); font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt-2);
+}
+.ywpu-pospick-t { flex: none; font-weight: 700; color: var(--ywpu-txt); }
+.ywpu-posq { flex: 0 1 150px; min-width: 110px; height: 26px; padding: 0 6px; font-size: var(--ywpu-fs-sm); }
+.ywpu-poss { flex: 0 1 240px; min-width: 140px; height: 26px; padding: 0 4px; font-size: var(--ywpu-fs-sm); }
+.ywpu-pospick-now, .ywpu-pospick-why { flex: 1 1 100%; font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-3); line-height: 1.5; }
+.ywpu-pospick-why { color: var(--ywpu-txt-2); }
+
+/* —— 条目编辑页展开区的「位置」一行（拖动把手 + 现在第几位） */
+.ywpu-posrow {
+    display: flex; align-items: center; gap: var(--ywpu-s2); flex-wrap: wrap;
+    margin: var(--ywpu-s2) 0; padding: 5px 8px;
+    border: 1px solid var(--ywpu-line-2); border-radius: var(--ywpu-r-sm);
+    background: var(--ywpu-bg); font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt-2);
+}
+.ywpu-dragh {
+    flex: none; cursor: grab; user-select: none; touch-action: none;
+    padding: 3px 10px; border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-r-pill);
+    background: var(--ywpu-raise); color: var(--ywpu-txt); font-size: var(--ywpu-fs-sm); font-weight: 700;
+    transition: background .12s var(--ywpu-ease), border-color .12s var(--ywpu-ease);
+}
+.ywpu-dragh:hover { border-color: var(--ywpu-accent-line); background: var(--ywpu-accent-bg); }
+.ywpu-dragh.ywpu-grabbing { cursor: grabbing; border-color: var(--ywpu-accent-line); background: var(--ywpu-accent-bg); }
+.ywpu-posnow { font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-2); }
+
+@media (max-width: 720px) {
+    .ywpu-src-t { font-size: var(--ywpu-fs-md); }
+    .ywpu-pospick, .ywpu-posprow { margin-left: 0; }
+    .ywpu-posq, .ywpu-poss { flex: 1 1 100%; min-width: 0; height: 32px; }
+    .ywpu-dragh { min-height: 34px; display: inline-flex; align-items: center; }
+}
+
+/* ==========================================================================
+   ★R6-e（2026-09-21 · 作者第三批反馈 B/M）：底栏排布 / 备份勾选框 / 拖动反馈 / 预览标签 / 来源块预设名
+   —— 只加新规则，上面那些老选择器的语义一个字没改（新旧共存、可回退）。
+   ========================================================================== */
+
+/* ---- ★B11：底栏「生成新预设 / 缝入当前预设」**永远同一行**（电脑版不再一上一下） ----
+   · 名字输入框自己伸缩（窄屏先挤它，不去挤按钮）；
+   · 两颗写盘按钮包在 .ywpu-btngroup 里（inline-flex + nowrap）→ **任何宽度下都同排**，只会整组换行、
+     绝不一上一下（作者原话："生成新预设在上、缝入当前预设在下 → 排布要合理统一"）。 */
+.ywpu-namein { flex: 1 1 160px; min-width: 110px; }
+.ywpu-footbtns { display: flex; flex-wrap: wrap; gap: var(--ywpu-s2); align-items: center; flex: 0 1 auto; margin-left: auto; }
+.ywpu-btngroup { display: inline-flex; align-items: center; gap: var(--ywpu-s2); flex: 0 0 auto; }
+/* ---- ★B12：「同时自动备份」勾选框 ——
+   ★S1-2（2026-09-21 R9）：这颗勾**搬进确认框**了（`.ywpu-bakchk`，见文件末尾 §16），底栏那颗 `.ywpu-autobak`
+   已经删掉（底栏因此少一行）；**默认不备份**的口径一个字没变，只是"要不要退路"现在和"确定要覆盖"同一次交互。 */
+.ywpu-bakchk {
+    display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 6px 9px;
+    border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-r-sm);
+    background: var(--ywpu-bg); font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt); cursor: pointer;
+}
+.ywpu-bakchk input { accent-color: var(--ywpu-accent); cursor: pointer; flex: none; width: 15px; height: 15px; }
+/* ---- ★S2-2：底栏状态行 = **一句小字**（三方/两方 + 顺序 + 四格计数并成一行；窄屏 ellipsis 收，绝不换行）
+   ★★AU4 ④（评审 §2 条 5）：`flex-basis` 从 `auto` 改成 **0** —— `auto` 时它的基准 = 内容宽（长句 ~300px），
+   flex 会**按基准判断放不下 ⇒ 换行**（手机实测被撑到 55px 那行就是这么来的）；基准 0 之后它既不参与
+   换行判断、又靠 `min-width: 0 + ellipsis` 把长句缩成一行（全文仍在 title 里）。
+   ★`nowrap + ellipsis` 两条一个字没动（`r9f` 那两条静态断言量着它们）。 */
+.ywpu-footstat {
+    flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-2);
+}
+/* ---- ★Wave B2：识版本"带锁"提示条 + 手选控件（plan §3.2②③ / §7 美观关）
+   ★为什么在**底栏**而不是顶部：结果窗口顶部只剩 4.5px 余量（r9h ① 卡"列表第一行距顶 ≤30%"——
+     实测 267px / 上限 271.5px）⇒ 顶部再加一个块必然顶破双视口首屏硬指标。
+   ★★Wave E2：整块**收纳**进一个 `<details>`（默认收起 = 第一行里的一颗小药丸，点开才铺开）——
+     B2 那版是"常驻一整行"，实测把底栏顶出 as2 评审 §U4 的验收线（手机 137→283px / 33.5%、
+     PC 83→152px；KPI = 手机 ≤140px 且 ≤17%、PC ≈81px）。**重排，不砍功能**：闭合态只留一句
+     "能不能判" + 一颗药丸，正文/读数/手选/一键/"不填也行"一个字都在里面（点一下展开）。
+   ★药丸沿用现成的 `…`（`.ywpu-adv` 那套）视觉语言：药丸 + 圆角 + 边框，不新造平行样式
+     （`#ywpu-adv > summary` 的同款三行：cursor / color / padding+border+radius）。
+   ★不许用 `.ywpu-note` / `.ywpu-footstat` 这两个类名：r9h ③ 按它们数"底栏 chrome ≤2 行"，多一行就红。
+   ★★Wave K1（2026-09-24 · 作者第 19 批第 2/3 条）：**展开态不再是"底栏里的一整行"，而是一个浮层**。
+     改前的病因（作者原话："再点一下收不起来、位置还会跑，要移到别处才能收"）：`[open]` 时
+     `flex: 1 1 100%` 把这块从"第一行右边那颗药丸"变成"底栏里新的一整行" ⇒ **药丸自己挪了位置**
+     ⇒ 用户在同一个位置再点一下，点到的已经不是药丸了（同一支探针的改前读数见 `e2e/tmp/waveK1-before-*.log`）。
+     改后：药丸**原地不动**（展开只换一圈强调色，位置/尺寸一个像素不差），正文折进 `.ywpu-lockbody`
+     —— `position: absolute; left/right: 底栏内边距; bottom: 100%`（浮在底栏**正上方**，跟 `.ywpu-adv-body`
+     同一套"绝对定位浮层"的做法）⇒ ① 点两次同一处 = 开 → 收；② 展开**不撑高底栏**（布局一个字不动）。 */
+.ywpu-lockbar { flex: 0 1 auto; min-width: 0; }
+/* 浮层的定位基准放在**底栏**（不是那颗药丸）：药丸在底栏最右边，若以它为基准，浮层会往右顶出卡片。
+   浮层宽度 = 底栏宽度 − 两侧内边距（PC 与手机同一口径，天然不横溢；高度由内容决定、不设内层滚动）。 */
+#ywpu-foot { position: relative; }
+.ywpu-lockbody {
+    position: absolute; left: var(--ywpu-s3); right: var(--ywpu-s3); bottom: calc(100% + 6px); z-index: 6;
+    display: flex; flex-direction: column; gap: var(--ywpu-s2);
+    box-sizing: border-box; text-align: left;
+    padding: var(--ywpu-s2) var(--ywpu-s3);
+    border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-r-sm);
+    background: var(--SmartThemeBlurTintColor, #16181d);   /* 与结果窗口同一块底色（不透明，不靠透明叠字） */
+    box-shadow: 0 10px 26px rgba(0, 0, 0, .34);
+}
+/* 浮层里的第一行：这块是干什么的（一行小标题 + 一句人话，回答作者"看不懂这块在干嘛"） */
+.ywpu-lock-h { display: flex; flex-wrap: wrap; gap: var(--ywpu-s2); align-items: baseline;
+    font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt); }
+.ywpu-lock-hint { font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-3); }
+/* 一键那排（［V0824］…）：一行放不下就折行；label 跟着按钮同一行 */
+.ywpu-lock-acts { display: flex; flex-wrap: wrap; gap: var(--ywpu-s2); align-items: center; }
+.ywpu-lock-lb { font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-2); }
+.ywpu-lockbar > summary { list-style: none; }
+.ywpu-lockbar > summary::-webkit-details-marker { display: none; }
+.ywpu-lock-sum {
+    cursor: pointer; display: block; width: max-content; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: var(--ywpu-fs-xs); line-height: 1.5; color: var(--ywpu-txt-2);
+    padding: 3px 8px; border-radius: var(--ywpu-r-pill); border: 1px solid var(--ywpu-line);
+}
+.ywpu-lock-sum:hover { color: var(--ywpu-txt); background: var(--ywpu-raise); }
+/* ★展开态只换颜色（**不许动 margin / padding / 定位** —— 那三样一动药丸就又跑了，正是这次的病根） */
+.ywpu-lockbar[open] > .ywpu-lock-sum { border-color: var(--ywpu-accent-line); background: var(--ywpu-accent-bg); color: var(--ywpu-txt); }
+/* ★Wave W2 ②（2026-09-24 · 作者第 20 批原话）：药丸两档颜色 ——
+     · **未选基准** = `让显示更精确 点此选基准`，**黄**；
+     · **已选基准** = `基准：<预设名>`，**绿**。
+   取色**全部走既有 ink 档**（`--yst-old-ink` = #fbbf24 混正文色 / `--yst-new-ink` = #4ade80 混正文色）——
+   它们正是条目侧「只有我有 / 新版新增」两族一直在用的那两个，**深色与真浅色两档的对比度都在
+   ui-audit / waveG-audit 的受检表里量过**（本轮读数见报告"美观关 4/4"那节），不新造色、不硬编码 hex。
+   ★`.ywpu-lock-ask` / `.ywpu-lock-has` 是**药丸独有**的类名，不与上面 `.ywpu-lock-ok`（整个 details
+   在"① 对得上"时加的那颗）冲突：那颗管的是**展开区那句正文**的颜色，跟这颗的状态色互不干扰。 */
+.ywpu-lock-sum.ywpu-lock-ask { color: var(--yst-old-ink); border-color: color-mix(in srgb, var(--yst-old) 45%, transparent); background: color-mix(in srgb, var(--yst-old) 12%, transparent); }
+.ywpu-lock-sum.ywpu-lock-ask:hover { color: var(--yst-old-ink); background: color-mix(in srgb, var(--yst-old) 22%, transparent); }
+.ywpu-lock-sum.ywpu-lock-has { color: var(--yst-new-ink); border-color: color-mix(in srgb, var(--yst-new) 45%, transparent); background: color-mix(in srgb, var(--yst-new) 12%, transparent); }
+.ywpu-lock-sum.ywpu-lock-has:hover { color: var(--yst-new-ink); background: color-mix(in srgb, var(--yst-new) 22%, transparent); }
+/* 展开态：**只换那圈强调色**（定位/尺寸一个字不动），字色仍是黄/绿 —— 展开不该把"选没选基准"吃掉 */
+.ywpu-lockbar[open] > .ywpu-lock-sum.ywpu-lock-ask,
+.ywpu-lockbar[open] > .ywpu-lock-sum.ywpu-lock-has { border-color: var(--ywpu-accent-line); background: var(--ywpu-accent-bg); }
+.ywpu-lockbar[open] > .ywpu-lock-sum.ywpu-lock-ask { color: var(--yst-old-ink); }
+.ywpu-lockbar[open] > .ywpu-lock-sum.ywpu-lock-has { color: var(--yst-new-ink); }
+/* ★plan §7【修正-查漏 3-5】：新提示条要**折行 ≤3 行**（手机上尤其重要 —— 底栏是常驻的）。
+   口径与现成的 .ywpu-src-why 一字不差（同款 -webkit-line-clamp:3）；全文仍在 title 里（悬停可见）。 */
+.ywpu-lock-t { font-size: var(--ywpu-fs-sm); line-height: 1.5; color: var(--ywpu-txt);
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ywpu-lock-ok .ywpu-lock-t { color: var(--yst-new-ink, var(--ywpu-txt)); }
+.ywpu-lock-base { display: flex; flex-wrap: wrap; gap: var(--ywpu-s2); align-items: center; }
+.ywpu-lock-sel { flex: 1 1 200px; min-width: 0; }
+.ywpu-lock-quick { flex: none; }
+.ywpu-lock-tip { font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-3); }
+.ywpu-lock-busy { font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-2); }
+/* 手机档：手选那一行**压成一行半**（下拉 + 选文件同一行；不填也行…自己一行、超了给省略号 ——
+   ★底栏是常驻的：手机档多一行就少一行列表，实测总览页一屏行数（r9h ⑤ ≥13）直接吃这个高。 */
+@media (max-width: 720px) {
+    .ywpu-lock-base { flex-wrap: nowrap; }
+    .ywpu-lock-sel { flex: 1 1 0; min-width: 0; }
+    .ywpu-lock-base .ywpu-btn.ywpu-mini { flex: none; }
+    /* ★Wave E2：这一行是 `nowrap` ⇒ 那句"不填也行…"必须能缩（`min-width: 0`），
+       否则它按"min-content = 整句话的宽度"顶出去（实测同一条横溢 397px 的两个来源之一）。 */
+    .ywpu-lock-tip { flex: 1 1 100%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+/* ---- ★M11：预览（伪缝入）——写盘按钮失效时的样子 + 那条"不会写盘"的说明 ---- */
+.ywpu-prevnote {
+    flex: 1 1 100%; font-size: var(--ywpu-fs-sm); font-weight: 700; color: var(--ywpu-accent-ink);
+    background: var(--ywpu-accent-bg); border: 1px solid var(--ywpu-accent-line);
+    border-radius: var(--ywpu-r-pill); padding: 3px 10px;
+}
+.ywpu-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ---- ★B14：拖动中的"拿起来了"反馈（作者："反馈差 → 要有像手机那样的明显反馈"） ----
+   ★只用"不改几何"的手段（opacity / filter / outline / box-shadow / transform 在**被排除的那一行**上）。
+   为什么这么讲究：落点判定读的是各行 getBoundingClientRect，给其它行加 margin/padding 会让落点自己抖。 */
+.ywpu-orow.ywpu-dragging { opacity: .32; filter: saturate(.45); outline: 1px dashed var(--ywpu-accent-line); outline-offset: -2px; }  /* 原位留个"洞" */
+.ywpu-ghost { transition: transform .05s linear; }
+.ywpu-ghost-lift, .ywpu-ghost-item {                     /* 跟手的影子 = "被拿起来的那张卡" */
+    transform: rotate(-.8deg) scale(1.04);
+    box-shadow: 0 12px 30px rgba(0,0,0,.45), 0 0 0 1px var(--ywpu-accent);
+    font-weight: 700; padding: 6px 12px;
+}
+.ywpu-dragmode .ywpu-ocol-body-tall { background: color-mix(in srgb, var(--ywpu-accent) 7%, transparent); }
+.ywpu-dragmode .ywpu-orow:not(.ywpu-dragging) { opacity: .88; }
+.ywpu-dragmode .ywpu-dropline { border-top-width: 3px; box-shadow: 0 0 10px var(--ywpu-accent); }
+.ywpu-giveway { box-shadow: inset 0 -3px 0 0 var(--ywpu-accent); }   /* "我给它让位"（纯视觉，不动几何） */
+#ywpu-order-hint.ywpu-hint-live {                        /* 拖动提示条：从小灰字变醒目胶囊 */
+    flex: 1 1 100%; padding: 4px 10px; border-radius: var(--ywpu-r-pill);
+    background: var(--ywpu-accent-bg); border: 1px solid var(--ywpu-accent-line);
+    color: var(--ywpu-accent-ink); font-weight: 700;
+}
+
+/* ---- ★B13：条目页拖动（**长按条目本体**，不是"展开后拖手柄"） ----
+   · 抓住态 .ywpu-armed、拖动中的原位 .ywpu-dragging 都要"一眼看出我现在在拖"；
+   · 页底那条浮动提示（#ywpu-dragtip）实时写"松手放到第 N 位"（B13c 的即时可见）。 */
+.ywpu-item.ywpu-armed { border-color: var(--ywpu-accent); box-shadow: inset 0 0 0 1px var(--ywpu-accent), 0 6px 18px rgba(0,0,0,.28); }
+.ywpu-item.ywpu-dragging { opacity: .4; outline: 1px dashed var(--ywpu-accent-line); outline-offset: -3px; }
+/* ★V（AR6②）：拖动中"占位块"与"落点线"要**一眼看出会落到哪** ——
+   · 占位块 = 被拖的那一行（它自己跟着指针在列表里走），底色换成强调色，跟普通行区分开；
+   · 落点线 = 贴在占位块**前面**的那条横线（= "将会插到这一行之前"），条目页里加粗到 3px + 发光。 */
+#ywpu-list .ywpu-item.ywpu-dragging { border-color: var(--ywpu-accent-line); background: var(--ywpu-accent-bg); }
+#ywpu-list .ywpu-dropline { border-top-width: 3px; box-shadow: 0 0 10px var(--ywpu-accent); margin: 1px 2px; }
+.ywpu-dragtip {
+    position: fixed; left: 50%; bottom: 78px; z-index: 32000; pointer-events: none;
+    transform: translateX(-50%) translateY(6px); opacity: 0;
+    max-width: min(560px, calc(100vw - 32px)); padding: 6px 14px; border-radius: var(--ywpu-r-pill);
+    background: var(--SmartThemeBlurTintColor, #16181d); color: var(--ywpu-txt);
+    border: 1px solid var(--ywpu-accent-line); box-shadow: var(--ywpu-shadow-2);
+    font-size: var(--ywpu-fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: opacity .12s var(--ywpu-ease), transform .12s var(--ywpu-ease);
+}
+.ywpu-dragtip-on { opacity: 1; transform: translateX(-50%) translateY(0); }
+.ywpu-dragtip-live { border-color: var(--ywpu-accent); font-weight: 700; }
+/* 条目头右侧那枚"能拖"的提示图形（展开的这一条：真节点；收起态：下面那条 ::after，悬停才出现）
+   ★★BJ-F-20（作者 2026-09-21 · 台账 §BJ-F 第 20 条："对比结果里每条点进去，右上角有**两个**拖动按钮"）：
+   这两个 ⠿ 是**同一件事被画了两遍**（功能完全重复，不是"两个不同的能力"）——
+     · 真节点：`preset-updater.js` 的 itemHtml 里那枚 `expanded ? span.ywpu-dragh（内容 ⠿）` —— 只有展开的那一条才画；
+     · 伪元素：下面那条 `:hover::after`（本来只为**收起态**加的悬停提示，见 JS 里 `itemHtml` 的注释）。
+   但那条伪元素规则**没排除展开态** ⇒ 鼠标一停在展开的那一条上，头上同时出现"真节点（胶囊）+ 伪元素（小图标）"两颗 ⠿。
+   保留**真节点**那一颗（它有 `title` 提示、`cursor:grab`、悬停变色，是本文件里"能拖"的唯一可读可点标记），
+   把伪元素收窄到**收起态**（`:not(.ywpu-active)`；展开态的那个类名见 JS `itemHtml` 的 `cls`）——
+   收起态的悬停提示一个字没丢，展开态右上角回到只剩一颗。 */
+.ywpu-item-head .ywpu-dragh { margin-left: auto; flex: none; cursor: grab; }
+@media (hover: hover) {
+    .ywpu-item:not(:hover) .ywpu-item-head .ywpu-dragh { opacity: .45; }
+    .ywpu-item:not(.ywpu-active):hover .ywpu-item-head::after { content: '⠿'; color: var(--ywpu-txt-3); font-size: 12px; margin-left: 6px; }
+    .ywpu-item:hover .ywpu-item-head .ywpu-dragh { opacity: 1; }
+}
+/* ★B13d：「↩ 撤销拖动」——在操作行最右边（"保存为两版 / 用新版"那一排的右边） */
+.ywpu-undodrag { margin-left: auto; border-color: var(--ywpu-accent-line); color: var(--ywpu-accent-ink); }
+.ywpu-undodrag:hover { border-color: var(--ywpu-accent); background: var(--ywpu-accent-bg); }
+
+/* ---- ★M3：来源块里的**预设名**换颜色（"缝进〈…〉" / "来自预设〈…〉"）—— 金色系 = "官方/预设"那一族 ---- */
+.ywpu-pname { color: var(--ywpu-gold-ink); font-weight: 700; }   /* ★R7：品牌色**当文字**必须走 -ink 那一档（裸金色在浅底上只有 3.85） */
+
+/* ---- ★F2：商店「一键更新全部」带过来的一批 —— 页顶那条"一起挑"的进度条 ---- */
+.ywpu-storebatch { display: none; }
+.ywpu-storebatch:not(:empty) {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--ywpu-s2);
+    margin-top: 4px; padding: 5px 9px; border-radius: var(--ywpu-r-sm);
+    border: 1px solid var(--ywpu-accent-line); background: var(--ywpu-accent-bg); font-size: var(--ywpu-fs-sm);
+}
+.ywpu-batchpill { font-weight: 700; color: var(--ywpu-accent-ink); white-space: nowrap; }
+.ywpu-batchname { max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ywpu-txt); }
+.ywpu-batchbtns { margin-left: auto; }
+
+/* ---- ★M24：三方对比时那枚"谁改的"（只有填了 ③ 官方旧版才画；两方对比一个字节都不多画） ---- */
+.ywpu-whopill { border-color: var(--ywpu-accent-line); color: var(--ywpu-txt-2); }
+
+@media (max-width: 720px) {
+    /* 手机上：按钮那一组也允许换行（但两颗写盘按钮**永远同排**），勾选框跟在它们后面
+       ★★AU4 ④（评审 §2 条 5）：**名字框仍然独占一行**（不改这一条 —— 手机 330px 上把它压到 60px
+       会让"新预设叫什么"看不清；省高度不靠它，靠 ①状态句并排 ②危险提示并进动作行 ③「离线/高级」折进「…」）。 */
+    .ywpu-footbtns { margin-left: 0; width: auto; }
+    .ywpu-namein { flex: 1 1 100%; }
+    .ywpu-btngroup { flex: 1 1 auto; }
+    .ywpu-btngroup .ywpu-btn { flex: 1 1 auto; }
+    .ywpu-dragtip { bottom: 92px; white-space: normal; }
+    .ywpu-batchname { max-width: 100%; }
+}
+
+/* ---- ★B13：展开区「位置」那一行里的操作提示（长按拖动 / 可撤销） ---- */
+.ywpu-poshint { flex: 1 1 100%; font-size: var(--ywpu-fs-xs); color: var(--ywpu-txt-2); line-height: 1.5; }
+.ywpu-poshint b { color: var(--ywpu-txt); }
+/* ---- ★B14：整页在"拖动中"时不许划选文字（否则一路把正文刷蓝，看着像卡了） ---- */
+#ywpu-root.ywpu-drag-on #ywpu-body { user-select: none; -webkit-user-select: none; }
+/* ---- ★V（AR6①）：拖动期间**整页**禁选。类只由 `noSelOn()` 加、只由 `noSelOff()` 撤
+   （长按成立那一刻加，松手/取消的每条路都撤 —— 面板内靠上面那条老规则，面板外用这条）。
+   为什么连 body 一起禁：拖动时指针会滑到面板外的消息区正文上，只禁面板里面照样把那片文字刷蓝
+   —— 作者原话"拖着拖着会像全选文字一样刮起来"说的就是它。 */
+body.ywpu-nosel { user-select: none; -webkit-user-select: none; }
+
+/* ---- 文案审核 A0.5 #2/#3：面板顶部只留版本号（标题与自造比喻都删了）----
+   ★§BY-A（2026-09-23）：那颗版本号胶囊也删了 ⇒ `.ywpu-box-t` / `.ywpu-boxt-min` / `.ywpu-ver`
+   三条规则**一起清掉**（它们只服务那一行，留着就是孤儿）。 ---- */
+/* ---- 文案审核 A0.5 #8：图例折进 <details>（平时只占一行「条目状态」）---- */
+/* ★★W106 ②（作者原话："商店里 右上角的条目状态 点开来后 鼠标要移到左上角才能重新折叠起来。
+   这个条目状态放进最左边对比结果旁边；点击后它的折叠区域还在原地；再点击一次就收起"）：
+   图例（`.ywpu-legend-fold`）**从"面板右上角"搬进窗口头第 1 行（标题旁）**（W103-庚 的上一站作废，
+   它的初衷"不占版面一行"照旧成立 —— 新区位就在标题那一行里，没有新增任何行高）。
+   · **为什么要搬**（W106 现场读数 + 机制）：老写法 `position:absolute; right:52px` 把盒子按**右缘**钉住 ——
+     收起时盒宽≈一颗 chip（看着在右上角 (1191,29)），一展开盒宽被 `.ywpu-legend-wrap` 撑到几百像素、
+     右缘不动 ⇒ 整盒**向左长**，而 `summary` 是盒内左对齐的子项 ⇒ "条目状态"那颗**跳到展开区左上角**
+     （实测展开后 (631,29)）—— 这就是作者说的"鼠标要移到左上角才能重新折叠"。
+   · 现在：① DOM 搬进 `#ywpu-head-top`（标题右、✕ 左），随那行排版（不再绝对定位）；
+           ② 展开层 `.ywpu-legend-wrap` 改挂**本组件正下方**（`position:absolute`，左对齐）⇒
+              点开/收起**原地**、**不推挤任何内容**（点前/点后 summary 矩形逐项相同，W106 四档实测）；
+           ③ 单击开、再击收（`<details>` 原生行为，点击目标不跑位）；
+           ④ 宽度上限按视口算 ⇒ 手机上也不会横溢（窄了里面自己折行，`.ywpu-legend` 本来就是 flex-wrap）。 */
+.ywpu-legend-fold { position: relative; flex: none; }
+/* ★★W104-甲（作者原话："右上角那个黑黑的是什么 看不清楚啊"）：
+   现场读数（深主题 · W104 侦察）：它 = 图例折叠条「条目状态」81×25 @(1191,29)，字色 = 正文色 88%、
+   底 = 正文色 6%（比它所在的头部那一层只亮 6% ⇒ 整颗读起来就是"一坨深色"）、描边 15%、圆角 8px。
+   改法（W104 当波**位置不动**、只治"看不清"；★W106 ② 起位置按作者新要求搬到标题旁 ——
+   下面这套"看得清"的样式一个字没动，只跟着换了落脚点）：
+     · 字色升到整颗正文色（100%，对比度实测 ≥4.5 且比改前更高）；字号不变；
+     · 底抬到 raise(10%) + 描边 38%（= 既有 `.ywpu-fbtn` 一族的基础描边档）+ 药丸圆角（与 `.ywpu-chip` 同圆角）；
+     · summary 里加**4 颗状态色小点**（`.ywpu-lgdots`，复用既有 `.ywpu-dot/.ywpu-d-*`）——
+       一眼看出这是"颜色说明"，不再是个说不出用途的黑盒子。 */
+.ywpu-legend-fold > summary {
+    cursor: pointer; font-size: var(--ywpu-fs-sm); color: var(--ywpu-txt);
+    padding: 2px 10px; border: 1px solid color-mix(in srgb, var(--ywpu-txt) 38%, transparent);
+    border-radius: var(--ywpu-r-pill);
+    background: var(--ywpu-raise); width: max-content;
+}
+.ywpu-legend-fold > summary:hover { background: color-mix(in srgb, var(--ywpu-txt) 16%, transparent); border-color: color-mix(in srgb, var(--ywpu-txt) 60%, transparent); }
+.ywpu-lgdots { display: inline-flex; align-items: center; gap: 3px; margin-right: 6px; vertical-align: -1px; }
+.ywpu-lgdots .ywpu-dot { margin-right: 0; }
+/* ★W106 ②：展开态 —— 那颗 chip 自己**不换形状**（点开前后 summary 矩形逐项相同），
+   改成"按下去"的样子（与它自己的 hover 同一档），框体归 `.ywpu-legend-wrap` 那层浮层。 */
+.ywpu-legend-fold[open] > summary { border-color: color-mix(in srgb, var(--ywpu-txt) 60%, transparent); background: color-mix(in srgb, var(--ywpu-txt) 16%, transparent); }
+/* ★W106 ②：展开层（浮层）—— 挂在本组件**正下方**、左对齐；绝对定位 ⇒ 不参与排版、**不推挤**。
+   z-index 30 > 吸顶块（`#ywpu-controls` z-index 8）⇒ 展开时不会被吸顶块盖住。
+   宽度上限：按视口算（左锚点就在面板左半边 ⇒ 与老写法"按右缘算"不同，见 W106 四档几何读数）。 */
+.ywpu-legend-wrap {
+    /* ★W106 自抓修（改后读数抓到）：只写 left 不写 width ⇒ 绝对定位的 shrink-to-fit 拿**本组件**（134px 的 chip）
+       当可用宽 ⇒ 展开层被夹成 134×326 一条竖列。改成 `width: max-content`（再被 max-width 封顶）⇒ 恢复成
+       老样子的宽浮层（PC ≈623px 三行）。★这条别删：它同时保证手机上 max-width:min(660px, 100vw-150px) 照旧封顶。 */
+    position: absolute; left: 0; top: calc(100% + 6px); z-index: 30; width: max-content;
+    background: var(--SmartThemeBlurTintColor, #16181d);
+    border: 1px solid var(--ywpu-line); border-radius: var(--ywpu-r-sm);
+    box-shadow: var(--ywpu-shadow-2); padding: 6px 8px 8px;
+    max-width: min(660px, calc(100vw - 150px));
+}
+
+/* ==========================================================================
+   ★★AU6 ④（AS2 §5.3 U13 / §6 条 4）：更新器的**控件尺寸**——两轮一字未动
+   （可点控件 39 个 / 其中 36 个 <32px / **最矮 14px**；chips = **25px**，手机 34 个控件）
+   --------------------------------------------------------------------------
+   为什么分"真抬"和"热区抬"两档：手机底栏 **136 / 上限 140**，只剩 4px ——
+   不许拿真实盒高去换触摸尺寸（那会把 U1/U2/U3 那几条首屏基线一起推走）。
+   · **真抬**（这些不长在列表行里，抬了不改编排）：
+       chips（`#ywpu-summary .ywpu-fbtn`）25 → **28**（评审原话"chips 用 padding 到 28"）；
+       输入框 / 下拉 30 → **32**（`<input>/<select>` 是替换元素，**伪元素热区对它们根本无效**，只能真抬）；
+       勾选框 / 色块那几颗（13~18px，全在弹窗或收着的图例里）→ **24**。
+   · **热区抬**（`::after` 把可点高度补到 ≥32，**可见盒一个字不动**）：`.ywpu-btn.ywpu-mini`(30)、
+       `.ywpu-xbtn`(22)、`.ywpu-knobwrap`、`.ywpu-fbtn`、`.ywpu-lgd`、`.ywpu-bakchk` ——
+       这一族**大量长在 135 行的列表行里**，真抬会把列表行高与"一屏几条"一起推走。
+   · 文字链（来源块 / 排查条 / 图例那几条 `<summary>`）≥24：用 `::before`
+       （它们的 `::after` 已经被 ▾ 箭头占了，别再抢）。
+   ★两条纪律（与商店那两条同一个理由）：
+     ① 锚点 `right: 0; left: auto` —— 热区**只会向左长**（行尾方向溢出才是 `scrollWidth` 会算的那种）；
+     ② **只长高、不设 `min-width`** —— 横向就是控件自己的宽度 ⇒ 绝不会盖到左右邻居身上
+        （更新器很多地方是 3~4px 间距的小按钮挨着排，横向外扩会真的抢走邻居的点击）。
+   ★底栏：只有名字框 31 → 32（+1）⇒ `#ywpu-foot` 136 → **137** ✓ ≤140。
+   ========================================================================== */
+@media (max-width: 720px) {
+    /* ---- ① 真抬 ---- */
+    /* ★Wave W2 ①：正则块那一排 chips（照抄条目区那一排）跟条目区那排**同一个尺寸口径** ——
+       同款 `.ywpu-chip .ywpu-fbtn`，手机档一起抬到 28（它们同属"chips 用 padding 到 28"那条评审结论）。
+       这一排在**正文区**（不在底栏）⇒ 抬它不会被底栏 KPI 吃回去。 */
+    #ywpu-summary .ywpu-fbtn, .ywpu-rxbar .ywpu-fbtn { min-height: 28px; }
+    .ywpu-input, .ywpu-textarea { min-height: 32px; }
+    .ywpu-chk input[type="checkbox"], .ywpu-bakchk input[type="checkbox"] { width: 24px; height: 24px; }
+    .ywpu-lgd input[type="color"], .ywpu-coloritem input[type="color"] { width: 24px; height: 24px; }
+    /* ---- ② 热区抬（只长高）---- */
+    /* ★Wave E2：`.ywpu-lock-sum`（识版本那条的"⚠ 选基准"药丸）也进这一族 —— 它长在底栏第一行里，
+       真抬会把那一行推高（= 底栏 KPI 直接吃这个高）⇒ 只补隐形热区，可见盒一个字不动。
+       ★Wave K1：`.ywpu-todo`（底栏「还剩 N 条」那颗 + 正则块「要你看 N 条」那颗）同样**只补隐形热区** ——
+       它的可见盒小（`3px 9px` 的胶囊），但它是**可点的**（一键跳到第一条未选）⇒ 手机上必须够 32。 */
+    .ywpu-btn.ywpu-mini, .ywpu-xbtn, .ywpu-knobwrap, .ywpu-fbtn, .ywpu-lgd, .ywpu-bakchk, .ywpu-lock-sum, .ywpu-todo { position: relative; }
+    .ywpu-btn.ywpu-mini::after, .ywpu-xbtn::after, .ywpu-knobwrap::after,
+    .ywpu-fbtn::after, .ywpu-lgd::after, .ywpu-bakchk::after, .ywpu-lock-sum::after, .ywpu-todo::after {
+        content: ""; position: absolute; right: 0; left: auto; top: 50%;
+        width: 100%; height: 32px; transform: translateY(-50%);
+    }
+    /* ---- ③ 文字链 ≥24（用 ::before，别抢它们的 ▾）---- */
+    .ywpu-src-h, .ywpu-troublebar > summary, .ywpu-legend-fold > summary { position: relative; }
+    .ywpu-src-h::before, .ywpu-troublebar > summary::before, .ywpu-legend-fold > summary::before {
+        content: ""; position: absolute; right: 0; left: auto; top: 50%;
+        width: 100%; height: 24px; transform: translateY(-50%);
+    }
+    /* ★Wave G ⑥：正则块里「另有 N 条两边一样（点开看）」那一行是本轮新控件 —— 手机上把**可见盒**抬到 32
+       （不借用"文字链那条 ::before 热区"：它只长到 24，而且和相邻控件的热区叠起来会抢点击） */
+    .ywpu-rx-same > summary { display: flex; align-items: center; min-height: 32px; }
+    /* ★★W108-①-6（R22 裁定）：手机底栏那句状态小字**收进 title** —— 改前它在 370px 的行里被 ellipsis
+       裁成「两方对比 · 顺序：」半截（R22 读数 cw 88 / sw 579），屏上只剩"半句话"的噪音。
+       现在手机档整句不画（全文仍在同一个 title 里），屏上只留「还剩 N 条要处理」+「点此选基准」两颗短句。
+       ★PC 档一个字节不动（1470px 放得下整句）；★判据锚点：手机档 .ywpu-footstat 可见盒高 = 0。 */
+    .ywpu-footstat { display: none; }
+}

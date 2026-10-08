@@ -1,0 +1,2974 @@
+/* ==========================================================================
+   云端「条目商店」· 样式表 v4.0（2026-09-21 · 定稿方案 §21「商店交互 v3」）
+   —— 和 preset-updater.css 同一套观感/令牌（`--yst-*` 状态色 / `--ywd-*` 正文三色 / SmartTheme 主题色），
+      但**独立一份**（更新器那份正在被别人改，别互相踩）。
+
+   ★v4.0 改的是"长相与层级"，**交互语义/DOM 契约都没动**：
+     data-act / data-in / data-* 取值、`yws-` 前缀、事件绑定、window.__ywstore 全部照旧。
+
+   本轮作者点名的五件事（§21）：
+     ① **卡片收紧**（"太肥大"）：内边距/行距/间距各降一档；
+     ② **标题成为第一焦点**：字号再提一档（18px/700）+ 颜色 = **当前主题的"引用文本色"
+        `--SmartThemeQuoteColor`**（作者："就用当前主题的那个特殊字体的颜色"）。
+        它是主题作者**对着自己的背景选过的**颜色 → 深浅主题都天然读得清；
+        再往主题正文色里混 18% 当安全垫（主题没定义这个变量时退回主色的 `-ink` 档）；
+     ③ 卡片下半部**重排**：一行元信息（BY 署名 · 类型 · 更新日期 · 已缝入 N 次）+ 一行条目名胶囊 + 按钮区；
+     ④ 顶栏只剩 4 颗**页面切换**按钮，而且**四颗同一套视觉**（不再"有的发光有的没边框"）；
+     ⑤ 上传向导：范围两种（部分上传 / 整份）、条目列表**限高 + 自己滚**（作者要求）、版权提醒在最上方。
+
+   禁止（§16/§17 红线）：外部图片/网络字体（离线必须能用）、刺眼高饱和撞色、大面积纯黑/纯白底、
+     动画 >200ms、改 emoji 语义（用户认颜色/图形，别把已有图标换掉）。
+
+   守的 UI 铁律（跟更新器同一套）：
+     ① 不做内层滚动容器 → 一律让外层滚；**两处例外**都是"用户主动打开/要求的"：
+        · 条目详情弹窗（modal，滚动在里面）
+        · **向导的条目列表**（`.yws-plist`，§21 D12：作者明确要求"限高 + 里面小小地下拉"）
+        ★有了它之后，`paint()` 必须**记住并还原它的 scrollTop**（见 preset-store.js 的 paint()）
+        —— 否则拖选松手那次重绘会把列表甩回最上面（那条铁律本来就禁止"跳滚动"）；
+     ② 手机端可用（390×844 也量过）+ 可滚区域 touch-action: pan-y；
+     ③ 陌生人文本一律 esc()/textContent（样式不参与，只是别在这条上挖坑）；
+     ④ **对比度 WCAG ≥4.5**（ui-audit + probe-store-light 会量）—— 高级感**不许**靠低对比灰字做。
+   改完务必跑：
+     node e2e/css-check.js D:/ST酒馆/public/scripts/extensions/third-party/st-kimi-reasoning-injector/preset-store.css
+     node e2e/class-check.js ; node e2e/ui-audit.js [mobile] ; node e2e/probe-store-light.js
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- 1. 令牌（色板） */
+/* ★§17：`#yws-dlg-host`（条目详情弹窗的宿主）也在这里 —— 它挂在 document.body 上（不是面板里），
+   不跟这一组一起声明就拿不到 `--yws-*`（原因见 preset-store.js 的 mountWizDialog） */
+.yws-host, #ywpu-view-store, #yws-dlg-host, #yws-banner, #yws-repbanner {   /* ★R7：横幅挂在挂载点外面，不列进来它拿不到 --yws-*（★U9：回复通知那条横幅同理） */
+    /* —— 文字三档（主 / 次 / 弱）：都从主题正文色混出来，跟 ST 主题走
+           ★alpha 是**逐层合成**口径量出来的（e2e/probe-store-light.js）：弱色必须 ≥.74、次色 ≥.84，
+             否则在浅色主题的浅底上会掉到 4.5 以下（实测 .62 只有 3.79） */
+    --yws-txt:   var(--SmartThemeBodyColor, #dcdcd7);
+    --yws-txt-2: color-mix(in srgb, var(--yws-txt) 88%, transparent);
+    --yws-txt-3: color-mix(in srgb, var(--yws-txt) 78%, transparent);
+    /* ★★W59（作者 2026-09-27 反馈 · 第 1 组）：**"我点开看过这张卡"那一档** —— 卡上的正文色降这一档。
+       ★★W64（2026-09-27 上午 · 作者追加反馈，原话）："我发现我不是让你做点击变暗阅读过吗 怎么这个
+       变暗一点都看不出来啊 —— **明显一点啊**" ⇒ **84% → 72%**（透明度多削近一倍：16% → 28%），
+       并把"已看"的第二个通道加到**描边**上（见下面 `.yws-card.yws-seen` 那一段）：
+       只有"字变暗"一个通道时，视线扫过一整排卡几乎感觉不到差别。
+       ★为什么不再狠（例如 62%）：本文件第 41~42 行的实测口径写着"弱色必须 ≥.74"，62% 在浅色主题的
+         浅底上只有 **3.79** ⇒ 一定被自动取色层按 ≥4.5+余量**顶回来**，顶回来之后各主题的"已看"
+         深浅还**不一致**。72% 的取舍：**深色主题**上一眼看得出（正文对比度约 12.8 → 7.3）；
+         **极浅主题**上若掉到 4.5 以下，兜底层会把它顶到 ≈4.65 —— 那正是本项目"正文合格"的定义，
+         不会看不清（作者最早那条"不能暗到看不清"仍然成立，因为**兜底是结构性的**、不是我拍的数）。
+       ★要再轻/再重**只改这一个数**（下面标题那档同步改，别只改一个）。
+       （历史：第一版按作者当初"**稍微**暗一点点 / 不要暗太多"取 84%，四档实测都过关，
+        但作者看不到差别 ⇒ 才有这次加大。）
+       ★**为什么不复用现成的 88% `--yws-txt-2`**：那是"次要文字"档（说明 / 胶囊 / 日期本来就用它），
+         拿它当"已看档"那些元素就**降无可降**（`--yws-txt-2` 不可能比它自己更暗）；
+         而且**同值**会被自动取色层（按"计算色相等"分组）**并进同一档** ⇒ 抬对比度时牵连别处。
+       ★**为什么另立令牌而不是"降低 `--yws-txt`"**：那样写是**自引用环**（非法）；退一步用绝对色
+         重算 `--yws-txt` 也不行 —— 那会把 `--yws-txt-3` 一起拖下去（78% × 72% ≈ **56%**），
+         等于把"弱档"也顺手改掉。
+       ★这一档同样吃自动取色层的兜底（它在 `preset-store.js` 的 `_INK_TOKENS` 名单里）⇒
+         极端浅色主题上会被按**实际合成底**朝白/黑推（保色相）到 ≥4.5+余量。 */
+    /* ★★W71（作者 2026-09-27：商店条目还是不够暗、已看与没看区分不开）⇒ 72% → **62%**。
+       ★实测口径（W65/W70）：这两档主题里标题的对比度早被兜底层顶到 ~4.9 ⇒ **光降这个数对标题无效**，
+         真正让人一眼看出来的是**卡片底色**那条（见下面 .yws-card.yws-seen 的 background-color）。 */
+    --yws-txt-seen: color-mix(in srgb, var(--yws-txt) 62%, transparent);
+
+    /* ★§21 A1：**卡片标题专用色 = 当前主题的"引用文本色"**（作者点名）。
+       它是主题作者对着自己的背景挑过的颜色 → 深色/浅色主题都天然有对比度；
+       混 18% 的正文色只是一层安全垫（万一某档主题的引用色偏淡，也不至于读不清）；
+       主题没定义 `--SmartThemeQuoteColor` 时退回主色的 `-ink` 档（= 已经跟正文色混过、任何主题都成立）。 */
+    --yws-quote:     var(--SmartThemeQuoteColor, var(--yws-accent));
+    --yws-title-ink: color-mix(in srgb, var(--yws-quote) 82%, var(--yws-txt));
+    /* ★★W59（第 1 组）：**已看卡的标题色** —— 从 `--yws-title-ink` 出发**只降 α**，
+       **色相一个字不动** ⇒ §21 A1 那条"标题专用色 = 主题的引用文本色（作者点名）"照旧成立，
+       只是这一档更轻。为什么不直接把标题写成 `--yws-txt-seen`：那是**灰**的，
+       会把作者点名的"标题走引用色"直接吃掉（观感变化远大于"暗一点"）。
+       ★★W64：与上面正文同批加大 —— 正文 84%→**72%**，标题 **74%**（比正文留一档：
+         标题是第一视觉焦点，让它比同卡其它小字少降一点，卡才不像"禁用"）。
+       ★它也在 `_INK_TOKENS` 名单里 ⇒ 与 `--yws-txt-seen` 同一道兜底（≥4.5）。
+       ★`--yws-title-ink` 自己仍**不在**名单里（它有 `applyTitleInk()` 那道专门兜底，
+         两个都写会互相打架 —— 本令牌是**另一个名字**，所以不冲突）。 */
+    --yws-title-seen: color-mix(in srgb, var(--yws-title-ink) 64%, transparent);   // ★W71：74% → 64%（同上：主信号在底色/描边）
+
+    /* —— 表面三档：页面底 / 卡片底 / 悬浮层（深色里偏亮、浅色里偏暗 = 都是"抬高"） */
+    --yws-bg:      color-mix(in srgb, var(--yws-txt) 3%, transparent);
+    --yws-surface: color-mix(in srgb, var(--yws-txt) 6%, transparent);
+    --yws-raise:   color-mix(in srgb, var(--yws-txt) 10%, transparent);
+
+    /* —— 描边两档 */
+    --yws-line:   color-mix(in srgb, var(--yws-txt) 15%, transparent);
+    --yws-line-2: color-mix(in srgb, var(--yws-txt) 8%, transparent);
+
+    /* —— 主色：低饱和蓝紫（跟更新器的 --yst-both #a78bfa / --yst-switch #60a5fa 是一家人）
+           `-ink` = 当**文字**用的那一档（跟正文色混 → 浅色主题里自动变深、深色主题里自动变亮）。 */
+    --yws-accent:      #8b95e8;
+    --yws-accent-ink:  color-mix(in srgb, var(--yws-accent) 42%, var(--yws-txt));
+    --yws-accent-bg:   color-mix(in srgb, var(--yws-accent) 16%, transparent);
+    --yws-accent-line: color-mix(in srgb, var(--yws-accent) 44%, transparent);
+
+    /* —— 官方 = 低饱和暖金（`--yws-offi` 这个名字 css-check 守着，别改名） */
+    /* ★★W76（作者：这个用红色）：**未看印章的红色家族** —— 照 `--yws-offi` / `--yws-accent` 的老写法：
+       一个基色 + 两个派生档（`-ink` 当文字用、混正文色；`-line` 当边框用）。
+       ★`--yws-seal-ink` 已进 `preset-store.js` 的 `_INK_TOKENS` ⇒ 自动吃"≥4.5"的对比兜底（与官方金标同一套纪律）。 */
+    --yws-seal:      #d6554f;
+    --yws-seal-ink:  color-mix(in srgb, var(--yws-seal) 55%, var(--yws-txt));
+    --yws-seal-line: color-mix(in srgb, var(--yws-seal) 48%, transparent);
+    --yws-offi:      #d9b26a;
+    /* ★★W61（R8 独立评分 §6-2 的复量 · P2-2）：混色比 **0.36 → 0.32** —— 真浅色下这一族
+       （官方标 .yws-offi / 横幅那句官方提示）实测只有 **4.59**（R8 在它那套浅色主题上量到 4.61），
+       离 4.5 只剩 0.09 的余量；改 0.32 之后：真浅 **4.98** · 深色 **8.70**（离线核算 + 四档实测，
+       见 waveW61 报告 §⑤）。★只动这一个数：色相 / 令牌族 / 字号 / 字重一个都没变
+       （"走更深的同族令牌"那一档）—— 深色档本来 8.56、余量很足，这是把两档都往安全侧挪，不是换设计。 */
+    --yws-gold-ink:  color-mix(in srgb, var(--yws-offi) 32%, var(--yws-txt));
+    --yws-gold-bg:   color-mix(in srgb, var(--yws-offi) 16%, transparent);
+    --yws-gold-line: color-mix(in srgb, var(--yws-offi) 46%, transparent);
+
+    /* —— 语义色（成功 / 警告 / 危险）+ 逐处挑那对红绿（更新器同款，别改）
+           ★同样分两档：`-bg/-line` 做底与描边（醒目），`-ink` 当文字用（任何主题都读得清） */
+    --yws-ok:   #5fc98d;
+    --yws-ok-ink: color-mix(in srgb, var(--yws-ok) 34%, var(--yws-txt));
+    --yws-ok-bg: color-mix(in srgb, var(--yws-ok) 14%, transparent);
+    --yws-warn: #d9b26a;
+    --yws-warn-ink: color-mix(in srgb, var(--yws-warn) 36%, var(--yws-txt));
+    --yws-warn-bg: color-mix(in srgb, var(--yws-warn) 14%, transparent);
+    --yws-bad:  #ef8080;
+    --yws-bad-ink: color-mix(in srgb, var(--yws-bad) 40%, var(--yws-txt));
+    --yws-bad-bg: color-mix(in srgb, var(--yws-bad) 14%, transparent);
+    --yws-old: #f87171;      /* 旧版红底（预览页 tag / 逐处挑） */
+    --yws-old-ink: color-mix(in srgb, var(--yws-old) 40%, var(--yws-txt));
+    --yws-new: #4ade80;      /* 新版绿底（更新器那对，留着给老规则） */
+    --yws-new-ink: color-mix(in srgb, var(--yws-new) 34%, var(--yws-txt));
+    /* ★§17 差异两色：**红 = 你手上的原文 / 蓝 = 这条带来的新文**（作者点名要红/蓝） */
+    --yws-dl-old: #f87171;
+    --yws-dl-add: #6ba8f0;
+
+    /* —— 几何 / 字号 / 阴影（间距一律 4 的倍数） */
+    --yws-r-sm: 8px; --yws-r-md: 10px; --yws-r-lg: 12px; --yws-r-pill: 999px;
+    --yws-fs-xs: 11px; --yws-fs-sm: 12px; --yws-fs-md: 13px; --yws-fs-lg: 15px;
+    /* ★★W89-②（作者 2026-10-04：「**展开和收起怎么字号改变啊？不要改变**」）——
+       **正文那一档的唯一定义**：卡片的正文预览（`.yws-card-w`）与简卡展开态的全文
+       （`.yws-card-body > .yws-pre / .yws-card-w`）**两态共用这一个令牌** ⇒ 收/展开字号逐项相同。
+       值就是原来 `.yws-card-w` 的那个字面量 12.5px（收起态观感一个像素没动；展开态从 13px 收回 12.5px，
+       与收起态对齐 —— 不许为了"展开更好看"改成更大的档）。 */
+    --yws-fs-body: 12.5px;   /* ★W89-②：卡片正文（预览与全文就这一个档，两态不许分叉） */
+    /* ★§21 A1：标题再提一档（17 → 18px），其余元信息不动 —— 层级只靠字号/字重/颜色 */
+    --yws-fs-title: 16px; --yws-fs-name: 14.5px;   /* ★W71：18px → 16px（作者：卡片标题可以小一点、现在有点太大） */
+    --yws-s1: 4px; --yws-s2: 8px; --yws-s3: 12px; --yws-s4: 16px;
+    --yws-shadow-1: 0 1px 2px rgba(0, 0, 0, .16);
+    --yws-shadow-2: 0 3px 8px rgba(0, 0, 0, .18), 0 12px 28px rgba(0, 0, 0, .16);
+    --yws-ease: cubic-bezier(.2, .6, .3, 1);
+    --yws-t: .13s;
+
+    color: var(--yws-txt);
+    line-height: 1.55;
+    /* 主题色变量（酒馆给的）—— 底部按钮条/吸顶条/弹窗要用它做磨砂底 */
+    --yws-glass: var(--SmartThemeBlurTintColor, rgba(22, 22, 26, .92));
+}
+.yws-host { display: block; }
+#ywpu-view-store { padding: 0 var(--yws-s3) var(--yws-s3); }
+/* 宽屏（更新器窗口里的第二入口）多给一点边距，别贴着框 */
+@media (min-width: 900px) { #ywpu-view-store { padding: 0 var(--yws-s4) var(--yws-s4); } }
+
+/* ==========================================================================
+   ★★BJ-B（作者第十五批 · 2026-09-22，§BJ-B）：**U4 那段"PC 吃宽屏"整段撤掉**（干干净净地撤）
+   --------------------------------------------------------------------------
+   作者原话："现在 PC 展开到 706px ⇒ 条目变窄、内容展示不全（**还不如一行只展示一个**）"
+   ⇒ 要求**缩回"像别的分页一样"的半边宽度**。
+   被删掉的是整段 `@media (min-width: 900px)`（U4 ①）：
+     · ①-a `#extensions_settings:has(…) { flex: 1 1 100% }`（那一列独占抽屉一整行）
+     · ①-b 兄弟列锁回 50%（那是 ①-a 的配套，一起走）
+     · ①-c `#kimi_presetstore_body.yws-host { max-width: 760px }`（面板自己的上限 + 居中）
+     · ①-d `.yws-toolbar .yws-tbrow { flex: 1 1 auto }` + 那颗刷新的 `margin-left: 0`
+       （"宽档工具条能并排就并排" —— BJ-A 之后工具条是**三组各一行**，宽窄一致，不需要这条）
+     · ①-e `.yws-toolbar { padding: 6px 10px }`（宽档内边距，跟着一起撤）
+   ⇒ 撤完的后果（= 作者要的）：抽屉里商店这一栏**回到别的分页那一档宽度**（1470 屏上 ≈351px）、
+     `.yws-cards` 在那个宽度下是**单列**（`minmax(310px, 1fr)` 放不下第二列）。
+   ★边界：**手机档（≤720px）从始至终没被这段碰过**（它在 `min-width: 900px` 里）⇒ 手机端口径不变。
+   ★口径说明（照实写）：`#ywpu-view-store`（**更新器窗口里的第二入口**）那条 `padding` 不属这一段 ——
+     它在宽窗口里本来就该多留一点边距（不是"抽屉吃宽屏"），保持原样。
+   ★★注意（踩过的坑）：**注释里不许出现花括号** —— `css-check.js` 的大括号平衡是**纯文本**数的，
+     注释里一个孤立的花括号就会让它报"depth=1 / 不平衡"（浏览器其实没事）。 */
+
+/* 卡片列表：窄了单列、宽了自动分栏（348px 抽屉里恒 1 列；1144px 更新器窗口里 3 列） */
+.yws-cards { display: grid; grid-template-columns: 1fr; gap: var(--yws-s2); }
+@media (min-width: 720px) { .yws-cards { grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: var(--yws-s2); align-items: start; } }
+/* ★★AU6 ②（AS2 §7 真红 2 / §6 新 2）：**展开的那张卡吃满整行**。
+   改前读数（AS2 §5.1 S30）：PC 宽档（面板 705.9）下展开卡的评论区只有 **~310px**（`占卡内宽比 43.9%`，
+   `as-store-pc.json` 里那一栏量的是"评论宽 ÷ 面板宽"）—— 因为卡片栏是 2 列，展开的那张**仍然只占一格**
+   （≈337），于是宽出来的 370px 全给了一旁的空列（评审原文："展开卡 589.7 下方一大片空"）。
+   依据（为什么选"吃满整行"而不是"改三列"）：① 评审给的那条验收是**评论 ≥80%** —— 吃满整行直接给到
+   ≈95%（310 → 670），三列只把 337 → 226，评论反而更窄；② 三列会把卡片压到 226px（低于本插件一直在用的
+   310px 最小卡宽），卡高/标题行数/极差那几条 S-columns 全要重新洗一遍，收益为负。
+   做法：只在多列档（≥720px）让 `.yws-open` 那张**跨满所有列**（`1 / -1`）—— 折叠的卡一张都不动
+   （"同行张数 2 / 完整可见 2"这些读数照旧），手机档是单列 ⇒ `1 / -1` 等于原来那一列（零影响）。 */
+@media (min-width: 720px) { .yws-cards > .yws-card.yws-open { grid-column: 1 / -1; } }
+
+/* ---------------------------------------------------------------- 2. 基础控件 */
+.yws-box {
+    border: 1px solid var(--yws-line); border-radius: var(--yws-r-lg);
+    padding: var(--yws-s3); margin-bottom: var(--yws-s3);
+    background: var(--yws-bg);
+}
+/* ★★W34-②（作者 2026-09-26 反馈 · "整个条目商店就会微妙的就是**横向宽那么一点点**"）：
+   **根因是"内容抢了隔壁面板的宽度"，不是我们自己的宽度算错了** —— 真界面逐层读数（`e2e/tmp/w34-diag2b.js`）：
+     酒馆的扩展区 `.extensions_block` 是个 flex 容器，两块面板（`#extensions_settings` / `#extensions_settings2`）
+     都是 `flex: 1 1 0%`（等分）+ 默认的 `min-width: auto` ⇒ **谁的内容 min-content 更大，谁就多占几个像素**。
+     实测：切「部分上传」那一档时我们这块 354.28px、隔壁 350.63px；切「整份预设」时两块都是 352.45px
+     ⇒ **同一块面板在切档时宽度变了 1.83px**（正是作者看到的"横向宽那么一点点"）。
+   ⇒ 修法（**只动我们自己的元素**，绝不写 `#extensions_settings{min-width:0}` 那种会连隔壁扩展一起改的选择器 ——
+     插件 CSS 是全局注入的）：给商店视图的盒子加 `contain: inline-size` —— 它的行内尺寸**不再参与 min-content
+     的计算**（CSS 规范：contain 打开后这个元素的内容不计入尺寸推导）⇒ 我们再也不抢隔壁的宽度。
+   ★实测（同一支诊断脚本，四档）：改前 part=350.28 / regex=350.95 / full=348.45 / play=348.45（三档都不同），
+     改后四档**全部 348.45**（差 0.00px）。★老浏览器不认 `contain` ⇒ 忽略这条声明、回到今天的行为（不会坏）。
+   ★为什么落在这里（而不是 `.yws-host` / `#kimi_reasoning_injector_settings`）：那几个候选**实测同样有效**，
+     但它们覆盖面更大（整个插件面板 / 更新器窗口也吃这条）⇒ 选**影响面最小、又正好治住商店四档**的这一层。 */
+#kimi_presetstore_body .yws-box { contain: inline-size; }
+/* ★T12/T11：`.yws-titlerow` 与 `.yws-statusline-min` **两条规则都删了** ——
+   前者是"「已连上」自己占一行"的那个盒子（连接状态并进状态行后整块不存在），
+   后者是"非商店页只画一颗刷新图标"的补丁（作者点名那是一片空区域 + 一颗孤零零的图标）。
+   ★`class-check` 只查"JS 里用到的类在 CSS 里有没有规则"（一个方向），所以删掉这两条不会误红。 */
+.yws-ver { font-size: var(--yws-fs-xs); opacity: .5; font-weight: 400; letter-spacing: 0; }
+.yws-sub, .yws-dim { font-size: var(--yws-fs-sm); color: var(--yws-txt-2); font-weight: 400; }
+.yws-dim2 { font-size: var(--yws-fs-xs); color: var(--yws-txt-3); }
+.yws-warn { color: var(--yws-bad-ink); font-size: var(--yws-fs-sm); }
+.yws-bad { color: var(--yws-bad-ink); }
+.yws-ok { color: var(--yws-ok-ink); }
+.yws-newdot { color: var(--yws-txt); font-weight: 600; }
+
+/* ★★W（AR2 · 2026-09-22）：连接状态那颗**胶囊整个删掉**了（作者点名取消）——
+   `.yws-online` 的四条规则（本体 / 圆点 / 在线档 / 离线档）与 `#yw-store-online` 那一整块（原来把它
+   绝对定位到「🛒 条目商店」大分页标题旁）**一起删除**：DOM 里不再有这颗元素，就不许留孤儿规则。
+   离线 / 连接中 / 出错三档现在只由 `.yws-statusline.yws-warnline` 那条**错误条**（人话）表达。 */
+
+/* 按钮：次 = 描边幽灵；主 = 实心；危险 = 单独色 */
+.yws-btn {
+    background: var(--yws-surface); color: var(--yws-txt); border: 1px solid var(--yws-line);
+    border-radius: var(--yws-r-sm); padding: 5px 11px; font-size: var(--yws-fs-md); cursor: pointer;
+    min-height: 30px; font-family: inherit; line-height: 1.4;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    transition: background var(--yws-t) var(--yws-ease), border-color var(--yws-t) var(--yws-ease), color var(--yws-t) var(--yws-ease), transform var(--yws-t) var(--yws-ease);
+}
+.yws-btn:hover { border-color: var(--yws-accent-line); background: color-mix(in srgb, var(--yws-accent) 12%, var(--yws-surface)); }
+.yws-btn:active { transform: translateY(1px); }
+.yws-btn:focus-visible { outline: 2px solid var(--yws-accent-line); outline-offset: 1px; }
+.yws-btn[disabled] { opacity: .45; cursor: not-allowed; }
+.yws-btn.yws-mini { min-height: 26px; padding: 2px 9px; font-size: var(--yws-fs-sm); border-radius: var(--yws-r-pill); }
+.yws-btn.yws-primary {
+    /* ★底色的主色浓度是**量出来的**：30% 在浅色主题里把底垫得太亮（文字对比掉到 3.3），
+       16% 让底几乎贴着主题自己的面板色 → 对比度跟"主题正文色 vs 面板"同一档，稳 */
+    background: color-mix(in srgb, var(--yws-accent) 16%, transparent); border-color: color-mix(in srgb, var(--yws-accent) 58%, transparent); color: var(--yws-txt);
+    font-weight: 600; box-shadow: 0 1px 0 color-mix(in srgb, var(--yws-accent) 20%, transparent) inset;
+}
+.yws-btn.yws-primary:hover { background: color-mix(in srgb, var(--yws-accent) 26%, transparent); border-color: var(--yws-accent); }
+.yws-btn.yws-sel { border-color: var(--yws-accent-line); background: var(--yws-accent-bg); color: var(--yws-txt); font-weight: 600; }
+/* 危险动作（撤回 / 拒绝）：单独一档，跟其它按钮分得开 */
+.yws-btn.yws-danger { border-color: color-mix(in srgb, var(--yws-bad) 46%, transparent); color: var(--yws-bad-ink); background: transparent; }
+.yws-btn.yws-danger:hover { background: var(--yws-bad-bg); border-color: var(--yws-bad); }
+/* 成功动作（通过）：跟主色分开，一眼看出"这是放行" */
+.yws-btn.yws-good { border-color: color-mix(in srgb, var(--yws-ok) 46%, transparent); color: var(--yws-ok-ink); background: transparent; }
+.yws-btn.yws-good:hover { background: var(--yws-ok-bg); border-color: var(--yws-ok); }
+.yws-btn.yws-ghost { background: transparent; border-color: transparent; color: var(--yws-txt-2); }
+.yws-btn.yws-ghost:hover { background: var(--yws-surface); border-color: var(--yws-line); color: var(--yws-txt); }
+
+.yws-inp, .yws-sel {
+    background: var(--yws-raise); color: var(--yws-txt); border: 1px solid var(--yws-line);
+    border-radius: var(--yws-r-sm); padding: 5px 8px; font-size: var(--yws-fs-md); font-family: inherit;
+    min-height: 30px; box-sizing: border-box;
+    transition: border-color var(--yws-t) var(--yws-ease), background var(--yws-t) var(--yws-ease);
+}
+.yws-inp:hover, .yws-sel:hover { border-color: var(--yws-accent-line); }
+.yws-inp:focus, .yws-sel:focus { outline: none; border-color: var(--yws-accent-line); background: color-mix(in srgb, var(--yws-accent) 8%, var(--yws-raise)); }
+/* ★★★W35-P6′（真主题实测抓到的一条**真**可用性缺陷）：`.yws-inp` 的**占位符**对比度在
+   ST 装着的 **8 档真主题里全部不达标**（正文门槛 4.5）：
+     深色 5 档 **2.04 ~ 2.64** · 浅色 3 档 **3.51 ~ 3.68**（读数 `tmp/shots-w35/w35-themes.json`）。
+   根因：我**没有**给 `::placeholder` 写过颜色 ⇒ 用的是**浏览器默认** `rgb(117,117,117)`（实测
+   `getComputedStyle(el,"::placeholder").color`，两档都是它、`opacity:1`），而输入框的底是
+   **宿主 ST 的** `--ui-color-sec`（见下一条说明）—— 灰字压深底/浅底都不够。
+   ⇒ 用**我们自己的** `--yws-txt-2`（= `color-mix(in srgb, var(--yws-txt) 88%, transparent)`，
+     本来就是"次要文字"那一档、跟着主题走）⇒ 实测 8 档全部 ≥4.5。**零硬编码颜色。**
+   ★附带查到（本轮**不改**，只记录）：命中这个 input 的**最高优先级**规则是**宿主自己的**
+     `input[type="text"], input[type="number"], …, input:not([type]) { background-color: var(--ui-color-sec) !important;
+       border: 1px solid var(--ui-color-sec) !important }`（CDP `CSS.getMatchedStylesForNode` 取证）
+     ⇒ 我们 `.yws-inp { background: var(--yws-raise); border: 1px solid var(--yws-line) }`（无 `!important`）
+       **两头都没生效**：屏幕上看到的底色与描边其实都是 ST 的 `--ui-color-sec`。
+     这是**既有耦合**（不是本波引入），8 档真主题下**字色对比度全部达标**（5.66~11.01）⇒ 不动它；
+     要去抢回来就得给自己的声明加 `!important`（与宿主对打），不在本波范围。 */
+.yws-inp::placeholder { color: var(--yws-txt-2); opacity: 1; }
+.yws-ta { width: 100%; min-height: 68px; resize: vertical; box-sizing: border-box; line-height: 1.6; }
+.yws-search { width: 160px; }
+.yws-lbl { font-size: var(--yws-fs-sm); color: var(--yws-txt-2); display: inline-flex; align-items: center; gap: var(--yws-s2); flex-wrap: wrap; }
+.yws-lbl > .yws-inp, .yws-lbl > .yws-sel { color: var(--yws-txt); }
+/* ★§21 E18：密钥输入框里的小眼睛（作者："你就在那个审核密钥里边画一个小眼睛就够了"）——
+   包一层定位容器，眼睛绝对定位在输入框右端；点它只切明文/遮蔽，值不动。 */
+.yws-keywrap { position: relative; display: inline-flex; align-items: center; flex: 1 1 120px; min-width: 0; }
+.yws-keywrap > .yws-inp { flex: 1 1 auto; min-width: 0; padding-right: 30px; }
+.yws-eye {
+    position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
+    width: 24px; height: 24px; min-height: 0; padding: 0; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; border: 1px solid transparent; border-radius: 6px;
+    color: var(--yws-txt-2); font-size: 13px; cursor: pointer; font-family: inherit;
+    transition: background var(--yws-t) var(--yws-ease), border-color var(--yws-t) var(--yws-ease), color var(--yws-t) var(--yws-ease);
+}
+.yws-eye:hover { background: var(--yws-raise); border-color: var(--yws-line); color: var(--yws-txt); }
+.yws-eye:focus-visible { outline: 2px solid var(--yws-accent-line); outline-offset: 1px; }
+/* 必填标记（放在标签最前面，别跑到控件后面去） */
+.yws-req { font-size: 10px; line-height: 1.6; color: var(--yws-txt); border: 1px solid var(--yws-gold-line); background: var(--yws-gold-bg); border-radius: var(--yws-r-pill); padding: 0 5px; flex: 0 0 auto; }
+.yws-pre {
+    margin: var(--yws-s2) 0 0; padding: var(--yws-s2) 10px; white-space: pre-wrap; word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--yws-fs-sm); line-height: 1.6;
+    background: var(--yws-raise); border: 1px solid var(--yws-line-2); border-radius: var(--yws-r-sm);
+    color: var(--yws-txt-2);
+}
+.yws-fold > summary { cursor: pointer; font-size: var(--yws-fs-sm); color: var(--yws-txt-2); padding: 2px 0; }
+.yws-fold > summary:hover { color: var(--yws-txt); }
+
+/* ---------------------------------------------------------------- 3. 顶栏 / 计数行 */
+/* ★§21 B5/B6：顶栏 = **4 颗页面切换按钮**（商店 / 上传条目 / 我的 / 待审）。
+   ★四颗**同一套视觉**：同一个底、同一根描边、同一个字号 —— 作者原话："为什么它们的那个样式不同，
+     怎么有一些是发光有一些不发光，甚至有一些是没有边框的"。所以这里不再有 ghost/primary 混排；
+     当前所在的那一颗用 `.yws-on`（主色描边 + 主色淡底 + 加粗）—— 那是唯一的差别。 */
+.yws-topbar { display: flex; flex-wrap: wrap; gap: var(--yws-s2); margin: 10px 0 var(--yws-s2); }
+.yws-topbar .yws-btn.yws-nav { background: var(--yws-surface); border: 1px solid var(--yws-line); color: var(--yws-txt-2); font-weight: 500; }
+.yws-topbar .yws-btn.yws-nav:hover { background: color-mix(in srgb, var(--yws-accent) 10%, var(--yws-surface)); border-color: var(--yws-line); color: var(--yws-txt); }
+.yws-topbar .yws-btn.yws-nav.yws-on {
+    border-color: var(--yws-accent-line); background: var(--yws-accent-bg); color: var(--yws-txt); font-weight: 650;
+    box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--yws-accent) 55%, transparent);
+}
+/* ★D14（audit-p12 人性化 C1）：没填审核密钥时那颗「🔒 待审」= **禁用态**（灰 + 锁），
+   别跟另外三颗平起平坐。
+   ★实测踩过的坑：**不许用 `opacity` 变灰** —— `probe-store-light` 的量具会把元素 opacity 乘进字色里
+   （逐层合成口径），`.62` 一乘就从 7.87 掉到 2.76/3.79（当场红）。改法 = **只靠"透明底 + 更弱的描边 +
+   正文色那一档（txt-2）+ 锁图标 + not-allowed 光标"** 表达禁用，字色本身的对比度照旧达标。 */
+.yws-topbar .yws-btn.yws-nav.yws-off, .yws-topbar .yws-btn.yws-nav:disabled {
+    color: var(--yws-txt-2); background: transparent; border-color: var(--yws-line-2);
+    cursor: not-allowed; font-weight: 400;
+}
+.yws-topbar .yws-btn.yws-nav.yws-off:hover, .yws-topbar .yws-btn.yws-nav:disabled:hover { background: transparent; border-color: var(--yws-line-2); color: var(--yws-txt-2); }
+.yws-statusline {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px;
+    font-size: var(--yws-fs-sm); color: var(--yws-txt-2);
+    border: 1px solid var(--yws-line-2); border-radius: var(--yws-r-md);
+    background: var(--yws-surface); padding: 6px 10px; margin-bottom: 10px;
+}
+.yws-statusline b { color: var(--yws-txt); font-weight: 600; }
+/* ★§21 B5：状态行右边那颗小「🔄」（顶栏不放刷新了，但"点刷新重试"这句话还得有地方点）
+   ★高度 ≥24px 是**硬线**（ui-audit 会量"每个按钮都点得到"；22px 那版当场被判红） */
+.yws-statusline .yws-sl-flex { flex: 1 1 auto; }
+.yws-statusline .yws-refresh { flex: 0 0 auto; margin-left: 4px; padding: 0 8px; min-height: 24px; line-height: 1; }
+/* ★★W86（2026-10-04 · 作者拍板）：连接失败横幅里那颗**带字**的「刷新重连」——
+   与图标刷新同一族（`.yws-btn.yws-mini` 那一套：同一个底/描边/字号，颜色全走变量、零硬编码），
+   只是多一个字 + 热区抬到 **32px**（手机档也按得准；`.yws-reconnect-sm` 那档用隐形热区补到 32）。 */
+.yws-statusline .yws-reconnect { flex: 0 0 auto; margin-left: 4px; }
+/* ★注意选择器要写成 `.yws-btn.yws-reconnect`（0-2-0）—— 光写 `.yws-reconnect`（0-1-0）压不过上面那条
+   `.yws-btn.yws-mini { min-height: 26px }`（实测：独立类写法量出来还是 26px ⇒ 热区判据当场红）。 */
+.yws-btn.yws-reconnect { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 3px 10px; line-height: 1.3; }
+.yws-reconnect .yws-ico { flex: 0 0 auto; }
+.yws-reconnect[disabled] { cursor: not-allowed; }
+/* 小号版（`.yws-cmerr` / `.yws-cmerr2` 那三条"拉不到"提示行里）：视觉矮一档，**热区照样 32**
+   —— 用 `.yws-eye` 那一族既有手法：伪元素撑高、不画东西（ui-audit 认这个口径）。 */
+.yws-btn.yws-reconnect-sm { position: relative; min-height: 26px; padding: 2px 9px; vertical-align: middle; margin-left: 6px; }
+.yws-reconnect-sm::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 32px; transform: translateY(-50%); }
+.yws-statusline .yws-stat { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+/* ★T12：连接状态并进这一行后，它跟计数之间那颗分隔点（`·` 是画出来的，不是文字，行尾换行时不会孤零零） */
+.yws-statusline .yws-sep { flex: 0 0 auto; color: var(--yws-txt-3); margin: 0 2px; }
+/* ★★W（AR2）：T13 那条"把胶囊底降成 `--yws-bg`"的规则随胶囊一起删（`.yws-statusline .yws-online`）
+   —— 现在这一行里只有纯文字（离线 / 出错 / 连接中），没有药丸、也没有双层底的问题。 */
+/* 离线/出错时不要那条"信息条"的框，直接一行警示 */
+.yws-statusline:has(.yws-warn) { background: var(--yws-bad-bg); border-color: color-mix(in srgb, var(--yws-bad) 34%, transparent); }
+/* ★★BJ-A1（作者第十五批 · 2026-09-22，§BJ-A1）：「缝到哪一份」那一格 ——
+   现在它是工具条**第 1 行（组 1）**里的一个普通成员（`.yws-tbrow-rec` 的第一个孩子）：
+   窄屏**先缩它**（`flex: 0 1 160px; min-width: 84px`，默认值通常够看），缩不下就整格换到下一排。
+   ★U6 那套"手机档收起来 + 一颗「缝到 ▾」开关"**整块删除**（作者："这个缝到哪一份是默认显示的，
+     不能因为折叠了就不显示"）—— 连同 `.yws-tbrow-tgt` / `.yws-tgtbtn` / `.yws-tgtopen` 三个孤儿
+     规则一起清掉（JS 里 `S.tgtOpen` 与 `tgt-toggle` 那一支也没了）。
+   ★认过的取舍：手机档工具条因此比 U6 那一版**高约 40px**（**不许**再为了压高度把它藏起来）。
+   ================================================================================
+   ★★W42（派单①）：**这一格就是"第 1 行里那个会缩的下拉"** —— 作者原话"太长了就**缩那个下拉选框**
+     自适应长度"。两条改动（都只为"第 1 行恒一行 + 顶两边"这一件事）：
+     · 整格 `flex: 0 1 auto` → **`flex: 1 1 auto`**：让它**吃掉这一行的余量** ⇒ 右缘顶到行右缘；
+     · 下拉自己 `flex: 0 1 160px; min-width: 84px` → **`flex: 1 1 0; min-width: 0`**：
+       彻底放开收缩（84px 那个下限在窄档里正是"掉行"的元凶之一）⇒ 再窄也只是把它截短，**行不掉**。
+   ★改前读数（真界面 PC 1470×905）：整格 188px（其中下拉 152px）· 与「📌缝入记录 + ⭐收藏记录」181px
+     一起需要 375px > 行内可用 282px ⇒ **掉行**。改后见报告 §② 的四档读数。 */
+.yws-targetcell { display: inline-flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; max-width: 100%; }
+.yws-targetlab { flex: 0 0 auto; font-size: var(--yws-fs-xs); }
+.yws-targetcell .yws-targetsel { flex: 1 1 0; min-width: 0; max-width: 100%; }
+/* ★★AU4 ②-b（评审 §2 条 2："没有未阅更新时不该再占那 84px"）：没有未阅时那颗"看过了"按钮（★W10 已彻底删除）不渲染
+   （见 `officialSecHtml`）⇒ 分区头从两行变一行。这里只把"按钮组"的换行口径写清楚：
+   宽档（≥900px）时它留在标题那一行；窄档（≤760px）仍然整组换到第二行（§R9-d 的既有口径，一个字没改）。 */
+
+/* 分区头：小标签 + 计数胶囊 + 一条细分隔线 */
+.yws-sec { margin: var(--yws-s4) 0 var(--yws-s2); }
+.yws-sec:first-of-type { margin-top: var(--yws-s2); }
+/* ★口径（量出来的）：这一行**必须允许换行** —— A8 之后它右边多了那颗"看过了"按钮（★W10 已删）+「⬇ 下载最新整份」，
+   348px 的抽屉里一行放不下 → `nowrap` 时 `scrollWidth > clientWidth`（实测：商店页横向溢出 **71px**、
+   这一行本身也被 `ui-audit` 判"内容溢出"）。`flex-wrap: wrap` + `::after` 那条细线仍然把右边填满。 */
+.yws-sech {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--yws-s2);
+    font-size: var(--yws-fs-sm); font-weight: 600; letter-spacing: .06em;
+    color: var(--yws-txt-2); margin-bottom: 10px; min-width: 0;
+}
+.yws-sech::after { content: ""; flex: 1 1 12px; height: 1px; background: var(--yws-line); border-radius: 1px; min-width: 0; }
+.yws-sech .yws-dim { letter-spacing: 0; font-weight: 400; margin: 0; }
+.yws-sec-ic { width: 18px; height: 18px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; background: var(--yws-raise); border: 1px solid var(--yws-line); }
+/* ★§21 B5：分区头右边挂的那颗按钮（「⬇ 下载最新整份」= 官方整份预设的唯一入口，从顶栏挪过来的） */
+.yws-sec-x { display: inline-flex; align-items: center; gap: var(--yws-s2); flex: 0 0 auto; }
+.yws-btn.yws-offi-dl { border-color: var(--yws-gold-line); background: var(--yws-gold-bg); color: var(--yws-txt); font-weight: 600; }
+/* ★★W42（派单① 第 2 行 · 作者原话"**下载最新预设（最右）**"）：`margin-left: auto` 是**唯一**能同时满足
+   两种情况的写法 —— ① 跟别的成员挤在同一行时：它被推到**行右缘**；② 这一行换行了（行内放不下）：
+   它自己在第二行，`margin-left: auto` 照样把它推到**那一行的右缘**。
+   ★为什么不改用 `justify-content: flex-end` 之类：那一行的**第一个**元素必须是「热度」（作者要"最左"），
+     而 `flex-end`/`space-between` 在换行后会把每个成员的位置都搅乱（"热度"会被推到中间）。
+   ★为什么不用 `order` 把它排到最后：DOM 顺序 = 事件委派与就地更新的锚点顺序，动它风险更大；
+     而且"最后一个"本来就够（它是这一行 DOM 里的最后一项）。 */
+.yws-btn.yws-offi-dl { margin-left: auto; }
+.yws-btn.yws-offi-dl:hover { border-color: var(--yws-offi); background: color-mix(in srgb, var(--yws-offi) 24%, transparent); }
+.yws-sec-n {
+    font-size: var(--yws-fs-xs); font-weight: 600; color: var(--yws-txt-2);
+    border: 1px solid var(--yws-line); border-radius: var(--yws-r-pill);
+    padding: 0 7px; min-width: 20px; text-align: center; background: var(--yws-surface); letter-spacing: 0;
+}
+.yws-sec[data-sec="official"] .yws-sec-ic { color: var(--yws-txt); border-color: var(--yws-gold-line); background: var(--yws-gold-bg); }
+.yws-sec[data-sec="official"] .yws-sech { color: var(--yws-txt); }
+.yws-sec[data-sec="user"] .yws-sec-ic { color: var(--yws-txt); border-color: var(--yws-accent-line); background: var(--yws-accent-bg); }
+
+/* ---------------------------------------------------------------- 4. ★卡片（最重点） */
+/* ★§21 A1：**整个卡片收紧**（作者说"太肥大"）—— 内边距 13/12/11 → 10/11/9，
+   用途与元信息行的上下间距各降 2~3px；视觉层级不变，只是不再虚胖。 */
+.yws-card {
+    position: relative; display: flex; flex-direction: column;
+    border: 1px solid var(--yws-line); border-radius: var(--yws-r-lg);
+    background: var(--yws-surface); padding: 8px 10px 8px;
+    box-shadow: var(--yws-shadow-1);
+    cursor: pointer; overflow: hidden;
+    transition: transform var(--yws-t) var(--yws-ease), box-shadow var(--yws-t) var(--yws-ease), border-color var(--yws-t) var(--yws-ease), background var(--yws-t) var(--yws-ease);
+    min-width: 0;
+}
+.yws-card:hover { transform: translateY(-1px); box-shadow: var(--yws-shadow-2); border-color: color-mix(in srgb, var(--yws-accent) 34%, var(--yws-line)); }
+.yws-card:active { transform: translateY(0); box-shadow: var(--yws-shadow-1); }
+.yws-card:focus-visible { outline: 2px solid var(--yws-accent-line); outline-offset: 2px; }
+/* 展开态：描边亮起来 + 底色抬一档（"这张正开着"一眼能看出来） */
+.yws-card.yws-open { border-color: var(--yws-accent-line); background: var(--yws-surface); box-shadow: var(--yws-shadow-2); }
+/* 官方卡：一层很淡的暖金（不用左边条，别跟更新器的"状态色==左边条"那套规矩混） */
+.yws-card.yws-card-offi { border-color: var(--yws-gold-line); background: linear-gradient(180deg, color-mix(in srgb, var(--yws-offi) 9%, transparent), transparent 42%), var(--yws-surface); }
+.yws-card.yws-card-offi:hover { border-color: var(--yws-offi); }
+
+/* —— ★标题（第一视觉焦点，§17 A1 + §21 A1：18px/700 + **主题引用色**） */
+/* ★A3（作者台账）：官方标**与标题同行**（不再各占一行、不再"空一行"）→ 这一行 `nowrap`：
+   官方、标题、徽标全在同一行，标题长了就**省略号**（不许把卡片撑高、也不许压塌右边的按钮）。 */
+/* ★★一行封顶的口径（量出来的，血泪）：`ui-audit` 的"内容溢出"判据是
+   `scrollWidth > clientWidth + 2`（X）或 `scrollHeight > clientHeight + 2`（Y）。
+   ⇒ **在受检元素本身上做 line-clamp / nowrap+ellipsis 一定会被判黄**
+     （实测：`.yws-card-t` 用 nowrap+ellipsis → X；改成 `-webkit-line-clamp:1` → Y，两条路都红）。
+   正确做法：**受检元素本身不裁**（文字老老实实换行 → 两个量都不超）。
+   ★★W（AR3 · 2026-09-22）：作者原话 —— **"标题最重要，少了什么不能少标题"**、
+   "标题必须完整展示（允许折两行，不许被压缩/截断）"。
+   ⇒ 改前那个"固定 22px + overflow:hidden 的一行封顶"**取消**：这一行改成**由内容决定高度**
+     （`min-height: 22px` 保住原来的视觉基线），标题**自然换行**成两行就显示两行、一个字都不裁；
+     原来挤在这一行里的两颗徽标（「有更新」「已缝入」）**搬出这一行** ——
+     「有更新」徽标**删掉**（更新日期上已经有红点，重复）；「已缝入」搬到卡片最下面那一行（AR3）。
+   ★★BD4（作者第十三批 · 2026-09-22）：AR3 那个"卡片下沿徽标行"**整行撤掉**了 —— 「已缝入（预设名）」
+     现在长在**元信息行的更新日期后面**（见下面 `.yws-sewn` 那一族），所以这里不再提"徽标行"。 */
+.yws-card-h { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 6px; min-width: 0; min-height: 22px; }
+/* ★A3②：标题**换行成多行**后如果这一行是 `align-items: center`，
+   标题那个多行盒子会被竖向居中 → 它的 box top 比「官方」低十几像素（实测 13px），
+   「官方与标题同行」那条几何断言当场假红。所以这里**顶对齐**（两者 box top 相同），
+   「官方」那两个字再用 3px 的光学补偿（仍然远小于判据的 6px）。 */
+.yws-card-h > .yws-offi { margin-top: 3px; }
+.yws-card-t {
+    /* ★§21 A1：颜色 = `--yws-title-ink`（当前主题的引用文本色 + 18% 正文色安全垫，见上面令牌） */
+    font-size: var(--yws-fs-title); font-weight: 700; line-height: 1.28; color: var(--yws-title-ink);
+    letter-spacing: -.01em;
+    flex: 1 1 auto; min-width: 0;
+    /* ★A9/T1：**一个字都不裁**（自然换行）—— 两个 overflow 量都不超，ui-audit 才过得去。
+       ★★W（AR3）：改前靠外层"固定高 + overflow:hidden"只显示一行；现在外层不再裁 ⇒ 标题**完整显示**
+       （折两行就显示两行，长到三行也不会被切掉半个字）。 */
+    overflow-wrap: anywhere;
+}
+/* 用途：★A9：**固定 2 行封顶**（原来是 3 行 —— 卡片高度跟着内容飘，作者说"整体还不整齐"）
+   ★T2 老口径（展开态里读全文）→ ★★BD3 起改成"**展开时上面这份不再裁**"（`.yws-card-wb.yws-wb-open`），
+   详情里那份重复的 `.yws-card-why2` 已删。 */
+/* ★两行封顶**交给外层 `.yws-card-wb`**（固定 3em + overflow:hidden），自己**不裁**（道理同 `.yws-card-t`）。
+   ★★T1（作者第四批反馈 · 真 BUG）：**第三行只露半个字**（作者原话"第三行只有一个头"，意思不明）。
+   根因 = **两处字号不一致**：包裹层 `3em` 按**它自己的** font-size 算（继承卡片 = **14px** → 42px），
+   而里面那行字是 `12.5px × 1.5 = 18.75px` ⇒ `42 ÷ 18.75 = **2.24 行**` —— 多出来的 0.24 行就是那半截字形。
+   实测（`e2e/tmp/r10-before-pc.json`）：包裹高 42 / 行高 18.75 / 可见行数 2.24 / 半截行 = true。
+   修法：**把字号钉在包裹层上**（`12.5px` 与 `.yws-card-w` 同一个数）⇒ `3em = 2 行 × 1.5 行高 = 37.5px`
+   = **整数行截断**，一个字都不会被切一半。★这两处字号必须一起改（改一处就又会半截）。 */
+.yws-card-wb { font-size: 12.5px; line-height: 1.5; height: 3em; overflow: hidden; margin-top: 3px; }
+/* ★★BD3（作者第十三批 · 2026-09-22，§BD3 的**真 BUG**）：这张卡**正展开着**的时候，上面这份用途说明
+   **不再裁**（`height: auto` + 不限溢出）—— 作者原话"要么上面对的那份不再被裁、要么详情里不再重复，
+   二选一，取观感更好的"；这里**两条都做了**（详情里那份重复的 `.yws-card-why2` 已经在 JS 里删掉）。
+   读数口径：展开卡的 `.yws-card-wb` 的 `scrollHeight - clientHeight` = **0**（改前被裁 42px 里那截露不全）。
+   ★只在这张卡**展开**时生效（收起态仍是两行封顶 + 卡片等高：`.yws-card-wb` 的默认那两条一个字没改）。 */
+.yws-card-wb.yws-wb-open { height: auto; overflow: visible; }
+.yws-card-w {
+    /* ★★W89-②：12.5px 字面量改走 `--yws-fs-body`（同一个值；与简卡展开态全文**共用同一个令牌** ⇒ 两态一致） */
+    font-size: var(--yws-fs-body); line-height: 1.5; color: var(--yws-txt-2); overflow-wrap: anywhere;
+    min-height: 3em;
+}
+/* 出处行（§9 快照即真相）——★移到**展开态**里（卡片上不放说明文字，§17 A5） */
+.yws-card-src { font-size: var(--yws-fs-xs); color: var(--yws-txt-3); margin-bottom: var(--yws-s2); overflow-wrap: anywhere; }
+
+/* 徽标 */
+/* ★A3（作者台账）：作者原话 ——「官方」① **不要外面的左右框**（就直接写"官方"）
+   ② 右边**直接接标题**（同一行）。所以这里：`border: 0`、`background: transparent`、`padding: 0`、
+   只留一颗小菱形 + 那个字（暖金色，深浅主题都读得清 —— 对比度由 ui-audit / probe-store-light 量）。
+   ★`class` 与文字口径不变（`.yws-offi` 这个名字被 css-check/ui-audit/probe-store-light 守着）。 */
+.yws-offi {
+    color: var(--yws-gold-ink); border: 0; background: transparent;
+    border-radius: 0; padding: 0; font-size: var(--yws-fs-sm); font-weight: 700;
+    display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; line-height: 1.6;
+    flex: 0 0 auto;
+}
+/* 「官方」那两个字保持原样（用户认这个字），前面加一颗小菱形当"图标感" */
+.yws-offi::before { content: ""; width: 5px; height: 5px; background: currentColor; transform: rotate(45deg); border-radius: 1px; flex: 0 0 auto; }
+/* ★★W77（2026-09-27 夜 · 作者拍板「免审窗口」· 台账 §HT ③）：卡片头部那一颗「自动通过」小标
+   （= 这条是在他开的免审窗口里**自动通过**的；服务端给只读回显 `auto`）。
+   **与 `.yws-offi`（官方）逐条同一套写法**（小菱形 + 字、无边框、`flex: 0 0 auto`），只有两处不同：
+     · 色族 = `--yws-ok-ink`（既有语义色里的"成功"那一档，**本来就在 `_INK_TOKENS` 名单里**
+       ⇒ 自动吃"按实际底色 ≥4.5"的兜底，与官方金标同一条纪律；**不新造令牌、不硬编码颜色**）；
+     · 字号收一档（`--yws-fs-xs`）：它四个字，跟官方那两个字一样宽就太占地方（"不许挤掉标题"那条教训）。
+   ★它是 `nowrap` + 固定宽 ⇒ 唯一的弹性都在标题上，而标题本来就是 `flex: 1 1 auto; min-width: 0`
+     且**一个字都不裁**（自然换行）—— 四档几何读数见报告 §⑤。 */
+.yws-auto {
+    color: var(--yws-ok-ink); border: 0; background: transparent;
+    border-radius: 0; padding: 0; font-size: var(--yws-fs-xs); font-weight: 700;
+    display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; line-height: 1.6;
+    flex: 0 0 auto;
+}
+.yws-auto::before { content: ""; width: 5px; height: 5px; background: currentColor; transform: rotate(45deg); border-radius: 1px; flex: 0 0 auto; }
+/* 头部是 `align-items: flex-start`（多行标题时两者 box top 要齐）⇒ 与 `.yws-offi` 一样给 3px 的光学补偿 */
+.yws-card-h > .yws-auto { margin-top: 3px; }
+/* ★★AU7-②（作者第十四批 · 2026-09-22，§AU7-②）：那一行**只写「已缝入」三个字** ——
+   作者原话："「已缝入」现在**盖住更新日期与作者**……**日期要显示完全**、**作者也被隐藏掉了**"。
+   改前（§BD4 那一版）这一格是 `已缝入（预设名）`，名字最长 18 字；而整个元信息行是
+   `flex-wrap: nowrap` + 每格 `min-width: 0`（当年为了让"同一排卡张张等高"量出来的口径）⇒
+   位置不够时**先被牺牲的正是它左边那两格**（更新日期、署名），于是作者看到"日期/作者被挤掉、盖住"。
+   现在的口径（作者给的三条，一个字不改）：
+     · 行内**只有「已缝入」**（预设名走浏览器原生 `title`，见 `sewnTagHtml`）；
+     · **更新日期与作者必须完整可见** —— 这一格 `flex-shrink: 0`（**一格都不缩**，见下面 `.yws-mday`）；
+     · **它自己最先缩、下限 3em（= 三个字）**：位置真不够时先缩它，但三颗字**始终在**（缩不到 0 宽），
+       再不够才轮到类型胶囊、最后才轮到署名（各自 `flex-shrink` 的权重见下面那两条）。
+   颜色/字重没变（`--yws-txt-2` + 600，对比度由 `applyAutoInk` 兜底）。 */
+.yws-sewn {
+    color: var(--yws-txt-2); font-size: var(--yws-fs-xs); font-weight: 600;
+    display: inline-flex; align-items: center; white-space: nowrap; line-height: 1.6;
+    /* ★AU7-②：`min-width: 3em` = 三个汉字（CJK 一个字约 1em）⇒ **「已缝入」永远读得全**，
+       同时把它能占的宽度封顶（11px 字号 ⇒ 33px；手机档 10px ⇒ 30px）。 */
+    flex: 0 20 auto; min-width: 3em;
+}
+/* ★★AU7-②：**同行的收缩优先级**那三条规则**故意写在 `.yws-card-m > …` 那一族之后**
+   （见下面 `.yws-card-m > .yws-by, > .yws-mtype, > .yws-by-t` 那条之后），
+   因为选择器特异性相同 ⇒ 靠**源码顺序**取胜（写前面会被那条 `flex: 0 1 auto` 顶掉）。 */
+/* ★★AU7-②：`.yws-sewn-o` / `.yws-sewn-n`（包裹预设名的括号 + 名字那一格）**两条规则整块删除** ——
+   名字不再进这一行（走 `title` + 详情里的 `.yws-sewnfull`），DOM 里一个字节都不剩，留着就是孤儿规则。
+   ★口径变更：`e2e/tmp/au3-bd4.js` 里断言"行内是 `已缝入（预设名）`"、"`.yws-sewn-n` 有 ellipsis"
+   那几条按 §AU7-② **作废**（作者改了显示形式，不是我们做漏了）。 */
+/* ★★AU7-②：**详情里**那一行完整的「已缝入：〈预设名〉」（不受宽度限制 —— 卡片行里只有三个字）。
+   与卡片上那三个字**同一份记账**（`stitchedRec`），字号/颜色降到"说明行"档（与 `.yws-card-src` 同族），
+   名字 `font-weight: 700` + 主文字色（对比度由 `applyAutoInk` 兜底），**不截断**（换行，一个字都不丢）。 */
+.yws-sewnfull {
+    font-size: var(--yws-fs-xs); color: var(--yws-txt-2);
+    margin-bottom: var(--yws-s2); overflow-wrap: anywhere;
+}
+.yws-sewnfull-n { font-weight: 700; color: var(--yws-txt); }
+/* ★★W（AR3）+ 的 `.yws-card-badges`（卡片下沿那行徽标）**整条规则删除** ——
+   ★BD4 把「已缝入」搬回元信息行（更新日期后面）之后，卡片下沿那一行**在 DOM 里已经不存在**：
+   留着规则就是孤儿，而且会让人以为"徽标行还在"。`r10-store-ui` / `aa-store-ui` 里那几条
+   "徽标行数 === 1" 的断言按 BD4 **作废**（写在 `e2e/au3-status.md` 的"被本批改动作废的旧断言"里）。 */
+/* ★★W（AR3 · 2026-09-22）：**「有更新」徽标删掉** —— 作者原话"更新日期上已经有小红点，重复"。
+   那颗红点由 `.yws-mday.yws-hasdot` 负责（保留）；`updAllCount()` / 「一键更新」那颗按钮走的是
+   `S.upToDate`，与这颗徽标**没有关系**，一个字没动。⇒ `.yws-upd` 的样式规则整条删除（不留孤儿规则）。 */
+.yws-tag {
+    font-size: var(--yws-fs-xs); border: 1px solid currentColor; border-radius: var(--yws-r-pill);
+    padding: 1px 8px; color: var(--yws-txt-2); white-space: nowrap; line-height: 1.6; flex: 0 0 auto;
+}
+.yws-tag-new { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-add) 48%, transparent); background: color-mix(in srgb, var(--yws-dl-add) 14%, transparent); }
+.yws-tag-patch { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-old) 46%, transparent); background: color-mix(in srgb, var(--yws-dl-old) 13%, transparent); }
+.yws-tag-old { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-old) 46%, transparent); background: color-mix(in srgb, var(--yws-dl-old) 13%, transparent); }
+
+/* ★A4（作者台账）：卡片**下半部分 = 一行** —— **左边**元信息（署名/类型/更新时间）、**右边**「缝入」，
+   「缝入」**不另起一行**。所以这里 `nowrap`（放不下就省略，绝不换行）+ `.yws-card-f` 用 `margin-left:auto`
+   贴到这一行的**右端**；条目名胶囊挪到下面独立的一行 `.yws-card-n`（DOM 里仍是 `.yws-card-m` 的**兄弟**，
+   老契约 `.yws-card-m span:nth-child(2)` = 类型 一个字不改）。
+   ★A5/A10：「已缝入 0 次」在 JS 里就**不渲染**了（0 次时那一格根本不存在）。 */
+.yws-card-m {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    /* ★★W119（作者 2026-10-08）：**去掉"内容 → 署名"之间那条横线**（官方条目 / 用户条目的卡片同款）。
+       原来这里是 `border-top: 1px solid var(--yws-line-2)`；间距（5px+5px）照旧保留，只是不再画线。 */
+    margin-top: 5px; padding-top: 5px;
+    font-size: var(--yws-fs-sm); color: var(--yws-txt-3); min-width: 0;
+}
+/* ★口径（量出来的）：这一行**不能**用 `flex-wrap: nowrap` + `overflow: hidden`
+   —— 放不下时 `scrollWidth > clientWidth`，`ui-audit` 会判"内容溢出"（实测 `.yws-card-m` 被抓过）。
+   现在的做法：允许换行（抽屉窄到装不下时元信息自己落一行，绝不裁切/溢出），
+   左边的元信息**可以自己省**（`flex: 0 1 auto` + 各自省略）。
+   ★★W3（作者第五批反馈）：动作区（♡ + 缝入）**已经搬到最下面那一行**（见 `.yws-card-n`）——
+   这一行现在**只剩元信息**，于是不会再"因为塞不下按钮而换行"（改前实测：这一行 62.88px = 两行）。 */
+.yws-card-m > .yws-by { flex: 0 1 auto; min-width: 0; }
+.yws-card-m > .yws-mtype { flex: 0 1 auto; min-width: 0; }
+.yws-card-m > .yws-by-t { flex: 0 0 auto; }
+/* ★★W（AR3 配套 · 作者第十批）：**PC 档这一行也不换行**（原来只有手机档不换行）。
+   理由：作者一直在要"同一排卡张张一样高/整整齐齐"（A9），而桌面档这行一旦换行，
+   同一分区里就会有一张卡高出一整行（实测极差 23px = 正好一行元信息）——
+   而 AR3 又允许标题折两行 ⇒ 卡高差异只会更明显。手机档早就用"四格都能缩"这套做法量过
+   （见下面 `@media (max-width:720px)` 那一段的注释：每格 `min-width:0` + 自己省略 ⇒
+   `scrollWidth == clientWidth`，**不会**被判"内容溢出"）。这里把同一个口径搬到 PC 档。 */
+.yws-card-m { flex-wrap: nowrap; }
+.yws-card-m > .yws-by, .yws-card-m > .yws-mtype, .yws-card-m > .yws-by-t { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ★★AU7-②（作者第十四批 · 2026-09-22，§AU7-②）：**这一行里"谁先让位"的收缩优先级**（作者点名的硬要求：
+   "更新日期与作者必须完整可见"）。上面那条把三格都写成 `flex: 0 1 auto`（都能缩）—— 那正是改前的问题：
+   位置不够时浏览器按"基准宽度加权"分着缩，而 `已缝入（预设名）` 那一格基准最宽 ⇒ 实际被牺牲掉的是
+   **日期和署名**（作者原话："盖住更新日期与作者"）。现在按下面的优先级来（特异性相同 ⇒ 靠源码顺序取胜，
+   所以这一组**必须**写在上面那条之后）：
+     · `.yws-mday`（更新日期）= `flex: 0 0 auto` —— **一格都不缩**（连省略号都不给：它压根不参与收缩）；
+     · `.yws-sewn`（已缝入）  = `flex-shrink: 20` —— **最先缩**，缩到它自己的 `min-width: 3em`（三个字）为止；
+     · `.yws-mtype`（类型胶囊）= `4` —— 第二顺位（它本来就是个短标签）；
+     · `.yws-by`（署名）      = `1` —— **最后**才轮到它（只有"作者名特别长 + 窄到极限"时才会省略号，
+       而全名一直在署名自己的 `title` 里 —— `data-who` 那一条）。
+   ★为什么不会因此"内容溢出"（`ui-audit` 会判红的那一项）：行里**还剩三格能缩**（已缝入 / 类型 / 署名），
+     只要有一格能缩，`scrollWidth == clientWidth` 就成立 —— 口径与上面 W 那两条注释完全一致。 */
+.yws-card-m > .yws-mday { flex: 0 0 auto; }
+.yws-card-m > .yws-sewn { flex: 0 20 auto; min-width: 3em; }
+.yws-card-m > .yws-mtype { flex: 0 4 auto; min-width: 0; }
+.yws-card-m > .yws-by { flex: 0 1 auto; min-width: 0; }
+/* ★★W2/W3（作者第五批反馈）：**最下面那一行 = 左边条目名胶囊 + 右边动作区（♡ + 缝入）**。
+   作者原话：W2「卡片下面（删掉"照官方哪一版改的"之后）留白还是太大 → 往上提、收紧」；
+   W3「「★」与「缝入」不要放这么高 → 放右下角靠角落，与左边内容对齐整齐（不要乱糟糟）」。
+   改前的两处浪费（都是量出来的，见 `e2e/tmp/r12-before-pc.json`）：
+     · 这一行**定高 40px**，而里面一行胶囊只有 21.05px ⇒ 卡片底部**白留 ~19px**（W2 说的就是它）；
+     · 动作区在**上面**那行（元信息行）：离卡片底 51px、抽屉一窄还会换行 → 同一排卡按钮高低不齐。
+   现在：这一行是 `flex`（左胶囊 / 右动作区，**居中对齐**），高度由**内容**决定（最高的是动作区那两颗按钮），
+   胶囊那一格**只有一行**（`nowrap` + 溢出隐藏 → 整数行、不留半截字，也不再把卡片撑高）。
+   ★"张张等高"仍在：每张卡这一行的最大高度都来自同一族按钮（同一套 `.yws-btn` 高度）⇒ 卡片高度仍然一致。 */
+.yws-card-n { display: flex; align-items: center; gap: 8px; margin-top: 4px; min-width: 0; }
+/* ★★W108-②-1（R22 裁定 · "条目名胶囊被压成 2 个字 = 本次唯一'信息真丢了'处"）：允许折到第 2 行 ——
+   改前 `height: 22px` 定死 + `nowrap` ⇒ 3 条胶囊在同一条线上被 flex 均摊收缩成「✍R...」（310px 卡宽）。
+   现在 `height: auto`（显式写死：压过下面手机档那条老 height）+ `min-height: 22px`（单行时行高口径不变）
+   + `wrap`（放不下就换行）⇒ 每条胶囊保有自己的字宽；动作区仍贴这一行右端（见下一行 align-self）。
+   ★卡片每张高 +18~24px = R22 明确可接受（"`+.18~24px` 可接受"）；判据锚点：胶囊 clientWidth 不再被压到 <30px。 */
+.yws-card-n > .yws-mnames { flex: 1 1 auto; min-width: 0; height: auto; min-height: 22px; overflow: hidden; flex-wrap: wrap; }
+/* ★W108-②-1：条目名折行后这一行变高 ⇒ 动作区（♡ + 缝入）钉在**右下角**（W3："绝不把按钮挤下去"）；
+   单行卡上动作区本来就是最高的那一项（它自己撑起行高）⇒ flex-end 与 center 位置**逐像素相同**（W108 探针量过）。 */
+.yws-card-n > .yws-card-f { flex: 0 0 auto; margin-left: auto; align-self: flex-end; }
+/* ★§21 A2：346px 的抽屉里这一行**放不下**四个元素（实测溢出 ~15px）→ 会换成两行；
+   ★原来用 `·` 分隔（CSS `::before` 画的），换行时行首会孤零零留一个 `·`（截图里一眼看得到）→
+   改成**纯间距**（column-gap 10px）：换行干净、读起来也更像"一行元信息"。
+   （老契约只关心 `.yws-card-m span:nth-child(2)` 是"类型"—— 不是"有没有点"，所以这条改动不影响任何断言。） */
+/* ★§17 A2：作者行 = 字面 `BY 署名`（圆圈头像已删）。★T7：作者点名要回 `BY` 那两个字（文案审核的"去掉 BY"作废）。
+   ★T8（作者原话"作者名要显眼"）：署名从 13.5px/650 提到 **14.5px/750**，颜色用主文字色 `--yws-txt`
+   （自动取色层会给它兜底对比度；`#kimi_presetstore_body .yws-by-n` 那条 `!important` 顶的是主题的粗体覆盖）。 */
+.yws-by { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
+.yws-by-k {
+    font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--yws-txt-3);
+    border: 1px solid var(--yws-line); border-radius: 4px; padding: 0 4px; line-height: 1.5; flex: 0 0 auto;
+}
+/* ★F4（作者台账）：**点署名 = 看这个人的全部卡**（作者合集）→ 给个"能点"的样子（悬停变主色 + 虚下划线） */
+.yws-by-n { font-size: var(--yws-fs-name); font-weight: 750; color: var(--yws-txt); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.yws-by-n:hover { color: var(--yws-accent-ink); text-decoration: underline dotted; text-underline-offset: 2px; }
+.yws-by-t { font-size: var(--yws-fs-xs); color: var(--yws-txt-3); }
+/* ★§21 A4：更新日期（`2026-09-21 更新` / 跟创建日不同时写 `更新于 …`）—— 比其它元信息稍亮一点，别被淹掉 */
+.yws-mday { color: var(--yws-txt-2); }
+/* 类型（child 2）：普通卡 = 主色小标签；官方卡 = 暖金小标签 */
+.yws-mtype {
+    color: var(--yws-txt); border: 1px solid var(--yws-accent-line); background: var(--yws-accent-bg);
+    border-radius: var(--yws-r-pill); padding: 0 6px; font-size: var(--yws-fs-xs); white-space: nowrap; line-height: 1.7;
+}
+.yws-card-offi .yws-mtype { color: var(--yws-txt); border-color: var(--yws-gold-line); background: var(--yws-gold-bg); }
+/* 条目名 = 小胶囊（最多 3 个 + "+N"），别用一串逗号文本。
+   ★A9：**一行 + 溢出省略**（原来会换行 → 卡片高度飘）；外层 `.yws-card-n` 定死 20px。 */
+.yws-mnames { display: flex; flex-wrap: nowrap; gap: 6px; min-width: 0; overflow: hidden; }
+.yws-chip {
+    font-size: var(--yws-fs-xs); font-weight: 500; color: var(--yws-txt-2); font-style: normal;
+    background: var(--yws-raise); border: 1px solid var(--yws-line-2); border-radius: var(--yws-r-pill);
+    padding: 1px 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.yws-chip-more { color: var(--yws-txt-3); background: transparent; }
+
+/* ★★W73（作者 2026-09-27 原话:"那些没点过的 **左上角 有个印章一样的斜着的 NEW**，如果点击了 就没了"）
+   三个设计点：
+   ① **斜的印章质感**：rotate(-11deg) + 半透明底 + 细边框 + 加粗大字距（像盖上去的，不是普通徽标）；
+   ② **不压字**：印章绝对定位在左上角，同时给"未读卡"的头部行**预留 36px**（.yws-card:not(.yws-seen) .yws-card-h）
+      ⇒ 印章落在留出的空档里，**不覆盖标题、也不产生任何横向溢出**（卡片本来就有 overflow:hidden + position:relative）；
+      ★只影响"未读"的卡（读过的卡没印章、头部不留空 ⇒ 布局会随"读没读过"变一下，这正是要的提示感）。
+   ③ **永远不吃点击**：pointer-events:none ⇒ 点印章等于点卡片本身（"点哪儿都能开"的规矩不破）。
+   ★颜色走 --yws-accent-ink / --yws-accent-line（既有视觉语言；前者本来就在 _INK_TOKENS 里 ⇒ 自动吃对比兜底）。 */
+/* ★★W76（作者 2026-09-27 原话：这个 NEW 不要占据字的位置、**标题本身不用动**、像个章一样盖在上面、
+   **可以往外面一点、不要影响任何排版、可以冒出卡片的位置**、**然后这个用红色**）
+   ⇒ 三处调整：
+   ① **撤掉"头部预留 36px"那条** ⇒ 标题/排版**一个字都不动**（作者要的"不影响任何排版"）；
+   ② 印章改成**盖在卡片左上角、往外冒**（负偏移 + 给未读卡开 `overflow: visible`）—— 卡片原本 `overflow:hidden`，
+      不放开的话印章会被沿卡片圆角切掉；只对**未读卡**放开，读过的卡照旧裁（它们本来也没印章）；
+   ③ 颜色换成**红色家族** `--yws-seal`（见令牌区）—— `--yws-seal-ink` 已进 `_INK_TOKENS` ⇒ 极端主题下自动吃对比兜底。
+   ★`pointer-events:none` 保留：点印章等于点卡片本身。 */
+.yws-stamp-new {
+    position: absolute; left: -7px; top: -6px; z-index: 3;
+    padding: 1px 6px 0; font-size: 11px; font-weight: 800; letter-spacing: .14em; line-height: 1.5;
+    color: var(--yws-seal-ink);
+    border: 1.5px solid var(--yws-seal-line); border-radius: 3px;
+    background: color-mix(in srgb, var(--yws-seal) 16%, transparent);
+    transform: rotate(-13deg);
+    pointer-events: none; user-select: none;
+}
+.yws-card:not(.yws-seen) { overflow: visible; }   /* ★W76：让印章能冒出卡片外（只放开未读卡） */
+
+
+/* ---- ★★W59（作者 2026-09-27 反馈 · 第 1 组）+ ★★W64（同日上午加大）：**"这张我看过了" ⇒ 卡上的字降一档** ----
+   作者原话（第一版）："看过的卡片要**稍微暗一点点**（让用户知道"这张我看过了"）；
+   **作者更新后恢复原色**；**不要暗太多 不能让视觉变得不清晰**"。
+   作者原话（W64 加大）："怎么这个变暗一点都看不出来啊 —— **明显一点啊**"。
+   口径（三条硬要求逐条落地）：
+     · **看得出来**：字走 `--yws-txt-seen`(**72%**，W64 从 84% 加大) + **描边降一档**
+       （`--yws-line` → `--yws-line-2`，第二个通道）；量化读数见报告的四档对照；
+     · **不许不清晰**：这一档在 `_INK_TOKENS` 里，自动取色层按实际合成底兜到 **≥4.5**；
+       ★**不用 `opacity`**（那会把整卡连描边一起压暗、而且自动取色层救不回"被 opacity 压着的字"）；
+     · **作者更新后恢复原色**：判据是 `seenBefore()`（账里那一版 >= 现在这一版），
+       `preset-store.js` 的 `cardHtml` 在**未看**时**根本不挂** `.yws-seen` ⇒ 这里一条规则都不生效。
+   ★★★W64（2026-09-27 上午 · 作者："变暗一点都看不出来 明显一点啊"）：在"字"之外**加第二个通道 =
+     描边降一档**（`--yws-line` 15% → `--yws-line-2` 8%，见下面那条 `.yws-card.yws-seen`）——
+     只降字太依赖"旁边正好有张没看过的卡"作对照；描边一变，单看一张也认得出"这张我看过了"。
+   ★**仍然不动**：卡片底色（`--yws-surface`，官方卡那层暖金是 `background: linear-gradient(...)`
+     叠在底色上，动 `background` 会把官方那层一起抹掉 ⇒ 不碰）、`--yws-txt-3` 那两档
+     （「BY」/「已缝入」本来就是最低档，降无可降）、以及**展开体里的任何东西**
+     （展开时用户正在读它，压暗反而是"变坏"）。
+   ★**展开态豁免**：`.yws-card.yws-open` 那条规则（描边亮 + 影子抬）**排在前面**、特异性同为两 class，
+     靠"后写的赢"会输给我这两条 ⇒ 我的选择器写成 `.yws-seen:not(.yws-open)`（三 class），
+     **展开中的卡一律保持原样**（在读的东西不压暗）。
+   ★`.yws-mtype` 那一条要能盖过 `.yws-card-offi .yws-mtype`（官方卡的暖金胶囊）：本选择器
+     三个 class > 它两个 class ⇒ 天然赢，不需要 `!important`。
+   ★两条 `:hover` 必须**重声明**：本组选择器的特异性高于原有的 `.yws-by-n:hover` /
+     `.yws-mday.yws-daybtn:hover` ⇒ 不补的话"已看的卡点作者名/点日期不变色"，那是真回归。
+   ★放在 `.yws-chip-more` 之后、`.yws-card-n` 之前（与卡片的其它规则同区，改的人一眼看得见）。 */
+/* ★★W68-修正（2026-09-27 · W65 验证波实测抓到的**我自己的错**）：六条字色规则**必须**同样带
+   `:not(.yws-open)` —— 我当初只给"描边"那条加了，结果**展开中的已看卡字色仍被压暗**（四档实测 0/6
+   回到未看态），与我写在上面那句"**展开中的卡一律保持原样（在读的东西不压暗）**"**自相矛盾**
+   （W65 报告 §甲-两条红之一）。★语义依据：这条"已看"提示是给**扫列表**用的（收起态一眼认出来）；
+   一旦展开，用户正在读它 ⇒ 按 W59 原口径（"不动展开体里的任何东西"）就该恢复原色。 */
+/* ★★W73（作者 2026-09-27 改主意）：**"已看变暗"整段撤销** —— 原来的六条"已看卡字色降一档"规则
+   已按作者要求删除，改成左上角一个斜的 NEW 印章（样式见本文件 .yws-stamp-new 那一段）。
+   ★上面的历史注释（W59/W64/W71 那几段）保留只为说明来路，**别再把这些规则恢复回来**；
+     令牌 --yws-txt-seen / --yws-title-seen 也留着（空着不用、零开销），要回退只需加回这几条。 */
+/* —— ★★W64：第二个通道 —— **描边也退一档**（15% → 8%）。不碰 `background`（官方暖金靠它）。
+   ★`:not(.yws-open)` 是必须的（理由见上面那段注释）：展开中的卡不做任何"已看"处理。 */
+/* ★★W71：**第三个通道 = 卡片底色也退一档**（作者连着两轮说看不出区别 ⇒ 只靠字不管用了：
+   这两档主题里标题的对比度被「不许暗到看不清」的兜底层顶到 ~4.9，字再降也降不动）。
+   ★只写 `background-color`（**不用 `background` 简写**）—— 官方卡的暖金是 `background: linear-gradient(...), var(--yws-surface)`，
+     用简写会把那层渐变一起抹掉；写 background-color 只改底色、渐变照旧盖在上面。
+   `--yws-surface` 的浓度 6% → 折到 ~2.7%，整块卡片更贴近页面底色 = 一眼看出这张我看过了。 */
+/* ★★W73：这条（已看卡描边退一档 + 底色退一档）**也一并撤销**（原因同上：改成盖 NEW 印章）。 */
+/* —— 两条 hover 重声明（字面/颜色与原来逐字相同，只是把特异性提上来） */
+/* ★★W73：这两条 hover 重声明是当初为压过"已看卡"那六条规则才加的 —— 那六条撤了，它们也一起撤。 */
+
+/* ★A4（作者台账）：动作区 —— ★★W3：现在的落点是**卡片最下面那一行**（`.yws-card-n` 的最后一个孩子）
+   的右端（"右下角靠角落"），与左边的条目名胶囊**居中对齐**（`.yws-card-n` 是 `align-items: center`）。
+   作者原话（W3）："「★」与「缝入」不要放这么高 → 放右下角靠角落，与左边内容对齐整齐"。
+   ★A7：这张卡里**只有这一颗**「缝入」（展开态那颗已经删掉，见 JS 的 cardBodyHtml）。 */
+.yws-card-f { display: inline-flex; justify-content: flex-end; align-items: center; gap: 6px; margin-left: auto; min-width: 0; flex: 0 0 auto; }
+.yws-btn.yws-sew {
+    border-color: color-mix(in srgb, var(--yws-accent) 52%, transparent);
+    background: color-mix(in srgb, var(--yws-accent) 13%, transparent);
+    color: var(--yws-txt); font-weight: 600;
+}
+.yws-btn.yws-sew:hover { background: color-mix(in srgb, var(--yws-accent) 24%, transparent); border-color: var(--yws-accent); }
+.yws-card:hover .yws-btn.yws-sew { border-color: var(--yws-accent-line); }
+/* ★轮5 点赞（后端 §4.4 的 /like）：`♡ 12` → 点过 = 实心高亮 `♥ 12`。
+   ★颜色口径与全站一致：**文字用正文色**（`--yws-txt`），"点过"只靠主色的底 + 描边表达 ——
+     浅色主题上一样读得清（品牌色当文字会在浅底上掉到 1.4，audit-p12 P1-4 那一族就是这个坑）。 */
+.yws-btn.yws-like {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
+    padding: 1px 9px; min-height: 24px;
+    border-color: var(--yws-line); background: var(--yws-surface); color: var(--yws-txt-2);
+    font-variant-numeric: tabular-nums;
+}
+.yws-btn.yws-like:hover { border-color: var(--yws-line); background: var(--yws-raise); color: var(--yws-txt); }
+.yws-btn.yws-like .yws-heart { font-size: 13px; line-height: 1; }
+.yws-btn.yws-like .yws-like-n { font-size: var(--yws-fs-xs); }
+.yws-btn.yws-like.yws-liked {
+    color: var(--yws-txt); font-weight: 600;
+    border-color: color-mix(in srgb, var(--yws-bad) 55%, transparent);
+    background: color-mix(in srgb, var(--yws-bad) 14%, transparent);
+}
+/* 离线（连不上商店）→ 心形置灰；点了给人话 toast，绝不静默 */
+.yws-btn.yws-like.yws-like-off { opacity: .5; cursor: not-allowed; color: var(--yws-txt-3); }
+/* ---- ★★C5-②（2026-09-23 · 商店浏览器实测 §2.2 ⚠2）：卡片上那颗 ♡ 的**触摸目标** ----
+   改前读数（手机 390×844，`getBoundingClientRect()`）：`.yws-card [data-act="like"]` = **24 高 × 44 宽**
+   —— 评审 §2 条 3 的门槛是 **≥32**（"视觉小、热区大"是允许的手法，但改前**热区本身就是 24**）。
+   做法与评论区那颗 ♡（`.yws-btn.yws-cmheart::after`，AF3 已验收的那一手）逐字同一套：
+     · 可见胶囊**一个像素都不动**（仍 24 高）⇒ 卡片高度 /"张张等高"/ 那一行 ≤72px 的账全不受影响；
+     · 用一颗**不可见的**绝对定位伪元素把可点区补到 **≥34×32**（绝对定位 = 不参与 flex 行高、不撑盒）。
+   ★热区虚胖不虚：点在 `::after` 上命中的**就是这颗按钮**（`elementFromPoint` 给回按钮）。
+   ★美观关（铁律 §5）：只加一颗透明伪元素，颜色 / 字号 / 间距 / 盒高一个字没动 ⇒
+     既视感不变、深浅色对比度不变（正文对比度那几条读数本改动碰不到）。 */
+.yws-card-f .yws-btn.yws-like { position: relative; }
+.yws-card-f .yws-btn.yws-like::after {
+    content: ''; position: absolute; left: 50%; top: 50%; width: 100%; min-width: 34px; height: 32px;
+    transform: translate(-50%, -50%);
+}
+
+/* ================================================================ ★★AA-2（作者第六批反馈）：评论区
+   作者要的形态：卡片上「评论 N 条」+ 标题右边「收藏」+ 「缝入记录」旁边「收藏记录」；
+   点「评论」→ 卡片下方切成**评论列表 + 底部发布框**（再点一次回来）；每条「谁 · 什么时候」+ 可点赞；
+   默认按热度（可切按时间）；**好看 + 紧凑（手机优先、别留大片空白）**。
+   尺寸口径：这一块在**抽屉里**（PC 350px / 手机 390px 两档都窄），所以一切按"一列到底、不换行、不空转"来：
+   · 每条：头一行（谁 · 时间 · 我写的/删）+ 正文（Markdown）+ 一行小动作（♡ 数字）；
+   · 行距/内边距都取最小档（4~8px），条目之间用**一条细分隔线**而不是外边距 —— 不制造大片空白；
+   · 发布框固定在列表下面（不是浮动），发布后**只重绘这一块**。 */
+.yws-btn.yws-cmbtn {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
+    padding: 1px 9px; min-height: 24px;
+    border-color: var(--yws-line); background: var(--yws-surface); color: var(--yws-txt-2);
+    font-variant-numeric: tabular-nums;
+}
+.yws-btn.yws-cmbtn:hover { border-color: var(--yws-line); background: var(--yws-raise); color: var(--yws-txt); }
+.yws-btn.yws-cmbtn .yws-cmico { font-size: 12px; line-height: 1; }
+.yws-btn.yws-cmbtn .yws-cmn { font-size: var(--yws-fs-xs); }
+.yws-btn.yws-cmbtn.yws-cmon { color: var(--yws-txt); font-weight: 600; border-color: var(--yws-accent-line); background: color-mix(in srgb, var(--yws-accent) 14%, transparent); }
+/* ★★W86（作者拍板「许愿 / 交流」区）：**许愿卡上那颗"楼"按钮 = 回复数**（作者原话"回复数要显眼"）——
+   与 `.yws-cmbtn` 同一族（**同一个 data-act="comments"、同一套评论/盖楼链路**），只把它抬一档：
+   · 数字走 **tabular-nums + 大一号**（一行行扫过去数字对齐、一眼看得出哪条有人回）；
+   · 描边/字色用主色族（与"这条是楼"的强调档一致，颜色全走变量、零硬编码）； */
+.yws-btn.yws-cmbtn.yws-wishrep { border-color: var(--yws-accent-line); background: color-mix(in srgb, var(--yws-accent) 10%, transparent); color: var(--yws-txt); }
+.yws-btn.yws-cmbtn.yws-wishrep:hover { border-color: var(--yws-accent); background: color-mix(in srgb, var(--yws-accent) 20%, transparent); }
+.yws-btn.yws-cmbtn.yws-wishrep .yws-cmn { font-size: var(--yws-fs-sm); font-weight: 650; }
+/* ★★W86：许愿卡展开后**正文全文那一块**（铺在回复区正上方）—— 只给它"与下面评论区之间的间距"，
+   其余观感全部继承既有的 `.yws-card-body` + `.yws-pre.yws-full`（pre-wrap + break-word ⇒ 零横向溢出）。 */
+.yws-wishbody { margin-bottom: 8px; }
+/* ★★W87（作者 2026-10-04 · 派单①）：「许愿 / 交流」区里**固定横幅**的美化 —— 常驻（有卡没卡都画）。
+   全部走既有令牌（accent 族 + 既有圆角/字号刻度），零硬编码颜色；正文档与 `.yws-basehint` 同族
+   （--yws-txt-2，吃自动取色层的 ≥4.5 兜底）；图标与分区头同款（🌠）。
+   ★几何：flex + min-width:0 + overflow-wrap:anywhere ⇒ 长句在 390 手机档也不撑破（四档实测见 waveW87 报告）。 */
+.yws-wishbanner {
+    display: flex; align-items: flex-start; gap: 8px; min-width: 0;
+    margin: var(--yws-s2) 0 2px; padding: 8px 11px;
+    border: 1px solid color-mix(in srgb, var(--yws-accent) 32%, transparent);
+    border-radius: var(--yws-r-md);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--yws-accent) 12%, transparent), color-mix(in srgb, var(--yws-accent) 4%, transparent));
+    font-size: var(--yws-fs-sm); line-height: 1.6; color: var(--yws-txt-2);
+}
+/* ★★W119b（作者 2026-10-08 改口径：折叠那版被否掉、改「OK」）：横幅里那颗 OK 靠右、同一族 `.yws-btn.yws-mini`
+   （高度 ≥24 走既有 mini 按钮那一档，ui-audit 的门槛不变）。点过 OK ⇒ 整条**彻底不再画**（JS 侧 `wishBannerOff`）。 */
+.yws-wishbanner-ok { margin-left: auto; flex: 0 0 auto; align-self: center; }
+.yws-wishbanner-ic { flex: 0 0 auto; line-height: 1.5; }
+.yws-wishbanner-tx { min-width: 0; overflow-wrap: anywhere; }
+.yws-wishbanner-k { color: var(--yws-accent-ink); font-weight: 650; }
+/* 标题右边那颗「☆ 收藏 / ★ 已收藏」（★AA-2）—— 跟"有更新"那种徽标同一档大小，不抢标题的行高。
+   ★高度取 **24px**：ui-audit 的"每个按钮都点得到（高度 ≥24）"那条是**硬门槛**（第一版写 20px 被它抓了红灯）。 */
+.yws-btn.yws-favbtn {
+    flex: 0 0 auto; min-height: 24px; padding: 0 7px; font-size: var(--yws-fs-xs); font-weight: 600;
+    border-color: var(--yws-line-2); background: transparent; color: var(--yws-txt-2); white-space: nowrap;
+}
+.yws-btn.yws-favbtn:hover { border-color: var(--yws-line); background: var(--yws-surface); color: var(--yws-txt); }
+/* ★★W79（作者 2026-09-27 深夜 同意）：**星标那颗按钮"看得见不变、能点到的地方放大"**。
+   来路：作者让去掉「收藏」二字后，按钮只剩 **27×24（PC）/ 28×32（手机）**，比本项目"点着舒服"的口径（32）小一圈
+   （W75 实测 · `waveW75-NEW印章验证-20260927.md` §乙）。修法 = 本项目一直在用的手法（**视觉小、热区大**）：
+   给按钮挂一层**看不见的 `::after` 热区**（向外各扩 6/5px）—— 它属于按钮自身的绘制/命中区域 ⇒ 点在它上面
+   就等于点在按钮上（事件照样冒泡到按钮的 handler），**视觉零变化、也不改 DOM**。
+   ★注意：扩出去的范围要留在卡片内（星标在卡片右上角、卡片内边距约 10px ⇒ 扩 5px 仍在里面）。 */
+.yws-btn.yws-favbtn { position: relative; }
+.yws-btn.yws-favbtn::after { content: ''; position: absolute; inset: -6px -5px; }
+
+.yws-btn.yws-favbtn.yws-favon {
+    color: var(--yws-txt); border-color: var(--yws-gold-line);
+    background: color-mix(in srgb, var(--yws-offi) 14%, transparent);
+}
+/* —— 评论区整块（★★U5：照小红书的形态重排过一次，尺寸都是**评审定死的读数**，别随手改）——
+   行高预算（单行正文的一条 = ≤72px，评审 §2 条 4 的验收）：
+     条目内边距 8 + 头一行 16.8 + 正文(上边距 2 + 19) + 小动作行(上边距 2 + 20) = 67.8px
+   面板左右各让 6px：卡片自己有 10px 内边距，这里用 -4px 负外边距吃掉 4px ⇒ 正文两侧各留 6px。 */
+.yws-cm { margin-top: 10px; margin-left: -4px; margin-right: -4px; padding-top: 9px; border-top: 1px dashed var(--yws-line); cursor: default; min-width: 0; }
+.yws-cmhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--yws-fs-sm); min-width: 0; }
+.yws-cmhead b { color: var(--yws-txt); }
+.yws-cmsort { display: inline-flex; gap: 4px; margin-left: auto; }
+.yws-btn.yws-sortbtn { min-height: 22px; padding: 0 8px; font-size: var(--yws-fs-xs); }
+.yws-btn.yws-sortbtn.yws-sel { color: var(--yws-txt); font-weight: 600; border-color: var(--yws-accent-line); background: color-mix(in srgb, var(--yws-accent) 14%, transparent); }
+.yws-cmerr { margin-top: 6px; font-size: var(--yws-fs-sm); color: var(--yws-bad-ink); overflow-wrap: anywhere; }
+/* ★W：「评论 N 条」那颗计数（`repaintComments()` 就地点它，与 `.yws-cmcount` 一一对应） */
+.yws-cmcount { font-size: var(--yws-fs-xs); }
+/* ★W107-①：`.yws-cmempty` 那条规则整行删掉（占位句被作者点名删除 ⇒ 这个类是孤儿；JS 侧已 0 引用） */
+.yws-cmlist { margin-top: 6px; }
+/* ★★U5：一条评论 = **两列网格**（头像 24 + 内容）；一条回复 = 同结构的小一号（头像 18）。
+   ★头像**故意留在 `.yws-cmh` 外面**（`.yws-cmh` 的子元素顺序与改前逐字一致）—— 有套件按
+     `.yws-cmh span:nth-child(3)` 读"什么时候"，插一个 span 进去就会读到那个点。 */
+.yws-cmrow, .yws-cmrep {
+    display: grid; grid-template-columns: 24px minmax(0, 1fr); column-gap: 6px; align-items: start;
+    padding: 4px 0; border-bottom: 1px solid var(--yws-line-2); min-width: 0;
+}
+.yws-cmrep { grid-template-columns: 18px minmax(0, 1fr); column-gap: 5px; padding: 3px 0; border-bottom: 0; }
+.yws-cmrow:last-child { border-bottom: 0; }
+.yws-cmrow.yws-cmmine { border-left: 2px solid var(--yws-accent-line); padding-left: 5px; margin-left: -7px; }
+/* 头像：昵称首字 + 名字哈希出的底色（JS 里内联 `background:hsl(...)`）；白字在任何色相上都够对比 */
+/* ★★W42（作者 2026-09-26 · 派单⑥ · **真 BUG**）：**这颗头像必须是正圆** ——
+   作者原话："它根本不是一个圆 它是一个**扁扁的椭圆**…左边这个应该是个圆 然后里面有字"。
+   ★根因（复现读数，真界面）：这一族头像**同时被两种容器**装着 ——
+     · 评论行 / 回复行是 `display: grid`（`grid-template-columns: 24px|18px …`）⇒ 列宽固定，**不会变形**；
+     · 但「我的 → 🔌 连接」那一行**"别人看到的你"小样**（`.yws-mypv`）是 `inline-flex` ⇒
+       头像成了**可收缩的 flex 项**（`flex-shrink` 默认 1），而它**没有** `flex: none` ——
+       于是那一行里的名字一长，收缩的账全落在这颗圆上：宽度被压、高度不动 ⇒ **扁椭圆**，
+       而且 `overflow:hidden` 把圈里那个字裁得只剩一条（作者说的"只显示一个大字"就是它）。
+   ★实测（改前 · PC 1470×905 · 我的页）：`宽 3 × 高 18`（**宽高比 0.167**）、`scrollWidth 6 > clientWidth 3`
+     ⇒ **字被裁**；手机档 `宽 5 × 高 18`（0.278）。改后见报告 §②（四档：宽=高、字完整可见）。
+   ★修法 = **一行 `flex: none`**：让它在任何 flex 容器里都**不参与收缩**（宽度就是声明的那 24/18px），
+     与它在 grid 里的表现**完全一致**（两处同一个形状，这才是"同一套头像"）。
+   ★为什么不改 `.yws-mypv` 或给名字加宽度：那都只是"这一处的补丁"——
+     头像被挤扁这件事的**根**是"它自己可收缩"；在根上修一次，任何将来新加的 flex 容器都受益。 */
+.yws-cmav {
+    width: 24px; height: 24px; border-radius: 50%; align-self: start; overflow: hidden;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: var(--yws-fs-sm); font-weight: 650; line-height: 1; color: #fff;
+    background: var(--yws-raise); user-select: none;
+    flex: none;                     /* ★★W42：正圆的唯一保证（见上） */
+}
+.yws-cmrep .yws-cmav, .yws-cmav.yws-cmav-s { width: 18px; height: 18px; font-size: 10px; }
+.yws-cmav.yws-cmav-gone { background: transparent !important; border: 1px dashed var(--yws-line); }
+.yws-cmmain { min-width: 0; }
+.yws-cmh { display: flex; align-items: baseline; gap: 5px; font-size: var(--yws-fs-sm); line-height: 1.4; color: var(--yws-txt-2); min-width: 0; flex-wrap: nowrap; }
+.yws-cmwho { color: var(--yws-txt); font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 42%; }
+.yws-cmdot { opacity: .6; }
+/* ★★BJ-E12/E14（作者第十五批 · 2026-09-22）：`.yws-cmtag`（"我写的"）与 `.yws-cmlz`（"楼主"）**两条规则删掉** ——
+   作者原话："**自己发的评论不显示「我写的」**"、"**删掉「楼主」这个称呼**（过时）"。
+   JS 里那两处渲染也一起删干净了（`lzHtml()` 整个函数 + 两处 `<span class="yws-cmtag">`），
+   留着规则就是孤儿（class-check 只查 JS→CSS 一个方向，所以这里必须自己记得删）。
+   ★"这是我的评论"这件事照旧看得出来：整行有 `.yws-cmmine` 的左边线 + 浅底（那条规则没动）。 */
+/* 「回复 @某某」：小一号、次要色，永远不换行（挤了就省略昵称，别把这一行撑高）
+   ★★U12（§BO-4）：这一颗现在**只剩"待确认 / 发送失败"那两档**在用（正常那一行把 @某某 **并进按钮**了，
+   见下面 `.yws-cmreply .yws-cmat-n`）—— 规则留着（那两档照旧要它）。 */
+.yws-cmat { font-size: var(--yws-fs-xs); color: var(--yws-txt-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+/* ★★U12（§BO-4）：正常那一行的「回复 @某某」——`@某某` 那个名字由 JS 写**被回复人的颜色**（内联色值），
+   这里只管三件事：①挤了就省略、别把这一行撑高；②**不缩字号**（它是按钮的一部分，11px 在手机上太小）；
+   ③没拿到颜色时的**兜底色**（次要色，在 `_INK_TOKENS` 名单里 ⇒ 自动取色层会兜到 ≥4.5）。 */
+.yws-cmreply .yws-cmat-n { color: var(--yws-txt-2); font-weight: 600; display: inline-block; max-width: 6em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+/* 右侧那颗 ♡（h24，数字 11px）—— `margin-left:auto` 顶到最右 */
+.yws-btn.yws-cmheart {
+    position: relative;                 /* ★AF3：给下面那颗"不可见热区"当定位基准（本身不带偏移 = 零布局影响） */
+    margin-left: auto; flex: 0 0 auto; min-height: 24px; height: 24px; padding: 0 8px;
+    font-size: var(--yws-fs-xs); border-color: var(--yws-line-2); background: transparent; color: var(--yws-txt-2);
+    font-variant-numeric: tabular-nums;
+}
+/* ★★AF3（浏览器验收红 2：两条评审要求相撞 → 两全）：这颗 ♡ 走"**视觉小、热区大**"——
+   可见胶囊仍是 **24px** 高（评审 §2 条 4 的排版规格写着"♡ 按钮 h24"，也是"单行正文那一行 ≤72px"的前提），
+   但**可点热区**用一颗**不可见的**绝对定位伪元素补到 **≥32×32**（评审 §2 条 3 的触摸下限照旧满足）。
+   ★为什么用绝对定位，而不是 padding + 负 margin：伪元素**不参与 flex 行高、不改按钮盒、不撑那一行**
+     ⇒ 零布局影响；padding 会把 24px 的盒撑成 32px，那条"单行正文 ≤72px"就再也过不了了。
+   ★热区虚胖不虚：`::after` 是按钮自己的盒子，点在它上面命中的**就是这颗按钮**（`elementFromPoint` 给回按钮）。 */
+.yws-btn.yws-cmheart::after {
+    content: ''; position: absolute; left: 50%; top: 50%; width: 100%; min-width: 34px; height: 32px;
+    transform: translate(-50%, -50%);
+}
+.yws-btn.yws-cmheart:hover { border-color: var(--yws-line); background: var(--yws-surface); color: var(--yws-txt); }
+.yws-btn.yws-cmheart.yws-liked { color: var(--yws-txt); font-weight: 600; border-color: color-mix(in srgb, var(--yws-bad) 55%, transparent); background: color-mix(in srgb, var(--yws-bad) 14%, transparent); }
+/* ★★W（评论"发出即所见"）：待确认 / 发送失败那两档的**状态字 + 两颗按钮**。
+   `yws-cmstate` = "发送中…"（暗一档）；失败档用 `yws-cmfail`（红系，与 `.yws-warn` 同一族观感）+ 那两颗按钮排在右边。 */
+.yws-cmstate { color: var(--yws-txt-3); }
+.yws-cmstate.yws-cmfail { color: var(--yws-bad-ink); font-weight: 600; }
+/* 失败那条这一行会挤（状态字 + 两颗按钮）→ 允许换行，按钮自己靠右 */
+.yws-cmpendrow .yws-cmh { flex-wrap: wrap; row-gap: 4px; }
+.yws-cmpendrow .yws-cmh .yws-btn { min-height: 20px; padding: 0 6px; font-size: var(--yws-fs-xs); }
+/* 失败那条整行再给一点底色（一眼看出"这条还没发出去"） */
+.yws-cmfailrow { background: color-mix(in srgb, var(--yws-bad) 8%, transparent); border-radius: var(--yws-r-sm); padding-right: 7px; }
+/* 列表 + 空态 + 翻页这一段（就地重画的目标）★U5 起里面**有输入控件**了（楼里那个回复小框）
+   ⇒ 重绘前必须记焦点、换完还回去（见 repaintComments / repaintThread）。 */
+.yws-cmbody { min-width: 0; }
+/* ★AF3（红 2）：正文上边距 2 → 1（那条 ≤72px 的账里省下的第二笔；视觉上头部行盒 24px 本身就带
+   ~4px 行距，正文并不会贴到昵称上）。 */
+.yws-cmb { margin-top: 1px; font-size: var(--yws-fs-md); color: var(--yws-txt); line-height: 1.45; overflow-wrap: anywhere; }
+.yws-cmb p, .yws-cmb .yws-mdp { margin: 0; }
+.yws-cmb .yws-mdl { margin: 2px 0 0; padding-left: 16px; }
+/* 小动作那一行（回复 / 展开 N 条回复 / 删）——这一行**预留高度** 20 → 17px，不再往下挤
+   ★AF3（红 2 的第三笔）：一行 ≤72px 的预算里，能省的只有"预留"而不"显示"的部分 ——
+     条目间距 8px（评审点名的）、头行 24px（♡ 的规格）、正文 13px/1.45（评审给的是 1.5）都不动，
+     于是省这里：正文上边距 2→1、这一行上边距 2→1、这一行预留高 20→17（它里面最高的内容只有 14.3px）。
+     文字动作的**可点热区不受影响**（≥24×24 由 `.yws-cmlink::after` 那颗不可见伪元素给足）。 */
+.yws-cmf { margin-top: 1px; display: flex; align-items: center; gap: 12px; min-height: 17px; min-width: 0; }
+/* ★★BJ-E13/E17（作者第十五批 · 2026-09-22，§BJ-E）：「回复」与「删」**挪到"多少小时前"的右边** ——
+   这两颗现在长在**头一行** `.yws-cmh` 里（`who · 时间 · 回复 · 删 · 回复@某人 · ♡`），
+   `.yws-cmf` 那一行只剩「展开 N 条回复 / 收起」。
+   口径：**不许把这一行撑高、也不许横向溢出** ——
+     · 它们不参与收缩（`flex: 0 0 auto`：两颗一共才 ~37px，比改前拿掉的「楼主 + 我写的」还窄）；
+     · 盒高由 `.yws-cmlink` 的既有口径给（20px），落在头一行那 24px（♡ 撑出来的）里，行高不变；
+     · 可点热区照旧是 `.yws-cmlink::after` 那颗 ≥24×24 的不可见伪元素。
+   ★「删」**不再 `margin-left: auto`**（改前它顶在小动作那一行的最右端；现在它在时间旁边，
+     行尾是那颗自带 `margin-left: auto` 的 ♡ —— 两个 auto 会把这一行扯成两半，所以这条一起去掉）。 */
+.yws-cmh > .yws-cmreply, .yws-cmh > .yws-cmdel { flex: 0 0 auto; }
+/* ★★U12（§BO-4）：那颗「回复 @某某」比原来的「回复」两个字长 ⇒ 让它**可收缩 + 自己省略**
+   （`.yws-cmh` 是 `nowrap`：不给收缩余地，长昵称会把这行挤出去）。
+   「删」仍是 `flex: 0 0 auto`（两个字，不许被压）。 */
+.yws-cmh > .yws-cmreply { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yws-cmh > .yws-cmreply, .yws-cmh > .yws-cmdel { min-height: 17px; }
+/* —— 「回复」「展开 N 条回复」「收起」这些**文字动作**（不是胶囊按钮：11px、无边框，点得到就行） */
+.yws-cmlink {
+    position: relative;                 /* ★AF3：给下面那颗"不可见热区"当定位基准（不带偏移 ⇒ 不动一格） */
+    border: 0; background: transparent; cursor: pointer; font-family: inherit; padding: 0 1px;
+    min-height: 20px; font-size: var(--yws-fs-xs); color: var(--yws-txt-2); line-height: 1.3;
+}
+/* ★AF3（同一条红线）：这族 11px 文字动作原来只有 20px 高（手机档手指按不准）——
+   用**不可见的绝对定位伪元素**把可点热区补到 **≥24×24**，盒子本身一个字不动
+   （字号/行高/盒高/间距/位置全部照旧 ⇒ 小动作那一行只有 17px，不会被它撑回去）。 */
+.yws-cmlink::after {
+    content: ''; position: absolute; left: 50%; top: 50%; width: 100%; min-width: 24px; height: 24px;
+    transform: translate(-50%, -50%);
+}
+/* ★AF3：小动作那一行里那颗「回复 / 删」的**盒高**跟着那一行一起收到 17（预留高才守得住 ≤72px）。
+   只收"盒子"、不收 glyph（11px 文字本身没变），可点热区仍是上面那颗 ≥24 的伪元素。 */
+.yws-cmf > .yws-cmlink:not(.yws-cmmore) { min-height: 17px; }
+.yws-cmlink:hover { color: var(--yws-txt); text-decoration: underline; }
+/* ★★BM-D / §BJ-G 23（作者第十五批 · 2026-09-22）：**「展开更多」/「收起」照小红书重做** ——
+   作者原话："按钮**样式照小红书**（作者嫌现在的按钮丑）"、"小字、次要色、不是大按钮"。
+   改前它是 `.yws-cmfold`：h24 圆角**胶囊**（有边框 + 有底色 + accent 蓝紫 + 橘色字重 600）——
+   那一颗在全篇里最显眼，而它只是个小动作。现在：
+     · **11px 小字**（与「回复」「删」同一档 `--yws-fs-xs`）、**次要色** `--yws-txt-2`、**零边框零底色零内边距**；
+     · 只比一行正文多留 1px 上边距（`.yws-cmmore` 在楼里紧跟着第 3 条回复，不占独立一行的高度）；
+     · hover 才变正文色 + 下划线（与 `.yws-cmlink:hover` 同一套）；
+     · **可点热区照旧 ≥24×24**（`.yws-cmlink::after` 那颗不可见伪元素，没动）。
+   ★对比度：`--yws-txt-2` 在 `_INK_TOKENS` 名单里 ⇒ `applyAutoInk` 会按当前主题底兜底到 ≥4.5（深/浅两档都量过）。 */
+.yws-cmlink.yws-cmmore { color: var(--yws-txt-2); font-weight: 400; }
+.yws-cmthread > .yws-cmlink.yws-cmmore { display: inline-flex; align-items: center; min-height: 20px; margin: 1px 0 1px; padding: 0; }
+.yws-cmf > .yws-cmlink.yws-cmmore { min-height: 20px; }
+/* ★★BJ-E13/E17（作者第十五批 · 2026-09-22）：「删」那颗**不再 `margin-left: auto`** ——
+   改前它顶在**小动作那一行**的最右端（`::after` 那颗热区还因此向右越界 5.5px，见下面那条注释）；
+   现在它在**头一行**、"多少小时前"的右边（作者："「删」字放到『一个小时前』旁边"）。
+   行尾那颗是自带宽 `margin-left: auto` 的 ♡ —— 这一行只能有**一个** auto 边距，所以这里必须让位。 */
+/* ★★AU6 · 真红（AS2 §7 真红 1）：那颗 `::after` 是**居中放大**的，而「删」只有 **13px** 宽、
+   以前又靠 `margin-left: auto` 顶在那行**最右端** ⇒ 伪元素向左右各外扩 5.5px，**右边那 5.5px 超出了本行**
+   ⇒ `.yws-cmf/.yws-cmmain/.yws-cmrow/.yws-cmlist/.yws-cmbody` 的 `scrollWidth - clientWidth` 全是 **5px**
+   （肉眼看不见，但它会污染一切"零横向溢出"的读数：`as2-f3` 实测「评论 5」）。
+   修法（**只改锚点，不改尺寸**）：这一颗的伪元素改成**右边贴住按钮右缘**（`right: 0; left: auto`）——
+   于是它只能**向左**长（长进本行里面），右缘与按钮右缘**逐像素对齐** ⇒ 一个像素都不会越出去。
+   ★★BJ-E17 之后它换了行（头一行、时间右边）但**这条修法照旧要留**：
+   它在头一行里左边还有「回复」，可它自己仍然只有 13px 宽 —— 居中放大在**任何**位置上都会左右各外扩 5.5px，
+   贴右锚点这一招与"它在哪一行"无关，是这颗按钮的固有属性（换了行也不许把 5px 溢出带回去）。 */
+.yws-cmdel::after { left: auto; right: 0; transform: translateY(-50%); }
+/* —— 楼中楼：**缩进 16px + 左侧 2px 竖线**（两级封顶：回复的回复也在这同一楼里，靠「回复 @某人」）—— */
+.yws-cmthread {
+    margin: 3px 0 0 16px; padding-left: 6px; min-width: 0;
+    border-left: 2px solid color-mix(in srgb, var(--yws-txt) 30%, transparent);
+}
+.yws-cmtdim { font-size: var(--yws-fs-xs); color: var(--yws-txt-3); padding: 3px 0; }
+.yws-cmerr2 { font-size: var(--yws-fs-xs); color: var(--yws-bad-ink); padding: 3px 0; overflow-wrap: anywhere; }
+/* ★★BM-D（作者第十五批）：楼末尾那颗「收起」**不再是胶囊** —— 与「展开更多」同一套
+   （`.yws-cmlink.yws-cmmore` 那条：11px 小字 + 次要色 + 零边框零底色，见上面那段说明）。
+   这里只补它"站在楼末尾"时那一点点上边距（与"再看 N 条"贴在一起时不挤）。 */
+.yws-cmthread > .yws-cmlink.yws-cmmore + .yws-cmlink.yws-cmmore { margin-left: 8px; }
+/* ★★BM-E / §BJ-E15/16（U9 班）：**回复通知跳过去时那一下高亮**（作者："滚到它 + 高亮一下"）——
+   一块静态底色块（**不做动画**：红线是"不许长动画"，这里只是加一个类、1.8 秒后摘掉）。 */
+.yws-cmhit {
+    background: var(--yws-accent-bg);
+    box-shadow: inset 0 0 0 1px var(--yws-accent-line);
+    border-radius: var(--yws-r-sm);
+}
+/* —— 墓碑（有回复的父评论被删了）：只留一句灰字，但它的「N 条回复」照旧在下面 —— */
+.yws-cmdead { background: transparent; }
+.yws-cmdead .yws-cmh { min-height: 18px; }
+.yws-cmdead-t { font-size: var(--yws-fs-xs); color: var(--yws-txt-3); font-style: italic; }
+/* —— 就地摊开的「回复」小框（不跳页、不占满屏；带"回复 @某某"提示与取消）—— */
+.yws-cmrbox { margin-top: 5px; padding: 6px 7px; border: 1px solid var(--yws-line-2); border-radius: var(--yws-r-sm); background: var(--yws-bg); }
+.yws-cmrwho { font-size: var(--yws-fs-xs); color: var(--yws-txt-3); margin-bottom: 4px; }
+.yws-cmrtx { width: 100%; min-height: 44px; max-height: 140px; font-size: var(--yws-fs-sm); }
+.yws-cmrfoot { display: flex; align-items: center; gap: 10px; margin-top: 5px; }
+.yws-btn.yws-cmrsend { min-height: 26px; padding: 2px 12px; font-size: var(--yws-fs-xs); }
+.yws-cmpage { display: flex; align-items: center; gap: 8px; margin-top: 7px; font-size: var(--yws-fs-xs); }
+/* —— 发布框（列表下面，不浮动；手机上一按就focus、不遮内容）—— */
+.yws-cmbox { margin-top: 9px; }
+.yws-cmta { width: 100%; min-height: 62px; max-height: 180px; font-size: var(--yws-fs-sm); }
+.yws-cmfoot { display: flex; align-items: center; gap: 6px; margin-top: 6px; min-width: 0; }
+.yws-emorow { display: flex; flex-wrap: wrap; gap: 3px; flex: 1 1 auto; min-width: 0; }
+.yws-emo {
+    border: 1px solid transparent; background: transparent; cursor: pointer; line-height: 1;
+    font-size: 15px; padding: 1px 2px; border-radius: 6px; font-family: inherit;
+    min-height: 24px; min-width: 24px;      /* ★ui-audit 的"点得到"硬门槛（高度 ≥24 / 宽度 ≥20） */
+}
+.yws-emo:hover { border-color: var(--yws-line); background: var(--yws-surface); }
+.yws-cmsend { flex: 0 0 auto; }
+.yws-cmnote { margin-top: 5px; font-size: var(--yws-fs-xs); overflow-wrap: anywhere; }
+.yws-cmnote > .yws-cmnote { margin-top: 2px; }
+/* 收藏记录页里那一行（复用 .yws-myrow，只补一条金色左条，跟"缝入记录"一眼分开） */
+.yws-favrow { border-left: 3px solid var(--yws-offi); }
+
+/* ---------------------------------------------------------------- 4b. ★展开态（就地只读预览，§17 B） */
+.yws-card-body {
+    margin-top: 11px; padding-top: 10px; border-top: 1px dashed var(--yws-line);
+    cursor: default; min-width: 0;
+}
+.yws-diffstat { font-size: var(--yws-fs-xs); color: var(--yws-txt-2); margin-bottom: 6px; overflow-wrap: anywhere; }
+.yws-rows { display: block; min-width: 0; }
+/* 一行一条（行尾折角；**点整行** = 摊开这条的差异） */
+.yws-prow2 {
+    border: 1px solid var(--yws-line-2); border-radius: var(--yws-r-md);
+    background: var(--yws-bg); margin-bottom: 6px; padding: 7px 9px; min-width: 0;
+    transition: border-color var(--yws-t) var(--yws-ease), background var(--yws-t) var(--yws-ease);
+}
+.yws-prow2:hover { border-color: var(--yws-line); background: var(--yws-surface); }
+.yws-prow2.yws-open { border-color: var(--yws-accent-line); background: var(--yws-surface); }
+.yws-prow2-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; font-size: var(--yws-fs-sm); }
+.yws-pname2 { font-weight: 600; font-size: var(--yws-fs-md); color: var(--yws-txt); overflow-wrap: anywhere; min-width: 0; flex: 0 1 auto; }
+.yws-verdict { font-size: var(--yws-fs-xs); color: var(--yws-txt-2); overflow-wrap: anywhere; min-width: 0; flex: 1 1 90px; }
+.yws-verdict.yws-same { color: var(--yws-txt-2); }
+/* 折角（§17 B6：把"看这条的正文（N 字）"那行文字删掉，换成行尾一个符号）*/
+.yws-caret {
+    flex: 0 0 auto; width: 16px; height: 16px; margin-left: auto;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--yws-txt-3); transition: transform var(--yws-t) var(--yws-ease), color var(--yws-t) var(--yws-ease);
+}
+.yws-caret::before {
+    content: ""; width: 6px; height: 6px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor;
+    transform: rotate(45deg) translate(-1px, -1px); border-radius: 1px;
+}
+.yws-prow2:hover .yws-caret { color: var(--yws-txt); }
+.yws-prow2.yws-open .yws-caret { transform: rotate(180deg); }
+.yws-rowbody { margin-top: 7px; min-width: 0; }
+/* 红/蓝差异：一处 = 上下两组（旧 / 新），**红 = 你手上的原文 / 蓝 = 这条带来的新文** */
+.yws-diffbox { min-width: 0; }
+.yws-dlb { border: 1px solid var(--yws-line-2); border-radius: var(--yws-r-sm); overflow: hidden; margin-bottom: 6px; }
+.yws-dl { display: flex; align-items: flex-start; gap: 7px; padding: 5px 8px; min-width: 0; }
+.yws-dl-old { background: color-mix(in srgb, var(--yws-dl-old) 15%, transparent); border-left: 3px solid var(--yws-dl-old); }
+.yws-dl-new { background: color-mix(in srgb, var(--yws-dl-add) 15%, transparent); border-left: 3px solid var(--yws-dl-add); }
+.yws-dl-k { flex: 0 0 auto; font-size: 10px; font-weight: 700; color: var(--yws-txt); border: 1px solid var(--yws-line); border-radius: 4px; padding: 0 4px; line-height: 1.6; background: var(--yws-surface); }
+.yws-dl-t { font-size: var(--yws-fs-sm); line-height: 1.6; color: var(--yws-txt); white-space: pre-wrap; word-break: break-word; min-width: 0; }
+/* 单侧改动（新增/删除）：另一侧不留空白格，写一句"原来没有 / 会被去掉"（弱色，一眼知道这是说明不是正文） */
+.yws-dl-t.yws-dl-none { color: var(--yws-txt-2); font-style: normal; }
+.yws-dlmore { font-size: var(--yws-fs-xs); color: var(--yws-txt-3); margin: 2px 0 6px; }
+/* 展开态底部：一个「去缝」（§17 B8：只留这一颗短按钮）+ 一句"这是只读预览" */
+.yws-card-bf { display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2); margin-top: var(--yws-s2); }
+.yws-card-bf .yws-dim { flex: 1 1 100%; font-size: var(--yws-fs-xs); color: var(--yws-txt-3); }
+
+/* 兼容：老的选择器（老预览页/待审页共用，css-check 守着，别删） */
+.yws-mlist { display: block; }
+/* ★★★W35-P9（作者点名"待审界面特别特别丑"的另一半：**方框套方框**）：
+   展开一条待审时，同屏有 **6 层看得见的 1px 描边盒**（读数：`.yws-dlb` → `.yws-prow2` →
+   `.yws-rvdiff` → `.yws-rvrow` → `.yws-wstep` → `.yws-box-main`）。其中 **`.yws-prow2` 的底色
+   与它父层 `.yws-rvdiff` 完全相同**（都是 `--yws-bg`）⇒ 那一层**只剩一圈描边能看见**、
+   零分组信息（"哪些是一组"已经由上面那行 `.yws-diffstat` 条目名 + 里面的 `.yws-dlb` 旧/新对说清了）。
+   ⇒ 去掉它的描边/圆角/底色 ⇒ 实测 **6 → 5 层**（退回 ⇒ 逐字回到 6，假证见报告 §3）。
+   ★作用域只到**待审页的展开体**：商店卡片展开态与上传向导里的 `.yws-prow2` 一个像素都不动。 */
+.yws-rvrow .yws-prow2 { border-color: transparent; border-radius: 0; background: transparent; }
+.yws-rvrow .yws-prow2:hover, .yws-rvrow .yws-prow2.yws-open { background: transparent; }
+.yws-view { display: block; }
+
+/* ---------------------------------------------------------------- 4c. ★特异度补丁（真量出来的）
+   实测（`e2e/tmp/probe-css-weight.js`）：用户的自定义 CSS 里有一条**全局**规则
+       body *:not(.fa):not(.fas):not(.fab):not(.fa-solid):not(.fa-brands):not(.fa-regular) {
+           font-family: "Noto Serif CJK" !important; font-weight: 600 !important; }
+   —— `!important` + 特异度 0,6,1：于是商店里**所有**字都被按成 600，
+   标题写 700、顶栏写 500/700 也照样渲染成 600（这正是作者说的"标题还是不显眼"的一半原因，另一半是字号）。
+   ★只靠 ID 提特异度**压不住 `!important`**（第一版就是这么写的，实测计算值仍是 600）→
+   这几条**必须**用 `!important` 才能拿到我们要的层级（字重是纯视觉意图，不影响任何行为）。 */
+#kimi_presetstore_body .yws-card-t, #ywpu-view-store .yws-card-t, #yws-dlg-host .yws-card-t { font-weight: 700 !important; }
+/* 顶栏未选中的 = 常规字重、选中的那颗加粗（四颗的"同一套视觉"里唯一的差别，§21 B6） */
+#kimi_presetstore_body .yws-topbar .yws-btn.yws-nav, #ywpu-view-store .yws-topbar .yws-btn.yws-nav { font-weight: 500 !important; }
+#kimi_presetstore_body .yws-topbar .yws-btn.yws-nav.yws-on, #ywpu-view-store .yws-topbar .yws-btn.yws-nav.yws-on { font-weight: 700 !important; }
+/* 署名与版权提醒里的强调（同一原因）；★T8：署名提到 **750**（作者要"作者名要显眼"，与 `.yws-by-n` 那条同步） */
+#kimi_presetstore_body .yws-by-n, #ywpu-view-store .yws-by-n { font-weight: 750 !important; }
+#kimi_presetstore_body .yws-rights-tx b, #ywpu-view-store .yws-rights-tx b, #yws-dlg-host .yws-rights-tx b { font-weight: 700 !important; }
+
+/* ---------------------------------------------------------------- 5. 横幅 / 提示条 */
+.yws-banner {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    border: 1px solid var(--yws-accent-line); border-radius: var(--yws-r-lg);
+    padding: 10px 12px; margin-bottom: 10px;
+    background: linear-gradient(180deg, var(--yws-accent-bg), transparent 80%), var(--yws-surface);
+    box-shadow: var(--yws-shadow-1);
+}
+.yws-banner-txt { font-size: var(--yws-fs-md); flex: 1 1 auto; min-width: 0; color: var(--yws-txt); }
+/* ★AU-①（作者第九批 §AQ1 定稿 · 横幅那张表的"颜色"栏）：**有官方更新时走金色**（官方优先）。
+   颜色全部取自既有令牌，**一个色值都不硬编码**：
+     · 边 = `--yws-gold-line`、底 = `--yws-gold-bg`（= 官方暖金按主题色混出来的，深/浅主题各自成立）
+     · 文字 = `--yws-gold-ink`
+   ★为什么这样就"主题自适应"：`--yws-gold-ink` 在 `preset-store.js` 的 `_INK_TOKENS` 名单里 ⇒
+     `paint()` 末尾那层 `applyAutoInk()`（横幅也单独过一次，见 paint 里那条注释）会量它压在当前主题底上的
+     **实际对比度**，不够 4.5 就保色相地朝白/黑推 —— 浅色主题下同样读得清（不达标的主题会被兜底，不是"看起来还行"）。
+   只有用户条目时**不加这个类** ⇒ 走的还是原来那条 `.yws-banner`（普通样式），一个字节没变。 */
+.yws-banner.yws-banner-offi {
+    border-color: var(--yws-gold-line);
+    background: linear-gradient(180deg, var(--yws-gold-bg), transparent 80%), var(--yws-surface);
+}
+.yws-banner.yws-banner-offi .yws-banner-txt { color: var(--yws-gold-ink); font-weight: 650; }
+/* ★★§BJ-E15（作者第十五批 · 2026-09-22）：**回复通知那条横幅**（`#yws-repbanner`）——
+   作者原话："顶部提示『你收到 N 条回复，要去看看吗』"。
+   ★口径两条（都是派单钉的）：① 与既有的"你缝过的条目更新了"那条（`.yws-note`）**并存不互相覆盖**；
+   ② **样式同族** —— 直接复用 `.yws-banner` 本体（边/底/圆角/内边距/阴影/字重全一样），
+      只加一个**色档类**：走主色（accent）那一族，与"官方更新"那条金色横幅一眼分得开；
+   ③ 两条同时存在时**排成一列**（DOM 上回复通知插在 `#yws-banner` 的**正后面**，见 `repBannerTick()`）
+      —— `.yws-banner` 自己的 `margin-bottom: 10px` 就是那一列的间距，不额外加规则。
+   颜色全部走既有令牌 ⇒ `_INK_TOKENS` 里那层"自动取色 + 对比兜底"照旧管它（深浅主题都 ≥4.5）。 */
+.yws-banner.yws-banner-rep { border-color: var(--yws-accent-line); }
+.yws-banner.yws-banner-rep .yws-banner-txt { color: var(--yws-accent-ink); font-weight: 650; }
+.yws-note {
+    border: 1px solid var(--yws-gold-line); border-radius: var(--yws-r-lg);
+    padding: 10px 12px; margin-bottom: 10px;
+    background: var(--yws-warn-bg);
+    font-size: var(--yws-fs-sm); color: var(--yws-txt); display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2);
+}
+.yws-note-line { display: block; flex: 1 1 100%; }
+/* ★P11（审查 D1）：列表这次没拉到 → 界面如实标注"这是上次的数据"（绝不假装它是空商店 / 更不宣布"被撤回了"） */
+.yws-stale {
+    border: 1px solid var(--yws-line); border-left: 3px solid var(--yws-warn);
+    border-radius: var(--yws-r-sm); background: var(--yws-warn-bg);
+    padding: 8px 10px; margin-bottom: 10px;
+    font-size: var(--yws-fs-sm); color: var(--yws-txt); line-height: 1.6;
+}
+/* 凭证区的人话说明（§17 E16） */
+.yws-crednote {
+    border: 1px solid var(--yws-line); border-left: 3px solid var(--yws-accent);
+    border-radius: var(--yws-r-sm); background: var(--yws-bg);
+    padding: 8px 10px; margin-top: var(--yws-s2);
+    font-size: var(--yws-fs-sm); color: var(--yws-txt); line-height: 1.6;
+}
+.yws-keyhint { font-size: var(--yws-fs-sm); color: var(--yws-txt-2); }
+/* ★P11（审查 A3/A4）：密钥与凭证的**风险提示**（"这段等于钥匙，别贴给别人"）——
+   与版权提醒同一族观感（暖金实边 + 左条 + 主文字色），但更紧凑：它是常驻说明，不是拦截。 */
+.yws-risknote {
+    border: 1px solid var(--yws-gold-line); border-left: 3px solid var(--yws-offi);
+    border-radius: var(--yws-r-sm); background: var(--yws-warn-bg);
+    padding: 8px 10px; margin-top: var(--yws-s2);
+    font-size: var(--yws-fs-sm); color: var(--yws-txt); line-height: 1.6;
+}
+.yws-risknote b { color: var(--yws-txt); font-weight: 650; }
+
+/* ---------------------------------------------------------------- 6. 老预览页（.yws-mhead 这一族：留着给老类名，
+   现在只有"待审/我的"页复用 .yws-card-w 与 .yws-pre） */
+.yws-mhead {
+    border: 1px solid var(--yws-line); border-radius: var(--yws-r-lg);
+    padding: var(--yws-s3); margin-bottom: 10px;
+    background: var(--yws-surface); box-shadow: var(--yws-shadow-1);
+}
+.yws-mtitle { font-size: var(--yws-fs-title); font-weight: 700; display: flex; flex-wrap: wrap; gap: var(--yws-s2); align-items: center; line-height: 1.4; overflow-wrap: anywhere; }
+.yws-mtitle .yws-dim { font-weight: 400; }
+.yws-mwhy { font-size: var(--yws-fs-md); line-height: 1.6; color: var(--yws-txt-2); margin: 6px 0 0; overflow-wrap: anywhere; }
+.yws-mhead .yws-dim { display: block; margin-top: 6px; }
+.yws-mrow {
+    border: 1px solid var(--yws-line-2); border-radius: var(--yws-r-md);
+    padding: 10px 12px; margin-bottom: var(--yws-s2); background: var(--yws-surface);
+    transition: border-color var(--yws-t) var(--yws-ease);
+}
+.yws-mrow:hover { border-color: var(--yws-line); }
+.yws-mrow.yws-off { opacity: .55; }
+.yws-mrow-h { display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2); font-weight: 600; }
+.yws-mname { font-weight: 600; font-size: var(--yws-fs-md); overflow-wrap: anywhere; min-width: 0; }
+.yws-mrow-a { font-size: var(--yws-fs-sm); color: var(--yws-txt-2); margin-top: var(--yws-s1); }
+.yws-lowanchor { border-left: 3px solid var(--yws-offi); padding-left: 8px; }
+.yws-mopt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2); margin-top: var(--yws-s2); }
+.yws-mfoot {
+    border: 1px solid var(--yws-line); border-radius: var(--yws-r-lg);
+    padding: 10px 12px; margin-top: 10px; background: var(--yws-surface);
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2);
+}
+.yws-mfoot .yws-sel { flex: 1 1 150px; min-width: 0; }
+.yws-mfoot .yws-dim { font-size: var(--yws-fs-sm); }
+.yws-mfoot + .yws-dim { display: block; margin-top: var(--yws-s2); }
+
+/* 逐处挑（老类名，css-check 守着；现在只有"红蓝两组底色"这套观感还在用） */
+.yws-pickhead { display: flex; flex-wrap: wrap; gap: var(--yws-s2); align-items: baseline; font-size: var(--yws-fs-sm); margin: 6px 0 2px; }
+.yws-pickhead .yws-old { color: var(--yws-old-ink); }
+.yws-pickhead .yws-new { color: var(--yws-new-ink); }
+.yws-progress { margin-left: auto; color: var(--yws-txt-3); }
+.yws-blk { border: 1px solid var(--yws-line-2); border-radius: var(--yws-r-sm); padding: var(--yws-s1); margin: var(--yws-s1) 0; }
+.yws-side { position: relative; border-radius: var(--yws-r-sm); padding: var(--yws-s1) 6px; cursor: pointer; border: 1px solid transparent; }
+.yws-side-old { background: color-mix(in srgb, var(--yws-old) 22%, transparent); }
+.yws-side-new { background: color-mix(in srgb, var(--yws-new) 20%, transparent); }
+.yws-side.yws-dimm { opacity: .55; }
+.yws-side.yws-dimm:hover { opacity: .95; }
+.yws-side.yws-pick { border-left: 3px solid currentColor; }
+.yws-side.yws-pick::after {
+    content: "✓"; position: absolute; right: 6px; bottom: 4px;
+    border: 2px solid currentColor; border-radius: 50%; width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center; opacity: .82;
+    transform: rotate(-12deg); font-weight: 700; pointer-events: none;
+}
+.yws-sl { font-size: var(--yws-fs-xs); color: var(--yws-txt-3); }
+
+/* ---------------------------------------------------------------- 7. 上传向导（三步） */
+.yws-wiz { display: block; }
+.yws-wsteps { display: flex; align-items: center; gap: var(--yws-s2); margin: var(--yws-s1) 0 var(--yws-s3); }
+.yws-wdot {
+    width: 26px; height: 26px; flex: 0 0 auto; border: 1px solid var(--yws-line); border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: var(--yws-fs-sm); color: var(--yws-txt-3); background: var(--yws-surface);
+    transition: color var(--yws-t) var(--yws-ease), border-color var(--yws-t) var(--yws-ease), background var(--yws-t) var(--yws-ease);
+}
+.yws-wdot.yws-on {
+    border-color: var(--yws-accent-line); color: var(--yws-accent-ink); background: var(--yws-accent-bg);
+    font-weight: 700; box-shadow: 0 0 0 4px color-mix(in srgb, var(--yws-accent) 10%, transparent);
+}
+/* "—" 连成一条细线（文字还在 DOM 里，只是不显示成破折号） */
+.yws-wsteps > .yws-dim { flex: 1 1 10px; font-size: 0; line-height: 0; height: 2px; border-radius: 2px; background: var(--yws-line); color: transparent; overflow: hidden; }
+.yws-wstep {
+    border: 1px solid var(--yws-line); border-radius: var(--yws-r-lg);
+    padding: var(--yws-s3); background: var(--yws-surface); box-shadow: var(--yws-shadow-1);
+}
+.yws-wstep > b { font-size: var(--yws-fs-md); font-weight: 600; color: var(--yws-txt); display: inline-block; }
+/* ★★C15/C16/E25/E27（作者台账）的**同一个 CSS 根因**（质检官已定位）：
+   以前这里 `.yws-wrow > .yws-lbl { flex: 1 1 100% }` + `.yws-wrow > .yws-dim { flex: 1 1 100% }`
+   —— 这两条让**每一个 label / 每一句说明都强行占满一整行**，于是：
+     · 「部分上传 / 整份预设」中间被那句说明挤成**竖排**（C15）
+     · 「审核密钥」那个 label 占满一行 → 「连接」按钮被挤到**下一行**（E25）
+     · 整个上传页/连接区**又纵向又宽**（C18/E27）
+   现在：label 与说明默认**跟别的控件同一行**（`flex: 0 1 auto`），只有"整段应该独占一行"的那几处
+   （长说明、textarea、`yws-lbl-col` 竖排标签）才显式给 `flex-basis:100%`。
+   ★口径没变：label 仍是个 flex 容器、控件吃剩余宽度；只是不再"无条件换行"。 */
+.yws-wrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 8px 0 0; min-width: 0; }
+.yws-wrow:first-of-type { margin-top: var(--yws-s3); }
+/* ★C18：这一档是"一屏里塞更多"的行（范围 + 两个下拉、标题 + 作者名、密钥 + 连接）—— 行内间距再收一点 */
+.yws-wrow-tight { margin-top: 6px; }
+.yws-wrow > .yws-lbl { flex: 0 1 auto; min-width: 0; }
+/* 行内标签（下拉/单行输入）：跟同行的兄弟并排，控件按内容分宽度 */
+.yws-wrow > .yws-lbl.yws-lbl-in { flex: 0 1 auto; }
+.yws-wrow > .yws-lbl > .yws-inp, .yws-wrow > .yws-lbl > .yws-sel { flex: 1 1 90px; min-width: 0; }
+/* 整行独占：长说明 / 大文本框 / 竖排标签（`yws-lbl-col`）—— 这些**必须**是新的一行 */
+.yws-wrow > .yws-lbl > .yws-ta { flex: 1 1 100%; margin-top: 2px; width: 100%; }
+.yws-wrow > .yws-lbl.yws-lbl-col { flex: 1 1 100%; align-items: flex-start; }
+.yws-wrow > .yws-lbl.yws-lbl-wide { flex: 1 1 100%; }
+.yws-wrow > .yws-dim.yws-wrownote, .yws-wrow > .yws-dim.yws-connhint { flex: 1 1 100%; }
+/* 底部按钮条：主/次分明 + 磨砂吸底（不改布局高度，也不吃滚动事件）
+   ★§21 D14：主按钮（下一步 / 提交到商店）推**右下角**（`.yws-last` = margin-left:auto）；手机端整行占满。 */
+.yws-wfoot {
+    position: sticky; bottom: 0; z-index: 2;
+    margin: var(--yws-s3) -12px -12px; padding: 10px 12px;
+    border-top: 1px solid var(--yws-line); border-radius: 0 0 var(--yws-r-lg) var(--yws-r-lg);
+    background: var(--yws-glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2);
+}
+.yws-wfoot .yws-last { margin-left: auto; }
+/* ★C18：底栏那半句提示**跟按钮同一行**（以前占满一行 → 底栏白白高出一截） */
+.yws-wfoot .yws-dim { flex: 1 1 auto; min-width: 0; }
+.yws-warnbox {
+    border: 1px solid color-mix(in srgb, var(--yws-bad) 46%, transparent); border-radius: var(--yws-r-md);
+    padding: 10px 12px; font-size: var(--yws-fs-sm); color: var(--yws-txt); background: var(--yws-bad-bg);
+    margin: 10px 0 0; line-height: 1.6;
+}
+/* ================================================================ ★★W（AR4 ③/§AV ④/⑤ + 评审 D6）
+   缝入位置那三块的样式（都是"人话 + 入口"，不是警告条 —— 所以走**中性偏提示**的观感，不走红）：
+     · `.yws-basehint`  = 没选「官方旧版」时的**推荐**（信息条，主色描边）；
+     · `.yws-reclab`→`.yws-rec` = 「官方旧版」标签上那颗**推荐**小字；
+     · `.yws-anchorgap` = "这几条缝进去会排到最后面"那块（**必须显眼**：它是要用户动手的）；
+     · `.yws-gaplist / .yws-gaprow / .yws-gapsel` = 里面每一条 + 那颗"插在哪条后面"的下拉；
+     · `.yws-srcfb`     = 底稿被静默换过那句人话（走 `.yws-warnbox` 的既有观感，只加一点强调）。 */
+/* ★★W40-⑥：**一条规则、两个选择器** —— `.yws-pvtag`（预览那一句标识）与 `.yws-basehint`
+   （「官方旧版」那句 / 「署名会写…」/「勾选提醒仅为…」）从此**必然是同一副外观**。 */
+.yws-basehint, .yws-pvtag {
+    border: 1px solid color-mix(in srgb, var(--yws-accent) 38%, transparent); border-radius: var(--yws-r-md);
+    padding: 7px 10px; margin: 8px 0 0; font-size: var(--yws-fs-sm); line-height: 1.6;
+    color: var(--yws-txt-2); background: color-mix(in srgb, var(--yws-accent) 8%, transparent);
+}
+/* ★★W13（作者第 22 批 §FU #6 · 2026-09-24）：上传第一步那两个下拉的**行位置 + 长度 + 徽标位置**
+   按作者本意重排（上一版是 W6-A8 的"只统一宽度"）。作者原话：「"_从哪份挑_怎么在筛选后边了` ⇒
+   **把它放下来**」；「把后面这两个下拉选框的长度进行**对齐**，可以**稍微长一点**（这样能看到预设的
+   全名，有些全名比较长）」；「**「最好选」就放在最靠右的地方**」；「兼容电脑和手机」。
+   改前（W6-A8 那一条）：两个下拉同一个确定宽度 146px、但两个 label 仍是**行内项** —— 面板一宽
+   （行 ≥ 约 500px：更新器窗口里那个入口 / 宽屏把商店那一栏拉宽）「从哪份挑」就跟「筛选」挤在**同一条线**
+   上；面板窄（抽屉 350 ⇒ 行 274.28）时两个 label 各自换行、下拉却只剩 146px（≈11 个汉字）。
+   改后：① 两个 label **各占一整行**（flex 1 1 100%）⇒ 「从哪份挑」永远在「筛选」**下面一行**；
+        ② 两个下拉**同一个宽度公式**（下面那条 clamp）⇒ 左右缘对齐、能宽就宽；
+        ③ 「最好选」小徽标 margin-left auto ⇒ 钉在**这一行的最右**。
+   宽度公式 = clamp(120px, 100% − 122px, 320px)：122px 是这一行留给"标签文字 + 间距 + 徽标"的位置
+   （量出来的：`官方旧版` 四个字 48px + 两处 8px 间距 + 徽标 47px + 两侧各 4px 边距 = 119px，再留 3px 余量）；
+   上限 320px（≈ 23 个汉字宽，够放典型长预设名；再长也只是空白），下限 120px（极端窄屏下不许被压没）。★这两个数是**量出来的**、不是拍的：
+   改前 labelB（官方旧版）实测宽 265 = 119 + 下拉 146，与上面这条算式逐项对上。
+   ★仍是 flex-shrink 1 + min-width 0 ⇒ 比"余量"还窄的屏上还能继续缩，绝不撑破这一行。
+   ★为什么不用媒体查询：约束来自**容器**（抽屉 350 / 更新器窗口 / 手机整屏都是同一个组件），
+     视口宽度判不出容器宽度；百分比公式会跟着容器自己走。 */
+.yws-wrow > .yws-lbl.yws-picklab { flex: 1 1 100%; }
+.yws-wrow .yws-lbl.yws-picklab > .yws-sel { flex: 0 1 auto; width: clamp(120px, calc(100% - 122px), 320px); min-width: 0; }
+.yws-wrow .yws-lbl.yws-picklab > .yws-rec { margin-left: auto; }
+/* ★★E1（2026-09-23 · plan §7【修正-查漏 3-6】）：上传向导那一屏的「官方旧版」下拉 —— **控件高 ≥ 32px**。
+   依据：手机档本来就有一条 `.yws-inp, .yws-sel { min-height: 32px }`（AU4 ③ 的"小控件一律抬到 ≥32"），
+   而**PC 档是 30px**（评审原文："PC 上 26px 不算错"）。
+   ⇒ 这里**只给这一颗**抬到 32（plan 点名的就是这一屏这一颗），**不动**全局 `.yws-sel` 的桌面刻度 ——
+     那会牵动商店其余屏幕（列表/顺序页/待审页/评论区）的几何断言，属另一件事。
+   实测读数：PC 改前 30 → 改后 32；手机档本来就是 32（不受影响）。 */
+.yws-wiz .yws-sel[data-in="w-base"] { min-height: 32px; }
+.yws-rec {
+    font-size: var(--yws-fs-xs); font-weight: 600; color: var(--yws-accent-ink);
+    border: 1px solid color-mix(in srgb, var(--yws-accent) 40%, transparent);
+    border-radius: var(--yws-r-pill); padding: 0 6px; margin: 0 4px; line-height: 1.5;
+}
+.yws-anchorgap {
+    border: 1px solid color-mix(in srgb, var(--yws-bad) 40%, transparent); border-radius: var(--yws-r-md);
+    padding: 9px 11px; margin: 9px 0 0; font-size: var(--yws-fs-sm); line-height: 1.6;
+    color: var(--yws-txt); background: var(--yws-bad-bg, transparent); min-width: 0;
+}
+.yws-gaplist { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.yws-gaprow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.yws-gaprow .yws-pname2 { font-weight: 600; }
+.yws-gapsel { max-width: 100%; }
+.yws-srcfb { border-left: 3px solid var(--yws-bad); }
+/* ★C17（作者台账）：版权警告**改红色**（原来暖金）。
+   ★不能只换颜色：红字最容易掉对比度 —— 所以**文字用 `--yws-bad-ink`**（= 红跟正文色混出来那一档，
+   任何主题上都够），底用很淡的红、左条用饱和红；量具（ui-audit / probe-store-light / contrast.js）必须 ≥4.5。 */
+/* ★红是**量出来的**（不许只换颜色）：底色那层红压得越重，红字对比度越低 ——
+   实测口径（e2e/r6-store-probe.js 的 C17 段 + `probe-light` 同一把尺）：
+     · 文字 = `--yws-bad` 混 12% 正文色（≈ rgb(236,142,141)）→ r 明显大于 g/b（"红系"成立）
+     · 底 = `--yws-bad` 只掺 **9%**（比原来的 13% 更淡）→ 压着深色主题时对比度 ≈ 5.0
+   改这里之前先跑一遍 C17 那两条（颜色判据 + 对比度）再看。 */
+.yws-rights {
+    display: flex; align-items: flex-start; gap: 9px;
+    margin: var(--yws-s3) 0 0; padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--yws-bad) 46%, transparent);
+    border-left: 4px solid var(--yws-bad);
+    border-radius: var(--yws-r-md);
+    background: color-mix(in srgb, var(--yws-bad) 9%, var(--yws-surface));
+    color: var(--yws-bad-ink);
+    font-size: var(--yws-fs-md); line-height: 1.6; font-weight: 600;
+}
+.yws-rights b, .yws-rights-tx b { color: inherit; font-weight: 700; }
+.yws-rights-ic { flex: 0 0 auto; font-size: 16px; line-height: 1.3; }
+.yws-rights-tx { min-width: 0; }
+/* ★★AA-4（作者第六批反馈）：上传向导「正则」那一档**整块重做**（作者原话见 preset-store.js 的 §AA-4 注释）：
+   ① 行首一颗**真开关**（On/Off 两个字 + 拨钮，两档颜色不同）—— 决定"传出去这条正则是开还是关"；
+   ② 点行**就地摊开这条的完整内容**（查找式/替换为/作用于/深度/标志 + 试跑），字段名对齐酒馆自己的正则面板；
+   ③ 关着的行半透明（复用 `.yws-prow.yws-off`，与 W10 同一口径）；
+   ④ **删掉**原来那块红底警告（`.yws-regexwarn`）与"形状可疑"清单（`.yws-regexrisk*`）和行尾的查找式预览（`.yws-find`）
+      —— 作者点名要去掉，理由：列表里不写预览内容，让人点进去看。 */
+.yws-rsw {
+    display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto;
+    padding: 1px 5px 1px 6px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--yws-line-2); background: var(--yws-raise);
+    font-size: var(--yws-fs-xs); font-weight: 700; letter-spacing: .02em; color: var(--yws-txt-2);
+    transition: background var(--yws-t) var(--yws-ease), border-color var(--yws-t) var(--yws-ease), color var(--yws-t) var(--yws-ease);
+}
+/* 拨钮（一颗小圆点，靠左 = 关 / 靠右 = 开）—— 与 On/Off 两个字是**两重编码**（颜色 + 文字 + 位置） */
+.yws-rsw-k { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .55; flex: 0 0 auto; }
+.yws-rsw-on { color: var(--yws-ok-ink); border-color: color-mix(in srgb, var(--yws-ok) 52%, transparent); background: var(--yws-ok-bg); }
+.yws-rsw-on .yws-rsw-k { opacity: 1; background: var(--yws-ok); box-shadow: 0 0 0 2px color-mix(in srgb, var(--yws-ok) 26%, transparent); }
+.yws-rsw:hover { border-color: var(--yws-accent-line); }
+.yws-rsw:focus-visible { outline: 2px solid var(--yws-accent-line); outline-offset: 1px; }
+/* On/Off 两个字**等宽**（切换时那一格宽度不变 → 后面的名字不会左右跳） */
+.yws-rsw-t { min-width: 19px; text-align: center; }
+/* 摊开的那块：一组"字段名 → 内容"（内容用等宽字，跟酒馆正则面板里的 find/replace 一个观感） */
+.yws-rxdetail { margin: 2px 0 6px 6px; padding: 8px 10px; border-left: 3px solid var(--yws-accent-line); background: var(--yws-bg); border-radius: 0 var(--yws-r-sm) var(--yws-r-sm) 0; }
+.yws-rxk { display: flex; gap: var(--yws-s2); align-items: baseline; margin-top: 4px; min-width: 0; }
+.yws-rxk:first-child { margin-top: 0; }
+.yws-rxkk { flex: 0 0 118px; font-size: var(--yws-fs-xs); color: var(--yws-txt-2); }
+.yws-rxv, .yws-rxv2 { flex: 1 1 auto; min-width: 0; font-size: var(--yws-fs-sm); color: var(--yws-txt); overflow-wrap: anywhere; }
+.yws-rxv { font-family: ui-monospace, Consolas, monospace; background: var(--yws-raise); border: 1px solid var(--yws-line-2); border-radius: 4px; padding: 2px 6px; white-space: pre-wrap; }
+.yws-rxtestb { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.yws-rxtest { align-items: flex-start; }
+.yws-rxin { font-size: var(--yws-fs-sm); min-height: 26px; padding: 3px 7px; }
+.yws-rxout { font-size: var(--yws-fs-sm); color: var(--yws-txt-2); }
+.yws-rxok { display: block; color: var(--yws-txt); }
+.yws-rights-tx b { font-weight: 700; }
+.yws-okbox {
+    border: 1px solid color-mix(in srgb, var(--yws-ok) 46%, transparent); border-radius: var(--yws-r-md);
+    padding: 10px 12px; font-size: var(--yws-fs-md); color: var(--yws-txt); background: var(--yws-ok-bg);
+    margin: 10px 0 0; line-height: 1.7;
+}
+.yws-okbox code { font-family: ui-monospace, Consolas, monospace; font-size: var(--yws-fs-sm); background: var(--yws-raise); border-radius: 5px; padding: 1px 6px; border: 1px solid var(--yws-line-2); }
+.yws-picks { border: 1px solid var(--yws-line); border-radius: var(--yws-r-md); padding: 0 0 var(--yws-s1); background: var(--yws-bg); overflow: hidden; }
+.yws-pickbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2);
+    font-size: var(--yws-fs-sm); color: var(--yws-txt-2);
+    position: sticky; top: 0; z-index: 2;
+    background: var(--yws-glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--yws-line-2); padding: 8px 10px;
+}
+.yws-pickbar b { color: var(--yws-txt); font-weight: 700; }
+.yws-pickbar .yws-search { flex: 1 1 110px; min-width: 0; }
+/* ★§21 D12：条目列表**限高 + 自己滚**（作者原话："做一个限制的高度吧，不要就是直接展开就特别特别长，
+   然后用户可以在里面进行一个小小的下拉"）—— 这是"不做内层滚动容器"那条铁律的**作者指定例外**
+   （所以 paint() 里必须记住并还原它的 scrollTop，见 preset-store.js）。 */
+.yws-plist {
+    margin-top: 2px; padding: 2px 6px;
+    max-height: 42vh; overflow-y: auto; overscroll-behavior: contain;
+    touch-action: pan-y; -webkit-overflow-scrolling: touch;
+}
+/* 细滚动条（别用默认那根粗的，抽屉里会挤到名字） */
+.yws-plist::-webkit-scrollbar { width: 8px; }
+.yws-plist::-webkit-scrollbar-thumb { background: var(--yws-line); border-radius: var(--yws-r-pill); }
+.yws-plist::-webkit-scrollbar-track { background: transparent; }
+/* ★一行一条（老版这里每条能撑到 90px 高，名字被挤成竖排 —— 窄抽屉里最丑的就是它） */
+.yws-prow {
+    display: flex; align-items: center; gap: var(--yws-s2);
+    padding: 5px 8px; min-height: 34px; box-sizing: border-box;
+    border-radius: var(--yws-r-sm); cursor: pointer; border: 1px solid transparent;
+    user-select: none; transition: background var(--yws-t) var(--yws-ease), border-color var(--yws-t) var(--yws-ease);
+}
+.yws-prow:hover { background: var(--yws-surface); }
+.yws-prow + .yws-prow { margin-top: 2px; }
+.yws-prow.yws-selrow { background: var(--yws-accent-bg); border-color: var(--yws-accent-line); }
+.yws-mark { width: 16px; flex: 0 0 auto; text-align: center; color: var(--yws-txt-3); font-size: var(--yws-fs-md); }
+.yws-prow.yws-selrow .yws-mark { color: var(--yws-accent-ink); }
+/* ★§17 D12：行首那个**勾选框**（点它才 = 选中）—— 给它一块自己的可点区域，别跟"点整行看详情"打架 */
+.yws-cb {
+    width: 22px; height: 22px; border-radius: 6px; box-sizing: border-box;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--yws-line); background: var(--yws-surface);
+    transition: border-color var(--yws-t) var(--yws-ease), background var(--yws-t) var(--yws-ease), color var(--yws-t) var(--yws-ease);
+}
+.yws-cb:hover { border-color: var(--yws-accent-line); background: var(--yws-accent-bg); }
+.yws-prow.yws-selrow .yws-cb { border-color: var(--yws-accent-line); background: var(--yws-accent-bg); color: var(--yws-txt); font-weight: 700; }
+/* ---- ★★C5-③（2026-09-23 · 商店浏览器实测 §2.2 ⚠3）：挑条目那一行的**勾选框** ----
+   改前读数（手机 390×844）：`.yws-prow [data-act="w-pick"]` 的 `getBoundingClientRect()` = **22×24**；
+   而**点整行**是"看这条改了什么"（行上是 `data-act="w-open"`）⇒ 手机上想勾一条，必须精准点中那个小方框。
+   两条口径都不许破（这是 §17 D12 定的形态）：① 点勾选框 = 勾选、点行 = 看差异 ——**两条路本来就在**，
+   `data-act` 各归各的；② 两块热区都要 ≥32（评审 §2 条 3）。
+   做法：勾选框的**可见盒一个像素不动**（仍 22×22；手机档 24 高那档也不变），用一颗不可见的伪元素把
+   **它自己**的可点区补成 **32×32** —— 伪元素属于这个 span ⇒ 点它命中的就是 `w-pick`，不会串到"看差异"上。
+   整行那一块的 ≥32 由 `.yws-prow` 的 `min-height: 34px`（手机实测 36px）保证，一个字不改。
+   ★为什么选择器是 `.yws-prow .yws-cb`（连"挑正则"那一行一起）：两行是**同一族行**（行 = 看内容 /
+     勾选框 = 选），同一个 mis-tap 风险、同一个数修掉；★热区只在行内长（22 宽那格左右各出 5px，
+     仍在行的 8px 内边距里）⇒ 不产生任何横向溢出（那条 5px 溢出的老坑）。
+   ★权重：本规则比 AU6③ 那条第 24px 热区多一个类 ⇒ 在 ≥900px 那档也由本规则说了算。
+   ★★B-1（wave4 · 2026-09-26 · **真 BUG**）：这颗热区原来是**伪元素** `.yws-prow .yws-cb::before` ——
+     实测**真鼠标点勾选框完全没反应**（`e2e/tmp/w4-store-probe.js`：mousedown ✓ mouseup ✓ **一个 click 都没有**；
+     程序化 `.click()` 反而正常）。定点实验（同一个元素、同一个手势、只差一处）：
+       · 把这条 `::before` 关掉 → `捕 click` **立刻出现** ✓
+       · 插一条**无关** style（排除"改过 DOM/重排"的混淆）→ click 仍然没有 ✗
+       · 把 `data-act` 摘掉 → click 仍然没有 ✗（排除"产品自己拦的"）
+     根因：Chrome 把 press/release 两次命中都算在**伪元素**上，而伪元素不是稳定的 DOM 节点
+     （两次 hit-test 拿到的是同一个 owner、但不是同一个节点）⇒ `click` 压根不合成。
+     ⇒ 改法：**热区从伪元素换成真子元素** `<i class="yws-hot">`（真节点 ⇒ 两次命中同一个节点 ⇒ click 正常合成），
+       几何一个像素不动（仍 32×32、仍居中、仍不可见），命中面也照旧是"勾选框这一格"（`<i>` 在 span 里面，
+       `ev.target.closest('[data-act]')` 照样认到 `w-pick`）。
+     ★注意：`.yws-hot` 是 span 的**子元素** ⇒ 改勾选符号时**不能拿 `textContent` 整块覆盖**（会把这颗热区一起清掉）——
+       `preset-store.js` 的 `setMarkText()` 只改那个文字节点的 nodeValue（见那里的注释）。 */
+.yws-prow .yws-cb { position: relative; }
+.yws-prow .yws-cb > .yws-hot {
+    position: absolute; left: 50%; right: auto; top: 50%; width: 32px; height: 32px;
+    transform: translate(-50%, -50%);
+}
+.yws-pname { font-weight: 600; font-size: var(--yws-fs-md); color: var(--yws-txt); flex: 0 1 auto; max-width: 58%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yws-prow .yws-dim { flex: 1 1 40px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 新增 / 改写 / 没动过（★§17 D12：一眼看得出哪些动过） */
+.yws-ptag {
+    flex: 0 0 auto; font-size: 10px; font-weight: 700; line-height: 1.7; white-space: nowrap;
+    border-radius: var(--yws-r-pill); padding: 0 7px; border: 1px solid var(--yws-line); color: var(--yws-txt-2); background: var(--yws-raise);
+}
+.yws-ptag.yws-st-new { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-add) 48%, transparent); background: color-mix(in srgb, var(--yws-dl-add) 15%, transparent); }
+.yws-ptag.yws-st-chg { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-old) 46%, transparent); background: color-mix(in srgb, var(--yws-dl-old) 14%, transparent); }
+.yws-ptag.yws-st-same { color: var(--yws-txt-2); background: transparent; }
+.yws-prow .yws-caret { width: 14px; height: 14px; }
+
+/* ---------------------------------------------------------------- 7b. ★条目详情弹窗（§17 D12） */
+/* 宿主挂在 document.body 上（ST 抽屉祖先有 transform，fixed 在面板里会退化成"跟着抽屉滚"） */
+#yws-dlg-host { position: static; display: block; }
+#yws-dlg-host:empty { display: none; }
+/* ★层数 9000 是**量出来的**：ST 的设置抽屉（`#top-settings-holder:has(.drawer-content.openDrawer)`）是
+   **z-index 4005** —— 第一版写成 3000，弹窗被抽屉整个盖住（截图里"白框不见了、字段表浮在外面"就是它）。
+   9000 仍在 ST 自己的原生弹窗（9999 · `#dialogue_popup` / `#rawPromptPopup`）之下 —— 那是想要的：
+   酒馆弹 confirm 时要盖在商店弹窗上面。 */
+.yws-modal {
+    position: fixed; inset: 0; z-index: 9000;
+    background: rgba(0, 0, 0, .5);
+    display: flex; align-items: center; justify-content: center;
+    padding: var(--yws-s3);
+}
+.yws-dlgbox {
+    width: min(780px, 100%); max-height: min(86vh, 820px); overflow: auto;
+    background: var(--yws-glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--yws-line); border-radius: var(--yws-r-lg);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, .38);
+    padding: var(--yws-s3); box-sizing: border-box;
+    touch-action: pan-y;
+}
+.yws-dlg-h { display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2); position: sticky; top: 0; z-index: 2;
+    background: var(--yws-glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    padding-bottom: var(--yws-s2); border-bottom: 1px solid var(--yws-line-2); margin: calc(-1 * var(--yws-s1)) 0 var(--yws-s2); }
+.yws-dlg-t { font-size: var(--yws-fs-lg); font-weight: 700; color: var(--yws-txt); overflow-wrap: anywhere; min-width: 0; flex: 1 1 auto; }
+.yws-dlg-h .yws-btn { margin-left: auto; }
+.yws-dlg-b { min-width: 0; }
+.yws-dlg-sec { font-size: var(--yws-fs-sm); font-weight: 600; color: var(--yws-txt); margin: var(--yws-s3) 0 6px; letter-spacing: .02em; }
+.yws-dlg-sec:first-child { margin-top: 0; }
+.yws-dlg-f { display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2); margin-top: var(--yws-s3);
+    position: sticky; bottom: 0; z-index: 2;
+    background: var(--yws-glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    padding-top: var(--yws-s2); border-top: 1px solid var(--yws-line-2); }
+.yws-dlg-f .yws-dim { flex: 1 1 100%; font-size: var(--yws-fs-sm); }
+/* 身份字段表（role / 系统提示 / 注入位置 / 深度 / 顺序 / 触发词 / 禁止覆盖） */
+.yws-fields { width: 100%; border-collapse: collapse; font-size: var(--yws-fs-sm); table-layout: fixed; }
+.yws-fields th, .yws-fields td { border-bottom: 1px solid var(--yws-line-2); padding: 4px 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.yws-fields th { color: var(--yws-txt-2); font-weight: 600; font-size: var(--yws-fs-xs); }
+.yws-fields .yws-fld-k { color: var(--yws-txt-2); width: 38%; font-size: var(--yws-fs-xs); }
+.yws-fields .yws-fld-old { color: var(--yws-txt-2); }
+.yws-fields .yws-fld-new { color: var(--yws-txt); font-weight: 600; }
+.yws-fields tr.yws-fld-diff td { background: color-mix(in srgb, var(--yws-dl-add) 12%, transparent); }
+.yws-fields tr.yws-fld-diff .yws-fld-old { background: color-mix(in srgb, var(--yws-dl-old) 13%, transparent); }
+
+/* ---------------------------------------------------------------- 8. 我的 / 待审 */
+.yws-myrow, .yws-rvrow {
+    border: 1px solid var(--yws-line); border-radius: var(--yws-r-lg);
+    padding: 10px 12px; margin-bottom: var(--yws-s2); background: var(--yws-surface);
+    box-shadow: var(--yws-shadow-1); min-width: 0;
+}
+.yws-myh { display: flex; flex-wrap: wrap; gap: var(--yws-s2); align-items: center; font-size: var(--yws-fs-md); font-weight: 600; overflow-wrap: anywhere; }
+.yws-myrow .yws-dim, .yws-rvrow .yws-dim { display: block; margin-top: 2px; }
+.yws-mrow2 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2); margin-top: var(--yws-s2); }
+/* ★★BM-F（作者第十五批 · 2026-09-22，§BM-F）：「📌 缝入记录」那一页 —— 每条右边的「删掉记录」、
+   以及上面那个可以**就地改**的条数（`.yws-sewnnum`：等宽数字，删一条时数字不跳宽度）。
+   ★删除按钮走现成的 `.yws-btn.yws-mini.yws-danger`（与"我的"里那颗撤回同一套观感）——
+     不新造视觉；`.yws-sewndel` 这个类只给"挨着这一行、紧凑"留一个抓手（与"重新缝 / 看这张卡"同一行）。
+   ★`.yws-sewnlist` = 那一摞行的容器（删到最后一条时，空态那句人话替换的就是它，见 `repaintSewnRow`）。 */
+.yws-sewnnum { font-variant-numeric: tabular-nums; }
+.yws-sewnlist { min-width: 0; }
+.yws-mrow2 .yws-inp { flex: 1 1 140px; min-width: 0; }
+/* ★★W35-P1（作者 2026-09-26 点名"待审界面 特别特别丑"）：**这两行是那一屏最大的丑源**——
+   `flex: 1 1 100%` 让理由框**必定独占一整行**，于是它把「看这条怎么改的 / 设为官方」与
+   「✗ 拒绝 / ✓ 通过」**劈成上下两段**（改前实测：动作区 **3 行 / 98px**，占行高 **45.8%**；
+   整页 5502.2px、首屏只看得到 2 行）。
+   ⇒ 只改这一处 basis：`100%` → `0` ⇒ 理由框与两颗决策按钮**自然并到同一行**。
+   ★配套（必须，不是可选）：那颗「✓ 通过」贴右 —— 与「我的」那边 `.yws-last` 的 `margin-left:auto`
+     是同一手法（复用既有做法，不新造观感）。
+   ★配套（必须）：占位符文案同时缩短 —— 框宽 246.5 → 118.2，原句「拒绝理由（写给上传者看）」
+     会被截成「拒绝理由（写给上」（见 `viewReview()` 那一句的 `title` 注释）。
+   改后实测：行高 214.2 → **180.2**（−34）、动作区 3 → **2 行 / 64px**、整页 5502.2 → **4856.2**。 */
+.yws-mrow2 .yws-inp[data-in="rv-reason"] { flex: 1 1 0; min-width: 60px; }
+/* ★★W40-②：「我的 → 只改名字/说明」里那个「说明」是**多行**字段（换成 textarea 之后）——
+   单行框与它并排 = 一个 32px 一个 76px，看着就是坏的 ⇒ 整行独占。
+   写法与既有的 `.yws-wrow > .yws-lbl > .yws-ta { flex: 1 1 100% }` 同一条（不新造平行样式）。 */
+.yws-mrow2 .yws-inp[data-in="my-why"] { flex: 1 1 100%; }
+.yws-mrow2 > .yws-btn.yws-danger { margin-left: auto; }
+/* ==========================================================================
+   ★★W54-②（本轮主题 · 作者：「这一轮 重点重新重做待审」）：**待审页**的形状 / 密度 / 热区
+   --------------------------------------------------------------------------
+   改前读数（PC 1470 抽屉，e2e/tmp/w54-baseline-pc-dark.log）：
+     · 行政区块 **131px** 压在第一条之前（裸标题 + 管理按钮行 + 分页 3 行）；
+     · 每条 **180 / 199 / 293 / 314px**（用途不封顶 ⇒ 小剧场 293、超长标题 314）；
+     · 动作区 **2 行 64px**，而且主按钮是「看这条怎么改的」（决策按钮只在 mini 幽灵档）；
+     · 「设为官方」勾选框 **11.5×11.5**（手机档远低于 32 的热区下限）；首屏只有 **2 条**。
+   这一节只做四件事：① 头带压扁 ② 每条内边距收紧 + 用途两行封顶 ③ 决策条一行放得下
+   ④ 三处热区补到 32（视觉盒一个像素不动）。**行为/语义一个字节都没动**。
+   ========================================================================== */
+/* ---- ① 头带：与商店分区头（.yws-sech）同一套，只把下边距收一点 ---- */
+.yws-rvhead { margin: 0 0 6px; }
+/* ★手机档（≤760px）那条 `.yws-sech > .yws-sec-x { flex: 1 1 100% }` 是给**商店分区头**写的（那里标题很长、
+   两颗按钮要换行）；待审页的头带短得多（285 里放得下 18+26+44+74+62+间距）⇒ 这一档把它放回**一行**
+   （实测省 31px）。权重写成 `.yws-sech.yws-rvhead`（多一个类）—— 那条媒体查询在文件更后面，同权重会被它盖掉。 */
+@media (max-width: 760px) { .yws-sech.yws-rvhead > .yws-sec-x { flex: 0 1 auto; margin-left: auto; } }
+/* ---- ★★W77/W78（2026-09-27 夜；09-28 凌晨改口径 · 作者拍板「免审」）：头带下面那一行「⚡ 免审」 ----
+   为什么是**独立一行**而不是头带里的第四颗按钮：W54 量过头带的余量（四颗按钮 = 250 / 可用 272），
+   再塞一颗必然折成两行（作者点名不要的那种"控件被顶出去"）⇒ 放在头带下面、与两个管理面板同一列。
+   几何：**单行**结构（`.yws-awin-r` = 标题 + 极简状态字 + 两颗按钮），`flex-wrap: wrap`
+   ⇒ 手机档窄了就自己折行，**零横向溢出**；色走既有令牌（关着 = `--yws-line/--yws-bg`，
+   开着 = `--yws-ok-*` 那一族 —— 与「成功」同一条视觉语言，深浅主题各自成立）。
+   ★W78：原来那行说明（`.yws-awin-h`）与四颗天数按钮整块删掉（作者："不按倒计时了 直接有个按钮开启
+   有个按钮关闭" + "关着 —— 提交的条目照旧进待审 **这句话删掉**"）⇒ 盒子只剩一行，**不留空盒**。
+   ★禁用态（当前不生效的那颗按钮）走既有 `.yws-btn[disabled]`（opacity .45 + not-allowed），不新造样式。 */
+.yws-awin { margin: 0 0 6px; padding: 5px 8px; border: 1px solid var(--yws-line); border-radius: var(--yws-r-sm); background: var(--yws-bg); }
+.yws-awin.yws-awin-on { border-color: color-mix(in srgb, var(--yws-ok) 46%, transparent); background: var(--yws-ok-bg); }
+.yws-awin-r { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.yws-awin-t { flex: 0 0 auto; font-size: var(--yws-fs-sm); font-weight: 650; color: var(--yws-txt); white-space: nowrap; }
+.yws-awin-s { flex: 1 1 9em; min-width: 0; font-size: var(--yws-fs-xs); color: var(--yws-txt-2); overflow-wrap: anywhere; }
+.yws-awin-s.yws-awin-ons { color: var(--yws-ok-ink); font-weight: 600; }
+.yws-awin-x { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+/* ---- ② 每条：内边距 10px 12px → 8px 10px（一屏多塞一条）。★只动待审行：
+   「我的」那一行是同一个选择器组里的另一半，**不许被牵连**（.yws-myrow 保持原样）。 ---- */
+.yws-rvrow { padding: 6px 10px; }
+/* ---- ③ 标题行：标题**一行 + 省略**（完整标题进 title），右边那颗「看差异」永远贴右 ---- */
+.yws-rvrow .yws-myh { gap: 6px; min-width: 0; }
+/* ★basis 必须是 0（不是 auto）：换行是按**basis**判的，而标题的自然宽常常 > 剩余宽
+   ⇒ basis:auto 时那颗「看差异」会被挤到第二行（实测第 1/7 行 171 vs 其余 145，差的 26 就是那一行）。
+   basis:0 + grow 才是标题吃满剩下的宽度、按钮永远跟它同一行。 */
+/* ★★W56-②（R7 §2 B2：「60 字标题只看得见 16 字」）：**两行封顶 + 等高预留**。
+   · 改前一行 175px 只放得下 ~17 个字（60 字标题看得见 27%）；两行 ≈ 34 字（53%）。
+   · **等高预留**：短标题也占两行的高度（与商店卡片「用途固定两行 ⇒ 卡片等高」同一条口径）——
+     这样一页之内行高仍然**全等**（分组对齐判据是"行高极差 0"，不许因为标题长短就参差）。
+   · 完整标题仍在 `title` 里（悬停可见）；**展开这一行**（看差异 ▾）时不再裁 —— 见 `[data-rv-open]` 那两条。
+   · `line-height` 钉在元素上（1.4）+ 高写 `2.8em`（13px × 1.4 × 2 = 36.4px）= **整数两行**，
+     不会切出半截字形（同 .yws-card-wb 那条"字号必须钉在包裹层"的教训）。 */
+.yws-rvt {
+    flex: 1 1 0; min-width: 0;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+    overflow: hidden; overflow-wrap: anywhere;
+    line-height: 1.4; height: 2.8em;
+}
+.yws-rvrow .yws-myh > .yws-rvopen { margin-left: auto; flex: 0 0 auto; }
+/* ---- ④ 元信息行：类型胶囊 + 「作者 X · 改 N 条 · 09-26 14:58」——一行；放不下时那一句自己省略
+   （★覆盖上面那条 `.yws-rvrow .yws-dim { display:block; margin-top:2px }`：它给的是"另起一行的灰字"，
+      在待审行里我们要的是"与胶囊同一行的那一句"。） ---- */
+.yws-rvmeta { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; margin-top: 2px; min-width: 0; }
+.yws-rvmeta > .yws-mtype { flex: 0 0 auto; }
+/* ★★W56-①：**这一行现在只有两件东西**（类型胶囊 + 作者）——「改动量 · 时间」搬到了第二行。
+   作者那一段**可以让位**（长了自己省略，绝不把右边的「设为官方」挤走）；「设为官方」不吃伸缩、永远贴右。 */
+.yws-rvrow .yws-rvmeta > .yws-rvauth, .yws-rvrow .yws-rvmeta > .yws-dim { flex: 0 1 auto; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 第二行：改动量 + 时间 —— **独占一整行**（改前这一整句只有 101px 可用，被省略 19~28 字）。
+   最坏那一句（改 1 条 · 新增 2 条 · 09-26 14:58）实测 184px ≤ 行宽 250px ⇒ PC / 手机都一个字不省。 */
+.yws-rvmeta2 { display: block; margin-top: 2px; }
+.yws-rvmeta2 > .yws-dim { display: block; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ---- ★★W56-②：**展开这一行 = 标题与用途都不再裁**（与「🛠 卡片管理」那张表点标题展开全名同一套：
+   点开就展开 —— 只是这里那一下由「看差异 ▾」承担）。收起时仍是两行封顶（行高全等靠它）。 */
+.yws-rvrow[data-rv-open="1"] .yws-rvt { -webkit-line-clamp: unset; line-clamp: unset; height: auto; }
+.yws-rvrow[data-rv-open="1"] .yws-card-wb { height: auto; overflow: visible; }
+/* ---- ⑤ 用途：**两行封顶**（复用商店卡片那份 `.yws-card-wb`，与卡片同一条口径）---- */
+.yws-rvrow .yws-card-wb { margin-top: 2px; }
+/* ---- ⑥ 决策条：一行放得下 通过 / 拒绝 / 理由 / 设为官方；
+   危险动作（拒绝）与安全动作（通过）靠既有两族色（.yws-good / .yws-danger）分开 ---- */
+.yws-rvacts { margin-top: 4px; gap: 8px; }
+/* ★W54-②（第 2 轮收口）：热区那几颗现在**分处两行**（看差异在标题行 / 设为官方在元信息行 /
+   通过·拒绝在决策条）⇒ 抓手从 .yws-rvacts 放到整行上，规则只有一条。 */
+.yws-rvrow .yws-btn[data-act="rv-open"], .yws-rvrow .yws-btn[data-act="rv-ok"], .yws-rvrow .yws-btn[data-act="rv-no"], .yws-rvrow .yws-rvoffi { position: relative; }
+/* ★★热区 = **真子元素** `<i class="yws-hot">`（**不是伪元素**）：伪元素当热区时 Chrome 把
+   press/release 两次命中算在伪元素上 ⇒ **一个 click 都不合成**（W4-B1 的定点实验，见上面
+   `.yws-prow .yws-cb > .yws-hot` 那段）。视觉盒一个像素不动（26px 那档仍是 26）⇒ 行高/密度不受影响，
+   可点区补到 **32 高**（手机档那颗勾选框同理：11.5 的方框由整枚标签的 32 高热区兜住）。 */
+.yws-rvrow .yws-hot { position: absolute; left: 50%; top: 50%; width: 100%; min-width: 34px; height: 32px; transform: translate(-50%, -50%); }
+/* 「设为官方」那枚标签（`.yws-rvoffi`）：挪到元信息行右端之后 —— 11px 小字 + 贴右；
+   热区靠上面那颗 .yws-hot（它同时兜住里面那个 11.5px 的原生勾选框）。 */
+.yws-rvmeta > .yws-rvoffi { flex: 0 0 auto; margin-left: auto; font-size: var(--yws-fs-xs); gap: 4px; }
+/* ★★W56-④（R7 §4 P4：「贴底那行的看差异被酒馆自己的输入框盖住 ⇒ 真触摸点不动」）：
+   ★成因（现场量到、不是猜的）：宿主自己的发送框 `TEXTAREA#send_textarea`（390×844 实测 y812~y843、
+     `pointerEvents:auto`）压在**抽屉底边**上（抽屉 `#rm_extensions_block` 可见区间 y30~829）⇒
+     屏幕最下面那一条（约 31px）是**宿主的死区**：谁的中心落进去都点不到。★宿主元素一个字节都不许动。
+   ⇒ 产品这边能做的、也正是 R7 点名的那一手：**给待审列表预留底部安全间距**（手机档 40px）——
+     列表**末尾**（分页条 + 最后一条）因此永远能滚到那条死区**上方**，不会被压在里面。
+   ★只在手机档（≤760px）生效，且只在待审视图（`.yws-rvstep` 是 viewReview 自己的钩子类）。 */
+@media (max-width: 760px) { .yws-rvstep { padding-bottom: 40px; } }
+/* 分页那句话：**不许换行**（换行就是 3 行 —— 第 1 轮实测 64px）；放不下时自己省略（判据是后面两句） */
+.yws-pgbar > .yws-dim:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ---- ⑦ 展开体：减一层"零信息"的描边盒（与 `.yws-rvrow .yws-prow2` 那一手同一族：
+   它和父层同底色，留着只有一圈描边能看见）---- */
+.yws-rvrow .yws-rvdiff { border-color: transparent; background: transparent; padding: 0; margin-top: var(--yws-s2); }
+/* 状态：小胶囊（和卡片上的徽标同一套观感） */
+.yws-st { font-size: var(--yws-fs-xs); font-weight: 600; border-radius: var(--yws-r-pill); padding: 1px 8px; border: 1px solid var(--yws-line); color: var(--yws-txt-2); background: var(--yws-raise); white-space: nowrap; }
+.yws-st-ok { color: var(--yws-ok-ink); border-color: color-mix(in srgb, var(--yws-ok) 44%, transparent); background: var(--yws-ok-bg); }
+.yws-st-bad { color: var(--yws-bad-ink); border-color: color-mix(in srgb, var(--yws-bad) 44%, transparent); background: var(--yws-bad-bg); }
+/* ★P11（审查 #3）：服务端没给回这一条 → "查不到（可能已下架）"（不是"待审核"）—— 用弱色，别当成就上线/失败 */
+.yws-st-miss { color: var(--yws-txt-2); border-color: var(--yws-line); background: transparent; }
+/* ================================================================ ★★§BJ-E15/16/19（U9 班 · 作者第十五批）
+   「我的」那一页的**两段**（📤 我的 / 💬 回复我的）+「回复我的」列表 + 那两颗颜色设置。
+   设计口径（"紧凑、手机优先，照小红书的信息密度"）：
+     · 分段条 = 与工具条那排筛选**同一族**（`.yws-btn.yws-mini` 的壳 + 选中态 `.yws-on`）；
+       未读数长在按钮里（`（未读 N）`）—— 顶栏那 4 颗的字**一个字没动**（老断言不受影响）。
+     · 一行的信息密度：谁 + 多久前 + 未读标记（一行）→ 正文（最多 3 行截断）→ "回复了你在「…」里的评论" → 三颗动作。
+       行与行之间用**细分隔线**（与评论区同一条口径：`.yws-cmrow` 那套），不靠外边距。 */
+.yws-segbar { display: flex; flex-wrap: wrap; gap: var(--yws-s2); margin-bottom: var(--yws-s2); min-width: 0; }
+.yws-btn.yws-segbtn { background: var(--yws-surface); border: 1px solid var(--yws-line); color: var(--yws-txt-2); font-weight: 500; }
+/* 选中态：与顶栏那 4 颗的选中态同一套（`.yws-topbar .yws-btn.yws-nav.yws-on` 的观感） */
+.yws-btn.yws-segbtn.yws-on { color: var(--yws-txt); font-weight: 700; border-color: var(--yws-accent-line); background: color-mix(in srgb, var(--yws-accent) 14%, transparent); }
+.yws-segbadge {
+    margin-left: 6px; padding: 0 6px; border-radius: var(--yws-r-pill);
+    font-size: var(--yws-fs-xs); font-weight: 600; font-variant-numeric: tabular-nums;
+    color: var(--yws-bad-ink); background: var(--yws-bad-bg);
+}
+/* ★★U12（§BO-6）：`.yws-myhead`（第一段那行标题）**规则删掉** —— JS 里那一块也删了
+   （作者："去掉页面里那个重复标题"）：名字与条数现在都长在**分段按钮**上，逐字 `📤 我的上传 · 共 N 条`。
+   留规则 = 孤儿（class-check 只查 JS→CSS 一个方向，CSS→JS 得自己记得删）。 */
+.yws-repwrap { min-width: 0; }
+.yws-rephead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2); margin-bottom: var(--yws-s2); font-size: var(--yws-fs-sm); }
+.yws-replist { min-width: 0; }
+.yws-reprow { padding: 8px 0; border-bottom: 1px solid var(--yws-line-2); min-width: 0; }
+.yws-reprow:last-child { border-bottom: 0; }
+/* 未读那一行：左侧一条主色细线（与 `.yws-cmmine` 同一招：只用边线 + 底色，不额外加标签行） */
+.yws-reprow-new { border-left: 2px solid var(--yws-accent-line); padding-left: 7px; margin-left: -9px; }
+.yws-reph { display: flex; align-items: baseline; gap: 5px; font-size: var(--yws-fs-sm); color: var(--yws-txt-2); min-width: 0; }
+.yws-reph .yws-cmav { align-self: center; }
+.yws-reptx {
+    margin-top: 2px; font-size: var(--yws-fs-md); color: var(--yws-txt); line-height: 1.45; overflow-wrap: anywhere;
+    /* 正文最多 3 行（信息密度照小红书：先看人 + 头一句，剩下的去详情里看） */
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.yws-reptx p, .yws-reptx .yws-mdp { margin: 0; }
+.yws-repmeta { font-size: var(--yws-fs-xs); margin-top: 2px; overflow-wrap: anywhere; }
+.yws-repb { display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2); margin-top: 6px; }
+.yws-repnew {
+    font-size: var(--yws-fs-xs); font-weight: 700; border-radius: var(--yws-r-pill); padding: 0 6px;
+    color: var(--yws-bad-ink); background: var(--yws-bad-bg); border: 1px solid color-mix(in srgb, var(--yws-bad) 40%, transparent);
+}
+.yws-repdone { font-size: var(--yws-fs-xs); }
+/* 「去回复」那颗主按钮：与「往前看」并排时**别把它拉满整行**（手机档三颗要能并排站下） */
+.yws-btn.yws-repgo { flex: 0 1 auto; }
+/* ★★W28-⑥（作者 2026-09-25 白天 · 台账 §GZ 第 3 条）：`.yws-repmorow`（那颗「再看 N 条」所在的一行）
+   这条规则**删掉了** —— 「回复我的」改成真正的分页之后，那颗按钮与它的 `case 'rep-more'` 一起退休
+   （分页走 `.yws-toolbar` + `.yws-pager.yws-pagsec` + `.yws-percell`，全是既有零件）。留着就是孤儿规则。 */
+/* ★★BM-E：那两颗**原生颜色控件**（`<input type="color">`）—— 与那一排输入框同高、同圆角，
+   去掉浏览器默认的厚边框（`appearance: none` + 自画 1px 描边），这样它跟旁边那颗「默认」按钮**齐平**。 */
+.yws-colorin {
+    appearance: none; -webkit-appearance: none;
+    width: 40px; height: 26px; padding: 0; cursor: pointer;
+    border: 1px solid var(--yws-line-2); border-radius: var(--yws-r-sm); background: var(--yws-bg);
+}
+.yws-colorin::-webkit-color-swatch-wrapper { padding: 2px; }
+.yws-colorin::-webkit-color-swatch { border: 0; border-radius: 5px; }
+.yws-colorin::-moz-color-swatch { border: 0; border-radius: 5px; }
+/* ★P11（审查 D3 · P1）：撤回的**二次确认**条（就地展开，写清后果 + 一个"连本地凭证一起删"的显式勾选） */
+.yws-dropask {
+    border: 1px solid color-mix(in srgb, var(--yws-bad) 40%, transparent); border-left: 3px solid var(--yws-bad);
+    border-radius: var(--yws-r-sm); background: var(--yws-bad-bg);
+    padding: 8px 10px; margin-top: var(--yws-s2); min-width: 0;
+}
+.yws-dropask-tx { font-size: var(--yws-fs-sm); color: var(--yws-txt); line-height: 1.65; }
+.yws-dropask .yws-lbl { flex: 1 1 100%; }
+/* ★★W17-B2：下架是**可恢复**的（作者 2026-09-25 裁定："撤回卡片时应该可以重新上架"）⇒
+   与"彻底删除"那颗红盒分开：同一套 .yws-dropask 结构（圆角/内边距/子选择器一个字没动），
+   只把色族换成"注意"（暖金，令牌复用 --yws-gold-line / --yws-gold-bg / --yws-offi）。
+   ★红盒（.yws-dropask 原样）留给真正不可逆的那一颗。 */
+.yws-dropask.yws-dropask-off { border-color: var(--yws-gold-line); border-left-color: var(--yws-offi); background: var(--yws-gold-bg); }
+/* ★P11（审查 #10③）：待审分页条 */
+.yws-pgbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2); margin: var(--yws-s2) 0; }
+/* ★§21 E16~E19：**连接区**（作者名 + 审核密钥 + 只读凭证框 + 粘贴框）——
+   作者要求"大幅简化"：不要导出/导入两颗按钮、不要那两句风险提示、说明文字一律删干净。 */
+/* ★D15（audit-p12 人性化 C3）：只读凭证框默认折成**一行摘要** + 一颗「复制」小按钮。
+   原文（textarea）一直在 DOM 里（`.value` 永远是当前凭证），收起时只是 `.yws-hide`。 */
+.yws-hide { display: none !important; }
+/* ★E27（量出来的）：这一行原来会**把连接区撑宽 48px**（`yws-credbar:48 | yws-credsum:48`）——
+   因为 `.yws-credsum` 是 `white-space: nowrap`、而这个 flex 容器的 `flex-basis` 是 `auto`（= 内容的完整宽度），
+   父级又是个 `inline-flex` 的 label → min-content 撑破容器。
+   修法：这一行自己**吃满一整行**（`flex: 1 1 100%` + `min-width: 0`），里面的摘要才有得可缩（配 `text-overflow`）。
+   ★改这里之前先跑 `e2e/r6-store-probe.js` 的 E27 那条（它会把"哪个孩子撑宽的"打出来）。
+   ★★AA-1③（作者第六批反馈）：作者原话"「📤 我的」里凭证与后面那段凭证**没对齐、还是歪的**"。
+   实测根因：这一条 `flex-wrap: wrap` ⇒ 抽屉一窄就**先换行再压缩** —— 摘要（124px）+「复制」占满第一行、
+   **「收起来」被甩到第二行**（实测改前：`.yws-credbar` 高 **60px**、`收起来` y=619.53 而摘要 y=589.23），
+   于是整个「凭证」那一行高 130px、那个只读框被顶到标签下面 68px 处 —— 看着就是"歪的"。
+   修法：**`nowrap`**（一律一行）+ 摘要让位（`flex: 1 1 auto` + `min-width: 0` + 省略号，全句进 `title`）
+   + 这一排的两颗小按钮内边距收紧一点 ⇒ 176px 里放得下「摘要… 复制 看原文」。 */
+.yws-credbar { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; margin: 2px 0 4px; flex: 1 1 100%; min-width: 0; }
+/* ★AA-1③：这两颗小按钮**不许被压**（改后实测：能被压到只剩 19px 文字宽度 → 两个字**竖排成两行**、
+   按钮高 43.59px、整行变成"歪的"）。`flex: 0 0 auto` + `nowrap` 之后，被压缩的是**摘要**（它有省略号）。 */
+.yws-credbar .yws-btn { padding: 4px 8px; flex: 0 0 auto; white-space: nowrap; }
+.yws-credsum {
+    flex: 1 1 auto; min-width: 0; font-size: var(--yws-fs-sm); color: var(--yws-txt-2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.yws-credrow { margin-top: var(--yws-s2); }
+.yws-conn {
+    margin-top: var(--yws-s3); padding: var(--yws-s3);
+    border: 1px solid var(--yws-line); border-radius: var(--yws-r-lg);
+    background: var(--yws-bg); min-width: 0;
+}
+.yws-conn-h { font-size: var(--yws-fs-md); font-weight: 650; color: var(--yws-txt); letter-spacing: .02em; }
+.yws-conn .yws-wrow:first-of-type { margin-top: var(--yws-s2); }
+/* 凭证框：label 单独占一行、框占满宽（只读那个框里是 JSON，别贴边） */
+.yws-lbl-col { flex: 1 1 100%; align-items: flex-start; }
+.yws-lbl-col > .yws-creds { flex: 1 1 100%; min-height: 62px; }
+.yws-creds { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--yws-fs-xs); }
+.yws-creds[readonly] { color: var(--yws-txt-2); background: var(--yws-surface); cursor: text; }
+.yws-full { max-width: 100%; }
+
+/* ---------------------------------------------------------------- 9. 空状态 / 离线 / 加载 */
+.yws-empty {
+    border: 1px dashed var(--yws-line); border-radius: var(--yws-r-lg);
+    padding: 18px 14px; margin-bottom: 10px; background: var(--yws-bg);
+    font-size: var(--yws-fs-sm); color: var(--yws-txt-2); text-align: center; line-height: 1.7;
+}
+.yws-empty b { color: var(--yws-txt); }
+.yws-empty .yws-btn { margin: 10px auto 0; display: flex; width: fit-content; }
+.yws-empty-ic { display: block; font-size: 26px; line-height: 1.2; margin-bottom: 6px; opacity: .9; }
+.yws-offline-ic { display: block; font-size: 22px; line-height: 1.2; margin-bottom: 4px; }
+
+/* ==========================================================================
+   9b. ★R6-d（2026-09-21 · 作者台账 A~G 商店那一批）新增的东西
+   —— 只加新规则，上面那些老选择器的语义一个字没改（新旧共存、可回退）。
+   ========================================================================== */
+
+/* ---- ★A2：计数行右边那颗刷新按钮的**内联 SVG 图标**（不再是 emoji 🔄） ---- */
+.yws-ico { display: inline-block; vertical-align: -2px; flex: 0 0 auto; }
+.yws-refresh { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+
+/* ---- ★A8：官方更新区（真 `<details>`；有更新默认展开；★W10-②：展开且被看到满 5 秒就**静默**记为已读） ---- */
+.yws-secdet { display: block; }
+.yws-secdet > .yws-sech { cursor: pointer; list-style: none; }
+.yws-secdet > .yws-sech::-webkit-details-marker { display: none; }
+.yws-secdet > .yws-sech::marker { content: ""; }
+/* 折叠指示三角（展开/收起都看得见"这里能点"） */
+.yws-secdet > .yws-sech .yws-sec-n::after { content: "▾"; margin-left: 5px; font-size: 10px; opacity: .7; }
+.yws-secdet:not([open]) > .yws-sech .yws-sec-n::after { content: "▸"; }
+/* ★★W6-A7（作者第 21 批 §FE-A7）：改前那句「有新更新，请查看」整块换成**红色数字角标** ——
+   挂在「官方更新」四个字的**右上角**（作者原话"像'新的'角标、带数字"）。
+   视觉沿用既有语义红那一族（字 = `.yws-bad-ink`、描边 = `.yws-bad` 半透明、底 = `.yws-bad-bg`，
+   与 `.yws-warn` / `.yws-danger` / `.yws-anchorgap` 同一个写法）；几何沿用被它替换掉的那颗胶囊的档位
+   （xs 字号 / 700 / 999px 圆角）—— 不新造平行样式（§5 美观关第 1 条）。
+   ★为什么不做"实心红底 + 白字"那种角标：`--yws-bad`（#ef8080）上白字只有 **2.60:1**（按 WCAG 相对亮度算过），
+     过不了正文 ≥4.5 那一关；这一族的 `-ink` 是跟主题正文色混出来的 ⇒ 深浅主题都天然达标。 */
+.yws-offibadge {
+    /* ★★W16（2026-09-24 · 作者台账 §GH）：「关于这个角标 **暂时用A** 吧 但是**那个圈能不能小一点**」
+       ⇒ **配色 / 形态 / 描边 / 圆角一个字不动**（还是 A 版：描边浅底 + 正文色字，`--yws-bad` 那一族），
+         只把**外圈收紧**（下面每一条都有真界面读数，见报告 §②）：
+       · 字号 11 → **10px**（跟着 xs 档走：`calc(var(--yws-fs-xs) - 1px)`，不硬编码一个孤立数字）；
+       · 行高 1.5 → **1**（外圈高度 16.5 → 约 13px 的文字盒）；
+       · 左右内边距 5 → **3px**；
+       · `display: inline-flex` + `align-items/justify-content: center` + `box-sizing: border-box`
+         + `min-width: 15px` + `height: 15px` ⇒ **一位数时就是一颗正圆（15×15）**，两位数由内容撑宽（还是药丸）。
+         ★`display` 那一条**是必须的**（迭代二换来的）：`min-width` 对**非替换的行内元素**（`display:inline`）
+         **不适用** ⇒ 只写 `min-width` 时量出来是 13.73×16（窄高），根本不成圆；改成行内 flex 盒才有定高。
+       · `top` -0.45em → **-0.5em**：@11px = 4.95px、@10px = 5.00px ⇒ "抬高半个字"这个**相对关系**不变
+         （真界面实测：角标**左边缘 x 与改前逐位相同**、**中心只差 +0.43px**；顶边因为圈矮了 2px 自然下落 1.44px）。
+       · `margin-right: 3.3px`：把外圈窄掉的 3.3px 补回**行内推进量** ⇒ 右边的计数 / 按钮区 / 摘要行 /
+         整个分区 / `<details>` **逐位不动**（实测读数全等；不加这一条时计数会左移 1.26px）。
+       ★硬约束（作者派的，逐条实测过）：对比度仍 ≥4.5（**深 13.21 / 浅 11.51 —— 与改前同值**，因为字色/底/描边
+         一个字没动）· 摘要行（真正的点击目标）高度**没变小**（PC 33 / 手机 64.5px，改前同值）·
+         角标正中 `elementFromPoint` 仍落在摘要行里（**仍在可点区域内**）· 别的元素零位移。 */
+    font-size: calc(var(--yws-fs-xs) - 1px); font-weight: 700; letter-spacing: 0; line-height: 1;
+    /* ★W16 迭代二：`display: inline-flex` 是**必须**的 —— `min-width` 对非替换的 `display:inline` 元素**不适用**，
+       所以 v1 那一版量出来是 13.73×16（窄高）而不是圆。改成行内 flex 盒 + 定高 15px 之后，一位数就是**正圆**。 */
+    display: inline-flex; align-items: center; justify-content: center;
+    /* ★字色用 `--yws-txt`（与它替换掉的那颗暖金胶囊**逐字同一个口径**）——
+       角标的"红"由描边 + 底色承担（下面两条），字仍用主题正文色 ⇒ 深/浅主题都稳过 ≥4.5
+       （`--yws-bad-ink` 在这颗角标自己那层 14% 红底上实测只有 ~4.3，卡在线上；见报告的美观关读数）。 */
+    color: var(--yws-txt);
+    border: 1px solid color-mix(in srgb, var(--yws-bad) 46%, transparent);
+    background: var(--yws-bad-bg);
+    border-radius: var(--yws-r-pill); padding: 0 3px; white-space: nowrap;
+    box-sizing: border-box; min-width: 15px; height: 15px;   /* ★W16：一位数 = 正圆（15×15 边框盒）；两位数由内容撑宽 */
+    flex: 0 0 auto; margin-left: 2px; margin-right: 3.3px;   /* ★W16：外圈窄掉的宽度在这里补回 ⇒ 右边不位移 */
+    position: relative; top: -0.5em;      /* ★"右上角"：抬高半个字 = 角标（不是并排的第二颗胶囊）；★W16 见上面那段 */
+    /* ★★W34-①（作者 2026-09-26 反馈）：这颗角标现在是**一颗 `<button>`**（点一下 = 这一区都看过了，
+       见 preset-store.js 的 `case 'sec-seen'`）—— 外观**一个像素都不改**（上面那些规则照旧），
+       只补两条"表单控件默认值"必须显式声明的：字体（button 不继承页面字体）与手型光标（= 可点的提示）；
+       `appearance: none` 一并压掉浏览器可能给 button 的额外装饰。 */
+    font-family: inherit; cursor: pointer; appearance: none; -webkit-appearance: none;
+}
+/* ★★W34-①：可点的那颗角标要有**看得见的键盘焦点**（原来它是个 <b>、不参与焦点链）——
+   用既有的 `--yws-line-2` 色阶画一圈细描边，不引入新颜色、也不改它平时的样子。 */
+.yws-offibadge:focus-visible { outline: 2px solid var(--yws-line-2); outline-offset: 1px; }
+/* ★★W34-①（**试过并已回退** · 如实记一笔，别再试一遍）：角标本体只有 15×15px，做成可点入口之后
+   手机上手点不准 ⇒ 试过用伪元素撑热区（`.yws-offibadge::after{position:absolute; inset:-8px -12px}`）→
+   真界面探针（`e2e/tmp/w34-geo.js` 的"热区"那几针：中心向下 8/14px、向右 12px 做 `elementFromPoint`）
+   **实测三针全 false**（伪元素没有把命中区撑出来）⇒ **当场回退**（不留未经验证的东西）。
+   ⇒ 这一条**记为未解决**：下一轮若要"手机点得到"，做法应是"角标外面再包一层透明的热区按钮"
+     或"手机档把角标放大一档"，并且要先用探针量到命中区变大再上线。 */
+/* ★★W10-②：这两条 `.yws-btn.yws-offi-read` 规则**删掉了** —— 那颗"看过了"按钮已按作者要求彻底删除
+   （清零机制换成"官方区展开且被看到 = 已读（静默）"，见 preset-store.js 的 offiAutoRead）。不留孤儿规则。 */
+
+/* ---- ★F1：搜索 / 排序 / 筛选 工具栏 ----
+   ★★BJ-A2/A3（作者第十五批 · 2026-09-22，§BJ-A）：**按作者这次写死的三组重新排版** ——
+   作者原话（组别这次是他给的，不再授权我们改）：
+     组 1 `缝到哪一份` · `缝入记录` · `收藏记录` · `一键更新`；
+     组 2 `热度` · `最新` · `全部` · `我缝过` · `没缝过` · `5条` · `10条`（+ 自定义）；
+     组 3 `搜索`。
+   三行落点（**一组一行**，与 JS 里 `toolbar()` 的三个 `.yws-tbrow-*` 一一对应）：
+     · `.yws-tbrow-rec` = 组 1（「缝到哪一份」那一格 + 那三颗按钮）—— ★U6 那颗「缝到 ▾」收起开关**已删**，
+       这一格在**两档都常显**（作者："这是默认显示的，不能因为折叠了就不显示"）；
+     · `.yws-tbrow-flt` = 组 2（排序 + 筛选 + 每页条数 `.yws-percell`）；
+     · `.yws-tbrow-q`   = 组 3（搜索框自己一行）。
+   ★「刷新」**不在工具条里了** —— 它挂在「用户更新」那条分组线的右端（见 `secHead` 的 extra）。
+   三行都是 `flex-wrap: wrap` 的独立行 ⇒ 窄屏各自换行，**不会横向溢出**。 */
+.yws-toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+    margin: 0 0 var(--yws-s2); min-width: 0;
+    padding: 6px 8px; border: 1px solid var(--yws-line-2); border-radius: var(--yws-r-md); background: var(--yws-bg);
+}
+/* ★★W25A（第 3 条 · AGENTS §5 的「优先缩间距/缩字号」）：组间 8px → 6px、上下 6px → 5px。
+   触摸目标**一个都没压**（按钮还是 26px PC / 32px 手机），只收缝。 */
+.yws-tbrow { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px; min-width: 0; flex: 1 1 100%; }
+.yws-tbrow-q { justify-content: flex-start; }
+/* ★AR1：`.yws-tb3` = "工具条是三行"的标记类（行本身由 `.yws-tbrow` 画；留着它是为了以后好定位/好改） */
+.yws-tb3 { align-content: flex-start; }
+/* ★BJ-A：第 1 行 = 作者组 1（三颗按钮各自独立、**不紧贴** —— 它们的字长短不一，贴着反而难读）。
+   注意：这一组**故意不用** `.yws-tbgroup`（那个类是"紧贴的连排"）——
+   `r12-store-ui` 的 W8 拿**第一个** `.yws-tbgroup` 当上传页那三颗范围按钮的"形状样板"，
+   所以第一个 `.yws-tbgroup` 仍是排序那一组（组 2 的开头，`flex: 0 0 auto` 的紧贴连排，形状一模一样）。
+   ================================================================================
+   ★★W42（作者 2026-09-26 · 派单①）：这一行现在有**一条硬口径** ——
+     作者原话："第 1 行：从「缝入…」（那个下拉）到「收藏记录」—— **严格要求一行、不许随宽度/端口变化掉行**，
+               太长了就**缩那个下拉选框**自适应长度，**左右顶到两边边界**"。
+   落地（两条，一条都不能少）：
+     · `flex-wrap: nowrap` —— 这一行**永远不掉行**
+       （改前是 `wrap`：PC 1470×905 那档行内可用宽只有 **282px**，而需求是 188 + 6 + 181 = **375px**
+        ⇒ 那两颗记录按钮被挤到第二行 —— 作者报的"这一堆内容完全挤在一起了"就是这个）；
+     · 宽度不够时**只缩那个下拉**：`.yws-targetcell { flex: 1 1 auto; min-width: 0 }` +
+       `.yws-targetsel { flex: 1 1 0; min-width: 0 }`（两颗记录按钮 `flex: 0 0 auto`，一个字不让）
+       ⇒ 下拉把余量吃满 ⇒ **左右自然顶到两边**（左缘 = 行左缘、右缘 = 行右缘）。
+   ★**为什么"缩下拉"是对的**（不是随便挑一个缩）：`<select>` 里的内容由浏览器自己按宽度截断显示，
+     截断只是"这一份预设名看不全"（悬停有 title、点开下拉能看到全部），**不会丢信息、也不会变形**；
+     而按钮里的字一旦被压就会折行/变形（那才是丑）。 */
+.yws-tbrow-rec { justify-content: flex-start; flex-wrap: nowrap; }
+.yws-tbrec { display: inline-flex; align-items: center; flex-wrap: nowrap; gap: 6px; min-width: 0; flex: 0 0 auto; }
+.yws-tbgroup { display: inline-flex; align-items: center; gap: 0; flex: 0 0 auto; }
+/* 三态开关成组：连成一排（首尾圆角），选中那颗用 `.yws-sel` 的既有观感 */
+.yws-tbgroup .yws-seg { border-radius: 0; margin-left: -1px; }
+.yws-tbgroup .yws-seg:first-child { border-radius: var(--yws-r-pill) 0 0 var(--yws-r-pill); margin-left: 0; }
+.yws-tbgroup .yws-seg:last-child { border-radius: 0 var(--yws-r-pill) var(--yws-r-pill) 0; }
+.yws-tbgroup .yws-seg.yws-sel { position: relative; z-index: 1; }
+/* ★★BJ-A 组 3：搜索框**自己一行**（作者把它单独列成第三组）——
+   `flex: 1 1 auto` 让它**拉满这一行**：手指好按、也不用再跟别的组"抢宽度"。
+   `min-width: 96px` 留着（很窄的抽屉里也不至于被压成一条线——那时它会自己换到第二排）。 */
+.yws-toolbar .yws-tbq { flex: 1 1 0; min-width: 96px; margin-left: 0; }   /* ★W25A（第 3 条）：basis auto → 0（见注释） */
+.yws-toolbar .yws-sl-flex { flex: 1 1 auto; }
+.yws-btn.yws-updall { border-color: color-mix(in srgb, var(--yws-accent) 52%, transparent); }
+/* ★F4：作者合集那条（顶上写着"只看谁"） */
+.yws-whobar { gap: 6px 8px; }
+.yws-whoname { font-size: var(--yws-fs-name); font-weight: 650; color: var(--yws-title-ink); }
+/* ★F7：离线缓存那条提示（`.yws-stale` 的既有观感 + 一句"离线时不能缝"） */
+.yws-offline-cache { border-color: color-mix(in srgb, var(--yws-warn) 40%, transparent); }
+.yws-nofit { padding: 14px; }
+/* 卡片区（★F1/F4：搜索打字 / 排序筛选切换**只换这一段**，不整页重绘 → 焦点与滚动都不动）
+   ★★AU7-①（作者第十四批 · 2026-09-22，§AU7-①）：**滚动锚定**这条的来历 ——
+   这一段是**整块被替换**的（`repaintCards()`：`host.innerHTML = cardsHtml()`，翻页就走它）。
+   Chrome 的**滚动锚定**（scroll anchoring）会在内容变化后自己挑一个"锚点元素"、按它把滚动位置拉回去；
+   而这里的锚点节点**整批销毁重建** ⇒ 浏览器重新挑锚点，落点不受我们控制（症状 = "点上一页/下一页
+   有时跳到最下面/位置很怪"，作者报的就是它）。把这一段从锚点候选里摘出去，页面滚动就只由
+   `keepOuterScroll()` 那套"记住 → 放回原位"说了算（同一份口径，见 preset-store.js 里那段根因注释）。
+   ★★V4 复验（作者第十五批验收 · 2026-09-22）抓到的**真回归**：这条原来是**常驻**的，
+     于是**"点日期开浮层"那条路**（不是分页！它往卡片里插/删一段 `.yws-histbox`）也失去了浏览器的锚定 ——
+     读数：抽屉 600 → **726**（Δ126 = 浮层高度；那张卡"缝过"时 Δ208 ⇒ 被点的日期直接**被顶出视口上沿**）。
+     A/B 证据：把这条改回 `auto` 再点日期 ⇒ **Δ0**（日期只动 1px）。
+   ⇒ 修法（**按构造两头都保住**）：它不再常驻，改成**只在"整块换列表"那一瞬间**生效 ——
+     `repaintCards()` 在写 `innerHTML` 前后各强制一次布局、把 `.yws-renoanchor` 加上又摘掉
+     （见 preset-store.js `repaintCards()` 里那三行）；除此之外整棵子树照常参与滚动锚定
+     ⇒ 插浮层 / 展开条目 / 展开楼中楼这些"内容变高变矮"的日常操作，浏览器自己就帮我们稳住位置。
+   为什么写在这一段上而不是挂在祖先滚动盒上：`overflow-anchor` 只影响**它自己这棵子树**的候选资格，
+   写在这一段上最精确 —— 抽屉里别的东西（酒馆自己的扩展列表）的锚定行为一个字都不动。 */
+/* ★★W28-⑥（作者 2026-09-25 白天 · 台账 §GZ 第 3 条）：`.yws-mylist` = 「我的上传」那个列表的外壳。
+   它原来没有容器（行直接铺在 `.yws-wstep` 里）—— 现在要和「商店主列表」一样**有个可定位的容器**
+   （分页按"这一份列表的直接子行"算序号：`.yws-mylist > .yws-myrow`）。
+   ★样式**复用同一条**（block + min-width:0，与 `.yws-clist` 逐字相同）—— 没有新造任何观感。 */
+.yws-clist, .yws-mylist { display: block; min-width: 0; }
+/* ★★V4 的修法：这张"临时关锚定"的票只在分页换列表的那一瞬被贴上（见 repaintCards 的注释）。 */
+.yws-clist.yws-renoanchor { overflow-anchor: none; }
+
+/* ---- ★F3「我缝过的」清单 ---- */
+.yws-sewnrow .yws-myh { gap: 6px; }
+.yws-st-new { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-accent) 52%, transparent); background: var(--yws-accent-bg); font-weight: 600; }
+.yws-st-unk { color: var(--yws-txt-2); }
+
+/* ---- ★F4/F29：点署名 / 正在编辑的横幅 ---- */
+.yws-editbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+    margin: var(--yws-s2) 0 0; padding: 8px 10px;
+    border: 1px solid var(--yws-accent-line); border-left: 4px solid var(--yws-accent);
+    border-radius: var(--yws-r-md); background: var(--yws-accent-bg); color: var(--yws-txt); font-size: var(--yws-fs-sm);
+}
+.yws-editbar .yws-pname { font-weight: 700; }
+
+/* ---- ★G31：**预设名上色**（原来用单书名号 〈〉 标出来，作者要求去掉书名号、改成换颜色） ---- */
+.yws-pname {
+    color: var(--yws-accent-ink); font-weight: 600;
+    /* 独立颜色，且必须 ≥4.5 对比度（contrast.js / probe-store-light 会量这一条） */
+}
+.yws-card-src .yws-pname { font-weight: 650; }
+/* ---- ★T2：展开态里的用途说明全文 ----
+   ★★BD3（作者第十三批 · 2026-09-22，§BD3）：这一格（`.yws-card-why2`）**整条规则删除** ——
+   那一份重复的说明在 JS 里已经删掉（DOM 里一个字节都不剩），留着规则就是孤儿。
+   展开态的"全文"现在由**上面那份不再被裁**来承担（`.yws-card-wb.yws-wb-open`）。 */
+
+/* ---- ★G32：自写 Markdown 渲染器吐出来的那几个元素 ---- */
+.yws-md > .yws-mdp { margin: 0 0 4px; }
+.yws-md > .yws-mdp:last-child { margin-bottom: 0; }
+.yws-md .yws-mdl { margin: 2px 0 4px; padding-left: 18px; }
+.yws-md .yws-mdl li { margin: 1px 0; }
+.yws-md .yws-mdbr { height: 6px; }
+.yws-md .yws-code {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .94em;
+    background: var(--yws-raise); border: 1px solid var(--yws-line-2); border-radius: 4px; padding: 0 4px;
+}
+.yws-md .yws-link { color: var(--yws-accent-ink); text-decoration: underline; text-underline-offset: 2px; }
+/* ★★U12（§BO-9）：**说明里的 Markdown 要真的渲染** —— 作者写的那几样里，改前渲染器只认
+   粗体/斜体/行内代码/列表/链接，**标题（`#`）/ 引用（`>`）/ 分隔线（`---`）/ 删除线（`~~`）一个都不认**，
+   写了就原样显示成一串符号（"写了 Markdown 但没生效"说的就是这几种）。
+   这里补上这四样吐出来的元素（都是**我们自己的**标签/类，用户输入里的 `<` 早被 esc 掉了 ⇒ XSS 铁律没松）：
+     · 标题用 `<div class="yws-mdh yws-mdh1..6">`（**不用 `<h1>` 这些原生标签**：主题 CSS 会给 h1..h6
+       加大边距/自己的颜色，在窄卡片里会被体检判溢出、还可能读不清；用受控的 div 才稳）；
+     · 字号只到 `--yws-fs-lg`（比正文略大 + 加粗就是"标题"，不搞层级大跳跃）。 */
+.yws-md > .yws-mdh { margin: 4px 0 2px; font-weight: 700; color: var(--yws-txt); font-size: var(--yws-fs-md); line-height: 1.35; }
+.yws-md > .yws-mdh:first-child { margin-top: 0; }
+.yws-md > .yws-mdh1, .yws-md > .yws-mdh2 { font-size: var(--yws-fs-lg); }
+.yws-md > .yws-mdh3 { font-size: var(--yws-fs-md); }
+.yws-md .yws-mdq { margin: 2px 0; padding-left: 8px; border-left: 2px solid var(--yws-line); color: var(--yws-txt-2); }
+.yws-md .yws-mdhr { height: 1px; margin: 6px 0; background: var(--yws-line-2); }
+/* 删除线**不压 opacity**（压了会掉对比度）：只画一条线 */
+.yws-md .yws-mddel { text-decoration: line-through; }
+/* ★★W（AR5 · 2026-09-22）：向导第二步那个「**效果：**」盒子（`.yws-mdpv` + `.yws-mdbox` +
+   空态提示 `.yws-mdhint` / `.yws-mdempty`）**整块删除** —— 作者原话"「效果」框与用途说明重复 ⇒ 删掉它，
+   保留下面的预览"。⇒ 上面那四条规则一起删掉（**不留孤儿规则**）；`.yws-md` / `.yws-link` 这两族
+   是**别处还在用**的（卡片用途、预览、评论正文都走同一个 mdRender），**保留**。
+   ★注意 `.yws-mdbox` 这个名字被 `aa-store-ui.js` §AA-1④ 与 `r6-smoke.js` 用来找那个盒子 ——
+     那两条断言按 AR5 **作废**（写在 `e2e/aw-status.md` 的"被本批改动作废的旧断言"里）。 */
+/* ★AA-1⑤：链接（Markdown 链接与裸地址共用这一类）—— 长地址要能折行（不然会撑破盒子被体检判"内容溢出"） */
+.yws-link { color: var(--yws-accent-ink); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; word-break: break-word; }
+/* 卡片上的用途说明也走 Markdown。
+   ★★U12：新加的标题/引用也一起"行内化"（卡片被 `.yws-card-wb` 两行封顶裁着，块级元素会把第一行顶掉）
+   ★★W116（作者 2026-10-08 拍板「上传说明要**完整保留空格、换行**」）：改前这一族全是"行内化"
+     （`display:inline` + 空行 `display:none`）⇒ 用户敲的回车被并成一条流水、行首空格被 HTML 折叠 ——
+     作者报的"换行和开头的空格被吃掉"就是这儿。现在：段落/标题/引用**改回块级**（每行回到自己那一行）
+     + 容器 `pre-wrap`（空格与缩进原样）+ 空行（`.yws-mdbr`，全局 6px）放出来（用户的空行就是空行）。
+     ★两行封顶行为不受影响：`.yws-card-wb` 固定 3em + overflow:hidden 与 `.yws-card-w` 的 min-height 一个字没改，
+       段落 margin 仍是 0 ⇒ 照旧裁"前两行"，只是现在裁的是**真换行之后**的前两行。 */
+.yws-card-w.yws-md { white-space: pre-wrap; }
+.yws-card-w.yws-md p, .yws-card-w.yws-md .yws-mdp { margin: 0; display: block; }
+.yws-card-w.yws-md .yws-mdl { margin: 0; padding-left: 16px; }
+.yws-card-w.yws-md .yws-mdbr { display: block; }
+.yws-card-w.yws-md .yws-mdh { margin: 0; display: block; font-size: inherit; }
+.yws-card-w.yws-md .yws-mdhr { display: none; }
+.yws-card-w.yws-md .yws-mdq { margin: 0; display: block; border-left: 0; padding-left: 0; }
+
+/* ---- ★C19/C20：上传预览面板 ----
+   ★★W37-L（作者 2026-09-26 反馈 · 第 12 条）：**"预览为什么比'填卡片'要窄呀 看起来下面像多重卡片…
+     整个预览的界面横向扩展到和填卡片一样宽"** + **"这个填卡片下面就没必要有那么一个往下拉的包裹的框框了"**。
+   改前读数（真界面 PC，W37 探针 ③）：`.yws-pv` 自己是**一个带边框 + 底色 + 12px 内边距**的盒子，
+   而它又是 `.yws-wstep`（同样有 padding）的孩子 ⇒ 里面那张预览卡比上面的「标题 / 说明」输入框**左右各窄 12px**，
+   看上去就是"套了两层的卡片"。
+   落地：① 负外边距把这一块**拉满到 `.yws-wstep` 的边**（`calc(var(--yws-s3) * -1)`，走既有间距令牌、不写死像素）
+     ⇒ 里面的内容与上面那几栏**左缘逐像素对齐**；② **去掉那层包裹框**（border / 底色 / 圆角全撤），
+     只在顶上留一根细线把它和"填卡片"那几栏分开 —— 不再是"多重卡片"。
+   ★改后读数（真界面 PC）：预览卡 x=419 r=691 w=272 = 说明框 x=419 r=691 w=272（改前：预览卡比它窄 24px）。 */
+.yws-pv {
+    margin: var(--yws-s3) calc(var(--yws-s3) * -1) calc(var(--yws-s3) * -1);
+    padding: 10px var(--yws-s3) 0;
+    border: 0; border-top: 1px solid var(--yws-line); border-radius: 0;
+    background: transparent; min-width: 0;
+}
+.yws-pvhead {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+    font-size: var(--yws-fs-md); color: var(--yws-txt); margin-bottom: 4px;
+}
+.yws-pvhead .yws-dim { flex: 1 1 auto; min-width: 0; }
+.yws-pvsec { margin-top: 10px; min-width: 0; }
+.yws-pvsec > .yws-pvhead { font-size: var(--yws-fs-sm); font-weight: 600; color: var(--yws-txt); }
+/* 预览里的那张卡：**只读**（点不动 —— 别让人以为能在这里缝） */
+/* ★★AA-5（作者第六批反馈）：预览里那张卡片**恢复可点** —— 作者原话"预览就是卡片，点卡片右下角的「缝入」直接进"。
+   改前这里一刀切 `pointer-events: none`（防误点），代价是整张卡片点不动（作者报的"所以卡片点不开"）。
+   现在卡片上**所有动作都被改写成 `prev-detail`**（见 preset-store.js 的 `previewCardHtml`）⇒ 点了只会打开
+   "用户那边看到的样子"那块只读界面 —— 可以放心让它可点。 */
+.yws-pvcard { cursor: pointer; }
+.yws-pvcard .yws-card { cursor: pointer; }
+.yws-pvcard .yws-card:hover { transform: none; box-shadow: var(--yws-shadow-1); }
+/* ★★BD5（作者第十三批 · 2026-09-22，§BD5）：**「收起」挪到右上角** ——
+   作者原话就是这一句。做法：`margin-left: auto` 把它顶到 `.yws-pvhead` 那一行的最右端
+   （那一行本来就是 `display:flex; flex-wrap: wrap`，标题与"（预览…）"那句在左边、它独占右边）。 */
+/* ★★BD5："**只有点右下角「缝入看效果」**才进入缝入界面" —— 那一颗的家：预览块的**右下角**一行。
+   `justify-content: flex-end` 让它贴右（手机上也是右下角）；上面那条细线把它跟卡片分开（一眼看出是"离开预览"的动作）。 */
+.yws-pvrow { margin-top: var(--yws-s2); }
+/* ★F5：查重提示（**不阻断** —— 所以是暖色的提示条，不是红色的错误框） */
+.yws-dupbox {
+    border: 1px solid color-mix(in srgb, var(--yws-warn) 46%, transparent); border-left: 4px solid var(--yws-warn);
+    border-radius: var(--yws-r-md); padding: 9px 11px; margin: 10px 0 0;
+    background: var(--yws-warn-bg); color: var(--yws-txt); font-size: var(--yws-fs-sm); line-height: 1.6;
+}
+
+/* ---- ★C15：范围按钮成组横排（两颗连着，像一排 tab） ---- */
+.yws-segbox { display: inline-flex; align-items: center; gap: 0; flex: 0 0 auto; }
+.yws-segbox .yws-btn { border-radius: 0; margin-left: -1px; }
+.yws-segbox .yws-btn:first-child { border-radius: var(--yws-r-pill) 0 0 var(--yws-r-pill); margin-left: 0; }
+.yws-segbox .yws-btn:last-child { border-radius: 0 var(--yws-r-pill) var(--yws-r-pill) 0; }
+.yws-segbox .yws-btn.yws-sel { position: relative; z-index: 1; }
+.yws-wftx { font-size: var(--yws-fs-xs); }
+
+/* ---- ★D21：待审页展开后的"这条怎么改的" ---- */
+.yws-rvdiff {
+    margin-top: var(--yws-s2); padding: 9px 10px;
+    border: 1px solid var(--yws-line-2); border-radius: var(--yws-r-md); background: var(--yws-bg); min-width: 0;
+}
+.yws-rvraw { margin-top: 6px; }
+.yws-rvraw > summary { font-size: var(--yws-fs-xs); }
+
+/* ---- ★E25/E27 连接区横排紧凑（★W89-⑤：F6 那颗「⤓ 导出凭据」随作者要求删除 ⇒
+   `.yws-conn-h .yws-bakbtn { margin-left: auto }` 那条规则也一并删掉 —— 元素没了，规则是死代码） ---- */
+.yws-conn-h { display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2); }
+/* ★E25（作者台账）：作者原话 ——「连接」按钮**放到审核密钥右边**（横向），**别单独占一行**。
+   口径：这一行**不换行**（`nowrap`）；label 吃剩余宽度（`flex:1 1 auto` + `min-width:0`），
+   按钮 `flex:0 0 auto` 永远贴在它右边。★这是**量出来的**：以前 `.yws-lbl` 是 `flex:1 1 100%`
+   → label 占满一整行 → 「连接」被挤到下一行（E25 的根因，也是 C15/E27 的同一个根因）。 */
+.yws-connrow { margin-top: 6px; flex-wrap: nowrap; }
+.yws-connrow > .yws-lbl { flex: 1 1 auto; min-width: 0; flex-wrap: nowrap; }
+.yws-connrow > .yws-lbl > .yws-inp { flex: 1 1 60px; min-width: 0; }
+/* 密钥框（含小眼睛）自己那一格：窄抽屉里也留得下，「连接」按钮不会被顶走 */
+.yws-connrow .yws-keywrap { flex: 0 1 138px; min-width: 90px; }
+/* ★★W45B-③（2026-09-26 · 作者反馈「头像出来了但名字样例没显示」）：
+   **nowrap 的连接行里，行尾那句灰字不许按「100% 基准」占位**。
+   上面那条 .yws-wrow > .yws-dim.yws-connhint { flex: 1 1 100% } 是给「会换行」的行用的 —— 那种行里
+   它靠 100% 的基准独占一行；而 .yws-connrow 是 flex-wrap: nowrap ⇒ 它既独占不了行，又把左边的标签
+   挤到只剩 90px，于是「别人看到的你」那小样只剩 ~20px、里面的名字被压成 **0 宽**（实测见报告 §③）。
+   这里按「同一行里的一条普通尾巴」办：按自己的内容占位、可以让、不去抢。 */
+.yws-connrow > .yws-dim.yws-connhint { flex: 0 1 auto; min-width: 0; }
+/* 「连接」按钮：就贴在密钥框**右边**（同一行） */
+.yws-connbtn { flex: 0 0 auto; align-self: center; }
+.yws-connhint { flex: 0 1 auto; font-size: var(--yws-fs-xs); }
+/* ★★U12（§BO-1 的"自己看不到变化"）：连接区那一行**小样 = 别人看到的你**（头像 + 名字，用上面那两个色）——
+   它是"这个色到底长什么样"的**当场证据**（这一页里没有评论区），改色时由 `syncMyColorRow()` **就地**换掉这一段。
+   口径与评论区同一套（18px 小头像 + 名字那一档字号）；名字超长自己省略，绝不把这一行挤到第二行。 */
+.yws-mypv { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+/* ★★W45B-③：**名字必须留得住** —— 它是可收缩的 flex 项、又带 overflow: hidden（自动最小尺寸 = 0，
+   与 W42 那颗头像的「可收缩」是同一族问题）⇒ 行里空间一紧，收缩的账全落在它身上，实测被压成 **0 宽**
+   （头像 18×18 好好的、名字屏幕上什么都没有、scrollWidth 57 全被裁掉）。
+   地板 2.6em ≈ 38px = 最窄也看得见两个字 + 省略号；将来任何新的 flex 容器都不可能再把它挤没。 */
+.yws-mypv .yws-cmwho { max-width: 7em; font-size: var(--yws-fs-name); min-width: 2.6em; }
+
+/* ==========================================================================
+   9c. ★M6~M23（2026-09-21 作者第二批反馈）
+   ========================================================================== */
+
+/* ---- ★T11/T12：`.yws-statusline-min` 那条规则**删掉了** ----
+   它原来是"非商店页只画一颗刷新图标"的补丁（`justify-content: flex-end`），也就是作者点名的那块**空区域**
+   —— 现在非商店页那一行只剩连接状态（正常态连图标都不画），这条补丁没有任何元素会命中。 */
+
+/* ---- ★M6：范围两颗按钮之间留出正常间距（原来"间距太窄"） ---- */
+.yws-segbox-gap { gap: 6px; }
+.yws-segbox-gap .yws-btn { margin-left: 0; border-radius: var(--yws-r-pill); }
+
+/* ---- ★M7：版权提醒**位置固定**（第①②步都在"步骤点下面、内容块上面"这同一格） ---- */
+/* 固定成"步骤点下面那一格"：不再随步骤在页面里上下跑（原来第①步在最上方、第②步跑到表单中间）。 */
+.yws-wiz > .yws-rights { margin: var(--yws-s2) 0 var(--yws-s3); }
+
+/* ---- ★M8：用途说明的输入框要**占满横向**（原来"忽然很窄"） ---- */
+.yws-lbl-wide { flex: 1 1 100%; align-items: flex-start; }
+.yws-lbl-wide > .yws-lbl-t { flex: 0 0 auto; line-height: 1.7; }
+.yws-ta-full { width: 100%; min-height: 76px; box-sizing: border-box; }
+/* ★W（AR5）：`.yws-mdrow`（「效果」盒子那一行）的规则随盒子一起删 —— 那一行 DOM 已经不存在了。 */
+
+/* ---- ★M10：预览区那行说明**独占一行**（原来被按钮挤到只剩半句、被裁切） ---- */
+.yws-pvhead { row-gap: 4px; }
+/* ★★BD5（作者第十三批）：`.yws-pvsub`（"上传后商店里的样子"那行字）在 AA-5 时 JS 里就删了 ——
+   这里把它的规则也删掉（不留孤儿）。
+   ★★W40-⑥（2026-09-26 · 作者第 6 条）：`.yws-pvtag`（预览区那一句标识）原来那条**药丸**样式也删了 ——
+   它现在与 `.yws-basehint`（「官方旧版」那句）**共用同一条规则**（见下面的并排选择器）：
+   作者要的正是"这三处要和「官方旧版」那句一样的 UI"。类名留着当锚点（r6/aa 的探针拿它读那行字），
+   外观不再由这里给（留一条空规则比不写更糟 ⇒ 整块删掉）。 */
+.yws-wrowhint { flex: 0 1 auto; font-size: var(--yws-fs-xs); }
+
+/* ---- ★M3：来源块 / 来源行里的**预设名要变色**（`.yws-pname`，判据见 preset-store.js 的 G31/M3） ---- */
+.yws-card-src { font-size: var(--yws-fs-xs); color: var(--yws-txt-2); }
+.yws-card-src .yws-pname { color: var(--yws-accent-ink); font-weight: 700; }
+/* 卡片标题行里那颗「官方」也算"来源标识"，跟预设名用同一族颜色系（暖金），一眼能对上 */
+.yws-card-h .yws-offi { color: var(--yws-gold-ink); }
+
+/* ---- ★T4（作者第四批反馈）：**`照官方 X 改的` 那颗胶囊整块删掉**（所有出现处）----
+   ★口径：作者要的是"这一行不存在"，所以这里**不留类名占位、不留空盒子**（`baseChipOf()` 现在恒返回空串）。
+   `--yws-based` 的老规则一并删掉（CSS 里再没有 `.yws-based`，谁把它加回来这里会立刻显形）。 */
+
+/* ---- ★T2：可点的「更新日期」+ 就地摊开的「更新记录」面板（鼠标点得到、手指也点得到） ---- */
+/* 日期那颗现在是按钮（`data-act="hist"`）：给它"能点"的样子（虚下划线 + 指针），但仍然是一行文字的大小
+   —— 不许把元信息那一行撑高（作者 A4/A9 的口径：一行元信息、卡片张张等高）。 */
+.yws-mday.yws-daybtn { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+.yws-mday.yws-daybtn:hover { color: var(--yws-accent-ink); }
+/* ★★BM-C（作者第十五批 · 2026-09-22 · **第三次讲这一块，以本条为准**）：记录块画在
+   「评论 / 点赞 / 缝入」那一行（`.yws-card-n`）**之后**、「具体内容」（展开体）**之前** ——
+   它是**展开区的最上沿**、也独立于展开态（只点日期时它自己就在那儿）。
+   间距按"上下都与卡片其它块同一套口径"给（上 6px 与动作行隔开、下 6px 与展开体隔开）——
+   画面整齐好看、手机档不挤（限高那一条见下面的媒体查询）。 */
+.yws-histbox {
+    position: relative;                 /* ★★BM-G：右上角那颗红点（`.yws-histdot`）的定位盒子（不改布局，零副作用） */
+    margin: 6px 0 6px; padding: 7px 9px;
+    border: 1px solid var(--yws-line-2); border-radius: var(--yws-r-md);
+    background: var(--yws-bg);
+    display: flex; flex-direction: column; gap: 2px;
+    font-size: var(--yws-fs-sm); color: var(--yws-txt-2);
+    /* ★★AU7-③（作者第十四批 · 2026-09-22，§AU7-③）：这一段**不许成为页面级滚动跳动的来源** ——
+       `overscroll-behavior: contain` ⇒ 内部滚到头也不会"接力"滚到外面那层抽屉（作者点名的那条）。
+       高度本身**不在这里限**（PC 档一行不挤，两段加起来也就几行；限高只给手机档，见下面媒体查询）。 */
+    overscroll-behavior: contain;
+}
+.yws-histh { font-size: var(--yws-fs-xs); color: var(--yws-txt); font-weight: 700; margin-bottom: 2px; }
+/* ★★BJ-C5：`.yws-histh-x`（两个小标题后面那串括号解释文字）**整条规则删掉** ——
+   JS 里那两处 span 也一起删了（作者："（再点一下日期收起）""（我缝过哪几次 · 当时第几版）"逐字清掉）；
+   留着规则就是孤儿（class-check 只查 JS→CSS 一个方向，所以这里必须自己记得删）。 */
+/* ★★BJ-C6（作者第十五批）：**"这一版就是我缝进去的那一版"** 的那个勾（`sewn` 那几行才画）——
+   用主色强调色那一档的墨色，跟「更新记录」那行的正文色分得开；勾后面只跟两个字，不占地方。 */
+.yws-histsew { flex: 0 0 auto; font-size: var(--yws-fs-xs); color: var(--yws-accent-ink); font-weight: 700; white-space: nowrap; }
+/* ★★BM-G（作者第十五批 · 2026-09-22，§BM-G）：**缝入记录里若有更新 → 这块的右上角也有一颗红点**
+   （"可点进去，行为与卡片上的红点一致"：`data-act="hist"` + 同一个 `toggleHist`，见 `histHtml`）。
+   视觉与卡片上那颗**同一套红**（`--yws-bad` + 同一圈 26% 光晕 ⇒ 换主题/换底也认得出来是"同一件事"）。
+   热区：元素盒 16px，用 `::before` 撑到 **28px**（评审要求的控件热区 ≥24px —— 与"红点伪元素"分开两条，
+   互不占位）；`::after` 画那个 7px 的圆点本体。绝对定位 ⇒ **不参与布局、不把标题挤走**。 */
+.yws-histdot {
+    position: absolute; top: 5px; right: 6px; width: 16px; height: 16px;
+    cursor: pointer; border-radius: 50%;
+}
+.yws-histdot::before { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
+.yws-histdot::after {
+    content: ""; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 7px; height: 7px; border-radius: 50%; background: var(--yws-bad);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--yws-bad) 26%, transparent);
+}
+.yws-histdot:hover::after { background: color-mix(in srgb, var(--yws-bad) 78%, #fff); }
+/* ★★AU7-③：**第二段的小标题**（「缝入记录」）—— 与第一段（「更新记录」）之间拉一条细分隔线，
+   两段**分区清楚**（作者要的"两类各一小标题/分组"）；用虚线而不是实线：它是"同一张卡的两段记账"，
+   不是两个模块（视觉上更轻，也不会让卡片看着被切成两块）。 */
+.yws-histh2 { margin-top: 5px; padding-top: 4px; border-top: 1px dashed var(--yws-line-2); }
+.yws-histline { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.yws-histk { flex: 0 0 46px; font-size: var(--yws-fs-xs); color: var(--yws-txt-3); }
+.yws-histt { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.yws-hist-now .yws-histt { color: var(--yws-txt); font-weight: 600; }
+.yws-hist-mine .yws-histt { color: var(--yws-txt-2); }
+.yws-hist-dim .yws-histt { color: var(--yws-txt-3); font-size: var(--yws-fs-xs); }
+.yws-hist-made .yws-histt { color: var(--yws-txt-2); }
+.yws-histk { flex: 0 0 46px; font-size: var(--yws-fs-xs); color: var(--yws-txt-3); }
+.yws-histt { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.yws-hist-now .yws-histt { color: var(--yws-txt); font-weight: 600; }
+.yws-hist-mine .yws-histt { color: var(--yws-txt-2); }
+.yws-hist-dim .yws-histt { color: var(--yws-txt-3); font-size: var(--yws-fs-xs); }
+.yws-hist-made .yws-histt { color: var(--yws-txt-2); }
+/* ★★W59（作者 2026-09-27 反馈 · 第 2 组）：「最早」那一行 —— **排版与「现在」同一套**（不再缩一号字，
+   跟着 `.yws-histbox` 走）、**色阶低一档**（`--yws-txt-2`，与同一块里的「缝入记录」同档）。
+   ⇒ 整块形成三级阶梯：现在(`--yws-txt`) / 最早+缝入(`--yws-txt-2`) / 更早说明(`--yws-txt-3`)。
+   ★**故意不跟「现在」同色**：作者第 2 组的立意是"别让整块都是同一种颜色的字"（视觉疲劳），
+     两行同色同号反而会加重那件事。这一档与「缝入记录」同色 ⇒ 读者一眼分得清"哪一行是现在"。
+   ★`--yws-txt-2` 在这里是**既有令牌**（不是新造档），自动取色层照旧给它兜底对比度（≥4.5）。 */
+.yws-hist-made .yws-histt { color: var(--yws-txt-2); }
+
+/* ---- ★★W1（作者第五批反馈）：**跟随鼠标的浮层（`.yws-tip`，原 T5）整条规则删掉** ----
+   作者原话："不要额外做鼠标跟随浮层（它还有很多 bug），你直接就用最简单的方式"。
+   那段全文说明现在写在**卡片本来就有的那句 `title`** 里（= 浏览器自带的悬停提示，零元素、零定位）。 */
+
+/* ★★W25A（第 1 / 3 / 5 / 9 条）几个**新类**的规则（`class-check` 要求 JS 用到的类都有规则）：
+   · `.yws-perhide`   = （★W42 已删 —— 那两颗档位按钮整排删掉了，见下面那段；规则一起删，不留孤儿）
+   · `.yws-sec-empty` = 某一栏里一张卡都没有时那句人话（小剧场那一栏常驻之后它必须能画出来）；
+   · `.yws-myrow-pv`  = 「我的上传」那一行的**内容预览**（点一下看全文：`[data-pv-open]` 时不再截断）；
+   · `.yws-crednote`  = 「我的凭据」展开看原文时那句说明（这一串就是你的凭据）。 */
+.yws-sec-empty { padding: 6px 2px 2px; line-height: 1.55; }
+.yws-myrow-pv { margin-top: 2px; line-height: 1.5; cursor: pointer; overflow-wrap: anywhere; }
+.yws-myrow-pv[data-pv-open="1"] { white-space: pre-wrap; }
+/* ★★W34-⑤（真 BUG 的修法 · 作者 2026-09-26 反馈）：预览文那一段 —— 点一下看全文时**只换它**的
+   `textContent`（同层的「小剧场」标签与时间 `.yws-mrow-at` 不再被顺手抹掉，见 `case 'my-pv'`）。
+   它自己**不承担任何新视觉**（颜色 / 字号 / 换行全继承 `.yws-myrow-pv`）；这条规则的作用只是
+   让这个类在样式表里有名有姓（`class-check` 只查"JS 里用到的类在 CSS 里有没有规则"这一个方向）。 */
+.yws-myrow-pvtxt { white-space: inherit; }
+.yws-kindtag { display: inline-block; margin-right: 5px; padding: 0 5px; border: 1px solid var(--yws-line); border-radius: var(--yws-r-pill); background: var(--yws-surface); color: var(--yws-txt-2); font-size: var(--yws-fs-xs); }
+.yws-mrow-at { margin-left: 6px; opacity: .75; }
+.yws-crednote { margin-top: 4px; line-height: 1.5; }
+/* ★★W42（派单①）：`.yws-pergroup .yws-per { min-width: 48px }` + `.yws-pergroup .yws-per.yws-perhide {...}`
+   两条规则**整排删掉** —— 它们服务的对象（`5 条 / 10 条` 两颗档位按钮）已按作者要求删掉：
+   作者原话"只保留「每页 N 条」…**只要留下这个就够了 前面的 5 条 10 条可以删除**"。
+   ★上一任（W35-P2）为这两颗写过一段"整块消失 → 改成变暗"的账，**整段作废**：
+     现在没有"档位"这回事了，`.yws-perhide` / `.yws-percustom` 两个 class 在 JS 里也不再出现
+     （判据：`grep -c 'yws-perhide\|yws-percustom' preset-store.js` = **0**）。
+   ★`class-check` 只查"JS 用到的类在 CSS 里有没有规则"这一个方向，所以删 JS 里的类时
+     **必须自己记得把 CSS 规则也删掉**（这句话本项目写在好几处，这里是共用同一条纪律）。 */
+
+/* ---- ★W10（作者第五批反馈）：与酒馆预设的开关状态同步 —— 关着的那条**变半透明**（仍然显示，只是不显眼）。
+   只改 class（`applySwitchDim` 只做 classList.toggle，绝不重绘）：所以滚动/焦点/输入一个字都不动。
+   取值范围只有这两个列表：上传向导「挑条目」的行（`.yws-prow`）与卡片展开态/伪缝入预览的条目行（`.yws-prow2`）。 */
+.yws-prow.yws-off, .yws-prow2.yws-off { opacity: .55; }
+.yws-prow.yws-off .yws-pname, .yws-prow2.yws-off .yws-pname2 { color: var(--yws-txt-2); }
+/* ★W10：关着的那一条仍然是"能点、能勾"的（作者说"仍然显示"）—— 只是看着淡一档 */
+
+/* ---- ★★W7（作者第五批反馈）：分页（★BJ-D 起**上下各一套**：上面那套在「用户更新」那一行、下面那套在末尾） ----
+   ★★BJ-D（作者第十五批 · 2026-09-22，§BJ-D）：下面那一套（原来的 `.yws-pager`，没加修饰类）点完**滚到"用户更新"第一条**。
+   ★★BM-A（作者第十五批 · 2026-09-22，§BM-A）：上面那一套（`.yws-pagertop`）**挪进「用户更新」那一行**、
+   紧跟「刷新」按钮的右边（同一个 `.yws-sec-x` 里）—— 点它**页面保持不动**（`repaintCards()` 的 keepOuterScroll）。
+   作者原话："**那样很丑**"（改前它自己占一行、画在两个分区之间、还带一根横线）⇒ 下面三条**全部撤掉**：
+     · 那条 `margin-top: 10px; padding-top: 8px` 的**独立行间距**；
+     · 那根 `border-top: 1px solid var(--yws-line-2)` 的**横线**（它就画在这一套上 —— 作者看到的那根）；
+     · 那套 `.yws-pagertop { margin: 4px 0 2px; padding-top/bottom }` 的**上下内边距**。
+   现在它只是一行里的一组小控件（与「刷新」那颗同一族的落点）：不占行、无线、跟着那一行的右端对齐。
+   下面那一套（`.yws-pager` 本体）**一个字没改** —— 它仍是"卡片列表末尾、计数行上面"的那一条。 */
+.yws-pager {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--yws-s2);
+    margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--yws-line-2); min-width: 0;
+}
+/* ★★BM-A：上面那一条 —— 它现在是「用户更新」那一行里的一格（不是一条独立行）：
+   零外边距 / 零内边距 / 无横线，自己缩成内容宽（`flex: 0 0 auto`），页码文案不折行。 */
+.yws-pagertop {
+    margin: 0; padding: 0; border-top: 0; flex: 0 0 auto; justify-content: flex-end; gap: 4px;
+}
+.yws-pagertop .yws-pageinfo { white-space: nowrap; }
+/* ★★W25A（第 7 条）：某一栏**自己的**那颗 compact 翻页（`‹ 1/2 ›`，画在它自己那一行的右端、
+   紧挨「刷新」左边）—— 它不再是"独立一条带横线的那套"，所以零边距、零内边距、无横线，
+   与「刷新」同一族的一格里的一小段（`.yws-sec-x` 里）。触摸目标不缩：按钮仍走 `.yws-mini` 那一套。 */
+.yws-pagsec { margin: 0; padding: 0; border-top: 0; flex: 0 0 auto; justify-content: flex-end; gap: 3px; }
+.yws-pagsec .yws-pageinfo { white-space: nowrap; }
+.yws-pgsec { min-width: 26px; padding-left: 4px; padding-right: 4px; }
+.yws-pageinfo { font-size: var(--yws-fs-xs); color: var(--yws-txt-2); font-variant-numeric: tabular-nums; }
+/* ★★W42（派单①）：`.yws-perlab`（那两个字「每页」）**这一轮复活** ——
+   BJ-A3 当年按作者一句"删掉「每页」两字"把它整条规则删了，而作者这一轮明确要的是
+   "**只保留「每页 N 条」**" ⇒ 那两个字必须回来（否则界面上只剩一个裸数字框，读不出它在说什么）。
+   ★样式**不新造**：直接沿用同排量词「条」那一档（`--yws-fs-sm` + `--yws-txt-2`）—— 两个词同族、同色阶。
+   ★`flex: 0 0 auto`：它是这一格里**不被压缩**的那一个（会缩的是那个数字框）。 */
+.yws-perlab { font-size: var(--yws-fs-sm); color: var(--yws-txt-2); flex: 0 0 auto; }
+/* ★★W42（派单①）：那一格现在是**一个控件**「每页 N 条」——
+   作者原话："只保留「每页 N 条」；删掉前面的「5 条 / 10 条」那些预设档位（只要留下这个就够了）"。
+   ★`5 条 / 10 条` 那两颗档位按钮的规则（`.yws-pergroup .yws-per { min-width: 48px }` 等 3 条）**整排删掉** ——
+     JS 里那两个 `<button data-act="per-5/per-10">` 已经不画了，留着就是孤儿规则。
+   ★这一格现在**自带宽度上限**、内部**不许换行**（它只有 4 个小件，宽度是固定的几十像素）：
+     万一哪天真被压到极限，宁可它里面的数字框被裁，也不许它把第 3 行顶成两行。 */
+.yws-pergroup { flex: 0 1 auto; min-width: 0; flex-wrap: nowrap; gap: 4px; align-items: center; }
+/* ★★W25A（第 3 条）：这一格挪到工具条第 3 行（搜索框右边）—— gap 6 → 5、并**允许它自己收缩**
+   （`flex: 0 1 auto`：与搜索框同一行，窄屏时先把余量让给搜索框；它里面的东西不再会"变形"）。
+   ★★W42（派单①）：那一格里现在**只有一个控件**「每页 N 条」（两颗档位按钮与那颗开合按钮都按作者要求删了，
+     见 `perPageHtml`）⇒ 这一格的占地从 **143px 掉到 ~110px**，第 3 行再也不会因为它而掉行。
+   ★★W42 顺手抓到的一个**既有真 BUG**（本行下面原来那段注释）：
+     原文在 `.yws-percell` 那条规则后面写了**两个 `*/`**（第 2023 行把注释关掉了，第 2024 行还有一个悬空的 `*/`）——
+     浏览器在注释外遇到 `*/` 会进入错误恢复，把"悬空文本 + `*/` + 下一条规则的选择器"当成**一个坏选择器**丢掉
+     ⇒ **`.yws-perin-w { display:inline-flex; align-items:center; gap:4px; flex:0 0 auto }` 这条规则从写下的那天起
+     就没生效过**（它在纯文本上看是"有的"，在浏览器里是"没有的"—— 症状被"内联元素本来就横向排列"盖住了）。
+     已修（把那段注释**并回一条**、悬空的 `*/` 删掉），修完 `.yws-perin-w` 的 computed 值见报告 §② 的读数。
+     ★教训（值得留在这）：**CSS 注释的 `*/` 必须成对** —— `css-check.js` 只查大括号平衡，查不出这个；
+       这轮我自己的量具（`e2e/tmp/w42-geom.js`）也不查它，是**逐字符扫"注释外的 `*/`"**扫出来的。 */
+.yws-percell { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; flex: 0 1 auto; min-width: 0; }
+/* ★★W25A：输入框那一小段的宽度**一个字都不改**（原来那条 `flex: 0 0 auto` 见下一条）。
+   ★试过的那条错路（写下来免得下一任再试）：让输入框 `flex: 1 0 100%` 占这一格自己的第二行 ——
+     实测它反而把这一格**撑宽到 215px**（闭合时 153），与搜索框同一行时照样换行（作者那条现象的翻版）。
+   ⇒ 结论：这一格的宽度**只减不增**才是对的（W42 又把"减"做到位了：两颗档位按钮整排删掉）。 */
+/* ★★W35-P3：`flex: 1 0 100%` 是"**必定另起一行**"的写法 —— 只是当前容器够宽才没触发。
+   外层再窄一点，界面就会变成"上一行一颗孤零零的『每页』、下一行一个裸数字框"（W25A 注释里点名过的形态）。
+   ⇒ `0 0 auto`：与「每页」两个字**同一行**，`flex-wrap` 交给父级决定。 */
+.yws-perin-w { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+/* ★★BD1（作者第十三批 · 2026-09-22，§BD1）：那个自定义数字框**要小** ——
+   作者原话："**输入框要小**（不要占那么宽；建议宽度按 **3 位数 + 单位「张」** 来定，**别再撑满**）"。
+   改前 `width: 66px`（AR1 那版"第四格就是输入框"，看着像一整格）。现在：
+     · 三位的数字（`100`）在 `--yws-fs-md` 下约 3ch ≈ 24px，加上左右内边距（`.yws-inp` 的 padding）与正中间对齐
+       ⇒ **48px** 够放"100"，也不会比旁边那几颗"5 张"按钮更宽（那几颗 min-width 44px）；
+     · `box-sizing: border-box`（`.yws-inp` 本来就是）—— 48px 是**含边框**的总宽，量出来的 `width` 就是它。 */
+/* ★★W25A（第 3 条）：48 → 44（仍是"3 位数 + 单位条"放得下的宽度；BD1 的「要小」更进一步）。 */
+/* ★★W35-P3（同一条"每页那个框有点丑"）：数字框 **44 → 52px** ——
+   框里要放得下 `1`~`100`（三位数），而 `type=number` 的微调箭头还要吃掉约 16px；44px 下三位数**贴边**。
+   52 是"三位数 + 左右内边距 + 箭头"量出来的最小舒适值（既有 `.yws-per { min-width: 48px }` 那一档之上）。 */
+/* ★★W42（派单①）：`.yws-perin { width: 52px }` 这**一条**留着（框的宽度是量出来的，与档位无关）——
+   它上面那三段"48 → 44 → 52"的账**原样保留**（那是这条宽度的来历）；
+   其中提到 `.yws-per { min-width: 48px }` 的地方（"那一档之上"）**已随档位一起作废**，只是记账文字不改。
+   ★为什么不再动宽度：52px = "三位数（1~100）+ 左右内边距 + `type=number` 的箭头"量出来的最小舒适值。 */
+.yws-perin { width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
+/* 「条」字跟在框后面（框外量词，用户一眼知道填的是"每页几条"） */
+/* ★★W35-P3：单位「条」原来 11px（`--yws-fs-xs`）挨着 13px 的数字**两个字号**，
+   抬到 `--yws-fs-sm`（12）与数字同族 —— 只动字号，颜色仍走 `--yws-txt-2`（零硬编码）。
+   ★★W42：那个「每页」标签（`.yws-perlab`）复用了**同一条色阶/字号**（两个词同族）。 */
+.yws-perunit { font-size: var(--yws-fs-sm); color: var(--yws-txt-2); flex: 0 0 auto; }
+/* ★W6：计数行（共 N 张 · 官方 N 张 · 我传 N 张）在**卡片列表下面**（类名仍是 `.yws-statusline`） */
+.yws-countsline { justify-content: center; margin-top: 6px; }
+.yws-countsline .yws-counts { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+/* ★W4/W5/W6：顶上那条**只在离线 / 出错**时出现（"状态 + 下一步"，必须显眼） */
+.yws-warnline { align-items: center; }
+
+/* ---- ★★W（AR2 · 2026-09-22）：AA-1①/② 那一整块（标题摆正 + 筹码绿色）**整段删除** ----
+   作者原话（AR2）：商店大分页标题旁边那颗「已连上」**取消**。
+   AA-1① 那个"标题歪了"的根因就是**筹码进了 summary 的 flex 流**（`[图标][标题][筹码][▸]`）；
+   筹码一删，标题自然回到"图标与箭头之间居中"的原位 ⇒ 这里连 `position: relative` 都不再需要，
+   `#yw-store-online` / `#yw-store-online::before` / `#yw-store-online.yws-off` 三条规则一起删掉
+   （**不留孤儿规则**）。离线/连接中的状态改由 `.yws-statusline.yws-warnline` 那条人话错误条表达。 */
+
+/* ---- ★M16：作者更新过 → **更新时间上打一个红点**（★T2 起：点它看「更新记录」，悬停仍然有 title 速览） ---- */
+.yws-mday.yws-hasdot { position: relative; padding-right: 9px; cursor: pointer; color: var(--yws-txt-2); }
+.yws-mday.yws-hasdot::after {
+    content: ""; position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+    width: 6px; height: 6px; border-radius: 50%; background: var(--yws-bad);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--yws-bad) 26%, transparent);
+}
+
+/* ---- ★M17：条目名那行 —— 与作者名之间再收窄（胶囊内边距压到 6px）----
+   ★★W2（作者第五批反馈）：**这一行的定高（40px）撤掉了** —— 它当时是想放"两行胶囊"，
+   而抽屉里通常只有一行（21px）⇒ 白白在卡片底部留了 ~19px 空白，正是作者说的"留白还是太大"。
+   现在高度由内容决定（详见上面 `.yws-card-n` 那一大段注释）：一行胶囊 + 右端动作区。 */
+.yws-mnames { align-content: flex-start; gap: 4px 5px; }
+.yws-chip { padding: 1px 6px; }
+
+/* ---- ★M14：编辑行要有退路（取消） ---- */
+.yws-editrow { flex-wrap: wrap; }
+
+/* ---- ★M15/M22：凭证那两行 —— 左边标签与右边内容**横向并排同一栏**、两行逐像素对齐 ---- */
+.yws-credline { flex-direction: row !important; flex-wrap: nowrap !important; align-items: flex-start; gap: var(--yws-s2); }
+/* ★AU-②（作者第九批 §AQ 第 1 条 · 凭证两行"还是对不齐"）：
+   这两行**齐不齐**全靠"两格同宽"，而原来是**写死的 62px / 手机 52px**，标签文字（「粘贴凭证」4 个字）
+   却是**随字号走**的 —— 字号被主题/浏览器缩放抬一档（12 → 13px），「粘贴凭证」正好 52px 顶死 → **折成两行**，
+   而「凭证」只有 2 个字不折 ⇒ 两行标签一高一矮（左边还有个被顶下去的内容），看着就是"歪的"。
+   这也解释了"AA 与质检量出来差 0px、作者却仍看到不齐"：**量具量的是左缘/宽度（确实 0px），
+   但折行只在特定字号/缩放下出现**。
+   ⇒ 改法（最小）：格子换成 **em**（同一档字号下 5.2em ≈ 62.4px，肉眼零变化；手机 4.6em ≈ 原 52px 那一档），
+     格子跟着字号**一起长** + `nowrap` ⇒ 永远装得下 4 个字、两格永远是同一个值、一个像素都不会错位。
+   ★别写成 `flex: 0 0 auto`：那样两格宽度会跟着各自文字走（「凭证」2 字 vs「粘贴凭证」4 字）= **真的错位**。 */
+.yws-credline > .yws-lbl-t { flex: 0 0 5.2em; line-height: 1.7; white-space: nowrap; }
+.yws-credbody { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.yws-credbox { width: 100%; box-sizing: border-box; min-height: 62px; }
+.yws-credrow { gap: var(--yws-s2); }
+/* ★★AU-②（作者第九批 §AQ 第 1 条 · 作者原话"为什么那个凭证和后面那个凭证平行对不上"）：
+   连接区**四行左缘统一**。改前四行的"控件左缘"是**三种数**（12px 字号下）：
+     · 作者名  → 裸文字 3 个字 = 36px + gap 8 = **44px**
+     · 审核密钥 → 裸文字 4 个字 = 48px + gap 8 = **56px**
+     · 凭证 / 粘贴凭证 → 固定标签列 `5.2em` = 62.4px + gap 8 = **70.4px**
+   （所以 AA/质检量"凭证 vs 粘贴凭证 差 0px"是**对的** —— 作者说的不是那一对，是**四行之间**。）
+   改法（最小）：前两行的标签文字也包进 `.yws-lbl-t`，用**同一个标签列**（下面那条 `.yws-credline > .yws-lbl-t`
+   的 5.2em / 手机 4.6em 同一个值）⇒ 四行控件左缘 = 标签列 + gap，**一个数**（12px 时 70.4px）。
+   ★别改成 `.yws-lbl-col`：那一族自带 `flex: 1 1 100%`（标签独占一整行）⇒ 密钥那颗「连接」按钮会被顶到下一行、
+     作者名那颗"只影响以后上传的卡片"提示同理 —— 会破坏 E25 的横向紧凑。 */
+.yws-connrow > .yws-lbl > .yws-lbl-t { flex: 0 0 5.2em; white-space: nowrap; }
+
+/* ==========================================================================
+   ★★AU6 ③（AS2 §6 条 3 那半句"PC 档把 ≤20px 的抬到 ≥24"，第一轮点了、第二轮仍未做）
+   --------------------------------------------------------------------------
+   改前读数（AS2 §5.1 S20）：PC 档 `.yws-by-n` / `.yws-mday` / `.yws-cb` / `.yws-dim[data-act]`
+   这一族**文字链**只有 **17px** 高（`min 17`），评审的门槛是 **24px**。
+   做法 = AF3 已经验过的那一手：`::before` 画一颗**不可见的**热区把可点高度补到 24，
+   **可见盒子一个字不动**（字号 / 行高 / 间距 / 盒高全照旧）⇒ 卡片高度**不会长**
+   （★这就是为什么不用评审原话里那句 `min-height:24px; display:inline-flex` 的写法：
+     那样会实实在在把卡片撑高，S-columns 的卡高一栏会跟着动）。
+   ★锚点为什么是 `right: 0; left: auto`（而不是像评论区那颗那样居中）：
+     这里**不许再犯一次 5px 溢出的错**（见 `.yws-cmf > .yws-cmdel::after` 那条注释）——
+     右锚点让热区**只会向左长**，而行尾方向溢出才是 `scrollWidth` 唯一会算进去的那一种。
+   ★为什么用 `::before` 而不是 `::after`：`.yws-mday.yws-hasdot::after`（那颗"有更新"的小红点）
+     已经把 `::after` 占了 —— 用 `::before` 两边互不打架（这四族都没有 `::before` 规则）。
+   ★只做宽档（≥900px）：手机档这四族的真实盒高已经抬到 24（见下面 §10 的 AU4 ③-b），不用再叠一层。
+   ★★B-1（wave4）：**`.yws-cb` 从这一族里摘掉**（它原来有这条 24px 伪元素热区）——
+     伪元素当热区会让 Chrome **不合成 click**（根因与定点实验见上面 `.yws-prow .yws-cb > .yws-hot` 那条注释）。
+     `.yws-cb` 现在用的是**真子元素**热区（≥32，比 24 还大），这一族里其余三族（都是纯展示的文字链）照旧。 */
+@media (min-width: 900px) {
+    .yws-mday, .yws-by-n, .yws-dim[data-act] { position: relative; }
+    .yws-mday::before, .yws-by-n::before, .yws-dim[data-act]::before {
+        content: ""; position: absolute; left: auto; right: 0; top: 50%; width: 100%; min-width: 24px; height: 24px;
+        transform: translateY(-50%);
+    }
+}
+
+/* ---------------------------------------------------------------- 10. 手机（390×844 也量过） */
+@media (max-width: 720px) {
+    /* ★M15/M22：手机上标签与内容并排会太挤 → 仍然并排，但标签那格收窄一点（两行还是对齐的）
+       ★AU-②：同样改成 em（4.6em ≈ 原 52px 那一档）—— 两格永远同宽、字号涨了也不会折行，理由见上面那条注释 */
+    .yws-credline > .yws-lbl-t { flex: 0 0 4.6em; }
+    /* ★AU-② 配套：手机档前两行也用**同一个**收窄后的标签列（4.6em）——
+       两边必须同时缩，否则手机档又变回"四行三种左缘"。 */
+    .yws-connrow > .yws-lbl > .yws-lbl-t { flex: 0 0 4.6em; }
+    /* ★W2/W3：手机档这一行也是"左胶囊 / 右动作区"，不再定高 40px（作者要的收紧在两档都生效） */
+    /* ★W108-②-1：与上面卡内那条同步（原来定高 22 + nowrap = 折行会被裁掉第二行） */
+    .yws-mnames { min-height: 22px; flex-wrap: wrap; }
+    .yws-btn { min-height: 34px; }
+    /* ★★AU4 ③（评审 §2 条 3：手机档"小控件一律抬到 ≥32px"）——
+       改前读数：手机档 `.yws-btn.yws-mini` = **30**、`.yws-inp/.yws-sel` = **30**（每页四颗、缝入记录、
+       收藏记录、筛选那颗下拉全在这一档）；评审的硬线是 **32**（触摸友好下限）。
+       ⇒ 手机档抬到 32（**只动手机档**：PC 档 26/30 保持 —— 评审明说"PC 上 26px 不算错"）。
+       `@media (max-width:720px)` 是 390 档；PC（1470）根本不进这一段。 */
+    .yws-btn.yws-mini { min-height: 32px; font-size: var(--yws-fs-sm); }
+    /* ★★AF3（红 2 的两全）：评论区那颗 ♡ **不进"小控件一律 ≥32px"那一族** —— 它走"视觉小、热区大"：
+       可见盒在手机档也维持 **24px**（与 PC 同一个数 ⇒ "单行正文那一行 ≤72px"这条评审规格
+       在两档都成立；改前是 30px ⇒ 手机档那一行 82px），触摸下限由那颗**不可见的**伪元素给足
+       （`.yws-btn.yws-cmheart::after` = ≥34×32 ⇒ 评审那条"手机小控件 ≥32px"照样满足，
+        而且比"把可见盒撑成 32"的点按体验更准：热区跟着按钮走、视觉又没变笨重）。 */
+    .yws-btn.yws-mini.yws-cmheart { min-height: 24px; height: 24px; }
+    .yws-inp, .yws-sel { min-height: 32px; }
+    /* ★★BM-E（U9 班 · 手机档）：那两颗**颜色控件**也抬到 **32**（与同排的输入框/按钮同一档；
+       PC 档 26px 是跟着 `.yws-btn.yws-mini` 那档走的 —— 评审口径"PC 上 26px 不算错"）。 */
+    .yws-colorin { height: 32px; width: 46px; }
+    /* ★★AU4 ③-b（评审 §2 条 3 后半）：`.yws-dim` 那一族**文字链**（署名 / 更新日期 / 条目名胶囊入口 /
+       勾选块）改前最矮 **17px** —— 手指按不准。它们不是按钮（是行内文字），抬到 **24px**（评审给的门槛），
+       做法是 `min-height` + 行内 flex 居中：**只加可点高度，不改字号、不改行高**（对比度/排版一个字不动）。 */
+    .yws-mday, .yws-by-n, .yws-cb, .yws-dim[data-act] { min-height: 24px; display: inline-flex; align-items: center; }
+    /* ★★W49-M2（评审 R3 · 该修）：**同一排的触摸目标统一 ≥32**（作者口径 §5-3：「视觉可以小、热区要大」）。
+       改前读数（真界面 390×844，e2e/tmp/w49-mobile-before.json）：
+         💬评论 可见盒 63×24 · **热区 49×25** ✗ ｜ 署名 29×24 · **30×25** ✗ ｜ 更新日期 82×24 · **49×25** ✗
+         ｜ 角标「3 New」39×15 · **39×16** ✗ ｜（对照：☆收藏 55×32 ✓ · ♡ 44×24 但热区 45×33 ✓ · 缝入 50×34 ✓）
+       ⇒ 三处按**同一套手法**补热区，**可见盒一个像素都不动**（卡片高度 /「张张等高」/ 单行正文 ≤72px 的账全不受影响）：
+         · 文字链那一族（署名 / 更新日期 / 条目名胶囊）= 与 **PC 档那条 ::before 逐字同源**，只把 24 抬到 32；
+         · 卡片动作排的「💬评论」= 与既有的 .yws-like::after（C5-②）逐字同源；
+         · 角标 = 同一条 ::after（★必须显式写 content: '' —— W34 那条漏了它，伪元素根本没生成，
+           所以当年量出来「热区没变大」；本波用真界面探针逐像素量过才留）。 */
+    .yws-mday, .yws-by-n, .yws-dim[data-act] { position: relative; }
+    .yws-mday::before, .yws-by-n::before, .yws-dim[data-act]::before {
+        content: ""; position: absolute; left: auto; right: 0; top: 50%; width: 100%; min-width: 32px; height: 32px;
+        transform: translateY(-50%);
+    }
+    .yws-card-f .yws-btn.yws-cmbtn { position: relative; }
+    .yws-card-f .yws-btn.yws-cmbtn::after {
+        content: ''; position: absolute; left: 50%; top: 50%; width: 100%; min-width: 34px; height: 32px;
+        transform: translate(-50%, -50%);
+    }
+    .yws-offibadge::after {
+        content: ''; position: absolute; left: 50%; top: 50%; width: 100%; min-width: 32px; height: 32px;
+        /* ★★W49-M2：**向下偏**（-25% 不是 -50%）—— 角标上面常常紧挨工具栏/分区头；
+           实测：上偏那种摆位最上面 3px 会被抢走（39×29），下偏之后 39×40 稳过 32（逐像素量过）。 */
+        transform: translate(-50%, -25%);
+    }
+    /* ★★W49-M2b（评审 R3 · 该修 · 手机档）：上面那条"居中撑开"的 32 热区，对**两个文字链**还不够 ——
+       W49 逐像素实测：署名 / 更新日期 只量到 **25**。根因两条（都不是"伪元素没生效"）：
+         · 日期的 4px 下溢落在**后画的兄弟**（卡片动作排）上 ⇒ 命中被抢走；
+         · 署名外面那格 `.yws-by` 自己有 `overflow: hidden`（省略号用的）⇒ 4px 上溢被裁掉。
+       ⇒ 把**容下它们的两个盒子**抬到 32：整行 `.yws-card-m` + 署名格 `.yws-by`。
+       **控件的可见观感一个字没动**（同字号、同一行、垂直居中；多出来的 8px 是空白），
+       代价 = 手机档卡片高 **+8px**（四档读数里逐项记着）。 */
+    .yws-card-m { min-height: 32px; }
+    .yws-card-m > .yws-by { min-height: 32px; }
+    /* ★★W49-M2c（评审 R3 · 该修）：这两个是**文字链**（不是按钮）—— 它们**自己带 overflow: hidden**
+       （省略号要用），所以挂伪元素撑出来的热区会被**它自己**裁掉（W49 诊断读数： / 
+       的  确实生成了 —— content "" / height 32px / 居中，但命中只到 25）。
+       ⇒ 手机档**只把这两个盒子本身**抬到 32（min-height）：文字同一字号、同一行、垂直居中，
+       **可见观感一个字没动**（盒子无底无边、多出来的是透明高度），省略号照旧（overflow 一个字没改），
+       而可点高度就真的是 32 —— 探针逐像素量过（改前 25 / 改后 32）。 */
+    .yws-by-n, .yws-mday { min-height: 32px; }
+    /* ★★W49-M2 记账（R3 的清单里还有一颗 125×22 的 .yws-lbl-in）：**它不是独立触摸目标** ——
+       它是个包着 <select> 的 <label>（真控件是里面那个 32 高的下拉，手机档 .yws-sel { min-height: 32px }）
+       ⇒ 这一颗**不动**（把它抬到 32 只会白撑一行）。 */
+    /* ★★★W35-P7（作者点名"待审界面特别特别丑"的一条硬伤）：**带勾选框的那种标签**原来只有
+       `.yws-lbl` 自己的高度 —— 实测「☐ 设为官方」= **87.5 × 18.6**、里头的
+       `input[type=checkbox]` 本体 = **11.5 × 11.5**（PC / 手机两档**都一样**，手指按不准）。
+       根因：上面那条 ≥24 的名单（`.yws-mday / .yws-by-n / .yws-cb / .yws-dim[data-act]`）
+       **不含 `.yws-lbl`**，而 CSS 里**一条 `input[type="checkbox"]` 的规则都没有**。
+       ⇒ 按 §5「**视觉可小、热区 ≥32**」修：**只把可点盒抬到 32**（`min-height`），
+         字号（12）/ 勾选框本体（11.5）**一个字不动** —— 多出来的高度是透明的，行内垂直居中。
+       ★用 `:has(…checkbox)` 把范围**只圈在"带勾选框的标签"**上（本项目已用 `:has()`，见
+         `.yws-statusline:has(.yws-warn)`）—— 不波及连接区那 6 个纯文字标签（那会把「📤 我的」
+         底部整块抬高 36px，而它们**本来就不是触摸目标**）。
+       ★不用伪元素撑热区：W34 刚实测过 `.yws-offibadge::after { inset:-8px -12px }` 在真界面
+         `elementFromPoint` **三针全 false**（当场回退了）—— 本条的判据是**真界面命中区实测**。
+       ★两处受益：待审页「设为官方」+ 上传向导「更新时提醒大家」（同一个类）。 */
+    .yws-lbl:has(input[type="checkbox"]) { min-height: 32px; }
+    .yws-search { width: 100%; flex: 1 1 100%; }
+    /* ★★BJ-A3（手机档）：搜索框本来就在**自己那一行**（组 3）⇒ 这一档只要"拉满整行"就对了
+       （改前它跟排序/筛选挤一行，才需要 `flex: 1 1 100%` 挤到第二排）。 */
+    /* ★★W42（派单① 第 3 行）：作者要的是"**搜索 + 每页多少条**，搜索框自适应长短" ——
+       **手机档也是同一行**（改前手机档 `flex: 1 1 100%` = 搜索框独占一整行，那一格被甩到第二行）。
+       读数（真界面手机 390×844 · 行内可用宽 295）：搜索框 179px + 那一格 ~110px ⇒ **一行放得下**。
+       `min-width: 0`（不是 0 之外的任何下限）是刻意的：它跟那一格一起挤时，宁可搜索框变窄，
+       也不许这一行掉成两行 —— 与第 1 行同一条纪律。 */
+    .yws-toolbar .yws-tbq { flex: 1 1 0; min-width: 0; margin-left: 0; }
+    /* ★★BJ-A（手机档）：**三组各占一行、组内一颗都不散**（与 PC 档同一套分组，不再有"优先缩谁"的说法）。
+       ★★W42：第 1 行那一条"恒一行"的硬口径在手机档**同样成立**（`nowrap` 来自上面那条规则，不分档）；
+         这里只把 `justify-content` 留给那两行（第 1 行由"下拉吃满余量"天然顶两边，不靠 justify）。 */
+    .yws-tbrow-q, .yws-tbrow-flt { justify-content: flex-start; }
+    /* ★★BJ-A1：手机档**照旧常显「缝到哪一份」**（U6 的收起开关与 `.yws-tgtbtn` 那一族已整块删除）。
+       作者认过的取舍：这一档的工具条因此比 U6 那一版高约 40px —— 不许再为压高度把它藏起来。 */
+    .yws-topbar { gap: 6px; }
+    .yws-topbar .yws-btn { flex: 1 1 46%; }
+    .yws-card-t { font-size: 15px; }   /* ★W71：17px → 15px（与桌面档同步收一档） */
+    /* ★A9：手机档也维持"两行封顶 + 卡片等高"（原来手机是 3 行 → 同一份数据在手机/电脑上高度就不一致了） */
+    .yws-card-w { -webkit-line-clamp: 2; line-clamp: 2; }
+    .yws-card-m { gap: 8px; }
+    /* ★W3 配套（手机档）：这一行现在**只剩元信息**了。390px 的屏上，"BY 署名 · N 个条目 · 日期 · 已缝入 N 次"
+       偶尔比可用宽度多**几十像素**（实测那张"BY 路人甲…"两行 51.73px）——
+       允许换行虽然不裁切，但**同一排卡立刻有高有矮**（A9 要"张张等高"，作者也点名过"整整齐齐"）。
+       ⇒ 手机档这一行**不换行**，四格都**可以缩**（`min-width: 0` + 各自省略），缩到 289px 里一行放平：
+         实测同一张卡 51.73px（两行）→ 26.69px（一行），18 张卡高度一致。
+       为什么这不会变成"内容溢出"（ui-audit 那条判据）：每一格都能缩到 0 并自己 `overflow: hidden`，
+       所以 `scrollWidth == clientWidth`（溢出被"省略号"消化掉了，不是被裁切出去）。 */
+    .yws-card-m { flex-wrap: nowrap; }
+    .yws-card-m > .yws-by, .yws-card-m > .yws-mtype, .yws-card-m > .yws-by-t { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* ★★AU7-②（手机档）：上面那条把三格都写成"能缩"，会在窄屏上**先牺牲日期与署名** ——
+       作者点名的硬要求是"更新日期与作者必须完整可见、窄屏时可以让「已缝入」缩到最小但仍要在"。
+       所以手机档也照 PC 档那一组（同一条口径，见 `.yws-card-m > .yws-mday` 那段注释）：
+       日期 `0 0 auto`（不缩）· 已缝入 `0 20 auto` + `min-width: 3em`（最先缩、下限三个字、字号再降一档到 10px）
+       · 类型胶囊 `0 4 auto` · 署名 `0 1 auto`（最后才轮到它）。 */
+    .yws-card-m > .yws-mday { flex: 0 0 auto; }
+    .yws-card-m > .yws-sewn { flex: 0 20 auto; min-width: 3em; font-size: 10px; }
+    .yws-card-m > .yws-mtype { flex: 0 4 auto; min-width: 0; }
+    .yws-card-m > .yws-by { flex: 0 1 auto; min-width: 0; }
+    /* ★★AU7-③（手机档）：那个小浮层**别把手机撑太高** —— 作者原话"紧凑（手机别撑太高，**可内部滚动**
+       但不许成为页面级滚动跳动的来源）"。两段（更新记录 + 缝入记录）在窄屏上换行多、行数也多，
+       所以手机档给它一个限高 + 自己滚：**限高与 `.yws-plist` 同一档（作者指定过的那个例外：限高 + 里面小小的下拉）**，
+       `overscroll-behavior: contain`（基础规则里已经写了）保证"滚到头也不带动外面的抽屉"。
+       ★PC 档**不限高**：桌面上一屏放得下几行，限高反而多出一根滚动条（作者说的是"手机别撑太高"）。 */
+    .yws-histbox { max-height: 38vh; overflow-y: auto; }
+    .yws-histbox::-webkit-scrollbar { width: 8px; }
+    .yws-histbox::-webkit-scrollbar-thumb { background: var(--yws-line); border-radius: var(--yws-r-pill); }
+    .yws-histbox::-webkit-scrollbar-track { background: transparent; }
+    /* ★★BM-G（手机档）：上面那条限高让它**自己会滚** —— 红点若跟着内容滚走，这一区就"看不出来有更新"了。
+       所以手机档把它改成**粘在右上角**（`position: sticky`：不滚时和原来一模一样，往下滚就停在顶上）。
+       它在 flex 列里占一整行 ⇒ `margin-bottom: -16px` 把那一行收掉（标题仍在左边，两不相撞）。 */
+    .yws-histdot { position: sticky; top: 0; align-self: flex-end; margin: 0 0 -16px; }
+    /* ★A4：手机档这一行也**不换行**（元信息该省就省，右侧的「缝入」必须还在这一行上） */
+    .yws-card-f { justify-content: flex-end; }
+    .yws-card-f .yws-btn { flex: 0 0 auto; }
+    /* ★轮5：手机档两颗按钮不各占一整行 —— 心形自己那点宽度就够（宽度撑满反而像"两个大按钮"） */
+    .yws-card-f .yws-btn.yws-like { flex: 0 0 auto; margin-right: 0; }
+    .yws-pname { max-width: 100%; flex: 1 1 auto; }
+    .yws-side.yws-pick::after { width: 22px; height: 22px; }
+    .yws-modal { padding: var(--yws-s2); }
+    .yws-dlgbox { max-height: 88vh; }
+    .yws-fields .yws-fld-k { width: 42%; }
+    /* 手机端条目列表再矮一点（键盘弹出来时也要能点到"下一步"） */
+    .yws-plist { max-height: 38vh; }
+    /* 底栏主按钮独占一行（跟次按钮分开，别挤在一起） */
+    .yws-wfoot .yws-last { margin-left: 0; flex: 1 1 100%; }
+    .yws-conn { padding: 10px; }
+}
+
+/* ==========================================================================
+   9d. ★R9-d UI 评审复验（分区头竖排 / 按钮被裁 / 顶栏孤行）
+   ========================================================================== */
+/* ★起因（评审截图 ui-v2-a-light-pc.png 07:31 抓到的事故）：官方分区头一行里塞了
+   ★ + 裸文本 + 那颗"有新更新"胶囊（★W6-A7 起换成红色数字角标 `.yws-offibadge`）+ 计数
+   + 一颗"看过了"按钮（★W10 已删）+「⬇ 下载最新整份」+ 刷新，
+   结果**标签被挤成一字一行**、右端那颗按钮被面板裁掉。
+   修法（两条一起才成立）：
+     ① 标签包成 `.yws-sec-t`（`white-space: nowrap`）—— 裸文本是匿名 flex item、min-content 只有**一个字**，
+        所以它会被压成一字一行；包起来之后它的 min-content = 整句，挤不下时**先让按钮组换行**；
+     ② 按钮组 `.yws-sec-x` 允许换行到下一行并**靠右对齐**（`flex: 1 1 100%` + `justify-content: flex-end`），
+        这样一来分区头最多两行、**永远不裁切**（`ui-audit` 的"内容溢出"也过了）。 */
+.yws-sech > .yws-sec-t { white-space: nowrap; }
+/* ★★W25A（第 2 条）：作者原话「把每一栏的刷新放到**横线的最右边**」。
+   改前 `::after`（那条细分隔线，`flex: 1 1 12px`）排在 `.yws-sec-x` **后面** ⇒ 它涨满余下的宽度、
+   按钮组被推在它**左边**（实测：刷新右缘距栏头右缘 139.2px / 254.2px —— 作者要的就是这个数 = 0）。
+   修法：给按钮组 `order: 1`（伪元素 `::after` 默认 order: 0）⇒ 线在中间涨、按钮组落在**最右**，
+   右缘 = 栏头右缘（探针判据：差 = 0）。窄屏那条媒体查询把 flex-basis 改成 100% 之后它自己占一行、
+   仍然靠右 —— 那一条一个字没改。 */
+.yws-sech > .yws-sec-x { flex: 0 0 auto; margin-left: auto; order: 1; }
+@media (max-width: 760px) {
+    .yws-sech > .yws-sec-t { white-space: normal; }
+    .yws-sech > .yws-sec-x { flex: 1 1 100%; justify-content: flex-end; margin-left: 0; }
+}
+/* ★顶栏页签不许"1 颗孤零零换行"（评审）：给每颗一个**下限宽度**，让 flex 均匀 packing ——
+   3 颗那种情况（没密钥）一律一行放得下（3×94 + 2×8 = 298，正好）。
+   ★★W52-N3（评审 R1-F2 / R3-A-2 / R6 的老账 · 该修）：**四颗那一档**改成"两行各两颗、四颗等宽"——
+     改前：每颗 flex 下限 84px ⇒ `3×84 + 2×8 = 268 ≤ 298` ⇒ 前 3 颗挤在第一行（94 / 手机 100），
+     第 4 颗「🔑 待审」换行后被 `flex-grow` **拉满整栏**（PC **298×32** / 手机 **311×34**，R6 逐字量到）。
+     为什么不是"一行四颗"：298 内宽里四颗只分到 **68.5px/颗**（手机 73）——
+     而「⬆ 上传条目」那一颗的**最小内容宽**实测就是 **92px** ⇒ 文字换行、行高会涨（= 控件被顶出去）。
+     ⇒ 两行各两颗：每颗 PC 145 / 手机 152.5，四颗等宽；**行高一个字不变**（32 + gap + 32 = 72，与改前同高）。
+     落地在 `topbar()` 加的那个 `.yws-nav4`（只有"有密钥 = 四颗"这一档有它，见那里的注释）。 */
+.yws-topbar .yws-btn.yws-nav { flex: 1 1 auto; min-width: 0; justify-content: center; padding-left: 7px; padding-right: 7px; }
+/* ★★W54-①（同一条老账的**最终形态**，作者 2026-09-26 夜拍板）：四颗一律**一行**。
+   W52-N3 那一版（calc(50% - 8px) ⇒ 145.2×4、两行各两颗）已撤 —— 作者原话是「为什么变成这么大
+   本来一行就可以展示完了」。改法 = **basis 回内容宽 + 左右内边距 11 → 7**：
+     四颗自然宽 71.2/92.4/71.2/71.2 = 306，3×8 gap = 330，内宽 298 ⇒ 差 32px；
+     每颗省 8px 内边距 ⇒ 274 + 24 = 298 **正好一行**（PC 1470；手机 390 内宽 311 还有余量）。
+   ★等宽四颗在 298 里做不到（flex: 1 1 0 ⇒ 68.6px/颗 ⇒「⬆ 上传条目」折两行、行高 32→48.4 =
+     控件被顶出去）⇒ 按「一行优先」落地，宽度按内容（grow 再把余量均匀分掉）。 */
+/* ★★AU6 ⑥（把 AS2 §5.1 S20 那条"变坏 +3"消掉）：**PC 档顶栏那 4 颗页签抬到 32px**。
+   改前读数（AS2 §5.1 S20）：`<32px 控件 62 → 65（+3）`。这 +3 的真来源**不是**那颗下拉
+   （下拉两轮都在：改前在面板里、改后进工具条）—— 是**顶栏那 4 颗页签**：
+     · 改前 = `95×48.4 ×3 + 301×30.2` ⇒ 只有「待审」那颗算 <32（**1 个**）；
+     · U4 之后 = `158×30.2 ×4` ⇒ **4 个**都算 <32 ⇒ 净增 **3**（与评审记的 +3 逐字对得上）。
+   为什么只动宽度档（≥721px）：手机档那 4 颗由手机段里那条 `.yws-btn` 的 `min-height: 34px` 管着（34 ✓ 已经够），
+   这条别去压低它。`min-height: 32px` 落在**边框盒**上（`.yws-btn` 的 box-sizing 是 border-box：
+   30.2 = 13px×1.4 行高 + 上下 padding 10 + 上下边框 2，与实测 30.2 逐字吻合）⇒ 高度正好 32。
+   代价只有 **+1.8px**（顶栏那一行 30.2 → 32），换来"PC 上 4 颗页签也够点"且 S20 回到 62 以下。 */
+@media (min-width: 721px) {
+    .yws-topbar .yws-btn.yws-nav { min-height: 32px; }
+    /* ★★★W35-P2b（P2 的**必须配套**，已预验证）：商店第 3 行是 `[搜索框] [每页那一格]`，
+       行内宽只有 **280.5**。P2 让那一格在"点开每页"时从 107 → **211.9** ⇒ 只剩 60.6 给搜索框，
+       而 `.yws-toolbar .yws-tbq` 的 `min-width` 是 **96px** ⇒ 放不下 ⇒ **那一格掉到下一行**
+       （实测 y 从 439.3 → 472.3），正是作者当年点名过的那种"控件被挤下去"。
+       ⇒ 这一档把搜索框的下限放开（它会自己涨满剩下的那 60.6px），**整行高度一个字不变**
+         （也就没有"点一下界面往下顶一截"的跳动）。
+    ★★W42（派单①）：上面那条"点开每页会让那一格涨到 211.9"的**根因已经不存在了** ——
+       那一格现在只有一个控件「每页 N 条」（两颗档位按钮整排删掉，见 `perPageHtml`），
+       宽度是**恒定 ~110px**、不会再涨。这条 `min-width: 0` **留着**（不是遗物）：
+       它是"第 3 行在任何 ≥721px 的宽度下都不换行"的保险（把下限交给 flex 自己算）。 */
+       ★**只进 ≥721px**：手机档 `.yws-toolbar .yws-tbq { flex: 1 1 100% }`（搜索框独占一行）
+         是**设计**——实测在手机档强加这条会把搜索框压成 75px 与那一格挤同一行，破坏那一档。 */
+    .yws-toolbar .yws-tbq { min-width: 0; }
+}
+
+/* ★★★W7-B6（2026-09-24）官方基准库管理面板（商店「官方更新」分区头那颗「🗄 基准库」摊开的那一块）。
+   口径：只用本项目既有的色板/圆角/字号，**不加新色**；窄屏（≤720px）逐行折行，不做横向滚动。
+   ★★W11 落地修正（两处，都是预备用稿里的真问题，落地前核出来）：
+     ① **删掉**原来那两条 `.yws-btn.yws-danger { border-color:#b4453c }` / `:hover{#d4574d}` ——
+        本文件 195~196 行**已经有**同一族规则走主题令牌（`--yws-bad` / `--yws-bad-ink` / `--yws-bad-bg`），
+        而这里是**追加在 EOF** ⇒ 同特异性下后面的赢 ⇒ 会把**全店所有** `.yws-danger` 按钮（撤回那颗也在用）
+        从"跟主题走"改回"写死的红" ⇒ 浅色主题下对比度不达标。危险观感**已经白拿**（`.yws-danger` 现成的），
+        一个字都不用加。
+     ② `var(--yws-line)` 不带兜底 —— 本文件 79 处用法**没有一处**写兜底（令牌在 `:root` 里定义，
+        兜底的 `#3a3a3a` 是深色主题的写死值，一旦哪天真取不到就会在浅色主题下画一条深色线）。 */
+.yws-badm { margin: 6px 0 2px; padding: 8px 8px 6px; border: 1px solid var(--yws-line); border-radius: 8px; }
+.yws-badm-h { font-weight: 600; margin-bottom: 6px; }
+.yws-badm-tip { margin-top: 6px; font-size: 12px; line-height: 1.45; }
+/* ★★W11 重做（作者："要好看 要清楚 而且不能太长，纵向别占太长" / "删除都没有在对应条目旁边"）：
+   **表格 + 表头**，每行的按钮就在那一行里；行高压到 ~30px（12px 字号 / 3px 上下内边距 / 单行不折）。
+   table-layout:fixed + 每格 nowrap+ellipsis ⇒ 窄屏也**不折成两行**（宁可省略号）。
+   列宽：版本 58 / 日期 76 / 大小 76 / 下拉 自适应 / 操作 84（两颗小按钮正好一行）。 */
+.yws-btab { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
+.yws-btab th { text-align: left; font-weight: 600; padding: 3px 6px; border-bottom: 1px solid var(--yws-line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yws-btab td { padding: 3px 6px; border-top: 1px solid var(--yws-line); vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yws-btab tbody tr:first-child td { border-top: 0; }
+.yws-bc1 { width: 58px; }
+.yws-bc2 { width: 76px; }
+.yws-bc3 { width: 76px; }
+.yws-bc5 { width: 84px; }
+.yws-bc5 .yws-btn { padding-left: 6px; padding-right: 6px; }
+.yws-bc5 .yws-btn + .yws-btn { margin-left: 4px; }
+.yws-bsel { width: 100%; max-width: 100%; }
+/* ★★W17-B2（2026-09-25 · 横溢归因 A/B 量的）：**基准库这张表一直是横溢的** ——
+   W11 的 4 列固定宽合计 322px，而面板内宽只有 270px（PC 抽屉，实测）⇒ 横溢 60px；
+   把操作列退回 84px 也还有 32px（= **既有问题**，不是这次把操作列改宽出来的）。行高那一档没变。
+   ⇒ 用**与卡片管理表同一套手法**（B1 已验证过）：行改 flex、元信息格收窄 + 省略号、操作格靠右并 nowrap。
+   ★作用域钉在 [data-badm]（基准库面板自己的钩子；卡片管理那张表带的是 .yws-cadm）—— 两张表互不影响。
+   实测（PC 1470 / 手机 390 两档）：面板横溢 60 → 0；行仍是一行（没折成两行）。
+   ★只覆盖**本表**的列宽；全局 .yws-bc5 那两条宽值保持 W11 原样（这两张表都不再依赖它们）。 */
+.yws-badm[data-badm] .yws-btab thead tr { display: flex; flex-wrap: wrap; align-items: flex-end; }   /* ★W19-B：表头与数据行**同一套折行**（否则表头挤成一行、与两行的数据列对不上） */
+.yws-badm[data-badm] .yws-btab tbody tr.yws-brow { display: flex; flex-wrap: nowrap; align-items: center; }
+.yws-badm[data-badm] .yws-btab tbody tr.yws-brow { flex-wrap: wrap; align-items: center; }   /* ★W19-B：不给折行，名称那一格（basis 100%）会被压成 6px（真界面实测） */
+/* 第 1 行：名称（一整行 —— 作者："这个基准直接用这个预设的名字就行了"） */
+.yws-badm[data-badm] .yws-btab .yws-bc1 { flex: 1 1 100%; min-width: 0; width: auto; }
+.yws-badm[data-badm] .yws-btab .yws-bname { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+/* 第 2 行：入库时间（MM-DD；**全日期在 title 里**）+ 大小（贴最右）+ 操作（最右那一档） */
+.yws-badm[data-badm] .yws-btab .yws-bc2 { flex: 0 0 auto; width: auto; margin-right: auto; }
+.yws-badm[data-badm] .yws-btab .yws-bc3 { flex: 0 0 auto; width: auto; text-align: right; }
+.yws-badm[data-badm] .yws-btab .yws-bc5 { flex: 0 0 auto; width: auto; margin-left: 4px; white-space: nowrap; }
+/* 两档都用 MM-DD（改前 PC 那一档 44px 的格子里 10 字日期是被截的；全日期在 title 里） */
+.yws-badm[data-badm] .yws-btab .yws-bdate-l { display: none; }
+.yws-badm[data-badm] .yws-btab .yws-bdate-s { display: inline; }
+/* 操作那三颗按钮再收一档内边距 —— 省下来的宽度全给名称那一行 */
+.yws-badm[data-badm] .yws-btab .yws-bc5 .yws-btn { padding-left: 4px; padding-right: 4px; font-size: var(--yws-fs-xs); }
+.yws-bdate-s { display: none; }
+/* 手机档：日期压成 MM-DD、字号再降一档、内边距再收一点（目标是**一行放得下**，不是折行） */
+@media (max-width: 720px) {
+    .yws-btab { font-size: 11px; }
+    .yws-btab th, .yws-btab td { padding: 3px 3px; }
+    .yws-bc1 { width: 46px; }
+    .yws-bc2 { width: 42px; }
+    .yws-bc3 { width: 68px; }
+    .yws-bc5 { width: 72px; }
+    .yws-bc5 .yws-btn { padding-left: 4px; padding-right: 4px; }
+    .yws-bc5 .yws-btn + .yws-btn { margin-left: 2px; }
+    .yws-bdate-l { display: none; }
+    .yws-bdate-s { display: inline; }
+}
+/* ==========================================================================
+   ★★★W15-C（2026-09-24 · 作者第 23 批「管理员能力」）「🛠 已上线卡片（管理员）」
+   --------------------------------------------------------------------------
+   与 W11 的「🗄 基准库管理」用**同一套表格语汇**（.yws-badm 外壳 + .yws-badm-h 标题 + .yws-btab
+   表头/行 + 行内 .yws-btn.yws-mini）—— 「🔑 待审」页看起来是"一块管理台的两个抽屉"，不是两种风格。
+   ★★为什么又要一个 .yws-cadm 作用域（而不是直接改上面那几条）：**W11 那张表一个像素都不许被
+     这一波动到**（判据 = W11 自己的探针 before/after 读数）。所以：
+       ① 本表要的列宽 / 行内按钮排布 / 手机档收哪一列，**全部挂在 .yws-cadm 下**；
+       ② 顺手把 W11 留下的 5 个"在用但没定义"的类名（.yws-brow / .yws-bver / .yws-bdate /
+          .yws-bsize / .yws-bc4）**补上定义** —— 它们同时就是本表在用的名字，所以 class-check
+          由红转绿（改前它一直红着这 5 条）；而作用域保证基准库面板的选择器一条都没被碰到。
+   列（PC）：卡片（吃剩余）· 作者 · 更新 · 编号 · 操作；六列宽的基准 = .yws-btab 的 12px 字号。
+   手机档：字号降一档、编号列压窄（超出省略号，全文在 title 里）、按钮内边距再收 —— 目标是
+     **一行放得下**（作者："不许横溢、不许挤成两行、行内操作要能点得到"），不是折行。
+   ========================================================================== */
+/* ★★★W17-B1（2026-09-25 夜间 · 作者原话转述："卡片管理那张表 每行只有作者/更新/编号，看不到卡片名字"）
+   --------------------------------------------------------------------------
+   真界面实测根因：那 5 条固定列宽里后 4 条合计 **432px**（84+86+128+134），而面板内宽只有
+   **258px**（PC 抽屉）/ **269px**（手机）⇒ `table-layout: fixed` 下第一列「卡片」（`width:auto`）
+   被挤成 **0px**（PC · `可见=false`）/ **16.91px**（手机 · 只剩一个半字）；整张表还横溢面板 **166px**
+   （「操作」那两颗按钮被裁在面板外 —— W15-C 当时量到按钮尺寸却没量"在不在面板里"）。
+   ⇒ 改成"**两行一行卡**"：
+     · 第 1 行 = **卡片名字**（吃满整行；超出用省略号，全文仍在 `title` 里）；
+     · 第 2 行 = 作者 · 更新 · 编号 + 「重发钥匙 / 删除卡」（靠右）。
+   实测（改前 → 改后 · 四档）：名字列 0/16.9px → **255~269px**；面板横溢 166 → **0**；
+   体横溢 174 → **0**；行高 31/37 → **53~59px**（仍是两行，没折成三行）；
+   名字对比度 8.88~10.87（正文门槛 4.5）；两颗按钮**都在面板内**（54×26 / 43×26，热区 ≥24）。
+   ★只用既有类名与既有令牌，不新造平行样式（§5 美观关第 1 条）；`.yws-cadm` 作用域保证
+     W11「🗄 基准库」那张表与基准表头**一个像素都没被碰**（它的 `<th>`/`<td>` 不在 `.yws-cadm` 里）。
+   ★迭代二/三（都是 A/B 量出来的）：第一版基宽 46/44/78 → 加上操作那两颗合计 273px > 269px
+     ⇒ 操作被挤到**第三行**（行高 82px）；第二版给操作格加 `white-space: nowrap` 才对；
+     第三版把 编号 64→56、按钮内边距 4→3px，PC 那一档（面板只有 258px）才第一次真正两行。 */
+.yws-cadm .yws-ctab tbody tr.yws-brow { display: flex; flex-wrap: wrap; align-items: center; }
+.yws-cadm .yws-ctab thead tr { display: flex; flex-wrap: wrap; align-items: flex-end; }
+/* 空态那一行（共用一个 td）也要吃满整行，别被 flex 挤成一小格 */
+.yws-cadm .yws-ctab tbody tr[data-cadm-msg="1"] td { flex: 1 1 100%; }
+/* 第 1 行：卡片名字 —— 吃满整行（原来 `width:auto` 被固定列宽挤成 0）；字重提一档当"名字"用 */
+/* ★★W19-B（作者）：第 1 行 = 标题（吃剩余宽度、超出省略号、悬停有全名、点一下跳商店）+ 作者 + 更新；
+   第 2 行 = 状态徽标（**永远看得见**）+ 靠右的操作。
+   改前的病（真界面实测）：标题格 `flex: 1 1 100%` ⇒ 标题独占一行（"为什么挤到了下面这一行"），
+   而徽标跟在长标题后面**被那一格的 overflow:hidden 裁掉**（在线中 x=848 > 标题格右缘 679 ⇒ 看不见）。 */
+.yws-cadm .yws-ctab .yws-bc1 { flex: 1 1 0%; min-width: 0; width: auto; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+.yws-cadm .yws-ctab .yws-bc1 .yws-offi { flex: 0 0 auto; }
+/* 标题那一颗（可点）：长得像文字、行为像按钮 —— 悬停下划线 + 手型（**新造的是"文字链"这一族，不是又一套按钮**） */
+.yws-cadm .yws-ctab .yws-cttl { flex: 1 1 auto; min-width: 0; display: block; padding: 3px 0;   /* ★W19-B：热区 ≥24（真界面实测裸文字只有 19px 高） */ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: transparent; border: 0; margin: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.yws-cadm .yws-ctab button.yws-cttl:hover { text-decoration: underline; }
+/* ★★W19-B 补（作者拍板）：**点一下标题 = 就地展开全名**（手机没有悬停 ⇒ 这是触屏唯一的落点）。
+   只放开这两个属性：white-space 让标题折行、overflow 不再裁 —— 再点一下收回（属性在 JS 那侧清掉）。 */
+.yws-cadm .yws-ctab tbody tr[data-cadm-exp="1"] .yws-cttl { white-space: normal; overflow: visible; text-overflow: clip; }
+/* 第 2 行：状态徽标 + 操作（靠右） */
+.yws-cadm .yws-ctab .yws-bc5 { flex: 1 1 100%; display: flex; align-items: center; gap: 4px; width: auto; white-space: nowrap; }
+.yws-cadm .yws-ctab .yws-cadm-ops { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+/* 第 2 行：作者 / 更新 / 编号 —— 允许收窄（flex-shrink），但都停在 min-width 之上 ⇒ 永不横溢 */
+/* ★W17-B1-迭代四（截图看出来的）：左右内边距 6 → 4px —— 上一版格子 44/40px 里被内边距吃掉 12px，
+   3 个汉字 / `09-24` 都差 1~5px ⇒ 作者被截成「路…」、更新被截成「09-…」（截图里一眼可见）。
+   本表改成 4px 后：可用宽 40/38，作者（3 字 33px）与更新（`09-24` 33px）都放得下，不再吃省略号。 */
+.yws-cadm .yws-ctab th, .yws-cadm .yws-ctab td { padding-left: 4px; padding-right: 4px; }
+.yws-cadm .yws-ctab .yws-bc2 { flex: 0 1 44px; min-width: 32px; width: auto; }
+.yws-cadm .yws-ctab .yws-bc3 { flex: 0 1 42px; min-width: 34px; width: auto; }
+.yws-cadm .yws-ctab .yws-bc4 { flex: 0 1 48px; min-width: 40px; width: auto; }
+/* 操作：靠右、不参与伸缩（`nowrap` 是必须的 —— 不加它那两颗按钮会在格里自己折成两行） */
+/* ★★W19-B：这一格改成「状态 + 靠右的操作」（原来只有按钮）—— 状态徽标从标题那一格搬过来
+   （标题一长它就会被标题格的 overflow:hidden 裁掉：改前真界面实测「在线中」x=848 > 标题格右缘 679）。 */
+.yws-cadm .yws-ctab .yws-bc5 { flex: 1 1 100%; display: flex; align-items: center; gap: 4px; width: auto; white-space: nowrap; }
+/* 本表两档都只显示 MM-DD（全文日期在 `title` 里）—— 两行布局里没有 128px 给那一格 */
+.yws-cadm .yws-bdate-l { display: none; }
+.yws-cadm .yws-bdate-s { display: inline; }
+/* ★作者点名"纵向别占太长"：本表（.yws-ctab = 卡片管理那张表的钩子类）上下内边距再收 1px/档
+   ⇒ 行比基准库那张表矮一档；表头/单元格的字号仍是 .yws-btab 那套（视觉语言一致）。 */
+.yws-cadm .yws-ctab th, .yws-cadm .yws-ctab td { padding-top: 2px; padding-bottom: 2px; }
+/* ★★W21-C（作者本批 · item ⑦-②）**行线错位**：数据行是 flex 容器（`align-items: center`），
+   而「卡片」那一格里的标题按钮比「作者 / 更新」两格高 2~3px（按钮上下各 3px 内边距，W19-B 专门为
+   "热区 ≥24"加的）⇒ 三格**按中心对齐**时顶边不在同一条 y 上，于是 `td { border-top }` 画的那条横线
+   在「卡片列」与「作者 / 更新」两区域之间**错开 2~3px**（真界面实测：PC 卡片格顶边 y804 / 作者+更新 y807）。
+   ⇒ 修法（**治根**，不是把线搬走）：让这一行的格子**等高**（`align-items: stretch`）——
+      三格顶边必然同 y ⇒ 同一条线；再把格子里的内容**自己居中**（`.yws-bc2/.yws-bc3` 变成
+      `display:flex; align-items:center`，与 `.yws-bc1` / `.yws-bc5` **本来就有**的那两条写法一致）。
+      ★为什么不把行线搬到 `tr` 上（本轮试过、已撤回）：本表是 `border-collapse: collapse`，
+        `tr`（它自己又是 `display:flex`）的 border 在浏览器里**算出来是 0**（实测 computed
+        border-top-width = 0）⇒ 线根本不画，读数只会变成"0 条线"，那是**装作修好了**。
+      ★`.yws-bc2/.yws-bc3 > * { min-width: 0 }`：格子变成 flex 容器后，里面那个带省略号的 span
+        必须允许收缩到比 min-content 更窄，否则作者名/日期会**溢出格子**（W17-B1 迭代四修过的
+        「作者被截成路…」就是这一族问题 —— 不能让省略号失效）。
+   ★作用域只在 `.yws-cadm .yws-ctab`（= 卡片管理这一张表）：W11「🗄 基准库」那张表挂在 `.yws-badm`
+     上、不在 `.yws-cadm` 里 ⇒ 它一个像素都不动（与 W17-B1/W19-B 两条口径一致）。 */
+.yws-cadm .yws-ctab tbody tr.yws-brow { align-items: stretch; }
+.yws-cadm .yws-ctab .yws-bc2,
+.yws-cadm .yws-ctab .yws-bc3 { display: flex; align-items: center; }
+.yws-cadm .yws-ctab .yws-bc2 > *, .yws-cadm .yws-ctab .yws-bc3 > * { min-width: 0; }
+/* 那一格（表格 + 读数 + 底注）是**搜索 / 翻页的就地刷新范围**（cardAdmApplyView 只改行的
+   display / 按钮 disabled / 两格 textContent，**一个 innerHTML 都不写** —— 光标、焦点、滚动都不动）。
+   —— min-width:0 是横向安全垫：表宽被 table-layout:fixed 夹住，这里再保证这一格自己能缩。 */
+.yws-cadm-body { min-width: 0; }
+/* 行内两颗按钮（重发钥匙 / 删除卡）—— 收一点内边距，让它们在 134px 里稳稳一行 */
+/* ★W17-B1：本表两档都用紧凑档（3px 内边距 / xs 字号）—— PC 抽屉里的面板也只有 258px 宽，
+   按 7px 内边距写的那 134px 列宽根本放不进面板（改前整表横溢 166px 就是这么来的）。
+   实测按钮 54×26 / 43×26，热区仍 ≥24（铁律：触摸目标不许 <24）。 */
+.yws-cadm .yws-bc5 .yws-btn { padding-left: 3px; padding-right: 3px; font-size: var(--yws-fs-xs); }
+.yws-cadm .yws-bc5 .yws-btn + .yws-btn { margin-left: 4px; }
+/* 悬停高亮：只在**本表**（.yws-cadm 作用域）—— 基准库那张表一个字都不动 */
+.yws-cadm .yws-brow:hover td { background: var(--yws-surface); }
+/* 编号那一格：等宽小字 + 粗体（长出来的部分由 .yws-btab td 的 ellipsis 剪，全文在 title 里） */
+.yws-cadm .yws-bver { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--yws-fs-xs); font-weight: 600; letter-spacing: 0; }
+/* 作者那一格：一格灰字元信息（nowrap + 省略号 —— 名字再长也不许把行撑成两行） */
+.yws-cadm .yws-bsize { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 更新时间：nowrap（PC 显示 YYYY-MM-DD，手机档由 .yws-bdate-l/-s 换成 MM-DD —— 上面既有那两条） */
+.yws-cadm .yws-bdate { white-space: nowrap; }
+/* 「官方」小标（复用既有的 .yws-offi 观感，只是在本表里再收一档字号） */
+.yws-cadm .yws-offi { font-size: var(--yws-fs-xs); }
+/* 那个搜索框吃满一整行（作者要的是"一行输入框"，不是跟别的控件挤） */
+.yws-cadm-q { flex: 1 1 100%; min-width: 0; }
+/* 那一行读数（共 N 张 / 第 P/Q 页）—— 上边距收一档，别在紧凑表下面又堆高度 */
+.yws-cadm-stat { margin: 6px 0 0; }
+.yws-cadm-stat .yws-btn + .yws-btn { margin-left: 0; }
+/* ★那一段"只在这一次"的钥匙：等宽可选中 + 允许换行（JSON 很长，横着溢出比换行难看得多）；
+   外面那圈用金色（官方/警示那一族的既有令牌），让人一眼知道"这东西别乱发"。 */
+.yws-ckey { border-color: var(--yws-gold-line); background: var(--yws-gold-bg); }
+.yws-ckeyjson { white-space: pre-wrap; word-break: break-all; max-height: none; overflow: visible; -webkit-user-select: all; user-select: all; }
+/* ★★W17-B1：手机档那四条 `width` 整块撤掉 —— 两行布局里列的宽窄由上面的 `flex` 基宽定（两档同一套，
+   所以 PC 与手机上"作者/更新/编号/操作"的相对宽窄一致）；只留"按钮更紧凑"这一条。 */
+@media (max-width: 720px) {
+    .yws-cadm .yws-ctab .yws-bc5 .yws-btn { padding-left: 3px; padding-right: 3px; font-size: var(--yws-fs-xs); }
+}
+
+/* ==========================================================================
+   ★★W88（2026-10-04 · 作者：「许愿的卡片…好多线…为什么预览在所有内容的下面？关闭时和展开时的 UI 要做好」·
+           「上面的小剧场卡片也是太丑了，能不能有点逻辑？」）
+   —— **简卡（lite）骨架**：许愿 / 小剧场两档共用同一套排版与间距尺度（DOM 里挂 `.yws-card-lite`）。
+   三条痛点逐条落地：
+     ① 好多线 ⇒ 卡内**零骨架线**：标/胶囊/按钮的描边全部撤掉，改用**底色层次**（填充 + hover 提一档）
+        表达可点性；唯一保留的线 = 卡片外框 +（展开态里）回复区上沿那一条（"最多一条分隔线"）。
+        颜色一律走既有令牌 / color-mix（零硬编码），间距走既有空间令牌（--yws-s1/s2）。
+     ② 预览在所有内容的下面 ⇒ **正文永远排在标题下面、作者行上面**：`order` 把次序钉死
+        （**W90 起：标题 1 / 正文 2 / 署名 3 / 动作 4 / 记录 5 / 回复区 6** —— 作者 2026-10-04 选图确认
+        "标题 → 正文 → 作者行（署名 · 时间）→ 动作行"；W88 时曾是 标题<署名<正文）；收起态 = 两行预览，展开态 = 全文，
+        两态位置一致 —— 正文再也不会落到动作行 / 元信息行下面去。
+     ③ 关闭 / 展开两态 ⇒ 骨架一个字不变，两态只差"预览↔全文"与"回复区在不在"。
+        ★★W91（作者 2026-10-05：「我觉得左下角的「收起」挺没必要的 —— 直接帮我删掉就行了」）：
+          展开态动作行那颗「收起」**已删**（JS 侧元素 + 本文件 `.yws-collapse` 两条一起摘掉，见下面 ③ 的补注）；
+          收起仍有三条既有路：点卡本体第二次 / 开着时点回复数那颗 / 回复面板头「✕ 收起」。**别再装回来。**
+   ★只管简卡：所有规则都挂在 `.yws-card-lite` 下（条目卡一个字节没动）。
+   ========================================================================== */
+/* —— ① 卡内零骨架线：署名行分隔线 / BY 方框 / 类型胶囊描边全部撤掉 —— */
+.yws-card-lite .yws-card-m { border-top: 0; margin-top: var(--yws-s1); padding-top: 0; gap: 5px; }
+.yws-card-lite .yws-by-k { border: 0; background: transparent; padding: 0; letter-spacing: .12em; color: var(--yws-txt-3); }
+/* ★★W89-④（作者 2026-10-04：「名字后面怎么有个 许愿 / 交流 这个多余文字 去掉」）：
+   简卡**不再渲染**「类型」那一格（`.yws-mtype`）⇒ 这条"把类型胶囊描边撤掉"的规则一并删除
+   （元素没了，规则就是死代码）。`.yws-mtype` 本身照旧服务**条目卡**与**待审行**（那两处一个字节没动）。 */
+/* 收藏星（W76 起只剩一颗星）：描边也撤掉，可点性交给悬停底色 */
+.yws-card-lite .yws-btn.yws-favbtn { border-color: transparent; background: transparent; color: var(--yws-txt-3); }
+.yws-card-lite .yws-btn.yws-favbtn:hover { border-color: transparent; background: var(--yws-raise); color: var(--yws-txt); }
+.yws-card-lite .yws-btn.yws-favbtn.yws-favon { border-color: transparent; background: color-mix(in srgb, var(--yws-offi) 16%, transparent); color: var(--yws-gold-ink); }
+/* 动作行那几颗：**描边 → 底色层次**（填充 + hover 提一档；不靠框） */
+.yws-card-lite .yws-card-f .yws-btn { border-color: transparent; }
+.yws-card-lite .yws-card-f .yws-btn.yws-cmbtn { background: var(--yws-raise); color: var(--yws-txt-2); }
+.yws-card-lite .yws-card-f .yws-btn.yws-cmbtn:hover { background: color-mix(in srgb, var(--yws-accent) 12%, var(--yws-raise)); color: var(--yws-txt); }
+.yws-card-lite .yws-card-f .yws-btn.yws-cmbtn.yws-wishrep { background: color-mix(in srgb, var(--yws-accent) 14%, transparent); color: var(--yws-txt); }
+.yws-card-lite .yws-card-f .yws-btn.yws-cmbtn.yws-wishrep:hover { background: color-mix(in srgb, var(--yws-accent) 22%, transparent); }
+.yws-card-lite .yws-card-f .yws-btn.yws-like { background: var(--yws-raise); }
+.yws-card-lite .yws-card-f .yws-btn.yws-like:hover { background: color-mix(in srgb, var(--yws-txt) 8%, var(--yws-raise)); color: var(--yws-txt); }
+.yws-card-lite .yws-card-f .yws-btn.yws-like.yws-liked { border-color: transparent; background: color-mix(in srgb, var(--yws-bad) 16%, transparent); }
+.yws-card-lite .yws-card-f .yws-btn.yws-sew { background: color-mix(in srgb, var(--yws-accent) 14%, transparent); }
+.yws-card-lite .yws-card-f .yws-btn.yws-sew:hover { background: color-mix(in srgb, var(--yws-accent) 22%, transparent); }
+/* —— ② 两态骨架：次序用 order 钉死（W90 起：标题 1 / **正文 2 / 署名 3** / 动作 4 / 记录 5 / 回复区 6） ——
+   ★★W90（作者 2026-10-04 选图确认）：**「许愿 / 交流」「小剧场」两卡的作者行（署名 · 时间）挪到正文下面** ——
+     要的次序 = 标题 → 正文 → 作者行 → 动作行（W88 时是 标题 → 署名 → 正文 → 动作）。
+     DOM 序一个字没动（正文块本来就画在 header 与 meta 行之间），只交换了下面两条 order 值。
+   ★为什么用 order 而不是挪 DOM：DOM 顺序是全站点击委派 / 就地更新 / 记录块锚点（`.yws-card-n` afterend）
+     的锚点顺序，动它风险大；"视觉次序"用 order 表达即可（卡片本来就是 flex 列容器）。
+   ★兜底 7：没点名的孩子排在最后（将来加东西不会挤到"正文上面"去）。 */
+.yws-card-lite > * { order: 7; }
+.yws-card-lite > .yws-card-h { order: 1; }
+.yws-card-lite > .yws-card-wb, .yws-card-lite > .yws-card-body { order: 2; }
+.yws-card-lite > .yws-card-m { order: 3; }
+.yws-card-lite > .yws-card-n { order: 4; }
+.yws-card-lite > .yws-histbox { order: 5; }
+.yws-card-lite > .yws-cm { order: 6; }
+/* 收起态那份正文预览：与上面一行拉开一点（原来的分隔线撤了，用留白代替线）；动作行同样给一圈留白。
+   ★W90：次序改成 标题→正文→作者行→动作 之后，署名行自带的 margin-top（--yws-s1，见上面那条
+     `.yws-card-lite .yws-card-m`）就是它与正文之间的留白 —— 两条 margin 一个字没动，本波只交换 order。 */
+.yws-card-lite > .yws-card-wb { margin-top: var(--yws-s2); }
+.yws-card-lite > .yws-card-n { margin-top: var(--yws-s2); }
+/* —— ③ 展开态那份全文：从"代码框"改回"正文"（.yws-pre 的方框 / 等宽字 / 内边距在本卡内撤掉） —— */
+.yws-card-lite > .yws-card-body { margin-top: var(--yws-s2); padding-top: 0; border-top: 0; }
+.yws-card-lite .yws-card-body > .yws-pre,
+.yws-card-lite .yws-card-body > .yws-card-w {
+    margin: 0; padding: 0; border: 0; background: transparent; border-radius: 0;
+    /* ★★W89-②（作者 2026-10-04：「展开和收起怎么字号改变啊？不要改变」）：
+       原来是 `var(--yws-fs-md)`（13px），而收起态那份预览（`.yws-card-w`）是 12.5px ⇒ **展开一下字变大**。
+       现在两态**共用 `--yws-fs-body`**（12.5px）：字号逐项相同，切态不再跳字号。 */
+    font-family: inherit; font-size: var(--yws-fs-body); line-height: 1.62; color: var(--yws-txt);
+    white-space: pre-wrap; word-break: break-word; min-height: 0;
+}
+/* ★★W91（作者 2026-10-05：「我觉得左下角的「收起」挺没必要的 —— 直接帮我删掉就行了」）——
+   动作行那颗「收起」**整颗已删** ⇒ 它那两条规则（`.yws-collapse` 的占位 + ≥32 热区）一并摘除
+   （元素没了，规则就是死代码；JS 侧那处渲染见 preset-store.js 的 `yws-card-n` 段注释）。
+   ★"能收起来"没丢：点卡本体第二次 / 开着时点回复数那颗 / 回复面板头「✕ 收起」——三条路照旧。
+   ★**别把这两条规则加回来**（同族历史见上面 W88 总注释 ③ 那一条）。 */
+/* 日期那颗（跳「更新记录」）平时**不画虚线** —— 它就是一行次要信息（少一条线）；
+   悬停才显出可点（颜色 + 虚下划线，与全站的 `.yws-mday.yws-daybtn:hover` 同一套）。 */
+.yws-card-lite .yws-mday.yws-daybtn { text-decoration: none; }
+.yws-card-lite .yws-mday.yws-daybtn:hover { text-decoration: underline dotted; text-underline-offset: 2px; color: var(--yws-accent-ink); }

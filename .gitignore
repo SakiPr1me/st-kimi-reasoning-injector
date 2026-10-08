@@ -11,12 +11,19 @@ WORK_HANDOFF.md
 # 迭代前代码快照（本地保留，不入库）
 *.pre-*
 
-# ★预设更新器：还没做完，不进仓库（用户拿到的包里没有 → 卡片不出现）
-preset-merge.js
-preset-updater.js
-preset-updater.css
+# ★★2026-10-08（作者点头推送 · 发布清单 N2-1 解除发布隔离）：预设更新器 + 条目商店的 5 个文件
+#   （preset-merge.js / preset-updater.js / preset-updater.css / preset-store.js / preset-store.css）
+#   **已随包发出**（`git add -f` 进仓库）—— 原来挡着它们的那 5 行已按发布清单删掉，**别再恢复**。
+#   ★下面这一行是**旧坏 CSS（死文件）**：永远保持隔离、不要 git add 它。
 preset-updater.css.broken
 
-# ★云端「条目商店」：同样还没做完（P3 骨架，接本地假后端）→ 不进仓库
-preset-store.js
-preset-store.css
+# ★已下线的「思维链美化折叠」留档（作者以后可能还要改；永不随插件发给用户）
+thinking-fold.removed.js
+
+# ★已下线的「云端自动取回整份」（P6 三槽位云端自动更新 · 台账 §CY 拍板删）代码留档
+#   —— 同上：永不随插件发给用户（模块本身没删干净时也不许外泄）
+preset-updater-cloud.removed.js
+
+# ★2026-09-24：补两个模式 —— *.bak-* 匹配不到 .k2bak-*，三个 k2bak 备份差点随包发出去（收口已移走）
+*.k2bak-*
+*.pre-*
