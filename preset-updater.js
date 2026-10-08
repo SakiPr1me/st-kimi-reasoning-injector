@@ -66,7 +66,7 @@ const EXT = 'preset_updater';
      按"没有读数证明要改"这条纪律，那里一个字都没改。
    读数 / 假证（把改前形态塞回副本 ⇒ A-2 / A′-3 / A′-6 三条当场翻红）/ 回归见 waveW112-缝入顺位与聚块-日间.md；
    与 index.js 的 updaterBuild 成对升） */
-const VERSION = '5.3.35';   // 更新器模块版本（随工具箱一起发布）
+const VERSION = '5.3.36';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -138,7 +138,7 @@ const VERSION = '5.3.35';   // 更新器模块版本（随工具箱一起发布�
 /* ★W60 收口（2026-09-27 · 发布准备 · 三戳同升）：v5.3.21 → **v5.3.22**（**W58 更新器一件**：三个步骤框的说明精简 —— 删掉三处标题行括注「（从已安装预设里选）」与 ② 那处「（可拖文件进来）」，① ② 各加一枚「（必选）」小标、③ 加「（可选）」，顶部那句补「可下拉选择，可导入文件。」；拖放 / 下拉 / 标签功能一个都没动。那波的业务改动由 W58 自己交付，**本波只升戳、业务逻辑一个字没改**；与 index.js 的 updaterBuild 成对升） */
 /* ★W94 收口（2026-10-06 · 发布准备 · 三戳同升）：v5.3.22 → **v5.3.23**（**F3 派单的三处修**：① ② 槽位副标题按 S.nextFrom 走 —— 商店"缝入"那条路上 ② 是"你这份 + 这张卡的改动"、不再写死「作者刚发的那份」（那是误读成"我 vs 官方"的直接诱因）；② 商店路进对比页**默认档 = 「待我处理」**（那几处改动本来埋在 39/115/142 行、首屏看不见），更新器自己那条路默认档一个字没动；③ 把 analyze().notice **真渲染出来** + 把"被这次对比动到的隐藏条目"点名（内核语义一个字没改，落盘口径不变）。同批还改了 preset-updater.css 的 .ywpu-notices（收一行 + 热区 26px）；与 index.js 的 updaterBuild 成对升） */
 /* ★W101 收口（2026-10-06 · 发布准备 · 三戳同升）：v5.3.26 → **v5.3.27**（**W101 = 作者实测八条**：甲①~⑤ 条目侧精简与重排（删行里那对 On→Off 牌子 / 开关两块的值改 ON·OFF / 删「改名：…→…」那行 / 展开区改成「①用我的·保存为两版·用新版 → ②还有N处没选 → ③名字变化 → ④开关变化 → ⑤内容变化」/ 删「点有底色的地方 = 换成另一边」）；乙⑥ 正则「同一处画两遍」的真 BUG（根因 = preset-merge.js 的 regexFieldDiff 把 scriptName/disabled 也当更改内容推了进来 ⇒ 与上面那两个选择块重复；已剔掉 ⇒ 各维恰好 1 处、那个外面没法选择的 On→Off 牌子也删了）；乙⑦ 正则侧那两组**真的能点**了（data-rxuse：点=选 / 再点=取消 / 盖章 + 变暗，与条目逐字同一套；每行加一颗「还有 N 处没选」）；丙⑧ 当前筛选一眼可见（明写「当前：X」+ 选中那颗加内描边与 ✓）。业务改动由 W101 交付，与 index.js 的 updaterBuild 成对升） */
-const BUILD = 'v5.3.35';
+const BUILD = 'v5.3.36';
 const API_ID = 'openai';                       // 对话补全预设（用户只使用对话补全）
 
 // ---------------------------------------------------------------- 设置
@@ -376,22 +376,45 @@ function listPresetNames() {
     try { return pm ? (pm.getAllPresets() || []) : []; } catch (e) { return []; }
 }
 
-/** 按名字读一份已安装预设（返回深拷贝，避免改到内存里的对象） */
+/** 按名字读一份已安装预设（返回深拷贝，避免改到内存里的对象）
+ *  ★★W121（作者 2026-10-08 转来用户报告："更新插件后…如果修改了预设，插件似乎只能读取到修改前的预设"）：
+ *    酒馆**面板里的编辑**（加/删/改条目、拨开关）只进「内存 + settings.json」，**不点「更新预设」不进预设文件**；
+ *    而改前这里读的是 `openai_settings`（= **文件那本账**在内存里的副本，只在保存/导入/删除时才更新）
+ *    ⇒ 用户刚在面板里改完、还没点「更新预设」时，我们读到的是**改动前**那份。
+ *    实测复现（副本 · 真页面）：加一条不保存 ⇒ 我们读 178 / 内存 179；点过「更新预设」⇒ 我们读 179 且盘上文件里也有。
+ *    ⇒ 修法：**当要读的就是"酒馆当前正在选用的这一份"时**——**键表照文件那份走**（不引入额外顶层键 ⇒ 顶层字段差异不出假噪音），
+ *      **值取内存里那份**（`prompts` / `prompt_order` 一定取内存）。生成时用的本来就是内存这份 ⇒ 对比、缝入、写盘都该以它为准。
+ *      ★其余预设（不是当前在用的那份）照旧读文件那本账（内存里没有它们的"最新态"可读）。
+ *      ★读内存这一段**失败就退回文件那份**（绝不因为这条"取新"把读取搞坏）。 */
 function readPreset(name) {
     const pm = presetManager();
     if (!pm) throw new Error('取不到酒馆的预设管理器，请刷新页面重试');
     const list = pm.getPresetList(API_ID);
     const names = list.preset_names || {};
+    let body = null;
     for (const [idx, n] of Object.entries(names)) {
         if (n !== name) continue;
-        const preset = list.presets?.[idx];
-        if (!preset) break;
-        return JSON.parse(JSON.stringify(preset));
+        body = list.presets?.[idx] || null;
+        break;
     }
-    const idx = pm.findPreset(name);
-    const preset = idx !== undefined && idx !== null ? list.presets?.[idx] : null;
-    if (!preset) throw new Error('找不到预设「' + name + '」');
-    return JSON.parse(JSON.stringify(preset));
+    if (!body) {
+        const idx = pm.findPreset(name);
+        body = (idx !== undefined && idx !== null) ? (list.presets?.[idx] || null) : null;
+    }
+    if (!body) throw new Error('找不到预设「' + name + '」');
+    try {
+        const ctx = window.SillyTavern?.getContext?.();
+        const live = ctx && ctx.chatCompletionSettings;
+        const sel = (typeof pm.getSelectedPresetName === 'function') ? String(pm.getSelectedPresetName() || '') : '';
+        if (sel && sel === name && live && Array.isArray(live.prompts)) {
+            const merged = {};
+            for (const k of Object.keys(body)) merged[k] = (live[k] !== undefined) ? live[k] : body[k];
+            merged.prompts = live.prompts;
+            if (Array.isArray(live.prompt_order)) merged.prompt_order = live.prompt_order;
+            return JSON.parse(JSON.stringify(merged));
+        }
+    } catch (e) { /* 读内存失败 ⇒ 退回文件那份（下面那行） */ }
+    return JSON.parse(JSON.stringify(body));
 }
 
 /* ==== ywpu-fresh-core:start（纯逻辑，别在这段里引用外面的东西 —— 探针会把这段单独抽出来跑）==== */

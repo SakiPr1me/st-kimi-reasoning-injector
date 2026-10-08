@@ -108,7 +108,7 @@ const EXT = 'preset_store';
    （`.yws-card-m` 的 `border-top` 删掉，间距照旧）。v2.2.53 → **2.2.54**
    ★★W119b（同日 · 作者改口径）：**折叠整条撤掉**（"有点丑 不要这么搞了"）⇒ 改成横幅里加一颗 **OK**，
    点了**彻底隐藏**（本机持久记 `wishBannerOff`，刷新/重进商店都不再画）。v2.2.54 → **2.2.55** */
-const VERSION = '2.2.55';
+const VERSION = '2.2.56';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -193,7 +193,7 @@ const VERSION = '2.2.55';
 /* ★★W91 收口（2026-10-05 · 删动作行「收起」）：v2.2.44 → **v2.2.45**（与上面 VERSION 那一行同一条口径；两处必须一起改）。 */
 /* ★★W96 收口（2026-10-06 · 整份上传「两道剔除」：ST 导出名单的 56 个敏感/连接键 + 不吃隐藏条目）：v2.2.46 → **v2.2.47**（与上面 VERSION 那一行同一条口径；两处必须一起改）。 */
 /* ★★W119b 收口（2026-10-08 · 折叠撤掉、改「OK」点了彻底隐藏）：v2.2.54 → **v2.2.55**（与上面 VERSION 那一行同一条口径；两处必须一起改）。 */
-const BUILD = 'v2.2.55';
+const BUILD = 'v2.2.56';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（`https://ywp-store-sakiprime.pages.dev`）：
@@ -902,16 +902,36 @@ function presetManager() {
 function listPresetNames() {
     try { const pm = presetManager(); return pm ? (pm.getAllPresets() || []) : []; } catch (e) { return []; }
 }
+/** ★★W121（与 preset-updater.js 的 readPreset **同一套修法**，作者 2026-10-08 转来的用户报告）：
+ *  酒馆面板里的编辑只进「内存 + settings.json」，不点「更新预设」不进预设文件；
+ *  改前这里读 `openai_settings`（= 文件那本账的副本）⇒ "改了预设插件读到旧的"。
+ *  ⇒ **当前正在选用的那一份：键表照文件、值取内存**（prompts / prompt_order 一定取内存）；其余预设照旧读文件那本账。
+ *  ★读内存失败 ⇒ 退回文件那份（绝不因为这条"取新"把读取搞坏）。 */
 function readPreset(name) {
     const pm = presetManager();
     if (!pm) throw new Error('取不到酒馆的预设管理器，请刷新页面重试');
     const list = pm.getPresetList(API_ID);
     const names = list.preset_names || {};
-    for (const [idx, n] of Object.entries(names)) if (n === name) { const p = list.presets?.[idx]; if (p) return JSON.parse(JSON.stringify(p)); }
-    const idx = pm.findPreset(name);
-    const p = idx !== undefined && idx !== null ? list.presets?.[idx] : null;
-    if (!p) throw new Error('找不到预设「' + name + '」');
-    return JSON.parse(JSON.stringify(p));
+    let body = null;
+    for (const [idx, n] of Object.entries(names)) if (n === name) { body = list.presets?.[idx] || null; break; }
+    if (!body) {
+        const idx = pm.findPreset(name);
+        body = (idx !== undefined && idx !== null) ? (list.presets?.[idx] || null) : null;
+    }
+    if (!body) throw new Error('找不到预设「' + name + '」');
+    try {
+        const ctx = window.SillyTavern?.getContext?.();
+        const live = ctx && ctx.chatCompletionSettings;
+        const sel = (typeof pm.getSelectedPresetName === 'function') ? String(pm.getSelectedPresetName() || '') : '';
+        if (sel && sel === name && live && Array.isArray(live.prompts)) {
+            const merged = {};
+            for (const k of Object.keys(body)) merged[k] = (live[k] !== undefined) ? live[k] : body[k];
+            merged.prompts = live.prompts;
+            if (Array.isArray(live.prompt_order)) merged.prompt_order = live.prompt_order;
+            return JSON.parse(JSON.stringify(merged));
+        }
+    } catch (e) { /* 读内存失败 ⇒ 退回文件那份 */ }
+    return JSON.parse(JSON.stringify(body));
 }
 /** 另存新名（★绝不覆盖同名：撞了就自动加（2）（3）…） */
 async function savePresetNew(name, preset) {
