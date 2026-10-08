@@ -36,7 +36,7 @@
 /* ---------------------------------------------------------------- 1. 令牌（色板） */
 /* ★§17：`#yws-dlg-host`（条目详情弹窗的宿主）也在这里 —— 它挂在 document.body 上（不是面板里），
    不跟这一组一起声明就拿不到 `--yws-*`（原因见 preset-store.js 的 mountWizDialog） */
-.yws-host, #ywpu-view-store, #yws-dlg-host, #yws-banner, #yws-repbanner {   /* ★R7：横幅挂在挂载点外面，不列进来它拿不到 --yws-*（★U9：回复通知那条横幅同理） */
+.yws-host, #ywpu-view-store, #yws-dlg-host, #yws-banner, #yws-repbanner, #yws-noticebanner {   /* ★R7：横幅挂在挂载点外面，不列进来它拿不到 --yws-*（★U9：回复通知那条横幅同理；★W128b：公告横幅同理） */
     /* —— 文字三档（主 / 次 / 弱）：都从主题正文色混出来，跟 ST 主题走
            ★alpha 是**逐层合成**口径量出来的（e2e/probe-store-light.js）：弱色必须 ≥.74、次色 ≥.84，
              否则在浅色主题的浅底上会掉到 4.5 以下（实测 .62 只有 3.79） */
@@ -1214,6 +1214,25 @@
    颜色全部走既有令牌 ⇒ `_INK_TOKENS` 里那层"自动取色 + 对比兜底"照旧管它（深浅主题都 ≥4.5）。 */
 .yws-banner.yws-banner-rep { border-color: var(--yws-accent-line); }
 .yws-banner.yws-banner-rep .yws-banner-txt { color: var(--yws-accent-ink); font-weight: 650; }
+/* ★★W128b（2026-10-09 · 作者拍板「自定义公告横幅」）：**公告那条横幅**（`#yws-noticebanner`）——
+   作者原话："我想做另外一个横幅 **自定义横幅** 就是有什么新鲜事 我想说的话 可以推送上去 …… 用户也可以点击
+   **已阅**"。
+   ★做法与上面那条「回复通知」**逐字同一套**（这也是本项目的既有纪律：**不新造平行样式**）——
+     复用 `.yws-banner` 本体（边/底/圆角/内边距/阴影/按钮族/自动取色全继承），只加一个色档类；
+     它排在**更新横幅上面**（DOM：公告 → 更新 → 回复，见 `noticeTick()` 的插入位）。
+   ★这一条只多**两样**：
+     ① 正文走 `white-space: pre-wrap`（**空格 / 换行 / 空行原样呈现** —— 与 W116「说明」「正文」
+        同一条口径；`overflow-wrap: anywhere` 防长英文串横向溢出）；
+     ② 那颗「已阅」贴右（`.yws-notice-ack { margin-left: auto }` —— 正文是 `flex: 1 1 auto`，
+        正常情况下它自然就在最右；显式写一遍是为了"正文很短"时也贴右，不与正文挤在一起）。
+   颜色全部走既有令牌（`--yws-accent-*`，与「回复通知」同一族；该族的 `-ink` 在 `_INK_TOKENS` 名单里
+   ⇒ 自动吃"≥4.5"的对比兜底，深浅两档主题都读得清）。 */
+.yws-banner.yws-banner-notice { border-color: var(--yws-accent-line); }
+.yws-banner.yws-banner-notice .yws-banner-txt {
+    color: var(--yws-accent-ink); font-weight: 650;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.yws-banner.yws-banner-notice .yws-notice-ack { margin-left: auto; flex: 0 0 auto; }
 .yws-note {
     border: 1px solid var(--yws-gold-line); border-radius: var(--yws-r-lg);
     padding: 10px 12px; margin-bottom: 10px;
@@ -1670,6 +1689,29 @@
 .yws-awin-s { flex: 1 1 9em; min-width: 0; font-size: var(--yws-fs-xs); color: var(--yws-txt-2); overflow-wrap: anywhere; }
 .yws-awin-s.yws-awin-ons { color: var(--yws-ok-ink); font-weight: 600; }
 .yws-awin-x { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+/* ★★W128b（2026-10-09 · 作者拍板「自定义公告横幅」）：**作者侧「📣 公告」那一行**（只在「🔑 待审」页里）——
+   形态与上面那块「⚡ 免审」**同一套**（同一个外盒语汇：`.yws-nadm` 借用 `.yws-awin` 的边/底/圆角/间距，
+   行内 `flex + wrap`，手机档自己折行、零横向溢出），只有两处按这一块的性质写：
+     · 多行框独占一整行（`.yws-nadm-edit`：`flex: 1 1 100%` 的 `textarea` + 靠右两颗按钮）；
+     · 文字档：正文两行封顶（`.yws-nadm-ta` 由 `.yws-ta` 那族给基本形态）。
+   色全部走既有令牌（在推 = `--yws-accent-*` 那一族，与商店里那条公告横幅**同色** ⇒ 一眼对得上；
+   状态字/时间走 `--yws-txt-2` / `--yws-txt-3` —— 都在 `_INK_TOKENS` 的兜底范围里）。 */
+.yws-nadm { margin: 0 0 6px; padding: 5px 8px; border: 1px solid var(--yws-line); border-radius: var(--yws-r-sm); background: var(--yws-bg); }
+.yws-nadm.yws-nadm-on { border-color: var(--yws-accent-line); background: var(--yws-accent-bg); }
+.yws-nadm-r { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.yws-nadm-t { flex: 0 0 auto; font-size: var(--yws-fs-sm); font-weight: 650; color: var(--yws-txt); white-space: nowrap; }
+.yws-nadm-cur { flex: 0 0 auto; font-size: var(--yws-fs-xs); color: var(--yws-txt-2); }
+.yws-nadm-txt { flex: 1 1 9em; min-width: 0; font-size: var(--yws-fs-xs); color: var(--yws-accent-ink); font-weight: 600; overflow-wrap: anywhere; }
+.yws-nadm-at { flex: 0 0 auto; font-size: var(--yws-fs-xs); color: var(--yws-txt-3); }
+.yws-nadm-non { flex: 1 1 9em; min-width: 0; font-size: var(--yws-fs-xs); color: var(--yws-txt-2); }
+.yws-nadm-miss { flex: 1 1 100%; min-width: 0; font-size: var(--yws-fs-xs); color: var(--yws-txt-2); overflow-wrap: anywhere; }
+.yws-nadm-edit { align-items: flex-end; }
+.yws-nadm-x { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.yws-nadm .yws-nadm-ta { flex: 1 1 12em; min-width: 0; font-size: var(--yws-fs-sm); }
+/* ★手机档：两颗按钮那一格在窄屏换行后**贴右**（与「免审」那两颗同一条观感），框独占上面一整行。 */
+@media (max-width: 720px) {
+    .yws-nadm-edit .yws-nadm-x { flex: 1 1 100%; justify-content: flex-end; }
+}
 /* ---- ② 每条：内边距 10px 12px → 8px 10px（一屏多塞一条）。★只动待审行：
    「我的」那一行是同一个选择器组里的另一半，**不许被牵连**（.yws-myrow 保持原样）。 ---- */
 .yws-rvrow { padding: 6px 10px; }

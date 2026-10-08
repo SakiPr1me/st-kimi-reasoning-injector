@@ -131,7 +131,25 @@ const EXT = 'preset_store';
       （上排 = 部分上传 · 正则 · 整份预设；下排 = 小剧场 · 许愿 / 交流），靠一个**不占位的断行元素**
       （`.yws-segbrk`，电脑档 `display:none`）+ 窄屏媒体查询实现；**电脑档仍是一行、形状一个像素不变**。
       改前读数（真页面 390×844）：那一排 5 颗共 311px vs 行内宽 285px ⇒ **横溢 26px**（许愿/交流 伸出 26px）。 */
-const VERSION = '2.2.60';
+/* ★★W128b 收口（2026-10-09 · 作者拍板「自定义公告横幅」· 客户端这一半）：v2.2.60 → **2.2.61**
+   （三处成对：本行 / 下面 BUILD / index.js 的 storeBuild。后端那一半 W128 已完工并部署在 A+B 两台。）
+   作者原话：**"每次有更新或者有新的条目的时候 不是会有一个顶上的横幅通知吗 我想做另外一个横幅 自定义横幅
+   就是有什么新鲜事 我想说的话 可以推送上去 用户也可以点击已阅 然后就不再更新 …… 但是我这一条取消推送后
+   所有人那边都不再显示 代表我修好了"** + 追加"**点击取消推送后 如果这段时间内没用酒馆的人 下次开酒馆
+   也不能推送**"。
+   ① **商店顶上一条公告横幅**（`#yws-noticebanner`）：**复用既有那套横幅**（`.yws-banner` + 一个色档类
+      `yws-banner-notice`，与「回复通知」那条 `yws-banner-rep` 同一套做法 —— 不新造平行样式）；
+      右边一颗「已阅」⇒ 把**这一条的 id** 记进本机账 `settings.noticeSeen`（新键**同时写进
+      `defaultSettings`** —— 铁律 32：升级补默认 = 新装值）；同一条不再显示；**换了 id（重推）⇒ 重新显示**。
+      正文 `esc` 后**原样**渲染（`white-space: pre-wrap`）⇒ 空格 / 换行 / 空行一个都不动（W116 同口径）。
+   ② ★★**只从"最近一次成功拉取"渲染公告**（`S.notice`，只在 `refresh()` 拉成功那一支里赋值）：
+      **不许**从 F7 离线缓存 / 任何本地缓存把公告"复活"（本地只存"已读 id" —— 只能抑制、不能注入）
+      ⇒ "取消后、这段期间没开过酒馆的人下次打开也不显示"是**结构性**成立的（他拉到的就是 null）。
+   ③ **作者侧推送界面**在「🔑 待审」页里（那页本来就只有带密钥的人进得去）：多行框 + 「推送」/「取消推送」
+      两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
+      空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
+      （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
+const VERSION = '2.2.61';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -217,11 +235,12 @@ const VERSION = '2.2.60';
 /* ★★W96 收口（2026-10-06 · 整份上传「两道剔除」：ST 导出名单的 56 个敏感/连接键 + 不吃隐藏条目）：v2.2.46 → **v2.2.47**（与上面 VERSION 那一行同一条口径；两处必须一起改）。 */
 /* ★★W119b 收口（2026-10-08 · 折叠撤掉、改「OK」点了彻底隐藏）：v2.2.54 → **v2.2.55**（与上面 VERSION 那一行同一条口径；两处必须一起改）。 */
 /* ★★W125-c 收口（2026-10-09 · 备胎后端 · c 期 · 客户端）：v2.2.57 → **v2.2.58**（与上面 VERSION 那一行同一条口径；两处必须一起改）。 */
+/* ★★W128b 收口（2026-10-09 · 作者拍板「自定义公告横幅」）：v2.2.60 → **2.2.61**（与上面 VERSION 那一行同一条口径；两处必须一起改）。 */
 /* ★★W126-b 收口（2026-10-09 · 作者转来的用户报告「没取名就点上传 ⇒ 卡住、补救也没用」）：
    v2.2.58 → **v2.2.59**（VERSION/BUILD 两处 + index.js 的 storeBuild = 三处成对）。
    只改署名这一条链：拦在入口（诱导去取名）/ 装包草稿空则回退设置并回填 / 「确认」落盘顺手回填草稿 /
    向导里那颗「去取名」（与拦入口同一个函数）。 */
-const BUILD = 'v2.2.60';
+const BUILD = 'v2.2.61';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（`https://ywp-store-sakiprime.pages.dev`）：
@@ -436,6 +455,18 @@ const defaultSettings = {
        中断（探针实测：刷新后顶栏都没画出来）。补上默认值——这才让 W48-B4 的设计意图（坏形状 ⇒ 按"没有它"
        处理 + 一次人话）真正成立；对正常机器零行为变化（缺键的那道 375 行也会补同一份空对象）。 */
     mineSeen: {},
+    /* ★★W128b（2026-10-09 · 作者拍板「自定义公告横幅」）：**本机"公告已阅"账** ——
+       `公告 id -> 已阅时刻（毫秒）`。点横幅那颗「已阅」就往这里记一笔（`noticeAck()`，唯一写入点），
+       `noticeVisible()` 按**这一条的 id** 判"该不该显示"。
+       ★三条口径（都是作者原话推出来的）：
+         · **只有 id 变了才重新显示**（重推 = 新 id）—— 所以判据必须拿 `id` 比，**不许**拿 `text` / `at` 凑
+           （同一个 id 的文字被服务端改过是另一回事，那种情形按"同一条"处理）；
+         · 这本账**只能"抑制"、不能"注入"**：它进不了任何"该显示什么"的判断 —— 该显示什么**只**由
+           `S.notice`（最近一次成功拉取）说了算；本机记的只是"这一条我点过已阅"；
+         · **不落进 F7 离线缓存**（`saveCache()` 的白名单里没有它、也没有公告正文本身）——
+           取消推送后，没打开过商店的人下次打开拉到的就是 `null`，界面上自然什么都不显示。
+       ★铁律 32：新键写在**这里**（同一个来源）⇒ 新装用户与老用户升级上来的生效值完全一致（都是空账）。 */
+    noticeSeen: {},
 };
 /** ★★W48-B4（评审 R4 · 该修）：形状判据「像个纯对象」（数组/数字/字符串都不算）。
  *  只给 `getSettings()` 里那张表用（表里那几个键是**按形状用**的：`for (const x of obj)` / `obj[id] = v`）。 */
@@ -463,6 +494,7 @@ const SET_SHAPE_KEYS = [
     ['cmMine', 'obj', '我发过的评论'],
     ['cmRead', 'obj', '已读的回复'],
     ['mineSeen', 'obj', '我的上传那条小记账'],
+    ['noticeSeen', 'obj', '公告"已阅"那本账'],          // ★W128b：形状坏了一样走"按没有它处理 + 一次人话"
 ];
 let _shapeTold = false;        // 「人话」一样只说一次（同一会话里）
 function getSettings() {
@@ -572,6 +604,23 @@ const S = {
          · `miss:true` = 拿不到（老后端 404 / 离线 / 403）⇒ 界面**如实说一句人话**，不假装"关着"、不弹红。
        ★`null` = 还没问过；**没填审核密钥时永远是 null**（普通人一个字节都不请求 —— 与「🔑 待审」那颗入口同一条纪律）。 */
     awin: null,
+    /* ★★W128b（2026-10-09 · 作者拍板「自定义公告横幅」）**公告这一套的四个状态位**：
+       · `notice`     = **最近一次成功拉取**（`/list`）里的公告：`{id, at, text}` 或 `null`（没在推）。
+         ★★**只活在内存**：绝不落盘、绝不进 F7 缓存（`saveCache()` 的白名单里没有它）——
+           这就是"只从最近一次成功拉取渲染、本地只存已读 id"那条纪律的落点。
+           拉失败 / 离线 / 摆的是缓存 ⇒ **`S.notice` 一个字节都不许动**（留着上一次成功那份；
+           从来没成功过 ⇒ 它一直是 null ⇒ 什么都不画 —— "没开过酒馆的人下次打开也不显示"）。
+           赋值点**只有 `refresh()` 拉成功那一支**（grep `S.notice =` 应恰好 1 处）+ 作者侧
+           `loadNotice()` / 推·取消回执那三处（都是服务端当场给的权威读数，同一条"成功才算"纪律）。
+       · `nadm`       = 作者侧「待审」页那一行的读数：`{ notice, gotAt, miss, err }`；`null` = 还没问过。
+         `miss:true`（老后端 404 / 离线 / 403）⇒ 界面**如实说一句人话**、不画按钮（与 `S.awin` 同一套）。
+       · `nadmDraft`  = 那个多行框里的草稿（**只活在这一屏**、不落盘；重绘必须从它取值 —— 与 `S.connD`
+         同一条口径：不然打到一半的内容会被一次后台重绘吃掉）。
+       · `nadmBusy`   = 推 / 取消正在飞（连点第二下在这个口子上就被吞掉；两颗按钮当场变禁用态）。 */
+    notice: null,
+    nadm: null,
+    nadmDraft: '',
+    nadmBusy: false,
     myList: [],               // 我的（本地凭证 + 服务端状态）
     /* ★★W27-B4①：`/mine` 拿到**空表**时的那句话（null = 不是空表 / 还没拉过）。
        { had: 这把凭据在这台设备上以前见过卡?, why: 服务端给的理由（有就照说，老后端没有=空串） }
@@ -1666,6 +1715,14 @@ const api = {
        ★界面侧 403 / 老后端 404 / 429 / 400 四档话术见 cardAdmErrText()（与 W11 基准库那三档同一口径）。 */
     cardDel: (id) => request('/card/del', { method: 'POST', body: { id: String(id == null ? '' : id), confirm: String(id == null ? '' : id) }, headers: { 'x-review-key': getSettings().reviewKey || '' } }),
     cardRescue: (id) => request('/card/rescue', { method: 'POST', body: { id: String(id == null ? '' : id), confirm: String(id == null ? '' : id) }, headers: { 'x-review-key': getSettings().reviewKey || '' } }),
+    /* ★★W128b（2026-10-09 · 作者拍板「自定义公告横幅」· 客户端半）**公告那一条写路由** ——
+       与 `/card/del` **同一套闸**（同一把钥匙 `x-review-key`；不填 / 不认 ⇒ 服务端 403，界面如实说、不猜、不重试）。
+       形状照后端那一波的报告（worker.js `POST /notice`，两端逐条镜像、契约差分守着）：
+         `{ text }`       → 200 `{ ok:true, notice:{id,text,at}, cleared:false }`（**每次推送换一个新 id**）
+         `{ clear:true }` → 200 `{ ok:true, notice:null, cleared:<原来在推就 true> }`
+       空 / 全空白 / 超长（>500 字）⇒ 服务端 400 人话（客户端**先**给自己那一道，见 `noticePush`）。 */
+    noticePush: (text) => request('/notice', { method: 'POST', body: { text: String(text == null ? '' : text) }, headers: { 'x-review-key': getSettings().reviewKey || '' } }),
+    noticeClear: () => request('/notice', { method: 'POST', body: { clear: true }, headers: { 'x-review-key': getSettings().reviewKey || '' } }),
     /* ★★W17-B2（作者 2026-09-25 裁定 · A 支后端已上线）**主人侧两条"下架之后"的动作** ——
        形状 / 错误码逐条照 worker.js 与 e2e/tmp/w17a-probe-shelf.json 的读数：
          · POST /card/relist { id }            → 200 {relisted:true,version} / 200 {relisted:false}（不在"已下架"里 = 幂等）
@@ -1855,6 +1912,12 @@ async function refresh(silent) {
         S.cardsStale = false;              // ★P11：这次真的拉到了 → "这是上次的数据"那句撤掉
         S.cached = false;                  // ★F7：这次是**真拉到的** → "这是上次缓存的"那句撤掉
         saveCache(S.cards);                // ★F7：成功一次就刷新本地缓存
+        /* ★★W128b：公告**只**从这一支（真拉成功）里取 —— 见 `S.notice` 的注释（★★那条"只从最近一次
+           成功拉取渲染、绝不从缓存复活"的纪律，落点就是这一行）。
+           ★`saveCache(S.cards)` 那本缓存**不收**公告（它的白名单里没有、也不许有）⇒ 摆缓存时一个字节都拿不到。
+           ★随后就地画一次：横幅挂在挂载点**外面**（不归 renderAll 管），与 `bannerTick()` 同一套。 */
+        S.notice = noticeOfList(r);
+        noticeTick();
         /* ★★U15（§BV-2 追溯色）：**首次真拉到列表**（= 服务端活着）时，问一次我那份「名字颜色 / 头像底色」——
            换设备/清了 localStorage 时颜色自己回来（拿不到就用本机值，见 pullMyProfile）。
            fire-and-forget + 只发一次（S.profTried）：**不拖慢刷新、失败也不弹任何东西**。 */
@@ -2396,6 +2459,108 @@ function bannerDone(open) {
     }
 }
 
+// ---------------------------------------------------------------- ★★W128b 公告横幅（作者推的"自定义横幅"）
+/*  作者原话（2026-10-09）："每次有更新或者有新的条目的时候 不是会有一个顶上的横幅通知吗 我想做另外一个横幅
+    **自定义横幅** 就是有什么新鲜事 我想说的话 可以推送上去 用户也可以点击**已阅** 然后就不再更新 比如我可以说：
+    哈哈 服务器炸咯 在修。然后这段时间内用户就可以看到 也可以点击已阅不再显示 **但是我这一条取消推送后
+    所有人那边都不再显示** 代表我修好了" + 追加"**点击取消推送后 如果这段时间内没用酒馆的人 下次开酒馆
+    也不能推送**"。
+    ------------------------------------------------------------------------------------------------
+    这一套的**四条硬口径**（每一条都有对应的验收读数，见 waveW128b 报告）：
+     ① **复用既有那套横幅**：`.yws-banner` 本体 + 一个色档类 `yws-banner-notice`（与「回复通知」那条
+        `yws-banner-rep` 逐字同一套做法：边/底/圆角/内边距/阴影/按钮族/自动取色全继承，**不新造平行样式**）；
+        DOM 上公告永远排在**更新横幅（`#yws-banner`）上面**（插在它前面），两条并存、各自独立。
+     ② **正文原样**：`esc()` 之后整串塞进 `.yws-banner-txt`（`white-space: pre-wrap`）——
+        空格 / 换行 / 空行 / 制表符一个都不动（与 W116「说明」/「正文」同一条口径：判空看去空白后的核、
+        长度按原文算、**存原文**、**显示原文**）。★没走 `mdRender`：现有那两条横幅都是纯文本直出
+        （`bannerText()` / `repBannerText()` 都是自己拼的定字串 + `esc`），"照现有横幅走"就是走这一条。
+     ③ **「已阅」= 本机账**（`settings.noticeSeen[这一条的 id]`）—— 同一条不再显示；作者重推（新 id）⇒ 重新显示。
+     ④ ★★**只从"最近一次成功拉取"渲染**：读的是 `S.notice`（只在 `refresh()` 拉成功那一支赋值），
+        **绝不**从 F7 离线缓存 / 任何本地缓存"复活"公告 —— 本地只存"已读 id"（**只能抑制、不能注入**）。
+        ⇒ "取消后、这段时间没开过酒馆的人下次打开也不显示"是**结构性**成立的：他拉到的就是 `null`。 */
+/** ★W128b：服务端那一栏（`/list` 的 `.notice`、`POST /notice` 回执的 `.notice`）的**判型收口**。
+ *  `null` / 形状不对（不是对象 / 没 id / 正文去空白后是空）⇒ **一律当作"没在推"**。
+ *  ★铁律 27 的同一族纪律（服务端那一侧 `noticeCurrent()` 也是这么办的）：宁可少显示一条，
+ *    绝不把坏形状拼进 innerHTML、也绝不打崩整个商店。 */
+function noticeShape(v) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+    const id = String(v.id || '');
+    const text = String(v.text == null ? '' : v.text);
+    if (!id || !text.trim()) return null;
+    return { id: id, at: String(v.at || ''), text: text };
+}
+/** 从 `/list` 那一发回包里取公告（唯一取数口；`refresh()` 与作者侧 `loadNotice()` 都走它） */
+const noticeOfList = (r) => noticeShape(r && r.notice);
+/** 这一条的 id 在本机"已阅"账里吗（**唯一**的抑制判据） */
+function noticeSeenOk(id) {
+    const b = getSettings().noticeSeen;
+    return !!(isObjShape(b) && b[String(id || '')]);
+}
+/** 这一刻该不该显示公告：**只有** `S.notice` 非空、且它的 id 没被已阅过 ⇒ 返回那一条（否则 null）。
+ *  ★这个函数是"显示什么"的唯一判据 —— 它**只读** `S.notice`（最近一次成功拉取）与本机已阅账，
+ *    不碰 F7 缓存、不碰任何本地存下来的正文（"只能抑制、不能注入"）。 */
+function noticeVisible() {
+    const n = S.notice;
+    if (!n || !n.id) return null;
+    return noticeSeenOk(n.id) ? null : n;
+}
+/** ★W128b：**「已阅」那颗按钮的唯一动作口**（横幅自己的 onclick 调它；探针也直接调它）。
+ *  写一笔本机账（`noticeSeen[id] = 现在`）→ 落盘 → 重画（这一刻判据立刻变假 ⇒ 横幅当场摘掉）。
+ *  ★为什么账里要存**时刻**而不是 `true`：这本账与 `cardSeen` / `offiRead` 那几家同一族（记"什么时候"），
+ *    值本身不参与判断（判断只看"键在不在"），留着是为了将来要清旧账时有据可依。 */
+function noticeAck() {
+    const n = S.notice;
+    if (!n || !n.id) { noticeTick(); return false; }
+    const s = getSettings();
+    if (!isObjShape(s.noticeSeen)) s.noticeSeen = {};
+    s.noticeSeen[String(n.id)] = Date.now();
+    saveSettings();
+    noticeTick();                                   // 判据当场变假 ⇒ 横幅就地摘掉（不整页重绘）
+    return true;
+}
+/** ★W128b：画 / 更新 / 摘掉顶上那条公告横幅 —— 与 `bannerTick()` / `repBannerTick()` 同一套写法：
+ *   · 位置：插在 `#yws-banner`（更新横幅）**前面**（它不在时插在商店卡片前面）⇒ 三条横幅排成一列、
+ *     公告在最上（作者："另一个横幅"+"各自独立；公告在上"）；
+ *   · **一模一样就不重写**：文字 + `data-yws-notice-id` 都没变 ⇒ 直接返回（不碰 DOM / 事件 / 焦点）；
+ *   · 横幅挂在挂载点**外面** ⇒ 事件得自己挂（`el.onclick`），并单独过一次 `applyAutoInk`
+ *     （浅色主题下那句公告也要 ≥4.5，与另两条横幅同一条纪律）；
+ *   · 出错只影响这一条横幅（warn 留痕），不影响别的任何东西。 */
+function noticeTick() {
+    try {
+        const card = bannerHost();
+        if (!card || !card.parentNode) return;
+        let el = $('#yws-noticebanner');
+        const n = noticeVisible();
+        if (!n) { if (el) el.remove(); return; }
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'yws-noticebanner';
+            el.className = 'yws-banner yws-banner-notice';
+            el.setAttribute('role', 'status');
+            /* ★插在更新横幅**前面**（它还没画出来时插在卡片前面）——公告永远在最上。 */
+            const next = $('#yws-banner');
+            if (next && next.parentNode === card.parentNode) card.parentNode.insertBefore(el, next);
+            else card.parentNode.insertBefore(el, card);
+            /* 横幅挂在卡片外面（不在任何挂载点里）⇒ 它得有自己的事件（与另两条横幅同一招） */
+            el.onclick = (ev) => {
+                const t = ev.target.closest('[data-act]');
+                if (!t) return;
+                if (t.getAttribute('data-act') === 'notice-ack') noticeAck();
+            };
+        }
+        const txt = n.text;
+        const tEl = el.querySelector('.yws-banner-txt');
+        if (tEl && tEl.textContent === txt && el.dataset.ywsNoticeId === String(n.id)) return;
+        /* ★正文：`esc()` 之后整串直出（空格/换行靠 CSS 的 `white-space: pre-wrap` 原样呈现）——
+           `esc` 是铁律（服务端 KV 万一被人手改成 `<img onerror>`，也进不来）。 */
+        el.innerHTML =
+            '<span class="yws-banner-txt">' + esc(txt) + '</span>' +
+            '<button class="yws-btn yws-mini yws-notice-ack" data-act="notice-ack" title="不再显示这一条（本机记住；作者下次推新公告还会提醒）">已阅</button>';
+        el.dataset.ywsNoticeId = String(n.id);        // 探针/量具的读数位（不参与渲染）
+        applyAutoInk(el);
+    } catch (e) { warn('公告横幅画不出来（不影响别的）', e); }
+}
+
 // ---------------------------------------------------------------- 挂载（卡片 + 更新器窗口第三标签）
 export function mountPresetStore(container) {
     if (!container || container.dataset.ywsMounted) return;
@@ -2432,6 +2597,10 @@ function checkStats() { api.stats(getSettings().readVersion).then(st => {
        标题上那个「（N待审）」永远停在打开面板那一刻（**只有填了密钥才会真发**，见 loadAwin 第一句）。 */
     void loadAwin(true);
     bannerTick(); updateCardTitle(); renderAll();
+    /* ★★W128b：15 分钟轮询那一支也顺手把公告横幅对齐一次 —— 它**不改任何状态**（`/stats` 里没有公告），
+       只是把"该显示/该摘掉"重判一遍（`noticeTick()` 自带"一模一样就不重写"的闸 ⇒ 平时零开销；
+       公告本身仍**只**由 `refresh()`（真拉列表）那一支更新）。 */
+    noticeTick();
 }).catch(() => { /* 离线静默 */ }); }
 
 // ---------------------------------------------------------------- ★P2-8 卡片标题色的"亮度兜底"
@@ -2728,7 +2897,7 @@ function applyAutoInkAll(force, freeze) {   // 与 `paint()` 里那几处取色�
        横幅/弹窗（原来那里是第二趟循环；现在一趟走完，复查那一步也要拿这份清单）。 */
     const targets = [];
     for (const m of S.mounts) if (m.el && m.el.isConnected) targets.push({ m: m, el: m.el });
-    for (const sel of ['#yws-banner', '#yws-repbanner', '#yws-dlg-host']) { const el = $(sel); if (el) targets.push({ m: null, el: el }); }
+    for (const sel of ['#yws-banner', '#yws-repbanner', '#yws-noticebanner', '#yws-dlg-host']) { const el = $(sel); if (el) targets.push({ m: null, el: el }); }
     /* ★换主题这一段**不淡**："--yws-t"就是商店自己每一条 transition 的时长（CSS 里一处处都用它），
        压成 0 ⇒ 换主题当帧就落到最终色，中间不会出现"字色与底色各走一半、糊在一起"的那 130ms
        （实测那一段有 148 / 295 个带字元素掉到 <4.5；.13s 之后才落回正常）。复查时放回去。 */
@@ -2836,6 +3005,9 @@ function paint(m) {
     /* ★R7：顶部横幅（「#yws-banner」，G5 的"有新包"提示条）**挂在挂载点外面**（就在商店卡片上面），
        它的元素不在 m.el 里 —— 不单独过一遍的话它永远没人管（纯白底上实测 1.25 = 最红的那一条）。 */
     { const bn = $('#yws-banner'); if (bn) applyAutoInk(bn); }
+    /* ★★W128b：公告横幅同理（它也挂在挂载点外面）—— 走**同一套**"自动取色 + 对比兜底"
+       （`--yws-accent-ink` 本来就在 `_INK_TOKENS` 名单里 ⇒ 深浅两档主题都 ≥4.5）。 */
+    { const nb = $('#yws-noticebanner'); if (nb) applyAutoInk(nb); }
     mountWizDialog();          // ★§17 D12：条目详情弹窗挂在 document.body（原因见函数注释）
     // ★P2-5：弹窗内层滚动 + 焦点还原（见上面记的地方）
     if (keepDlg) { const b = $('#yws-dlg-host .yws-dlgbox'); if (b && b.scrollHeight > b.clientHeight + 1) b.scrollTop = keepDlg; }
@@ -12360,6 +12532,127 @@ function awinHtml() {
     return wrap('<span class="yws-awin-t">⚡ ' + esc(T.t) + '</span>' + stat +
         '<span class="yws-awin-x">' + btnOn + btnOff + '</span>');
 }
+/* ================================================================ ★★W128b 作者侧：**公告那一条推送**（只在「🔑 待审」页）
+   作者原话见文件末尾那段口径（"有什么新鲜事 我想说的话 可以推送上去"）。
+   ------------------------------------------------------------------------------------------------
+   界面上就三样（**能删的字就删**）：
+     ① 一行状态：`📣 公告  当前在推送：「…」（10-09 05:20）` / `当前没有公告`；
+     ② 一个多行框（想说的话；**支持换行** —— W116 起文本一律原样保留，服务端也是 `keepWs`）；
+     ③ 两颗按钮：「推送」（每次推送 = 服务端换一个**新 id** = 重新提醒所有人）/「取消推送」。
+   三条纪律（与这一页其它块**同一套**）：
+     · **没填审核密钥 ⇒ 本函数返回空串**（可见性闸；`viewReview()` 自己还有一道整页闸 —— 纵深防御）；
+     · 拿不到（老后端 404 / 离线 / 403）⇒ 只写一句人话、**不画按钮**（点了也只会失败），但**不许假装
+       "当前没有公告"** —— 那一格显示的是**上一次已知**的那一份（与 `S.awin` 保 `pendN` 同一条纪律）；
+     · 空 / 超长在客户端**先给人话**（服务端那道闸照旧在，两边都拦；口径 = 客户端不替服务端省掉校验）。
+   ★「当前在推什么」读的是 `GET /list` 的 `notice` 栏（后端那一波没给 `GET /notice`，保持"一条写接口"
+     的最小面 —— 它的报告 §⑤ 也是这么建议的）；**只在进这一页 / 点「刷新」时才问一发**（没人进就不问）。 */
+async function loadNotice(silent) {
+    if (!String(getSettings().reviewKey || '').trim()) { S.nadm = null; return null; }
+    try {
+        const r = await api.list(0);
+        const n = noticeOfList(r);
+        S.nadm = { notice: n, gotAt: Date.now(), miss: false, err: 0 };
+        /* ★这一发也是"一次成功的 /list 拉取"⇒ 本机那条横幅跟着对齐（与 `refresh()` 那一支同一把尺：
+           拉到了就以它为准；横幅那边自带"一模一样就不重写"的闸）。 */
+        S.notice = n;
+        noticeTick();
+    } catch (e) {
+        const st = Number((e && e.status) || 0);
+        /* ★拿不到**保留上一份已知读数**（"问不到"不等于"没有公告"），只标 miss + 记状态码。 */
+        S.nadm = { notice: (S.nadm && S.nadm.notice) || null, gotAt: Date.now(), miss: true, err: st };
+        if (!silent && st && st !== 403 && st !== 404) warn('问当前公告没成功（' + st + '）', e);
+    }
+    return S.nadm;
+}
+/** ★W128b：作者侧那一行（渲染口径见上面那段注释；`data-nadm` 给探针一个读数位：'1' 在推 / '0' 没有 / 'miss'）。 */
+function noticeAdminHtml() {
+    if (!String(getSettings().reviewKey || '').trim()) return '';
+    const a = S.nadm;
+    const cur = a ? a.notice : null;
+    const miss = !!(a && a.miss);
+    const busy = !!S.nadmBusy;
+    const at = cur ? String(cur.at || '') : '';
+    /* 时间显示照待审行那一套（年份不占位，全句进 title） */
+    const when = at.length >= 16 ? at.slice(5, 16).replace('T', ' ') : at;
+    const stateHtml = cur
+        ? '<span class="yws-nadm-cur">当前在推送：</span>' +
+          '<span class="yws-nadm-txt" title="' + esc(cur.text) + '">' + esc(clip(String(cur.text).replace(/\s+/g, ' '), 40)) + '</span>' +
+          (when ? '<span class="yws-nadm-at">（' + esc(when) + '）</span>' : '')
+        : '<span class="yws-nadm-non">当前没有公告</span>';
+    const row1 = '<div class="yws-nadm-r">' +
+        '<span class="yws-nadm-t">📣 公告</span>' + stateHtml +
+        (miss ? '<span class="yws-nadm-miss">（' + esc(a && a.err === 403 ? '密钥不对（服务端 403）—— 到「📤 我的」底部重新填一次' : '这台后端还没有这个功能 / 现在连不上 —— 稍后再来') + '）</span>' : '') +
+        '</div>';
+    if (miss) return '<div class="yws-nadm" data-nadm="miss">' + row1 + '</div>';
+    const btnPush = '<button class="yws-btn yws-mini yws-primary" data-act="notice-push"' + (busy ? ' disabled' : '') + ' title="推上去：所有人打开商店都会在顶上看到这条横幅">' + (busy ? '推送中…' : '推送') + '</button>';
+    const btnClear = '<button class="yws-btn yws-mini yws-danger" data-act="notice-clear"' + (busy ? ' disabled' : '') + ' title="取消这一条：所有人那边都不再显示（包括这段时间没开过商店的人 —— 他们下次打开拉到的就是空）">取消推送</button>';
+    const ta = '<textarea class="yws-inp yws-ta yws-nadm-ta" data-in="notice-text" maxlength="500" rows="2" ' +
+        'placeholder="想跟大家说的话（比如：服务器炸咯，在修）—— 推上去之后所有人打开商店都会在顶上看到；支持换行">' + esc(S.nadmDraft || '') + '</textarea>';
+    return '<div class="yws-nadm' + (cur ? ' yws-nadm-on' : '') + '" data-nadm="' + (cur ? '1' : '0') + '">' +
+        row1 +
+        '<div class="yws-nadm-r yws-nadm-edit">' + ta +
+            '<span class="yws-nadm-x">' + btnPush + btnClear + '</span>' +
+        '</div></div>';
+}
+/** ★W128b：「推送」那颗按钮的**唯一动作口**（`case 'notice-push'` 与探针都走它）。
+ *  ① 以**界面上的值**为准（用户打完字直接点，别读可能过期的状态 —— 与「我的」那个保存同一口径）；
+ *     ★探针那条路可以显式给正文（`noticePush(null, '文本')`）—— 走的**还是这一个函数**、这一个防连点闸。
+ *  ② 空 / 超长**先给人话**（文案照服务端那两句的口径写，人看得懂是同一件事）；
+ *  ③ 防连点：`S.nadmBusy` 只留一发在飞（连点第二发在这里就被吞掉，按钮同时 disabled）；
+ *  ④ 回执直接覆盖本地状态（不猜、不重算）—— 服务端给了新 id ⇒ 那一条立刻算"新的"（所有人重新看到）。 */
+async function noticePush(m, textArg) {
+    if (S.nadmBusy) return false;
+    const ta = (m && m.el && m.el.isConnected) ? $('[data-in="notice-text"]', m.el) : null;
+    const text = (textArg !== undefined) ? String(textArg == null ? '' : textArg)
+        : String(ta ? ta.value : (S.nadmDraft || ''));
+    S.nadmDraft = text;                                    // 界面为准（重绘也从它取值）
+    if (!text.trim()) { toast('warning', '公告正文不能空 —— 先写点什么再点「推送」（这次什么都没推）。'); return false; }
+    const nChars = [...text].length;                       // 与服务端同一把尺：按"字符"数（中文一个字算一个）
+    if (nChars > 500) { toast('warning', '公告正文太长（' + nChars + ' > 500 字）—— 这次什么都没推。'); return false; }
+    S.nadmBusy = true; renderAll();                        // 两颗按钮当场变「推送中…」（禁用态）
+    try {
+        const r = await api.noticePush(text);
+        const n = noticeShape(r && r.notice);
+        S.nadm = { notice: n, gotAt: Date.now(), miss: false, err: 0 };
+        S.notice = n;                                      // ★本机那条横幅也当场跟着走（同一次权威读数）
+        S.nadmDraft = '';                                  // 推成功了 ⇒ 框里清空（要接着改就重打）
+        noticeTick();
+        toast('success', '公告推上去了 —— 大家打开商店就能在顶上看到；点过「已阅」的人也会因为这是一条新的重新看到。');
+        return true;
+    } catch (e) {
+        const st = Number((e && e.status) || 0);
+        toast('error', st === 403 ? '推不上去：审核密钥不对（服务端说 403）—— 到「📤 我的」底部重新填一次'
+            : st === 400 ? ('推不上去，服务端说这次请求不合法（什么都没推）：' + ((e && e.message) || e))
+            : st === 404 ? '推不上去：这台后端还没有这个功能（老后端）—— 公告这一条它不认识。'
+            : ('推送失败：' + ((e && e.message) || e) + ' → ' + nextStepOf(e && e.status)));
+        return false;
+    } finally { S.nadmBusy = false; renderAll(); }
+}
+/** ★W128b：「取消推送」那颗按钮的**唯一动作口** —— 取消 = 服务端把那把键**删掉**（不留空壳）。
+ *  作者口径（原话）："**我这一条取消推送后 所有人那边都不再显示** 代表我修好了" +
+ *  "点击取消推送后 **如果这段时间内没用酒馆的人 下次开酒馆 也不能推送**" ⇒
+ *  客户端这一侧的要害是：**不许**把公告正文落在任何本地缓存里（否则"没开过商店的人"会从缓存里把它复活）。
+ *  本函数只把两个内存状态位清掉（`S.notice` / `S.nadm`）—— 缓存那一侧本来就**没有**它（见 `S.notice` 注释）。 */
+async function noticeCancel() {
+    if (S.nadmBusy) return false;
+    S.nadmBusy = true; renderAll();
+    try {
+        const r = await api.noticeClear();
+        S.nadm = { notice: null, gotAt: Date.now(), miss: false, err: 0 };
+        S.notice = null;                                   // 本机那条横幅当场摘掉
+        noticeTick();
+        toast('success', (r && r.cleared)
+            ? '已取消推送 —— 所有人那边都不再显示这条（这段时间没开过商店的人，下次打开也不会看到）。'
+            : '当前本来就没有在推的公告 —— 已经清干净了。');
+        return true;
+    } catch (e) {
+        const st = Number((e && e.status) || 0);
+        toast('error', st === 403 ? '取消不了：审核密钥不对（服务端说 403）—— 到「📤 我的」底部重新填一次'
+            : st === 404 ? '取消不了：这台后端还没有这个功能（老后端）—— 公告这一条它不认识。'
+            : ('取消失败：' + ((e && e.message) || e) + ' → ' + nextStepOf(e && e.status)));
+        return false;
+    } finally { S.nadmBusy = false; renderAll(); }
+}
 /** ★P11（审查 #10③）：待审页分页条 —— 后端 `/pending` 默认只给 20 条（`nextOffset`/`pendingTotal`/`truncated`），
  *  以前客户端把服务端给多少就只显示多少、而且一句话都不交代（>20 条时用户以为就这些）。
  *  这里如实写"共 N 个包 · 这一页 M 个 · 第 P 页"，并给「下一页 / 上一页」。 */
@@ -12447,6 +12740,11 @@ function viewReview() {
            ★可见性：`awinHtml()` 自己有一道"没密钥就返回空串"（与 `reviewAdminHtml()` 同一套纵深防御），
              而这一页本身没密钥时第一句就返回空态 ⇒ 普通用户**连这一页都进不来**，更看不到这一行。 */
         awinHtml() +
+        /* ★★W128b（2026-10-09 · 作者拍板「自定义公告横幅」）：**公告那一行**就摆在这儿 ——
+           与「⚡ 免审」同一档形态（头带下面独立一行）、同一套可见性纪律（没密钥 = 这一页进不来，
+           它自己还有一道 `return ''` 的纵深防御）。它只在**进这一页 / 点「刷新」**时才问一发 `/list`
+           （`loadNotice`），别人一个字节都不多发。 */
+        noticeAdminHtml() +
         baseAdminHtml() +
         cardAdminHtml() +
         /* ★★W34-③（作者 2026-09-26 反馈）：**恒画**（0 条时也画 —— 显示「共 0 条等你看 · 第 1 / 1 页」
@@ -12885,7 +13183,7 @@ function onClick(m, ev) {
                 S.view = 'mine'; loadMine().then(renderAll); renderAll();
                 break;
             }
-            S.view = 'review'; renderAll(); loadPending(); void loadAwin(true); break;
+            S.view = 'review'; renderAll(); loadPending(); void loadAwin(true); void loadNotice(true); break;
         /* ★P1-2（audit-p12 · 真 BUG）：顶栏那颗「⬆ 上传条目」以前无条件 `startUpload()` = **重建向导**，
            于是"填到第②步再点它一下"（用户以为在当前页点当前页是安全的）→ 回第①步、输入全空、勾选归零，
            而且**没有任何提示、没法撤销**。现在的口径：
@@ -13404,7 +13702,7 @@ function onClick(m, ev) {
                 .catch(e => toast('error', e.status === 403 ? '连不上：审核密钥不对（服务端 403）—— 到 Cloudflare 面板核对一下' : ('连接失败：' + (e.message || e) + ' → ' + nextStepOf(e.status))));
             break;
         }
-        case 'review-refresh': loadPending(); void loadAwin(true); break;
+        case 'review-refresh': loadPending(); void loadAwin(true); void loadNotice(true); break;
         /* ★★W125-c：备用后端那一行的「切换 / 切到备用 / 切回默认」—— 三个说法同一颗按钮、同一个 case。
            动作口只有 `apiSwitchNow()` 一处（它自己按框里的值决定"切过去"还是"回默认"，
            非空那一支还要先过 ST 原生确认弹窗；框空那一支 = 直接回默认 —— 见 `STORE_API` 下面那段口径）。 */
@@ -13415,6 +13713,12 @@ function onClick(m, ev) {
            ★当前不生效的那颗是 `disabled`（浏览器不会派发 click ⇒ 这里连判都不用判一次）。 */
         case 'awin-on': ev.preventDefault(); awinSet(true); break;
         case 'awin-off': ev.preventDefault(); awinSet(false); break;
+        /* ★★W128b（2026-10-09 · 作者拍板「自定义公告横幅」）：公告那一行那两颗 —— 推 / 取消推。
+           两条都只有填了密钥才画得出来（`noticeAdminHtml()` 自己有一道闸）；动作口各只有一处
+           （`noticePush` / `noticeCancel`，防连点与"界面为准"都在它们里面）。
+           ★横幅上那颗「已阅」**不走这里** —— 横幅挂在挂载点外面，有它自己的 `el.onclick`（见 `noticeTick`）。 */
+        case 'notice-push': ev.preventDefault(); void noticePush(m); break;
+        case 'notice-clear': ev.preventDefault(); void noticeCancel(); break;
         // ★P11：待审分页（后端默认只给 20 条 —— 不翻页就永远看不见后面的）
         case 'pending-next': loadPending(S.pendingNext); break;
         case 'pending-prev': loadPending(Math.max(0, (S.pendingOffset || 0) - pendingPer())); break;
@@ -13579,6 +13883,9 @@ function onChange(m, ev) {
     }
     else if (inp === 'review-key') { getSettings().reviewKey = String(t.value || '').trim(); saveSettings(); }
     else if (inp === 'rv-official') { S.rvOfficial = S.rvOfficial || {}; S.rvOfficial[t.getAttribute('data-id')] = !!t.checked; }
+    /* ★★W128b：公告那个多行框 —— **只更新草稿、不重绘整页**（与 `w-why` / `cmt-text` 同一条口径：
+       重绘会把正在输入的内容与光标冲掉；重绘时从 `S.nadmDraft` 取值，所以草稿丢不了）。 */
+    else if (inp === 'notice-text') S.nadmDraft = String(t.value == null ? '' : t.value);
     /* ★AN2：每页张数的「自定义」框 —— **失焦 / 回车才生效**（打字中一律不重绘：
        正在输入的内容与光标一个字都不许被冲掉；夹取与提示都在 setPerPage 里） */
     /* ★AR1：数字框 —— 失焦 / 回车那一下**立刻**落地（防抖那条路见 onInput 里的 perCustomTyping）。
@@ -14139,6 +14446,19 @@ export function initStoreDebug() {
         /* ★AU（作者第九批 · U 支）：横幅那两个数与三条文案、预勾选阶梯都是**纯函数** —— 出口给 e2e 用
            （纯 Node 的 vm 探针也走它；浏览器侧要复验同一份口径时不用再抄一遍断言）。 */
         bannerNums, bannerText, bannerClass, preselectFromPack, preLine, hasOwnerId,
+        /* ★★W128b（2026-10-09 · 作者拍板「自定义公告横幅」）：公告这一套的**同一份口径出口** ——
+           探针直接调产品自己的函数 / 读同一份判据，不把断言对着 DOM 再抄一份（"抄一份就等于测了个假的"）：
+             · `noticeEl()`      —— 顶上那条横幅的节点（没有 = null，摘掉了也读得到"没有"）；
+             · `noticeTick()` / `noticeAck()` —— 画/摘 + 「已阅」那本账的**唯一**写入点；
+             · `noticeVisible()` —— "这一刻该不该显示"（唯一判据：`S.notice` 非空 + id 没被已阅过）；
+             · `noticeShape(v)`  —— 服务端那一栏的判型口径（坏形状 ⇒ 当作"没在推"）；
+             · `noticeSeenBag()` —— 本机"已阅"账的只读出口（探针要断"记的是这一条的 id"）；
+             · `loadNotice` / `noticePush` / `noticeCancel` / `noticeAdminHtml` —— 作者侧（待审页）那一行。 */
+        noticeEl: () => document.getElementById('yws-noticebanner'),
+        noticeTick, noticeAck, noticeVisible, noticeShape, noticeSeenBag: () => (getSettings().noticeSeen || {}),
+        /* ★★W128b：`noticePush(m, text)` —— 探针可以直接给正文（走的是同一个函数），
+           也可以不传第二参（那就照界面上那个框的值来，与用户点按钮逐字同一条路）。 */
+        loadNotice, noticePush, noticeCancel, noticeAdminHtml,
         actAt, panelKeepsClick, isPanelKeptCardClick, CM_KEEP_SEL, CARD_LEVEL_ACTS,
         /* ★★AU7-④：**纯 Node 探针的"点一次"驱动口** —— 走的**是同一个 onClick**（不是另写一份判据）。
            为什么需要它：onClick(m, ev) 的入参是 DOM 事件，纯 Node 里没有 DOM；这里按界面真实的样子

@@ -7757,7 +7757,12 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
    老动作 `get-official` 的路由留着）；② 发布向导「① 选范围」那一排在**手机档分两行**
    （上排 = 部分上传 · 正则 · 整份预设；下排 = 小剧场 · 许愿 / 交流），电脑档仍是一行。
    ⇒ storeBuild v2.2.59 → **v2.2.60**（与 preset-store.js 的 VERSION/BUILD 成对）。 */
-const storeBuild = 'v2.2.60';
+/* ★★W128b（2026-10-09 · 作者拍板「自定义公告横幅」· 客户端半）：商店顶上多一条**公告横幅**
+   （复用既有横幅组件；「已阅」记本机账 `noticeSeen`；**只从"最近一次成功拉取"渲染**、绝不从缓存复活）
+   + 「🔑 待审」页里作者侧那一条推送界面（多行框 + 推送 / 取消推送 + 当前在推什么）——
+   ★本波**只动商店**（更新器 v5.3.35 / 工具箱 1.46.21 一个字节没动）。
+   ⇒ storeBuild v2.2.60 → **v2.2.61**（与 preset-store.js 的 VERSION/BUILD 成对）。 */
+const storeBuild = 'v2.2.61';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();
