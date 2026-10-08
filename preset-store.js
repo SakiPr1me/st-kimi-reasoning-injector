@@ -108,7 +108,17 @@ const EXT = 'preset_store';
    （`.yws-card-m` 的 `border-top` 删掉，间距照旧）。v2.2.53 → **2.2.54**
    ★★W119b（同日 · 作者改口径）：**折叠整条撤掉**（"有点丑 不要这么搞了"）⇒ 改成横幅里加一颗 **OK**，
    点了**彻底隐藏**（本机持久记 `wishBannerOff`，刷新/重进商店都不再画）。v2.2.54 → **2.2.55** */
-const VERSION = '2.2.57';
+/* ★★W125-c（2026-10-09 · W125 备胎后端 · c 期 · 客户端这一半）：v2.2.57 → **2.2.58**
+   （① 设置里多一个「备用后端地址」框：**空 = 与改前逐字同行为**；填上 + 确认之后，商店**全部**请求
+      （列表/上传/评论/点赞/我的/待审/基准库/缝入记账…都只走 `request()` 一个口）都打到那个地址；
+      ② 切过去要一次 **ST 原生确认**（人话讲清"切过去以后这边就是最新的"）、**不点确认不切**；
+      ③ **写死单向、永不自动回切** —— 产品自己任何情况下都不许切回默认，回默认只有"人把地址框清空"一条路；
+      ④ 「当前在用：主/备」状态牌两处：连接区那一行 + 商店卡列表底下那条计数行（备用档才多画那一块 ⇒
+         没设备用时**一个字节都不多**，老断言照旧命中）；
+      ⑤ 顺带把那句 5xx 兜底话术改成实话（台账 §XXIX 那次额度事故："等一会儿"→"额度按北京时间早 8 点恢复
+         + 别反复点刷新"，指路那颗刷新按钮照旧保留）。
+      与下面 BUILD、index.js 的 storeBuild 成对升）。 */
+const VERSION = '2.2.59';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -193,7 +203,12 @@ const VERSION = '2.2.57';
 /* ★★W91 收口（2026-10-05 · 删动作行「收起」）：v2.2.44 → **v2.2.45**（与上面 VERSION 那一行同一条口径；两处必须一起改）。 */
 /* ★★W96 收口（2026-10-06 · 整份上传「两道剔除」：ST 导出名单的 56 个敏感/连接键 + 不吃隐藏条目）：v2.2.46 → **v2.2.47**（与上面 VERSION 那一行同一条口径；两处必须一起改）。 */
 /* ★★W119b 收口（2026-10-08 · 折叠撤掉、改「OK」点了彻底隐藏）：v2.2.54 → **v2.2.55**（与上面 VERSION 那一行同一条口径；两处必须一起改）。 */
-const BUILD = 'v2.2.57';
+/* ★★W125-c 收口（2026-10-09 · 备胎后端 · c 期 · 客户端）：v2.2.57 → **v2.2.58**（与上面 VERSION 那一行同一条口径；两处必须一起改）。 */
+/* ★★W126-b 收口（2026-10-09 · 作者转来的用户报告「没取名就点上传 ⇒ 卡住、补救也没用」）：
+   v2.2.58 → **v2.2.59**（VERSION/BUILD 两处 + index.js 的 storeBuild = 三处成对）。
+   只改署名这一条链：拦在入口（诱导去取名）/ 装包草稿空则回退设置并回填 / 「确认」落盘顺手回填草稿 /
+   向导里那颗「去取名」（与拦入口同一个函数）。 */
+const BUILD = 'v2.2.59';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（`https://ywp-store-sakiprime.pages.dev`）：
@@ -215,6 +230,31 @@ const STORE_API = (() => {
         return FALLBACK;
     } catch (e) { return FALLBACK; }
 })();
+/* ================================================================ ★★W125-c（2026-10-09 · 备胎后端 · c 期）
+   作者原话（2026-10-09）：“先做备胎吧。主要是我担心以后主要的额度到了、切成次要的，然后第二天有额度了、
+   再变回主要的，主要的没有及时更新丢数据 —— **所以只要次要的就好了**。” ⇒ 客户端这一半就三件事：
+     ① **设置里多一个「备用后端地址」框**：**空 = 一切都与改前逐字相同**（`apiBaseOf()` 直接返回上面那个
+        `STORE_API`）；**填上 + 确认之后，商店的全部请求**（列表 / 上传 / 评论 / 点赞 / 我的 / 待审 / 基准库 /
+        缝入记账…**全部**，因为它们都只走 `request()` 这一个口）都打到它；
+     ② **切过去要一次明确的确认**（ST 原生弹窗，人话讲清“切过去以后这边就是最新的”）；不点确认**不切**；
+     ③ ★**写死单向、永不自动回切**：**产品自己在任何情况下都不许把地址切回默认** ——
+        请求超时 / 离线 / 5xx / 重试 / 定时轮询，一处都不许"兜底回默认"（回默认 = 又可能丢数据，作者原话）。
+        **回默认只有一条路：人亲手把那个框清空**（`apiDraft()` 里那一支 / 按钮那一支）。
+   ★为什么"清空框 ⇒ 立刻回默认"不再问一次：把地址清空这个动作本身就是“我不要备用了”这句人话，
+     再弹一次确认只会让“怎么回去”变得绕。代价如实写进报告：改地址时若先把框**整个清空**会当场回到默认
+     （再把地址填回去、点一次「切到备用」就回来了）。
+   ★`STORE_API` 与 `window.__YW_STORE_API__` 那套（e2e 测试隔离口子 / `assertPinned` 读的 `__ywstore.api`）
+     **一个字没动** —— 隔离口径仍只认那个默认值。 */
+/** ★W125-c：备用后端地址（规范化：去首尾空白、去结尾的 `/`）。空串 = 从来没设过（= 全部走默认，逐字同行为）。 */
+function backupApiOf() {
+    try { return String((getSettings() || {}).backupApi || '').trim().replace(/\/+$/, ''); } catch (e) { return ''; }
+}
+/** ★W125-c：**这一发请求打到哪** —— 全店唯一的地址口径（`request()` 只调它这一处）。
+ *  ★空 ⇒ 原样返回 `STORE_API` ⇒ 拼出来的 URL 与改前**逐字相同**（这就是"老用户零影响"的机器证据）。 */
+function apiBaseOf() { return backupApiOf() || STORE_API; }
+/** ★W125-c：现在是不是在备用后端上（状态牌 / 计数条那个小牌用它）。
+ *  ★用户把**默认地址原样**填进框里 ⇒ 算"主"（`apiBaseOf()` 与 `STORE_API` 相等）—— 那是实话。 */
+const apiOnBackup = () => apiBaseOf() !== STORE_API;
 const TIMEOUT = 8000;                     // 单次请求超时（毫秒）——超时也算离线，静默 + console.warn
 /** ★P11（审查 D3）：**上传**超时按包大小放大 —— 依据：1Mbps 上行传 1MB 恰好 8 秒，而 8 秒是**所有**请求的默认值，
  *  于是大包在慢网下必然被误判成"离线"，可服务端其实已经收下了（用户重试还会撞 409 判重，"提交失败"其实是成功）。
@@ -270,6 +310,12 @@ const REP_SCAN_MS = 60 * 1000;
 const defaultSettings = {
     author: '',            // 作者名（第一次手填，之后自动带；★P11 术语统一：署名/署名ID/by 一律叫"作者名"）
     reviewKey: '',         // 审核密钥（只有作者本人填；不填就不渲染「待审」）
+    /* ★★W125-c（2026-10-09 · 备胎后端 · c 期）：**备用后端地址**（设置里那个框）。
+       **空串 = 从来没设过** ⇒ 一切与改前逐字相同（`apiBaseOf()` 直接返回 `STORE_API`）；
+       非空（且是用户点过「切到备用」确认过的）⇒ 商店全部请求都打到它。详见 `STORE_API` 下面那一整段口径。
+       ★铁律 32：新键写在**这里**（同一个来源）⇒ 新装用户与老用户升级上来的生效值完全一致（都是空串）。
+       ★单向：产品自己永不把它改回默认，只有人亲手清空那个框 / 点「切回默认」才回得来。 */
+    backupApi: '',
     creds: [],             // 上传凭证：[{ id, editKey, title, at }]
     readVersion: 0,        // 已经"看过"的商店版本号（横幅/计数用它判未读）
     bannerVersion: -1,     // 横幅"已经弹过一次"的版本号（同一个版本不再烦人）
@@ -679,6 +725,13 @@ const S = {
        · `connAt` = 上一次成功落盘的时刻（**防连点**：700ms 内的重复确认一律忽略）。 */
     connD: {},
     connAt: 0,
+    /* ★★W125-c：「备用后端地址」那个框的**待确认草稿**（与上面 `connD` 同一条口径：进框打字只进草稿、
+       不落盘、不切后端 —— 只有点「切到备用」那一下才写设置 + 换后端）。
+       · `undefined` = **没有草稿**（输入框显示设置里存的那份 `settings.backupApi`）；
+       · 字符串（含空串）= 用户正在改的那一份 ⇒ 后台一次重绘**必须**从它取值（否则用户打到一半的地址被吃掉）。
+       ★为什么"空草稿"要用 `undefined` 区分：把地址**清空**是一个有意义的动作（= 撤掉备用、回默认），
+         不能用"值等于空串"冒充"没改过"。 */
+    apiD: undefined,
     /* ★★W28-④（作者 2026-09-25 白天 · 台账 §GZ 第 1 条）：**「缝到哪一份」跟随酒馆当前预设**的两个小状态
        （都不落盘，只活在这一屏）：
         · `tgtCur`    = 上一次看到的"酒馆当前预设名"（它一变 = 用户在酒馆里换了预设 ⇒ 这一格跟上）；
@@ -1433,7 +1486,14 @@ function nextStepOf(status) {
     if (n === 409) return '同一份内容已经在审核里了 —— 到「📤 我的」把它撤掉，或换个标题再传。';
     if (n === 413) return '包太大了 —— 少挑几条、或换个更小的预设再传。';
     if (n === 429) return '你点得太快了 —— 等一分钟再回「🛒 商店」点那颗刷新按钮。';
-    if (n >= 500) return '这是商店服务端出的问题（不是你这边）—— 等一会儿回「🛒 商店」点那颗刷新按钮重试；一直不行就先用更新器里的离线路。';
+    /* ★★W125-c（2026-10-09 · 台账 §XXIX 那次额度事故换来的实话）：改前这句写的是"**等一会儿**回商店点刷新重试"——
+       而 2026-10-08 深夜真发生的那一次不是"等一会儿"能好的：免费版 KV 的 `list()` 是**每天 1000 次**，
+       按 UTC 0 点重置（= **北京时间每天早上 8 点**）。⇒ 照实说：额度类的问题按早 8 点恢复；
+       顺带劝一句"**别反复点刷新**"（每刷一次都在花额度 —— 这正是那天额度被用光的原因之一）。
+       ★不是所有 5xx 都是额度 ⇒ 句子写成"服务端出了点问题（最常见的一种：额度用完）"，
+         两种情形都说得通，也不冤枉真·临时故障；★"回商店点那颗刷新按钮"这个指路**原样保留**
+         （那颗按钮真的在，老口径"文案点着它、按钮就必须在"不作废）。 */
+    if (n >= 500) return '商店服务端出了点问题（最常见的一种：当天的免费额度用完了 —— 它按北京时间每天早上 8 点恢复）。这期间商店里能看、不能缝（先用更新器里那条离线路）；别反复点刷新（每刷一次都在花额度），过了早 8 点回「🛒 商店」点那颗刷新按钮再试。';
     return '回「🛒 商店」点那颗刷新按钮再试一次；一直不行就先别管它（不影响你现有的任何功能）。';
 }
 /* ★W4-ignored:start */
@@ -1469,7 +1529,10 @@ function ignoredHint(r, what) {
 }
 /* ★W4-ignored:end */
 async function request(path, { method = 'GET', body = null, headers = {}, timeout = TIMEOUT, upload = false } = {}) {
-    const url = STORE_API + path;
+    /* ★★W125-c：地址从**常量**改成**每次现读这一处口径**（`apiBaseOf()`）——
+       没填「备用后端地址」时它返回的就是 `STORE_API` 本身 ⇒ URL 与改前**逐字相同**；
+       填了（且确认过）就全打到那个地址。★除了这一行，本函数一个字没动。 */
+    const url = apiBaseOf() + path;
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeout);
     try {
@@ -2989,7 +3052,11 @@ function countsLine() {
          `credSummary()` 那句"· N 张卡的钥匙"—— 那些「张」量的是"卡"这个名词，不是条目计数。 */
     return seg('共', st.total, '条') + ' · ' + seg('官方', st.official, '条', '带官方标的卡（含官方小剧场 / 许愿）') +
         (getSettings().author ? ' · ' + seg('我传的', st.mine, '条') : '') +
-        (un > 0 ? ' · <span class="yws-stat yws-newdot">新 ' + numOf(un) + ' 条</span>' : '');
+        (un > 0 ? ' · <span class="yws-stat yws-newdot">新 ' + numOf(un) + ' 条</span>' : '') +
+        /* ★★W125-c：在备用后端上时这一条尾巴上多一块**状态牌**（卡列表那一页最显眼的一处，随时看得见
+           "现在哪边是最新的"）。★**没设备用地址时这里一个字节都不多**（老断言 `/共 N 条 · 官方 N 条/` 照旧命中，
+           既有套件的读数一个字不变）—— 所以这一块只能写在这个位置、且必须带条件。 */
+        (apiOnBackup() ? ' · <span class="yws-segbadge" data-api-on="backup" title="' + esc('商店现在连着备用后端：' + apiBaseOf()) + '">当前在用：备</span>' : '');
 }
 // ================================================================ ★★W10（作者第五批反馈）：与酒馆预设的开关状态同步
 /* 作者原话：「**选择条目时与酒馆预设的开关状态同步**：外层（酒馆预设里）关掉某条 → 这里对应的条目**变半透明**
@@ -8329,7 +8396,77 @@ function afterStitched(cardId, name) {
     } catch (e) { warn('缝入记账失败（预设已经写好了，不影响）', e); return false; }
 }
 // ---------------------------------------------------------------- 上传向导（三步）
-function startUpload() {
+/* ================================================================ ★★W126-b（作者 2026-10-08 转来的用户报告 · 真 BUG）
+   **「没取名就点上传 ⇒ 卡住」的修复：一条收口 + 三段引导**
+   ------------------------------------------------------------------
+   用户原话："上传时如果没有事先取名的话就点击了上传会卡在"没有取名"，**临时补救后也没法更新**。
+             可以取完名字保存好退出删掉酒馆后台重新进入"。
+   根因（两处，都在本文件）：
+     ① `startUpload()` 造草稿那一刻就把设置里的署名**拷进草稿**（见下面 `draft` 那一行）——
+        用户后来到「📤 我的 → 🔌 连接」改名，**草稿里还是那个空串** ⇒ 提交照样抛「署名还是空的」
+        （这就是"临时补救也没用"；改后档探针逐字复现过）；
+     ② 向导里那句"（还没设）"只是提示、**不拦人** ⇒ 用户能一路填到提交才炸。
+   ⇒ 三段（作者原话"如果在没取名的时候上传内容 **先诱导到让用户去取名**"）：
+     甲 `startUpload()` **拦在入口**：没名字 ⇒ 不开向导，`goNameFirst()` 把人送到那一格；
+     乙 提交处**草稿空就用设置里现在这一把**（`draftAuthorFix`，并把草稿回填）+「确认」落盘那一下回填草稿
+        ⇒ 任何时候补上名字都**当场生效**，不必退出/重进；
+     丙 向导第②步那句提示旁边给一颗「去取名」（走**同一个** `goNameFirst()`，不写两份）。
+   ★只拦"新上传"；`startEdit` / `startResubmit`（编辑并更新 / 重新提交）不拦（传 `skipAuthorGate`）——
+     它们的草稿署名来自线上那张卡（或已有内容），正常不空。 */
+/** 设置里现在那一把署名（去首尾空白；空串 = 还没设过）—— **唯一读口**（拦入口 / 装包回退 / 回填共用这一处） */
+function authorNameNow() { try { return String(getSettings().author || '').trim(); } catch (e) { return ''; } }
+/** ★乙：向导草稿里的署名 —— **草稿优先，草稿空了就用设置里现在这一把**（并把草稿**回填**）。
+ *  为什么必须回退：署名是在向导"开局"那一刻拷进草稿的（见 `startUpload` / `startResubmit` / `startEdit`），
+ *  用户之后再去改名，草稿不会自己跟上来（用户原话"临时补救了也没用"）。
+ *  @returns 现在**真正该用的**那个署名（渲染那句小字 / 装包都读这一处） */
+function draftAuthorFix(w) {
+    if (!w || !w.draft) return '';
+    let a = String(w.draft.author || '').trim();
+    if (!a) { a = authorNameNow(); if (a) w.draft.author = a; }
+    return a;
+}
+/** 某一格"闪一下"：临时内联 outline（+一点点底色），2 秒后**原样收回**。
+ *  ★颜色走主题变量（`--SmartThemeQuoteColor`，与全站"特殊色"同一处来源）—— 不硬编码、不动 CSS 文件、
+ *  不新造平行样式类（铁律 5 / 美观关）。★重入安全：连点只重置定时器（不叠）。 */
+function flashField(el) {
+    if (!el || !el.style) return false;
+    try { if (el.__ywFlashT) clearTimeout(el.__ywFlashT); } catch (e) { }
+    const prev = { outline: el.style.outline, off: el.style.outlineOffset, bg: el.style.backgroundColor };
+    el.style.outline = '2px solid var(--SmartThemeQuoteColor, currentColor)';
+    el.style.outlineOffset = '2px';
+    /* color-mix 不被支持时这一行会被浏览器忽略（outline 那一圈照样在）—— 不写第二套兜底颜色 */
+    el.style.backgroundColor = 'color-mix(in srgb, var(--SmartThemeQuoteColor, transparent) 22%, transparent)';
+    el.__ywFlashT = setTimeout(() => {
+        try { el.style.outline = prev.outline; el.style.outlineOffset = prev.off; el.style.backgroundColor = prev.bg; } catch (e) { }
+        try { el.__ywFlashT = null; } catch (e) { }
+    }, 2000);
+    return true;
+}
+/** ★甲/丙**共用**的"把人送到「📤 我的 → 🔌 连接 → 作者名」那一格"（跳页 + 滚进视野 + 闪 + 聚焦 + 一句人话）。
+ *  ★不销毁已经在填的向导（`S.wiz` 一个字都不动）—— 取完名回来点「⬆ 发布」照旧回到原来那一步。 */
+function goNameFirst() {
+    try { S.mySeg = 'up'; } catch (e) { }        // 万一停在「我的」页第二段（那一段没有连接区）
+    S.view = 'mine';
+    renderAll();
+    let inp = null;
+    for (const m of [...S.mounts]) { if (m.el && m.el.isConnected) { inp = $('[data-in="my-author"]', m.el); if (inp) break; } }
+    if (!inp) {                                  // 极端情况（面板还没挂上）：照样给人话，绝不静默
+        toast('warning', '还没取名字 —— 卡片上会写「BY 你的名字」。到「📤 我的」页最下面的「🔌 连接」里填一个、点旁边那颗「确认」，再回来上传。');
+        return false;
+    }
+    try { inp.scrollIntoView({ block: 'center', inline: 'nearest' }); } catch (e) { }
+    try { inp.focus({ preventScroll: true }); } catch (e) { try { inp.focus(); } catch (e2) { } }
+    flashField(inp);
+    toast('warning', '还没取名字 —— 卡片上会写「BY 你的名字」。已经把你送到「📤 我的 → 🔌 连接」那一格：填好名字、点它右边那颗「确认」，再回来点「⬆ 发布」上传。');
+    return true;
+}
+/** 上传向导（三步）
+ *  @param {{skipAuthorGate?: boolean}} [opts] ★W126-b：`skipAuthorGate` = 编辑并更新 / 重新提交那两条路
+ *         （它们的草稿署名来自线上那张卡 / 已有内容，没有"拦在入口"的必要 —— 见上面 W126-b 那段）。 */
+function startUpload(opts) {
+    /* ★W126-b 甲：**没取名字 ⇒ 不开向导**（先把人诱导到「我的 → 连接 → 作者名」那一格）。
+       判据只认"设置里存着的那一把"（`authorNameNow()`）—— 打字只进草稿，要点「确认」才落盘（W28-③）。 */
+    if (!(opts && opts.skipAuthorGate) && !authorNameNow()) { goNameFirst(); return; }
     // ★§17 D12：dlg = 条目"完整变化"弹窗（null = 没开）；picked 的语义没变（还是 identifier 数组）
     // ★§21 D9：scope 只剩 'part'（部分上传：可一条可多条，载荷按条数写成 single/multi）与 'full'（整份预设）
     /* ★AA-4：正则那一档的三个新状态 —— `rxOn`（传出去开/关，见 rxOnOf）/ `ropen`（摊开的是哪一条）/
@@ -8338,7 +8475,7 @@ function startUpload() {
        `srcFallback` = 源预设被静默换过时记一笔（见 loadWizardPreset / srcFallbackHtml）。 */
     /* ★W22（W2b）：draft 里多了 playText 这一位（第四档「小剧场」的正文；初值显式给，别靠 undefined）。
        ★★W42（派单②）：`srcName` 的初值走 `wizSrcDefault()` = **酒馆当前预设**（不再取 `listPresetNames()[0]`）。 */
-    S.wiz = { step: 1, scope: 'part', srcName: wizSrcDefault(), baseName: '', picked: [], pickedRegex: [], q: '', draft: { title: '', why: '', author: getSettings().author || '', playText: '' }, result: null, dlg: null, updated: false, rxOn: {}, ropen: '', rxTry: {}, afterPick: {}, srcFallback: null };
+    S.wiz = { step: 1, scope: 'part', srcName: wizSrcDefault(), baseName: '', picked: [], pickedRegex: [], q: '', draft: { title: '', why: '', author: authorNameNow(), playText: '' }, result: null, dlg: null, updated: false, rxOn: {}, ropen: '', rxTry: {}, afterPick: {}, srcFallback: null };
     S.wiz.baseVersion = '';
     /* ★★E1：顺手问一次官方基准清单（fire-and-forget：**失败一律静默**，只影响"云端那组渲染不渲染"） */
     void loadBaseList();
@@ -8505,12 +8642,16 @@ function startResubmit(id) {
     const sid = String(id || '');
     if (!sid) return;
     const row = (S.myList || []).find(x => String(x.id) === sid) || (getSettings().creds || []).find(x => String(x.id) === sid) || {};
-    startUpload();                                   // 干净的一份新草稿（顺带清掉 editId/resubFrom）
+    /* ★★W126-b：这一条走「重新提交」，**不**吃"没取名就先拦"那道闸（甲只管新上传）——
+       理由与 `startEdit` 同一条：它的内容/署名来自那张已有的卡，用户是"在这张卡上继续"。
+       ⇒ 草稿署名照旧从设置里带（空了也不拦；补名那条路由乙兜底：确认一下当场生效）。 */
+    startUpload({ skipAuthorGate: true });           // 干净的一份新草稿（顺带清掉 editId/resubFrom）
     const w = S.wiz;
     w.draft = {
         title: String(row.serverTitle || row.title || ''),
         why: String(row.why || ''),
-        author: String(getSettings().author || ''),
+        /* ★★W126-b：与 `startUpload` 同一处读口（`authorNameNow()`）—— 免得两处各写一份取法。 */
+        author: authorNameNow(),
         /* ★★★Wave I₂（方案 §A.4 第 3 条）：**重新提交也是一张新卡**，把原来那张的"提醒意愿"照原样带回来。
            `row.announce` = `/list` 卡片上那个只读回显；老卡 / 老缓存读不到 ⇒ `true`（= 照旧提醒），
            与后端 `announce !== false` 同口径。不写这一位 = 静默丢回默认（作者要的是"我那张怎么设的就怎么带过去"）。
@@ -9605,8 +9746,12 @@ function viewUpload() {
             /* ★★W40-⑥（作者 2026-09-26 反馈 · 第 6 条）：这一句也要**有外框**（与「官方旧版」那句
                —— `.yws-basehint` —— 完全同一族：同一条 CSS 规则、同一套变量）⇒ 由"一行灰字"变成一个提示盒。
                ★字面一个字没改（作者只说了外观）；`.yws-dim` 那层 span 去掉（盒子的色阶与它同一档）。 */
-            (function () { const au = String(w.draft.author || ''); return '<div class="yws-basehint">署名会写「BY ' + esc(au || '（还没设）') + '」' +
-                (au ? '（在「📤 我的」页最下面的「🔌 连接」里能改）' : ' —— 还没设过：到「📤 我的」页最下面的「🔌 连接」里设一个再提交。') + '</div>'; })() +
+            /* ★★W126-b（丙）：署名**空**的时候，这句提示旁边多一颗「去取名」——
+               点了走 `goNameFirst()`（与"拦在入口"那一条**同一个函数**：跳页 + 滚进来 + 闪 + 聚焦 + 一句人话），
+               已经在填的进度一个字都不丢（`S.wiz` 不动）。★这句的取值也走 `draftAuthorFix(w)`
+               ⇒ 用户去填完名回来，这句当场变成「BY 那个名字」。 */
+            (function () { const au = draftAuthorFix(w); return '<div class="yws-basehint">署名会写「BY ' + esc(au || '（还没设）') + '」' +
+                (au ? '（在「📤 我的」页最下面的「🔌 连接」里能改）' : ' —— 还没设过：到「📤 我的」页最下面的「🔌 连接」里设一个再提交。<button type="button" class="yws-btn yws-mini yws-ghost" data-act="author-guide">去取名</button>') + '</div>'; })() +
             /* ★M8（作者台账）：「用途说明」输入框**没占满横向**（忽然很窄）→
                这颗 label 加 `yws-lbl-wide`（整行独占 + 框吃满），textarea 也显式 100%（两个一起才不会被挤窄）。 */
             /* ★W22（W2b）：这一档的正文框**逐字复用「用途说明」那套样式与写法**（yws-lbl-wide + yws-lbl-t +
@@ -10313,7 +10458,10 @@ function buildPayload() {
        ★必须两头一起改才有用：这里不再削 + 卡片 CSS 不再折叠换行/空格（见 preset-store.css 的 W116 段）。 */
     const whyRaw = String(w.draft.why || '');
     const why = whyRaw.trim();                     // 只用于校验，不进包
-    const author = String(w.draft.author || '').trim();
+    /* ★★W126-b（乙）：**草稿优先，草稿空了就用设置里现在这一把**（并把草稿回填）——
+       署名是在向导"开局"那一刻拷进草稿的 ⇒ 用户之后再去改名，改前这里读的还是那个空串，
+       提交照样抛「署名还是空的」（用户原话"临时补救了也没用"）。口径与那句小字同一处：`draftAuthorFix`。 */
+    const author = draftAuthorFix(w);
     if (!title) throw new Error('标题必填（一句话说清这是什么）');
     /* ★W22（W2b）：**小剧场档没有「用途说明」这一栏**（作者口径 = 只有「标题 + 正文」）⇒ 这条闸对 play 档不成立。
        ★其余三档一个字没改；服务端那一侧 why 由通用闸落成**空串**（键永远在，与其它 kind 同型，见 play-api.md §2.1）。 */
@@ -11508,6 +11656,11 @@ function connSaveNow() {
     if (hadNc) s.myNameColor = /^#[0-9a-f]{6}$/i.test(nc) ? nc : '';
     if (hadAv) s.avColor = /^#[0-9a-f]{6}$/i.test(av) ? av : '';
     saveSettings();
+    /* ★★W126-b（乙·第二半）：向导若开着、草稿里的署名还是空的 ⇒ 把刚存的名字**回填进草稿**。
+       不填的话：用户回到向导，那句小字还写着「（还没设）」、提交也会再炸一次
+       —— 那正是用户原话"临时补救了也没用"的现场（改前档探针逐字复现过）。
+       ★只在"草稿空"时才填（草稿里已经有的名字一个字都不动：它可能是编辑那张卡带回来的署名）。 */
+    if (hadName && name && S.wiz && S.wiz.draft && !String(S.wiz.draft.author || '').trim()) S.wiz.draft.author = name;
     S.connAt = now;
     S.connD = {};                                            // 草稿落地 ⇒ 清空（那颗按钮随即变灰）
     /* ② 一句人话（**一次**）：署名那句沿用既有的"署名提示语"（§GH/§GL 已定的口径，逐字没改）；
@@ -11604,6 +11757,227 @@ function syncMyColorRow() {
         if (typeof cmInkFix === 'function') cmInkFix(m.el);
     }
 }
+/* ---------------------------------------------------------------- ★★W125-c：备用后端地址（那一行的全部实现）
+   口径（三句，与 `STORE_API` 下面那段一字同源）：**空 = 走默认（逐字同行为）** · **切过去要确认** ·
+   **写死单向，永不自动回切**（回默认只有"人把框清空"这一条路）。 */
+/** 输入框里**该显示什么**：待确认草稿优先，否则设置里存的那份（与 `connEff` 同一条口径 ——
+ *  后台一次重绘不许把用户刚打进去的地址吃掉）。 */
+function apiEff() {
+    if (S.apiD !== undefined) return String(S.apiD == null ? '' : S.apiD);
+    return backupApiOf();
+}
+/** 地址形状（空 = 合法，它的意思就是"回默认"）：只收 http(s):// 开头的一整串。
+ *  ★本地假后端（`http://127.0.0.1:8790` 这种）也是合法的 —— e2e 与手工演练走的就是它。 */
+function apiAddrOk(v) {
+    const t = String(v || '').trim();
+    return !t || /^https?:\/\/[^\s]+$/i.test(t);
+}
+/** 那颗按钮"现在能不能按"（= 有没有一件能做的事）+ 它的文案 / tooltip —— **渲染与就地更新读同一处** */
+function apiBtnState() {
+    const onB = apiOnBackup();
+    const d = String(apiEff() || '').trim();
+    const same = !!d && d.replace(/\/+$/, '') === backupApiOf();
+    const can = d ? !same : onB;
+    return {
+        can,
+        label: d ? '切到备用' : (onB ? '切回默认' : '切换'),
+        tip: can ? (d ? '切到这个地址（会先问你一次，确认后才切）' : '把备用地址撤掉、切回默认地址')
+                 : '没要改的 —— 框空着就是走默认地址（今天这条路，一个字没变）',
+    };
+}
+/** 右边那颗按钮（与「连接」同一族：`.yws-btn.yws-mini.yws-connbtn`）——
+ *  · 框里有地址（且与现在用的那个不是同一个）⇒「切到备用」；· 框空着且在备用上 ⇒「切回默认」；
+ *  · 没改动 ⇒ 禁用（灰着，与 `connSaveBtnHtml` 同一条"看得见的节流"）。
+ *  ★它只**在按下之后**才动设置（而且非空那一支还要先过确认弹窗）—— 打字一律不动后端。 */
+function apiSwitchBtnHtml() {
+    const s = apiBtnState();
+    return '<button type="button" class="yws-btn yws-mini yws-connbtn yws-apibtn' + (s.can ? ' yws-primary' : '') + '"' +
+        ' data-act="api-switch"' + (s.can ? '' : ' disabled aria-disabled="true"') +
+        ' title="' + esc(s.tip) + '">' + s.label + '</button>';
+}
+/** ★★★就地更新那颗按钮 —— **只改属性/文字，绝不换节点**。
+ *  为什么这一步是硬要求（本支真踩过）：用户在框里打完字、接着去点这颗按钮时，**mousedown 会让输入框失焦**
+ *  ⇒ `change` 事件先到 ⇒ 若这里用 `outerHTML` 把按钮换掉，`mouseup` 就落在**另一个节点**上
+ *  ⇒ 浏览器**不派发 click** ⇒ "点了没反应"（得点第二下才生效）。真鼠标实测读数：只点一次 → 确认框不弹；
+ *  用 `el.click()` 打同一颗按钮 → 弹。⇒ 这一支现在**只动 class/disabled/title/textContent**（节点不变）。
+ *  `connSaveBtnHtml()` 那边（`.yws-connsave`）用的就是这一套写法，口径一致。 */
+function apiSyncBtn(btn) {
+    if (!btn) return;
+    const s = apiBtnState();
+    if (btn.textContent !== s.label) btn.textContent = s.label;
+    if (btn.classList.contains('yws-primary') !== s.can) btn.classList.toggle('yws-primary', s.can);
+    const dis = btn.hasAttribute('disabled');
+    if (dis === s.can) {
+        if (s.can) { btn.removeAttribute('disabled'); btn.removeAttribute('aria-disabled'); }
+        else { btn.setAttribute('disabled', ''); btn.setAttribute('aria-disabled', 'true'); }
+    }
+    if (btn.getAttribute('title') !== s.tip) btn.setAttribute('title', s.tip);
+}
+/** 状态牌的内容（class / text / data-api-on / title）—— 渲染与就地更新共用这一份判据 */
+function apiStatusBits() {
+    const onB = apiOnBackup();
+    return {
+        cls: onB ? 'yws-segbadge' : 'yws-chip',
+        on: onB ? 'backup' : 'main',
+        text: '当前在用：' + (onB ? '备' : '主'),
+        title: onB ? ('商店现在连着备用后端：' + apiBaseOf()) : '',
+    };
+}
+/** 「当前在用：主 / 备」那块**状态牌**（`data-api-on` 给探针读；备那一档用既有 `.yws-segbadge` 那套醒目底，
+ *  主那一档是中性 `.yws-chip`）。★主那一档也照写不误（作者要的"明写"就是**任何时候都看得见**）。
+ *  ★「看起来像小功能、其实是两条路」：渲染用它、**就地更新用 `apiSyncChip`**（同一份 `apiStatusBits()`）。 */
+function apiStatusHtml() {
+    const b = apiStatusBits();
+    return '<span class="' + b.cls + '" data-api-on="' + b.on + '"' + (b.title ? ' title="' + esc(b.title) + '"' : '') + '>' + b.text + '</span>';
+}
+/** 就地更新一块**已经存在**的状态牌（只改 class/属性/文字 —— **不换节点**，与 `apiSyncBtn` 同一条理由） */
+function apiSyncChip(el) {
+    if (!el) return;
+    const b = apiStatusBits();
+    if (el.className !== b.cls) el.className = b.cls;
+    if (el.getAttribute('data-api-on') !== b.on) el.setAttribute('data-api-on', b.on);
+    if ((el.getAttribute('title') || '') !== b.title) { if (b.title) el.setAttribute('title', b.title); else el.removeAttribute('title'); }
+    if (el.textContent !== b.text) el.textContent = b.text;
+}
+/** 那一整行 = **两小行**（`.yws-connrow` 是 `flex-wrap: nowrap` 的紧凑行：标签列 + 输入框 + 按钮
+ *  在同一行里各就各位；下面那一条**整行独占**的灰字（状态牌 + 一句人话）另起一行）。
+ *  ★为什么必须分两行：`.yws-connrow` 的行尾尾巴（`.yws-connhint`）是**可收缩**的（W45B-③ 那条：
+ *    它不许按 100% 基准占位）—— 把长句子塞进去会把输入框挤到只剩几十像素（本支实测：输入框被压到 28px）。
+ *    分两行之后输入框拿满第一行的剩余宽度，牌子与说明也**一眼看得见**。 */
+function apiRowHtml() {
+    return '<div class="yws-wrow yws-connrow"><label class="yws-lbl yws-lbl-in"><span class="yws-lbl-t">备用后端</span>' +
+            '<input class="yws-inp" data-in="backup-api" spellcheck="false" autocomplete="off" maxlength="200"' +
+            ' placeholder="空 = 走默认地址（不懂就别填）" value="' + esc(apiEff()) + '"></label>' +
+        apiSwitchBtnHtml() + '</div>' +
+        '<div class="yws-wrow"><span class="yws-dim yws-connhint" data-apihint="1">' + apiChipAndHint() + '</span></div>';
+}
+/** 状态牌 + 紧跟其后的那句人话（**只有这一处口径**：整行渲染与就地更新读的是同一个函数，永远不会两套说法） */
+function apiHintText() {
+    const onB = apiOnBackup();
+    const dirty = (S.apiD !== undefined) && (String(S.apiD).trim().replace(/\/+$/, '') !== backupApiOf());
+    if (!onB) return dirty ? '填好了点右边那颗「切到备用」（会先问你一次）' : '空着 = 走默认地址，不用管它';
+    return dirty ? '按右边那颗「切到备用」先问你一次'
+                 : ('备用：' + clip(apiBaseOf(), 42) + '（要回默认就把框清空）');
+}
+const apiChipAndHint = () => apiStatusHtml() + ' ' + esc(apiHintText());
+/** 打字 / 失焦那一支（**只记草稿**；只有"把框清空"这**一个**动作会当场生效 —— 见文件头那段口径）。
+ *  ★清空 = 亲手把备用地址撤了 ⇒ 立刻回默认（唯一一条回默认的路；产品自己永远不走）。 */
+function apiDraft(v) {
+    S.apiD = String(v == null ? '' : v);
+    if (!String(S.apiD).trim() && apiOnBackup()) { apiRevertToMain(); return; }
+    repaintApiRow();
+}
+/** **就地**把那颗按钮 / 状态牌 / 那句人话对齐（绝不整页重绘 —— 用户可能正在框里打字）。
+ *  两处状态牌都要管：连接区那一颗（**永远在**，主/备两档都写）+ 计数条那一颗（只在备用档存在）。
+ *  ★每一样都只换自己那一个节点：输入框、光标、滚动一律不碰（铁律：重绘不许让输入/滚动跳掉）。 */
+function repaintApiRow() {
+    for (const m of S.mounts) {
+        if (!m.el || !m.el.isConnected) continue;
+        /* ★按钮与状态牌都**就地改属性**（`apiSyncBtn` / `apiSyncChip`）—— 绝不 outerHTML 换节点：
+           换节点会让"打完字接着点按钮"那一下失效（mousedown 后 change 触发重画 ⇒ mouseup 落在新节点 ⇒ 不派发 click）。 */
+        apiSyncBtn($('.yws-apibtn', m.el));
+        apiSyncChip($('.yws-conn [data-api-on]', m.el));
+        const box = $('.yws-counts', m.el);
+        const cntChip = box ? $('[data-api-on]', box) : null;
+        if (cntChip && !apiOnBackup()) cntChip.remove();
+        else if (cntChip) apiSyncChip(cntChip);
+        else if (box && apiOnBackup()) box.insertAdjacentHTML('beforeend', ' · ' + apiStatusHtml());
+        const hint = $('[data-apihint="1"]', m.el);
+        /* 那一句人话（不含牌子本身）：只换**它自己那一个文本节点**，不去碰牌子那个节点 */
+        if (hint) {
+            const tail = [...hint.childNodes].filter(n => n.nodeType === 3);
+            const txt = ' ' + apiHintText();
+            if (tail.length) { if (tail[tail.length - 1].nodeValue !== txt) tail[tail.length - 1].nodeValue = txt; }
+            else hint.appendChild(document.createTextNode(txt));
+        }
+    }
+}
+/** ★W125-c：**回默认**（唯一一条路：人把地址框清空 / 点「切回默认」）。
+ *  ★产品自己**永远**不会走到这里 —— 请求出错 / 超时 / 离线 / 重试一处都不回切（写死单向，见文件头那段）。 */
+function apiRevertToMain() {
+    const had = backupApiOf();
+    if (!had) return false;
+    const s = getSettings();
+    s.backupApi = ''; saveSettings();
+    S.apiD = undefined;
+    apiAfterSwitch('main', had);
+    return true;
+}
+/** ★W125-c：按一下那颗「切换」—— 读**界面上的值**（与 `review-key-save` 同一条口径）。
+ *  · 框空 ⇒ 撤掉备用、回默认（人话把后果说清）；
+ *  · 框里有地址 ⇒ 先校验形状，再**问一次**（说清"切过去以后这边就是最新的"），点了确认才落盘 + 换后端。 */
+function apiSwitchNow(m) {
+    const el = $('[data-in="backup-api"]', (m && m.el) ? m.el : document);
+    const raw = String(el ? el.value : apiEff()).trim();
+    const onB = apiOnBackup();
+    if (!raw) {
+        if (!onB) { toast('info', '地址框空着 —— 现在走的就是默认地址，不用切。'); return; }
+        apiRevertToMain();
+        return;
+    }
+    if (!apiAddrOk(raw)) {
+        toast('warning', '这个地址看着不对：要写成 http:// 或 https:// 开头的一整串（例：https://xxx.pages.dev）。' +
+            '本机跑的假后端也是这个写法（例：http://127.0.0.1:8790）。你原来那份设置一个字节都没动。');
+        return;
+    }
+    const addr = raw.replace(/\/+$/, '');
+    if (addr === STORE_API) {                       // 用户把默认地址原样填回来了 = 他要的就是"回默认"
+        if (!onB) { toast('info', '这就是默认地址 —— 现在已经在用它了。'); return; }
+        apiRevertToMain();
+        return;
+    }
+    if (onB && addr === backupApiOf()) { toast('info', '现在用的就是这个备用地址 —— 不用再切一次。'); return; }
+    const head = onB ? '换成另一个备用后端？' : '切到备用后端？';
+    const body = '切过去以后，商店就<b>以这个地址上的数据为准</b> —— 它就是最新的那一份。<br>' +
+        '· 列表、上传、评论、点赞、「我的」…所有请求都会发到它；<br>' +
+        '· 以后<b>不会自己切回来</b>（免得两边不同步、把新东西弄丢）；要回默认得把这个地址框清空。<br>' +
+        '地址：<b>' + esc(addr) + '</b>';
+    const plain = '切过去以后，商店就以这个地址上的数据为准（它就是最新的那一份）。\n' +
+        '列表、上传、评论、点赞、我的…所有请求都会发到它。\n' +
+        '以后不会自己切回来（免得两边不同步、把新东西弄丢）；要回默认得把地址框清空。\n' +
+        '地址：' + addr;
+    void askYes(head, body, '切过去', plain).then(ok => {
+        if (!ok) { toast('info', '好，没切 —— 还在' + (onB ? '原来那个备用地址' : '默认地址') + '上。'); return; }
+        const s = getSettings();
+        s.backupApi = addr; saveSettings();
+        S.apiD = undefined;                          // 草稿落地 ⇒ 清掉（框里以后显示的就是生效值）
+        apiAfterSwitch('backup', addr);
+    });
+}
+/** ★W125-c：**切完这一下**要做的事（两个方向共用一处，口径只有一份）：
+ *  把"上一个后端"的读数**全部作废**（列表 / 计数 / 我的 / 待审 / 基准库 / 评论 / 缝入记录…）——
+ *  不清的话，切过去的头几秒界面还画着上一个后端的东西（看着像"切了没生效"）。
+ *  ★只清**内存里的读数**，用户数据（凭据 / 缝入记账 / 收藏 / 已阅账）一个字节都不动。 */
+function apiAfterSwitch(kind, addr) {
+    S.cards = []; S.loaded = false; S.cached = false; S.cardsStale = false;
+    S.stats = { total: 0, official: 0, unread: 0, mine: 0 };
+    S.version = 0; S.busy = false;
+    S.bases = null; S.basesAt = 0; S.basesTried = false; S.basesErr = ''; S.basesBusy = false;
+    S.myList = []; S.mineEmptyHint = null; S.shelfRows = []; S.upToDate = {};
+    S.pending = []; S.pendingTotal = 0; S.pendingNext = null; S.pendingOffset = 0; S.pendingOpen = {};
+    S.awin = null; S.profTried = false; S.officialFull = null; S.officialBusy = false;
+    S.openId = ''; S.cardView = null; S.openRows = {};
+    S.stitchNotes = []; S.myDrop = null; S.myEdit = null;
+    /* ★F7 离线缓存（`settings.cache` = "最近一次成功拉到的**那个后端**的列表"）**也要扔掉** ——
+       不扔的话，切过去之后万一新后端连不上，界面会把**上一个后端**的清单顶上来（虽然标着"这是上次的数据"，
+       但那个"上次"根本不是这台后端的，正是作者最怕的"哪边才是最新的"）。★它只是显示缓存、不是用户数据。 */
+    try { const s0 = getSettings(); s0.cache = null; } catch (e) { }
+    S.cm.openId = ''; S.cm.items = []; S.cm.total = 0; S.cm.page = 1; S.cm.err = ''; S.cm.busy = false;
+    S.cm.threads = {}; S.cm.replyTo = ''; S.cm.listId = ''; S.cm.at = {}; S.cm.autoId = '';
+    S.rep.items = []; S.rep.err = ''; S.rep.at = 0; S.rep.busy = false;
+    S.lastErr = ''; S.lastErrStatus = 0; S.online = null;
+    renderAll();
+    toast(kind === 'backup' ? 'success' : 'info', kind === 'backup'
+        ? ('切到备用后端了：' + addr + ' —— 以后商店就以它为准，不会再自己切回来（要回默认就把这个地址清空）。')
+        : ('已切回默认后端（原来那条路）—— 提醒：备用那边的改动这边看不到。'));
+    /* 立刻从新后端拉一发。★正在飞的那一发是**旧后端**的（`refresh` 有 `S.busy` 防并发）⇒ 等它落地再发，
+       免得"刚切过去又被旧后端那一发的回话盖回来"（最多等 8 秒，之后照发不误）。 */
+    const kick = (n) => {
+        if (S.busy && n < 40) { setTimeout(() => kick(n + 1), 200); return; }
+        void refresh(true);
+    };
+    kick(0);
+}
 function connHtml() {
     const s = getSettings();
     return '<div class="yws-conn">' +
@@ -11661,6 +12035,10 @@ function connHtml() {
                 '<button type="button" class="yws-eye" data-act="review-key-eye" title="' + (S.showKey ? '藏起来' : '看一眼') + '" aria-label="显示或隐藏审核密钥">' + (S.showKey ? '🙈' : '👁') + '</button>' +
             '</span></label>' +
             '<button class="yws-btn yws-primary yws-mini yws-connbtn" data-act="review-key-save">连接</button></div>' +
+        /* ★★W125-c（2026-10-09 · 备胎后端 · c 期）：**备用后端地址**那一行 ——
+           空着 = 走默认地址（与改前逐字相同）；填上地址 + 点右边那颗「切到备用」并**确认**之后，
+           商店全部请求都打到它，而且**不会再自己切回来**（要回来得把框清空）。口径见 `STORE_API` 下面那一整段。 */
+        apiRowHtml() +
         /* ★D15（audit-p12 人性化 C3）：只读凭证框以前一上来就是一坨原始 JSON（`{"author":"…","creds":[…]}`）。
            现在默认折成**一行摘要**（「凭证：余温 · 3 张卡的钥匙」）+ 一颗「复制」小按钮，
            需要看原文时点「看原文」展开（textarea 一直在 DOM 里，`.value` 永远是当前凭证 —— e2e 与"改作者名立刻跟着变"都靠它）。 */
@@ -12431,6 +12809,9 @@ function onClick(m, ev) {
         /* ★F2：一键更新全部"有更新"的卡 —— **只跳转不自动改** */
         case 'upd-all': ev.preventDefault(); updateAllEntry(); break;
         case 'to-mine': S.view = 'mine'; loadMine().then(renderAll); renderAll(); break;
+        /* ★★W126-b（丙）：向导第②步那颗「去取名」—— 与"拦在入口"（甲）走**同一个** `goNameFirst()`：
+           跳「我的」+ 把作者名那一格滚进来/闪一下/聚焦 + 一句人话。★只切页面、**不销毁**向导。 */
+        case 'author-guide': ev.preventDefault(); goNameFirst(); break;
         /* ★§21 B7：「🔑 待审」**永远显示**（不再"没填密钥就消失"）—— 没填密钥时点了给一句人话，
            并把页面切到有密钥输入框的那一页（「我的」底部的连接区），不让人对着"点了没反应"发呆。
            ★D14（audit-p12 人性化）：没填密钥时这颗按钮本身就是**禁用态**（灰 + 🔒），
@@ -12961,6 +13342,10 @@ function onClick(m, ev) {
             break;
         }
         case 'review-refresh': loadPending(); void loadAwin(true); break;
+        /* ★★W125-c：备用后端那一行的「切换 / 切到备用 / 切回默认」—— 三个说法同一颗按钮、同一个 case。
+           动作口只有 `apiSwitchNow()` 一处（它自己按框里的值决定"切过去"还是"回默认"，
+           非空那一支还要先过 ST 原生确认弹窗；框空那一支 = 直接回默认 —— 见 `STORE_API` 下面那段口径）。 */
+        case 'api-switch': ev.preventDefault(); apiSwitchNow(m); break;
         /* ★★W77/W78（2026-09-27 夜；09-28 凌晨改口径 · 作者拍板「免审」）：开（`awin-on`）/ 关（`awin-off`）。
            两颗都走同一个 `awinSet()`（只有 `on` 一位）—— 判据只有一处，不会出现"两颗按钮说两套话"。
            ★服务端是权威（开着的状态它说了算），客户端**不自己算**、也不做任何定时任务。
@@ -13117,6 +13502,10 @@ function onChange(m, ev) {
     }
     /* ★§21 E18：密钥**边打边存**（以前只有点「保存密钥」才写 → 用户填完直接走人就白填了）。
        ★★W28-③：这一条**不在**作者这次要改的范围里（原话只点了"名字 + 颜色那些"）⇒ 一个字没动。 */
+    /* ★★W125-c：备用后端地址那个框 —— **失焦 / 回车**那一发与打字走**同一条**口径（`apiDraft`：
+       只记草稿；只有"框被清空"那一下会当场回默认）。留着这一支是为了"只触发 change 不触发 input"
+       的那些输入路径（自动填充 / 输入法提交）也不丢值。 */
+    else if (inp === 'backup-api') apiDraft(String(t.value || ''));
     /* ★C6：那两颗取色器**关闭/确认**那一下 —— ★★W28-③：以前是把最终值立刻补发到服务端；
        现在改成"只补记草稿"（真正的落盘与同步都收在 `connSaveNow()` 那一颗「确认」上）。 */
     else if (inp === 'my-name-color' || inp === 'av-color') {
@@ -13202,6 +13591,9 @@ function onInput(m, ev) {
         if (cv) cv.value = credValue();
     }
     else if (inp === 'my-title') { if (S.myEdit) S.myEdit.title = t.value; }
+    /* ★★W125-c：备用后端地址框 —— 打字**只记草稿**（不落盘、不切后端、不重绘整页）。
+       ★唯一会当场生效的动作是"把框清空"（= 亲手撤掉备用 ⇒ 回默认，见 `apiDraft` 与文件头那段口径）。 */
+    else if (inp === 'backup-api') apiDraft(String(t.value || ''));
     /* ★★BM-E（作者第十五批 · 2026-09-22）：那两颗**原生颜色控件**（名字颜色 / 头像底色）——
        值就是 `#rrggbb`，**不整页重绘**（正在拖取色器，整页重绘会把它打断；而且铁律也不许重绘跳滚动）。
        ★空串 = 没设（"默认"那颗按钮就是把它写回空串）；这里传进来的永远是合法的 `#rrggbb`，脏值一律忽略。
@@ -13541,6 +13933,10 @@ export function initStoreDebug() {
     registerStoreApiPortal();          // ★P6：把云端数据入口交给更新器（两处入口同一个函数）
     window.__ywstore = {
         version: VERSION, build: BUILD, api: STORE_API,
+        /* ★★W125-c：**只读**两个出口给探针 —— `apiBase()` = 这会儿真正在用的地址（空档 = 就是 `api` 那个默认值）；
+           `apiBackup()` = 设置里存着的备用地址（空串 = 没设过）。★不改 `api` 这一位：
+           `_store-api-pin.assertPinned` 量的就是它（"模块读到的默认地址"，雷打不动）。 */
+        apiBase: apiBaseOf, apiBackup: backupApiOf, apiOnBackup,
         state: S, settings: getSettings, core: PM,
         mount: mountPresetStore, render: renderAll, refresh, checkStats, unreadInfo, markRead,
         setView: (v) => { S.view = v; renderAll(); },

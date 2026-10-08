@@ -7746,7 +7746,13 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
 /* ★★W118 收口（2026-10-08 · 剧场/许愿正文改走 mdRender + 许愿标签改「内容」） ⇒ storeBuild v2.2.52 → **v2.2.53**（与 preset-store.js 的 VERSION/BUILD 成对）。 */
 /* ★★W119 收口（2026-10-08 · 许愿横幅可折叠 + 去掉卡片"内容/署名"横线） ⇒ storeBuild v2.2.53 → **v2.2.54**（与 preset-store.js 的 VERSION/BUILD 成对）。 */
 /* ★★W119b 收口（2026-10-08 · 折叠撤掉、横幅改「OK」点了彻底隐藏） ⇒ storeBuild v2.2.54 → **v2.2.55**（与 preset-store.js 的 VERSION/BUILD 成对）。 */
-const storeBuild = 'v2.2.57';
+/* ★★W125-c 收口（2026-10-09 · 备胎后端 · c 期 · 客户端）：设置里多一个「备用后端地址」+ 单向切换
+   （切成备用要确认、永不自动回切、界面明写「当前在用：主/备」）+ 5xx 文案改成实话（额度按北京时间早 8 点恢复）
+   ⇒ storeBuild v2.2.57 → **v2.2.58**（与 preset-store.js 的 VERSION/BUILD 成对）。 */
+/* ★★W126-b（2026-10-09 · 作者转来的用户报告「没取名就点上传 ⇒ 卡住、临时补救也没用」）：
+   商店只改"署名"那一条链（拦在入口诱导去取名 / 装包草稿空则回退设置并回填 / 「确认」落盘顺手回填草稿 /
+   向导第②步那颗「去取名」） ⇒ storeBuild v2.2.58 → **v2.2.59**（与 preset-store.js 的 VERSION/BUILD 成对）。 */
+const storeBuild = 'v2.2.59';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();
