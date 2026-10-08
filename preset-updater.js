@@ -66,7 +66,7 @@ const EXT = 'preset_updater';
      按"没有读数证明要改"这条纪律，那里一个字都没改。
    读数 / 假证（把改前形态塞回副本 ⇒ A-2 / A′-3 / A′-6 三条当场翻红）/ 回归见 waveW112-缝入顺位与聚块-日间.md；
    与 index.js 的 updaterBuild 成对升） */
-const VERSION = '5.3.36';   // 更新器模块版本（随工具箱一起发布）
+const VERSION = '5.3.37';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -138,7 +138,7 @@ const VERSION = '5.3.36';   // 更新器模块版本（随工具箱一起发布�
 /* ★W60 收口（2026-09-27 · 发布准备 · 三戳同升）：v5.3.21 → **v5.3.22**（**W58 更新器一件**：三个步骤框的说明精简 —— 删掉三处标题行括注「（从已安装预设里选）」与 ② 那处「（可拖文件进来）」，① ② 各加一枚「（必选）」小标、③ 加「（可选）」，顶部那句补「可下拉选择，可导入文件。」；拖放 / 下拉 / 标签功能一个都没动。那波的业务改动由 W58 自己交付，**本波只升戳、业务逻辑一个字没改**；与 index.js 的 updaterBuild 成对升） */
 /* ★W94 收口（2026-10-06 · 发布准备 · 三戳同升）：v5.3.22 → **v5.3.23**（**F3 派单的三处修**：① ② 槽位副标题按 S.nextFrom 走 —— 商店"缝入"那条路上 ② 是"你这份 + 这张卡的改动"、不再写死「作者刚发的那份」（那是误读成"我 vs 官方"的直接诱因）；② 商店路进对比页**默认档 = 「待我处理」**（那几处改动本来埋在 39/115/142 行、首屏看不见），更新器自己那条路默认档一个字没动；③ 把 analyze().notice **真渲染出来** + 把"被这次对比动到的隐藏条目"点名（内核语义一个字没改，落盘口径不变）。同批还改了 preset-updater.css 的 .ywpu-notices（收一行 + 热区 26px）；与 index.js 的 updaterBuild 成对升） */
 /* ★W101 收口（2026-10-06 · 发布准备 · 三戳同升）：v5.3.26 → **v5.3.27**（**W101 = 作者实测八条**：甲①~⑤ 条目侧精简与重排（删行里那对 On→Off 牌子 / 开关两块的值改 ON·OFF / 删「改名：…→…」那行 / 展开区改成「①用我的·保存为两版·用新版 → ②还有N处没选 → ③名字变化 → ④开关变化 → ⑤内容变化」/ 删「点有底色的地方 = 换成另一边」）；乙⑥ 正则「同一处画两遍」的真 BUG（根因 = preset-merge.js 的 regexFieldDiff 把 scriptName/disabled 也当更改内容推了进来 ⇒ 与上面那两个选择块重复；已剔掉 ⇒ 各维恰好 1 处、那个外面没法选择的 On→Off 牌子也删了）；乙⑦ 正则侧那两组**真的能点**了（data-rxuse：点=选 / 再点=取消 / 盖章 + 变暗，与条目逐字同一套；每行加一颗「还有 N 处没选」）；丙⑧ 当前筛选一眼可见（明写「当前：X」+ 选中那颗加内描边与 ✓）。业务改动由 W101 交付，与 index.js 的 updaterBuild 成对升） */
-const BUILD = 'v5.3.36';
+const BUILD = 'v5.3.37';
 const API_ID = 'openai';                       // 对话补全预设（用户只使用对话补全）
 
 // ---------------------------------------------------------------- 设置
@@ -417,6 +417,78 @@ function readPreset(name) {
     return JSON.parse(JSON.stringify(body));
 }
 
+/** ★★W123（作者 2026-10-08 拍板 · 原话："**缝预设之前 先帮你们 保存预设** …… 就是**点击每个缝入之前
+ *  先帮用户点击一次 保存预设**"）—— 作者自己的实测复现：**保存条目但没保存预设 ⇒ 缝完没保存的条目消失**；
+ *  **先保存预设再缝 ⇒ 没问题**。
+ *  为什么需要：ST 的面板编辑只进「内存 + settings.json」，**不点「更新预设」不进预设文件**；而缝入是
+ *  **覆盖 ① 那份预设的文件** ⇒ 用户刚加的条目 / 拨的开关（还没保存的）会在缝的那一刻被写没。
+ *  ⇒ 口径：**每次"缝"之前，先替用户把他在用的这份预设存一次** —— 走**酒馆自己的「更新预设」按钮**那一条
+ *     （`$('#update_oai_preset').trigger('click')`，与行内插入功能 `inlineInsFlush` 逐字同一条路，
+ *      也与手点同一条：POST `/api/presets/save` + 回填 `openai_settings`），再读、再对比、再覆盖。
+ *  ★★为什么**不用** `pm.updatePreset()`（第一版就踩了，探针当场抓住）：酒馆的 `PresetManager.getPresetSettings`
+ *     对 **openai 这一档返回 `{}`**（`preset-manager.js` 的 `getSettingsByApiId` 里 openai 没分支）⇒
+ *     `updatePreset()` 会把用户的预设文件**写成一个空的 `{}`**（实测：文件变成 128 字节的 `{}`）。
+ *     按钮那条路走的是 `saveOpenAIPreset(name, oai_settings)`，写的是**内存里正在用的那份** ✓。
+ *  ★**已经一致就一个字都不写**（文件那本账已经追上内存了 ⇒ 直接返回，不白写用户文件）。
+ *  ★只存**当前选中的那份**（`getSelectedPresetName()`）；按钮不在 / 没选中 / 等不到落盘 ⇒ **如实跳过 + 说人话**，绝不硬撑。
+ *  ★真写了才报一句（toast）：让用户知道"我没点保存、插件替我按了一次「更新预设」"。
+ *  @returns {Promise<boolean>} 真存了（或本来就已经一致）= true
+ */
+async function saveCurrentPresetFirst(tag) {
+    let name = '';
+    const readRaw = (nm) => {   // 文件那本账（openai_settings 里那份；与 readPreset 的老取法同源）
+        try {
+            const pm2 = presetManager();
+            const list = pm2.getPresetList(API_ID);
+            const names = list.preset_names || {};
+            for (const [i, n] of Object.entries(names)) if (n === nm) return list.presets?.[i] || null;
+            const idx2 = pm2.findPreset(nm);
+            return (idx2 !== undefined && idx2 !== null) ? (list.presets?.[idx2] || null) : null;
+        } catch (e) { return null; }
+    };
+    /** "这一份现在长什么样"的摘要：条目数 + 100001 顺序表逐条 `id:开/关`（缝入关心的就这两样） */
+    const snapOf = (p) => {
+        if (!p) return null;
+        try {
+            const t = (p.prompt_order || []).find(o => o.character_id === 100001) || (p.prompt_order || [])[0];
+            return JSON.stringify({ n: (p.prompts || []).length, o: ((t && t.order) || []).map(e => e.identifier + ':' + (e.enabled ? 1 : 0)) });
+        } catch (e) { return null; }
+    };
+    try {
+        const pm = presetManager();
+        if (!pm) return false;
+        name = (typeof pm.getSelectedPresetName === 'function') ? String(pm.getSelectedPresetName() || '') : '';
+        if (!name) return false;
+        const ctx = window.SillyTavern?.getContext?.();
+        const want = snapOf(ctx && ctx.chatCompletionSettings);
+        if (!want) return false;
+        if (snapOf(readRaw(name)) === want) return true;                 // ★已经一致 ⇒ 一个字都不写
+        const btn = document.getElementById('update_oai_preset');
+        if (!btn) {
+            try { toast('warning', '想先替你保存「' + name + '」但找不到酒馆的「更新预设」按钮 —— 先把你在面板里改的那份保存一下，再缝。', { timeOut: 10000 }); } catch (e) { }
+            return false;
+        }
+        try { $(btn).trigger('click'); } catch (e) {
+            try { toast('warning', '想先替你保存「' + name + '」但按不动酒馆的「更新预设」—— 先自己保存一下再缝。', { timeOut: 10000 }); } catch (e2) { }
+            return false;
+        }
+        for (let i = 0; i < 30; i++) {                                   // 等它落盘 + 回填（≈3.6 秒封顶）
+            await new Promise(r => setTimeout(r, 120));
+            if (snapOf(readRaw(name)) === want) {
+                try { toast('info', '缝入前先替你保存了一次「' + name + '」（免得你刚改、还没保存的部分被覆盖）', { timeOut: 6000 }); } catch (e) { }
+                console.info('[预设更新器] 缝入前先保存预设（W123）', { tag: String(tag || ''), 名字: name });
+                return true;
+            }
+        }
+        try { toast('warning', '替你按了「更新预设」但没等到落盘（3.6 秒）—— 缝之前先回面板看一眼这份存好了没。', { timeOut: 10000 }); } catch (e) { }
+        return false;
+    } catch (e) {
+        console.warn('[预设更新器] 缝入前替你保存预设没成（照旧往下走；读取那道还有一层）', e);
+        try { toast('warning', '想先替你保存「' + (name || '在用的这份预设') + '」但没成功 —— 你刚改的若还没保存，先回预设面板点一下「更新预设」再缝。', { timeOut: 10000 }); } catch (e2) { }
+        return false;
+    }
+}
+
 /* ==== ywpu-fresh-core:start（纯逻辑，别在这段里引用外面的东西 —— 探针会把这段单独抽出来跑）==== */
 /** 规范化序列化（**只为"任何变动都反映到摘要上"**）：对象键排序、数组保序、类型写死。
  *  ★它**不做任何"算不算改了"的语义判定** —— 语义全部交给下面用到的内核函数
@@ -638,6 +710,7 @@ export function mountPresetUpdater(container) {
         generate: doGenerate,
         readPreset,
         listPresetNames,
+        saveFirst: saveCurrentPresetFirst,   // ★W123：缝之前的"先保存预设"（e2e / 商店侧都用它）
         /* ★P13 测试卫生：把「重列三槽位下拉」暴露出来 —— `run-updater-e2e` 是先 `pm.savePreset('E2E-我的',…)`
            再选它，而下拉是**面板挂载时**列一次的（真实用户那边：刚存进酒馆的预设要重新打开面板/换个下拉才会出现）。
            没有这个口子，测试只能靠"上一轮留下的同名文件恰好在启动时就在磁盘上"才过（本轮清了副本的 e2e 产物，
@@ -793,6 +866,8 @@ function registerUpdaterCloudPortal() {
             openStorePseudo,
             // ★F2（跨批契约）：商店「一键更新全部有更新的卡」调它 —— 只打开，让用户逐条挑
             openStoreBatch,
+            // ★W123：商店「缝入」点下去**先**调它一次（"缝之前先帮用户保存预设"，作者拍板）
+            saveFirst: saveCurrentPresetFirst,
         };
     } catch (e) { console.warn('[预设更新器] 注册云端入口失败', e); }
 }
@@ -7327,6 +7402,9 @@ async function doGenerate() {
     if (S.busy) return;
     // ★M11（跨批契约）：预览（伪缝入）模式 —— **绝不写盘**（按钮已 disabled，这里再兜一道，脚本/接口也绕不过去）
     if (S.preview) { toast('info', '这是预览（伪缝入）：不会真的写盘。想真缝就到商店卡片上点「缝入」'); return; }
+    /* ★★W123（作者 2026-10-08 拍板 · 与 stitchIntoCurrent 同一句口径）：**缝（生成）之前先把在用的这份存一次** ——
+       不然"① 那份没保存的改动"会缺在生成出来的新预设里。 */
+    await saveCurrentPresetFirst('generate');
     /* ★W19A ①：**写盘前的同一族防线**（与 stitchIntoCurrent 同一句判据）—— ① 那份预设如果在开对比之后
        又被改过，生成出来的新预设会**缺掉他刚改的那些**（另存新名不覆盖原文件，但"看着像没改过"同样是坑）。
        先拦、先按最新内容重算，让他看一眼再点。 */
@@ -7533,6 +7611,11 @@ async function stitchIntoCurrent() {
     if (S.busy) return;
     if (S.preview) { toast('info', '这是预览（伪缝入）：不会真的写盘。想真缝就到商店卡片上点「缝入」'); return; }   // ★M11：预览模式绝不写盘
     if (!S.analysis) { toast('warning', '先点「开始对比」'); return; }
+    /* ★★W123（作者 2026-10-08 拍板："缝预设之前 先帮你们 保存预设"）：**缝之前先把在用的这份存一次** ——
+       （作者实测：保存条目但没保存预设 ⇒ 缝完没保存的条目消失；先保存预设再缝 ⇒ 没问题）。
+       存完 `openai_settings`（文件那本账）就追上内存了 ⇒ 下面这次读/拼/覆盖全都基于最新内容。
+       ★存不了（没这 API/没选中/存失败）⇒ saveFirst 自己会 toast 说明，这里照常往下走（读取那道还有一层）。 */
+    await saveCurrentPresetFirst('stitch');
     /* ★W19A ①：**写盘前的同一族防线** —— ① 那份预设如果在开对比之后又被改过（用户在酒馆里改的），
        这一缝就是拿旧快照去**覆盖原文件** ⇒ 他刚改的那些会被悄悄吃掉。所以先拦、先重算、先让他看一眼。 */
     if (mineChangedSinceAnalysis()) return;

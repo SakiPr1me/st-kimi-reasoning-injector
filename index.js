@@ -7545,7 +7545,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
     /* ★W60 收口（2026-09-27 · 发布准备 · 三戳同升）：v5.3.21 → **v5.3.22**（**W58 更新器一件**：三个步骤框的说明精简 —— 删掉三处标题行括注「（从已安装预设里选）」与 ② 那处「（可拖文件进来）」，① ② 各加一枚「（必选）」小标、③ 加「（可选）」，顶部那句补「可下拉选择，可导入文件。」；拖放 / 下拉 / 标签功能一个都没动。那波的业务改动由 W58 自己交付，**本波只升戳、业务逻辑一个字没改**；与 preset-updater.js 的 VERSION/BUILD 成对升） */
         /* ★W95 收口（2026-10-06 · 发布准备 · 三戳同升）：v5.3.23 → **v5.3.24**（W95 = 对比页提示条去重+「跳过去」/ 来源块「展开」与删「作者备注」/ 正则块收起-展开重做 + 去掉那圈「圆角左边条」弧形 + 选择框三档适配 / `编辑时也跑` 改人话「你改消息时也跑一遍」；本波业务改动由 W95 交付，与 preset-updater.js 的 VERSION/BUILD 成对升） */
 /* ★W101 收口（2026-10-06 · 发布准备 · 三戳同升）：v5.3.26 → **v5.3.27**（W101 = 甲①~⑤ 条目精简与重排 / 乙⑥ 正则「两遍」真 BUG / 乙⑦ 正则真鼠标可点选 + 每行计数 / 丙⑧ 当前筛选可见；业务改动由 W101 交付，与 preset-updater.js 的 VERSION/BUILD 成对升） */
-        const updaterBuild = 'v5.3.36';
+        const updaterBuild = 'v5.3.37';
     import('./preset-updater.js?b=' + updaterBuild)
         .then(mod => {
             // 卡片插在「不常用」那张卡之前（和以前静态 HTML 的位置一致）
@@ -7685,7 +7685,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
 /* ★★W118 收口（2026-10-08 · 剧场/许愿正文改走 mdRender + 许愿标签改「内容」） ⇒ storeBuild v2.2.52 → **v2.2.53**（与 preset-store.js 的 VERSION/BUILD 成对）。 */
 /* ★★W119 收口（2026-10-08 · 许愿横幅可折叠 + 去掉卡片"内容/署名"横线） ⇒ storeBuild v2.2.53 → **v2.2.54**（与 preset-store.js 的 VERSION/BUILD 成对）。 */
 /* ★★W119b 收口（2026-10-08 · 折叠撤掉、横幅改「OK」点了彻底隐藏） ⇒ storeBuild v2.2.54 → **v2.2.55**（与 preset-store.js 的 VERSION/BUILD 成对）。 */
-const storeBuild = 'v2.2.56';
+const storeBuild = 'v2.2.57';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();

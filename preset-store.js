@@ -108,7 +108,7 @@ const EXT = 'preset_store';
    （`.yws-card-m` 的 `border-top` 删掉，间距照旧）。v2.2.53 → **2.2.54**
    ★★W119b（同日 · 作者改口径）：**折叠整条撤掉**（"有点丑 不要这么搞了"）⇒ 改成横幅里加一颗 **OK**，
    点了**彻底隐藏**（本机持久记 `wishBannerOff`，刷新/重进商店都不再画）。v2.2.54 → **2.2.55** */
-const VERSION = '2.2.56';
+const VERSION = '2.2.57';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -193,7 +193,7 @@ const VERSION = '2.2.56';
 /* ★★W91 收口（2026-10-05 · 删动作行「收起」）：v2.2.44 → **v2.2.45**（与上面 VERSION 那一行同一条口径；两处必须一起改）。 */
 /* ★★W96 收口（2026-10-06 · 整份上传「两道剔除」：ST 导出名单的 56 个敏感/连接键 + 不吃隐藏条目）：v2.2.46 → **v2.2.47**（与上面 VERSION 那一行同一条口径；两处必须一起改）。 */
 /* ★★W119b 收口（2026-10-08 · 折叠撤掉、改「OK」点了彻底隐藏）：v2.2.54 → **v2.2.55**（与上面 VERSION 那一行同一条口径；两处必须一起改）。 */
-const BUILD = 'v2.2.56';
+const BUILD = 'v2.2.57';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（`https://ywp-store-sakiprime.pages.dev`）：
@@ -8096,7 +8096,15 @@ function openInUpdater(id) {
  *  ★§21 F20：**把卡片的标题与用途一起报过去**（更新器在对比页顶部会写"正在缝什么"）——
  *   接口约定见定稿方案 §21：`window.__ywUpdaterCloud.openStore({ pack, card, target, title, why })`，
  *   两个新字段都是**字符串**；老版更新器读不到它们也无所谓（它只读 pack/card/target，多给的键不影响）。 */
-function doOpenInUpdater(upd, cv) {
+async function doOpenInUpdater(upd, cv) {
+    /* ★★W123（作者 2026-10-08 拍板 · 原话："点击每个缝入之前 先帮用户点击一次 保存预设"）：
+       **开对比页之前，先把"你在用的这份预设"存一次**（`__ywUpdaterCloud.saveFirst` = 更新器那条路，
+       与酒馆「更新预设」同一口径：POST + 回填内存那份）。
+       为什么：ST 的面板编辑只进「内存 + settings.json」，不点「更新预设」不进预设文件；而缝入是**覆盖
+       ① 那份预设的文件** ⇒ 用户刚加的条目 / 拨的开关（没保存的）会在缝的那一刻被写没（作者实测：
+       保存条目但没保存预设 ⇒ 缝完没保存的条目消失；先保存预设再缝 ⇒ 没问题）。
+       ★saveFirst 不在（老版更新器）/ 存失败 ⇒ **照常往下开**（更新器那侧还有同样一道，且都给人话）。 */
+    try { if (upd && typeof upd.saveFirst === 'function') await upd.saveFirst('store'); } catch (e) { warn('缝入前先保存预设失败（照常打开对比页）', e); }
     const names = listPresetNames();
     /* ★★W28-④：同一条跟随器（酒馆换了预设 ⇒ 这里也换；用户手选过 ⇒ 按他的）。
        ★这是"缝入前再对齐一次"的地方 —— 它保住了"报给更新器的那一份 = 界面上那一格显示的那一份"。
