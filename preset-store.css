@@ -397,15 +397,29 @@
 /* 分区头：小标签 + 计数胶囊 + 一条细分隔线 */
 .yws-sec { margin: var(--yws-s4) 0 var(--yws-s2); }
 .yws-sec:first-of-type { margin-top: var(--yws-s2); }
-/* ★口径（量出来的）：这一行**必须允许换行** —— A8 之后它右边多了那颗"看过了"按钮（★W10 已删）+「⬇ 下载最新整份」，
-   348px 的抽屉里一行放不下 → `nowrap` 时 `scrollWidth > clientWidth`（实测：商店页横向溢出 **71px**、
-   这一行本身也被 `ui-audit` 判"内容溢出"）。`flex-wrap: wrap` + `::after` 那条细线仍然把右边填满。 */
+/* ★★W127（作者 2026-10-09 反馈）："官方条目/用户条目/小剧场 后面不是跟着横线、然后分页和刷新吗 ——
+   手机版横线非常长，分页和刷新被挤到下一行。不能保持在同一行吗？"⇒ **改成一行放得下**：
+   · 老口径（W10 那会儿）写的是"这一行必须允许换行"——当时右边同时挂着「看过了」+「⬇ 下载最新整份」两颗，
+     `nowrap` 会把抽屉撑出 71px 横向溢出；**现在那两颗只剩「下载最新整份」一颗**（实测 298px 内宽够用），
+     而 `wrap` + 那条 `flex:1` 的细线会**抢满第一行**（改前几何读数：手机 390 视口下细线宽 **142px**、
+     三行分别折成 2~3 行）⇒ 把分页/刷新挤到第二行。
+   · 现在：`nowrap` + 细线**可被压到 4px**（它只是装饰）+ 分区头里那套分页器收紧一点 ⇒ 一行放得下；
+     真放不下时**由细线先被压扁**（它是唯一的可缩项），而不是把控件甩到下一行。 */
 .yws-sech {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--yws-s2);
+    display: flex; flex-wrap: nowrap; align-items: center; gap: 6px var(--yws-s2);
     font-size: var(--yws-fs-sm); font-weight: 600; letter-spacing: .06em;
     color: var(--yws-txt-2); margin-bottom: 10px; min-width: 0;
 }
-.yws-sech::after { content: ""; flex: 1 1 12px; height: 1px; background: var(--yws-line); border-radius: 1px; min-width: 0; }
+.yws-sech::after { content: ""; flex: 1 1 8px; height: 1px; background: var(--yws-line); border-radius: 1px; min-width: 4px; }
+/* ★W127：分区头右边那一簇（分页器 / 刷新）不许被压扁、也不许被细线挤走 */
+.yws-sech .yws-sec-x { flex: 0 0 auto; }
+/* ★W127：这一行里的"字"不许被压窄、也不许在自己内部折行 ——
+   （改后实测：只加 `nowrap` 行时 flex 会把「官方条目」压到两个字宽、它就在内部折成 «官方/条目»；
+     口径 = **要压就压那条装饰细线**（它是唯一可缩的），字面一律 `flex: 0 0 auto`） */
+.yws-sech .yws-sec-t, .yws-sech .yws-sec-n, .yws-sech .yws-sec-x { flex: 0 0 auto; white-space: nowrap; }
+/* ★W127：分区头里那套分页器收紧一点（同一套件、只是行内更紧凑；顶栏与别处那颗不受影响） */
+.yws-sech .yws-sec-x .yws-pagsec .yws-btn.yws-mini { padding: 0 6px; min-width: 22px; }
+.yws-sech .yws-sec-x .yws-pagsec .yws-pageinfo { letter-spacing: 0; }
 .yws-sech .yws-dim { letter-spacing: 0; font-weight: 400; margin: 0; }
 .yws-sec-ic { width: 18px; height: 18px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; background: var(--yws-raise); border: 1px solid var(--yws-line); }
 /* ★§21 B5：分区头右边挂的那颗按钮（「⬇ 下载最新整份」= 官方整份预设的唯一入口，从顶栏挪过来的） */
