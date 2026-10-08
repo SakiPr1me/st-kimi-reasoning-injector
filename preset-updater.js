@@ -78,13 +78,17 @@ const EXT = 'preset_updater';
      这是供**不想要两个条目**的用户。可以做成 **点击按顺序选择后 然后往里面选条目 点击里面的每个不同
      按鼠标点击的顺序①②③④ 然后按顺序组成新条目**"）：行里那排插成 `用我的 · 保存为两版 · 合二为一 · 用新版`；
      点它 = 进"按点击顺序选"模式（这一条**自动展开** —— 不展开就没有"里面"可点），正文里每一处不同的
-     **两侧**都是可点片段（**同文段也可点** = 原样收进来），每点一片按点击先后编 ①②③④…（章里写号），
-     **再点同一片 = 取消**（后面的号往前补）；结果 = 按点击顺序拼成一条新条目。另给一颗「按原顺序全收」
-     （免得忘收同文段）。**内核改动 = 0**：产物走既有 `source:'custom'` + `customText` 通路，
+     **两侧**都是可点片段，每点一片按点击先后编 ①②③④…（章里写号），**再点同一片 = 取消**（后面的号往前补）；
+     结果 = 按点击顺序拼成一条新条目。**内核改动 = 0**：产物走既有 `source:'custom'` + `customText` 通路，
      `mergeSeq=[{block,side}…]` 只是这一条自己的账（重开回显），并同步成 `blockDecision`
      ⇒ 内核「每一处都挑过才算完」那道闸照旧管住半成品。
-   读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md；台账 §XXVIII） */
-const VERSION = '5.3.38';   // 更新器模块版本（随工具箱一起发布）
+   · ★**v5.3.39（W124-修订）**：验收支抓到两条"悄悄丢内容"级问题（P1 只点不同处 ⇒ 同文段全丢；
+     P2 半成品那句"没点的按新版写进去"是假的）⇒ 「合二为一」的结果改成"**永远是一条完整正文**"：
+     ①点过的片按点击顺序（不动）；②没被点走的**同文段默认收进结果**、位置 = 它原本的位置
+     （点它一下 = 排除，再点一下 = 收回；小标「已默认收进来 / 不要它」）；③**没点过的不同处按新版**。
+     ⇒ chip 文案、结果行那句人话、正文顶上说明同步；**「按原顺序全收」那颗按钮删掉**（用途已被②整份覆盖）。
+   读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md §修订；台账 §XXVIII） */
+const VERSION = '5.3.39';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -158,7 +162,17 @@ const VERSION = '5.3.38';   // 更新器模块版本（随工具箱一起发布�
 /* ★W101 收口（2026-10-06 · 发布准备 · 三戳同升）：v5.3.26 → **v5.3.27**（**W101 = 作者实测八条**：甲①~⑤ 条目侧精简与重排（删行里那对 On→Off 牌子 / 开关两块的值改 ON·OFF / 删「改名：…→…」那行 / 展开区改成「①用我的·保存为两版·用新版 → ②还有N处没选 → ③名字变化 → ④开关变化 → ⑤内容变化」/ 删「点有底色的地方 = 换成另一边」）；乙⑥ 正则「同一处画两遍」的真 BUG（根因 = preset-merge.js 的 regexFieldDiff 把 scriptName/disabled 也当更改内容推了进来 ⇒ 与上面那两个选择块重复；已剔掉 ⇒ 各维恰好 1 处、那个外面没法选择的 On→Off 牌子也删了）；乙⑦ 正则侧那两组**真的能点**了（data-rxuse：点=选 / 再点=取消 / 盖章 + 变暗，与条目逐字同一套；每行加一颗「还有 N 处没选」）；丙⑧ 当前筛选一眼可见（明写「当前：X」+ 选中那颗加内描边与 ✓）。业务改动由 W101 交付，与 index.js 的 updaterBuild 成对升） */
 /* ★W124 收口（2026-10-08）：v5.3.37 → **v5.3.38**（甲「保存为两版」缝进来那版改名「原名 by:作者」+ 乙 第四态「合二为一」；
    详见上面 `VERSION` 前那段；内核只加了可选参 `nextNameSuffix`，不传 = 老行为逐字不变；与 index.js 的 updaterBuild 成对升） */
-const BUILD = 'v5.3.38';
+/* ★W124-修订 收口（2026-10-08 · 独立验收支两条"悄悄丢内容"级问题 ⇒ 只动本文件）：v5.3.38 → **v5.3.39**
+   · **P1**：只点"不同处"（同文段一片不点）就写盘 ⇒ 写进去的只有点过的那几片，**两段同文段一个字不在**
+     （且 chip 打勾、写盘不弹半成品框 —— 静默丢）。
+   · **P2**：点 2 处（留 1 处没点）⇒ 半成品确认框那句"没点的 N 处按新版写进去"**是假的**（实际只写点过的片）。
+   · **修法**：「合二为一」的结果改成"**永远是一条完整正文**" —— ①点过的片按点击顺序（不动）；
+     ②没被点走的同文段**默认收进结果**、位置 = 它原本的位置（点它一下 = 排除，再点 = 收回）；
+     ③没点过的不同处**按新版**（与逐处挑兜底同口径）⇒ 结果永远完整、不留一处内容缺口。
+     随之同步：chip 文案（"没改动的已收好 / 没选的按新版"）· 结果行那句人话（另含 X 段没改动的 + Y 处没点的按新版）·
+     正文顶上说明 · **删掉「按原顺序全收」**（用途已被②整份覆盖，避免语义重叠的按钮）。
+     判据仍全走既有 `source:'custom'` + `customText` 通路 ⇒ **内核改动继续为 0**；与 index.js 的 updaterBuild 成对升） */
+const BUILD = 'v5.3.39';
 const API_ID = 'openai';                       // 对话补全预设（用户只使用对话补全）
 
 // ---------------------------------------------------------------- 设置
@@ -5308,7 +5322,24 @@ function swPill(on) { return `<span class="ywpu-sw ${on ? 'ywpu-sw-on' : 'ywpu-s
  *    内核 `itemDecided()` 那套「每一处都挑过才算完」的判据因此**一个字都不用改**就管得住半成品
  *    （没点全 ⇒ 仍算「待我处理」⇒ 生成/缝入前照旧拦一道，与逐处挑同一个口径）。
  *  ★手改过的文字（`customEdited`）与片顺序的关系：**再点一片就按"照点击拼的正文"重算**（手改被这一次
- *    点片覆盖）—— 与逐处挑"点上面任何一块会回到自动拼的结果"同一条路。 */
+ *    点片覆盖）—— 与逐处挑"点上面任何一块会回到自动拼的结果"同一条路。
+ *
+ *  ★★W124-修订（2026-10-08 · 独立验收支抓到的两条"悄悄丢内容"级问题 + 修法定稿 · 只动本文件）：
+ *    **P1**：只点"不同处"（同文段一片都不点）就写盘 ⇒ 结果 = **只有点过的那几片**，两段同文段一个字不在，
+ *          而 chip 已经打勾、写盘也不弹半成品确认框（整个丢法**静默**）。
+ *    **P2**：点 2 处（留 1 处没点）⇒ 半成品确认框写着"你挑过的地方保留，**没点的 N 处按新版写进去**"，
+ *          实际写进去的**只有点过的那 2 片**（没点的那处新版 + 同文段全丢）—— 承诺 ≠ 行为。
+ *    ⇒ **修法（口径已钉死）：「合二为一」的结果改成"永远是一条完整正文"**，规则三条：
+ *      ① **你点过的片** ⇒ 仍按**点击顺序**拼接（作者要的语义，一个字不改）；
+ *      ② **没被点走的同文段** ⇒ **默认收进结果**、位置 = **它原本的位置**（原先紧邻的那一片若在结果里，
+ *         就插在它后面；不在就插在**结果开头**，多个这样的段之间保持原相对顺序）；UI 上给
+ *         「已默认收进来」小标 —— **点它一下 = 排除**（不进结果），再点一下 = 收回来；
+ *      ③ **没点过的"不同处"** ⇒ 按**新版**（与逐处挑既有兜底 `dflt` 同口径）⇒ 写盘前那句
+ *         "没点的按新版写进去"从此**成真**，配合同文段默认收 ⇒ 结果永远完整、不丢任何内容。
+ *     随之同步的四处：进度 chip 文案（"没改动的已收好 / 没选的按新版"）· 结果行那句人话
+ *     （补"另含 X 段没改动的（按原位置）+ Y 处没点的按新版"）· 正文顶上那句说明 ·
+ *     「按原顺序全收」那颗小按钮**删掉**（它的用途"免得忘了收同文段"已被②覆盖，留着就是语义重叠）。
+ *     判据（写盘/预览/结算）仍然全走既有 `source:'custom'` + `customText` 通路 —— **内核改动继续为 0**。 */
 
 /** ★W124-甲：这次对比"缝进来那一版"要加的名字后缀。唯一来源 = 商店会话里的作者名（`S.store.author`，
  *  内核 `openStorePack()` 已经把 `card.author || pack.author` 收进来了）；没有作者名（手动选文件 /
@@ -5321,6 +5352,9 @@ function packCameFromCard() { return !!(S.store || S.patch); }
 /** ★W124-乙：`dec.mergeSeq` 是数组 ⇒ 这一条处在「合二为一」模式（**空数组 = 刚点进来、还没点片**）；
  *  别的状态一律 null（判据 = `source === 'custom'` —— 逐处挑那条路 `source` 也是 'custom'，但**没有** mergeSeq） */
 function mergeSeqOf(dec) { return (dec && dec.source === 'custom' && Array.isArray(dec.mergeSeq)) ? dec.mergeSeq : null; }
+/** ★W124-修订：这一条里"被你点掉（不要了）的同文段"（块号数组）。只对**没改动的那一段**有意义 ——
+ *  它们默认就收在结果里（见 `assembleMergeSeq` 的②），点一下 = 排除，再点一下 = 收回来。 */
+function mergeExcludedOf(dec) { return (dec && Array.isArray(dec.mergeExcluded)) ? dec.mergeExcluded : []; }
 const CIRCLED_NUM = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
 /** 片的序号图形（1~20 用 ①~⑳，再往上退回 (21) 这种括号数字） */
 const seqMarkOf = (n) => (n >= 1 && n <= CIRCLED_NUM.length) ? CIRCLED_NUM[n - 1] : ('(' + n + ')');
@@ -5331,16 +5365,41 @@ function pieceLines(bl, side) {
     if (side === 'mine') return bl.mine.slice();
     return bl.next.slice();
 }
-/** 按点击顺序把这些片拼成正文（**这就是写进 `dec.customText` 的那一份**，也是结果框里看见的那份） */
-function assembleMergeSeq(it, seq) {
+/** ★★W124-修订（验收支 P1/P2 ⇒ 修法定稿）：把「合二为一」的结果拼成**一条完整正文** —— 规则三条：
+ *   ① **你点过的片** ⇒ 仍按**点击顺序**拼接（作者要的语义，一个字不改）；
+ *   ② **没被点走的同文段** ⇒ **默认收进结果**、位置 = **它原本的位置**：每段同文段按"原先紧邻的前一块"
+ *      找锚 —— 那一块有片在结果里就插在**它后面**；不在（比如它被排除了）就插在**结果开头**
+ *      （多个这样的段之间保持原相对顺序）。被点掉（`excluded`）的段**不进结果**；
+ *   ③ **没点过的"不同处"** ⇒ 按**新版**（与逐处挑既有兜底 `dflt` 同口径）。
+ *  ⇒ 结果永远完整：写盘那句"没点的按新版写进去"从此成真，同文段**一个都不丢**（P1/P2 两条都在这断）。 */
+function assembleMergeSeq(it, seq, excluded) {
     const blocks = blocksOf(it);
-    const out = [];
+    const off = new Set(excluded || []);
+    const out = [];                                  // 元素 = {block, side}，按结果里的先后排
+    const inSeq = new Set();
     for (const s of (seq || [])) {
-        const bl = blocks.find(b => b.i === s.block);
-        if (!bl) continue;
-        out.push(...pieceLines(bl, s.side));
+        if (!blocks.some(b => b.i === s.block)) continue;
+        out.push({ block: s.block, side: s.side });
+        inSeq.add(s.block);
     }
-    return out.join('\n');
+    let head = 0;                                    // "结果开头"那一段的边界（多个都没锚点的按原序排前面）
+    for (const bl of blocks) {
+        if (inSeq.has(bl.i)) continue;               // 这一块点过了 ⇒ 它的片已经在核心里（按点击顺序）
+        if (!bl.changed && off.has(bl.i)) continue;  // 同文段被你点掉 ⇒ 不进结果（其余照收）
+        const side = bl.changed ? 'next' : 'same';   // 没点过的不同处按新版；同文段原样整段
+        const prev = bl.i - 1;                       // ★原先紧邻的前一块
+        let at = -1;
+        for (let j = out.length - 1; j >= 0; j--) { if (out[j].block === prev) { at = j + 1; break; } }
+        if (at < 0) at = head;                       // 前面那块不在结果里（或它本来就是头一块）⇒ 插到开头
+        out.splice(at, 0, { block: bl.i, side });
+        if (at <= head) head++;
+    }
+    const lines = [];
+    for (const s of out) {
+        const bl = blocks.find(b => b.i === s.block);
+        if (bl) lines.push(...pieceLines(bl, s.side));
+    }
+    return lines.join('\n');
 }
 /** 顺序 → `blockDecision`：每一处取"这一处被点到的那一版"（同一处点了两版 ⇒ 取最后点的那一版）。
  *  只为让内核「每一处都挑过才算完」那道闸照旧管得住半成品（见本段顶部 ★）。 */
@@ -5354,59 +5413,86 @@ function mergeIndex(seq, block, side) {
     for (let i = 0; i < (seq || []).length; i++) if (seq[i].block === block && seq[i].side === side) return i + 1;
     return 0;
 }
-/** ★W124-乙：那句人话（行里提示 + `resultNote` **两处同源**，只此一份）——
- *  「合二为一：按你点的顺序 ①②③ 拼（共 3 片）」 */
-function mergeNoteOf(dec) {
+/** ★W124-乙（★修订后口径）：那句人话（行里提示 + `resultNote` **两处同源**，只此一份）。
+ *  改前只写「按你点的顺序 ①②③ 拼（共 N 片）」—— 会让人以为"没点的就不写"（那正是 P1/P2 的坑）。
+ *  改后按**实际会写进预设的那份**说全三件事：点过的（按点击顺序）+ 没改动的（按原位置）+ 没点的（按新版）。 */
+function mergeNoteOf(it, dec) {
     const seq = mergeSeqOf(dec) || [];
-    if (!seq.length) return '合二为一：还没点 —— 点正文里每一片，按你点的先后拼成一条';
-    return '合二为一：按你点的顺序 ' + seq.map((_, i) => seqMarkOf(i + 1)).join('') + ' 拼（共 ' + seq.length + ' 片）';
+    if (!seq.length) return '合二为一：还没点 —— 点每处不同你要的那一边；没改动的会自动收好、没点的按新版';
+    const blocks = blocksOf(it);
+    const off = new Set(mergeExcludedOf(dec));
+    const inSeq = new Set(seq.map(s => s.block));
+    const sameIn = blocks.filter(b => !b.changed && !off.has(b.i) && !inSeq.has(b.i)).length;
+    const unPicked = blocks.filter(b => b.changed && !inSeq.has(b.i)).length;
+    let t = '合二为一：按你点的顺序 ' + seq.map((_, i) => seqMarkOf(i + 1)).join('') + ' 拼（共 ' + seq.length + ' 片）';
+    const extra = [];
+    if (sameIn) extra.push('另含 ' + sameIn + ' 段没改动的（按原位置）');
+    if (unPicked) extra.push(unPicked + ' 处没点的按新版');
+    if (extra.length) t += '，' + extra.join(' + ');
+    return t;
 }
-/** 把"这一条的片顺序"写进决策表（顺序 + 拼好的正文 + 内核那套进度账）—— 合二为一**唯一**的写入口 */
-function writeMergeSeq(key, it, seq) {
+/** 把"这一条的片顺序 + 排除账"写进决策表（顺序 + 拼好的**完整正文** + 内核那套进度账）—— 合二为一**唯一**的写入口 */
+function writeMergeSeq(key, it, seq, excluded) {
     const cur = S.decisions[key] || {};
+    const off = Array.isArray(excluded) ? excluded.slice() : mergeExcludedOf(cur);
     S.decisions[key] = {
-        ...cur, source: 'custom', mergeSeq: seq,
+        ...cur, source: 'custom', mergeSeq: seq, mergeExcluded: off,
         blockDecision: mergeBdOf(seq),
-        customText: assembleMergeSeq(it, seq),
+        customText: assembleMergeSeq(it, seq, off),
         customEdited: false,
     };
     S.keepVisible[key] = true;
 }
-/** 点一片：没点过 = 收进来（按动作先后给号）；点过同一片 = 取消它（后面的号往前补） */
+/** 点一片：
+ *   · **不同处**（mine/next）：没点过 = 收进来（按动作先后给号）；点过同一片 = 取消它（后面的号往前补）
+ *     —— 与作者口径逐字一致，一个字没改；
+ *   · **同文段**（same）：★修订 —— 它本来就默认收在结果里（见 `assembleMergeSeq` 的②）⇒ 点它 =
+ *     **不要它**（排除，不进结果）；再点一下 = 收回来。 */
 function mergePick(key, blockIndex, side, anchorEl) {
     const it = itemOf(key);
     if (!it || Number.isNaN(blockIndex)) return;
-    const seq = mergeSeqOf(S.decisions[key] || {});
+    const dec = S.decisions[key] || {};
+    const seq = mergeSeqOf(dec);
     if (!seq) return;                                    // 不在合二为一模式 ⇒ 什么都不做（防御）
+    if (side === 'same') {
+        const off = mergeExcludedOf(dec).slice();
+        const at = off.indexOf(blockIndex);
+        if (at >= 0) off.splice(at, 1); else off.push(blockIndex);
+        writeMergeSeq(key, it, seq, off);
+        commitItemEdit(key, anchorEl);
+        return;
+    }
     const at = seq.findIndex(s => s.block === blockIndex && s.side === side);
     const next = at >= 0 ? seq.slice(0, at).concat(seq.slice(at + 1)) : seq.concat([{ block: blockIndex, side }]);
     writeMergeSeq(key, it, next);
     commitItemEdit(key, anchorEl);
 }
-/** 「按原顺序全收」：正文按**原顺序**整条收齐 —— 没改动的段原样收、改过的地方用你已经点过的
- *  那一版（没点过的按新版）。⭐它是"免得用户忘收同文段"的那颗小按钮（作者口径）；会覆盖当前点击顺序。 */
-function mergeSeqAll(it) {
-    const seq = [];
-    for (const bl of blocksOf(it)) {
-        if (!bl.changed) { seq.push({ block: bl.i, side: 'same' }); continue; }
-        const cur0 = mergeSeqOf(S.decisions[it.key] || {}) || [];
-        const hit = cur0.find(s => s.block === bl.i && (s.side === 'mine' || s.side === 'next'));
-        seq.push({ block: bl.i, side: hit ? hit.side : 'next' });
-    }
-    return seq;
+/** ★W124-修订：进度 chip 的文案（**两处同源**：`renderEffect()` 画的那颗 + `syncItemChips()` 就地刷的那颗）。
+ *  合二为一这一档必须把新口径说全（与修法定稿 ① 一字对应）：**没改动的已收好 + 没选的按新版** ——
+ *  ⇒ ✓ 不再等于"只写你点的那几片"，而是"整条正文都齐了"；真被点掉过同文段时如实报几段。 */
+function chipTextOf(it, dec, pg) {
+    if (!mergeSeqOf(dec)) return pg.left ? `还有 <b>${pg.left}</b> 处没选` : `✓ ${pg.total} 处都选过了`;
+    const off = mergeExcludedOf(dec).length;
+    const tail = off ? `（${off} 段没改动的你不要）` : '（没改动的已收好）';
+    return pg.left ? `还有 <b>${pg.left}</b> 处没选 · 没选的按新版${tail}` : `✓ ${pg.total} 处都选过了${tail}`;
 }
 /** 合二为一模式的正文：每一片都能点（改过的块 = 旧版/新版两组；没改动的段 = 一整片原样）。
- *  ★视觉复用既有骨架（`.ywpu-patch` + `.ywpu-grp` 红底旧/绿底新 + `.ywpu-stamp` 章），
- *    只有"没改动的段"那一片用一枚中性底（`.ywpu-grp-take`，见 CSS）—— 别穿红/绿去冒充"差异"。 */
-function mergeBodyHtml(it, blocks, seq) {
-    const grp = (bl, side, label, cls) => {
-        const n = mergeIndex(seq, bl.i, side);
+ *  ★视觉复用既有骨架（`.ywpu-patch` + `.ywpu-grp` 红底旧/绿底新 + `.ywpu-stamp` 章 + `.ywpu-alt-chip` 小标），
+ *    只有"没改动的段"那一片用一枚中性底（`.ywpu-grp-take`，见 CSS）—— 别穿红/绿去冒充"差异"。
+ *  ★修订：没改动的段**默认就是「已默认收进来」**（`ywpu-on` + 小标）；点掉之后变暗 + 小标改「不要它」。 */
+function mergeBodyHtml(it, blocks, seq, excluded) {
+    const off = new Set(excluded || []);
+    const grp = (bl, side, label, cls, on, badge) => {
+        const n = side === 'same' ? 0 : mergeIndex(seq, bl.i, side);
         const lines = pieceLines(bl, side);
         const rows = lines.length
-            ? lines.map(t => `<div class="ywpu-pl ywpu-pl-grp">${esc(t) || '　'}</div>`).join('')
+            ? lines.map((t, li) => `<div class="ywpu-pl ywpu-pl-grp">${esc(t) || '　'}${(badge && li === lines.length - 1) ? badge : ''}</div>`).join('')
             : `<div class="ywpu-pl ywpu-pl-none">（${side === 'mine' ? '旧版这里什么也没有' : '新版把这几行删了'}）</div>`;
-        return `<div class="ywpu-grp ${cls}${n ? ' ywpu-on' : ''}" data-act="merge-pick" data-block="${bl.i}" data-side="${side}"`
-            + ` title="点这里 = 把这一片收进新条目（按点击先后编号；再点一次 = 取消）">`
+        const tip = side === 'same'
+            ? (on ? '这段没改动，已经默认收进结果了 —— 点一下 = 这次不要它（再点一下收回来）'
+                : '这段没改动，你点了"不要它"（不进结果）—— 点一下收回来')
+            : '点这里 = 把这一片收进新条目（按点击先后编号；再点一次 = 取消）';
+        return `<div class="ywpu-grp ${cls}${on ? ' ywpu-on' : ''}" data-act="merge-pick" data-block="${bl.i}" data-side="${side}" title="${tip}">`
             + `<span class="ywpu-grp-lab">${label}</span><div class="ywpu-grp-rows">${rows}</div>`
             + (n ? `<span class="ywpu-stamp" title="第 ${n} 片">${seqMarkOf(n)}</span>` : '') + '</div>';
     };
@@ -5416,12 +5502,17 @@ function mergeBodyHtml(it, blocks, seq) {
             const tag = kind === 'add' ? '新版新增' : kind === 'del' ? '新版删掉' : '改了内容';
             return `<div class="ywpu-patch ywpu-k-${kind}" data-block="${bl.i}" data-decided="0">`
                 + `<span class="ywpu-patch-tag">${tag}</span><div class="ywpu-patch-body">`
-                + grp(bl, 'mine', '旧版', 'ywpu-grp-mine') + grp(bl, 'next', '新版', 'ywpu-grp-next')
+                + grp(bl, 'mine', '旧版', 'ywpu-grp-mine', !!mergeIndex(seq, bl.i, 'mine'))
+                + grp(bl, 'next', '新版', 'ywpu-grp-next', !!mergeIndex(seq, bl.i, 'next'))
                 + '</div></div>';
         }
+        const gone = off.has(bl.i);
         return `<div class="ywpu-patch" data-block="${bl.i}" data-decided="0">`
             + `<span class="ywpu-patch-tag">没改动</span><div class="ywpu-patch-body">`
-            + grp(bl, 'same', '原样', 'ywpu-grp-take') + '</div></div>';
+            + grp(bl, 'same', '原样', 'ywpu-grp-take', !gone,
+                gone ? '<span class="ywpu-alt-chip">不要它（点一下收回来）</span>'
+                    : '<span class="ywpu-alt-chip">已默认收进来</span>')
+            + '</div></div>';
     }).join('');
 }
 
@@ -5542,8 +5633,8 @@ function resultNote(it, dec) {
             + '，你的版本另存一条（名字（旧版））跟在它后面'
             + (!suf && packCameFromCard() ? '（这张包没带作者名 ⇒ 没改名）' : '');
     }
-    /* ★W124-乙：合二为一的"结果行"人话 */
-    if (src === 'custom' && mergeSeqOf(dec)) return mergeNoteOf(dec);
+    /* ★W124-乙：合二为一的"结果行"人话（★修订后：点过的按点击顺序 + 没改动的按原位置 + 没点的按新版） */
+    if (src === 'custom' && mergeSeqOf(dec)) return mergeNoteOf(it, dec);
     const pg = decideProgress(it, dec);
     if (pg.left) return `已挑 ${pg.decided}/${pg.total} 处`;
     const ch = choiceOf(it, dec);
@@ -5676,8 +5767,8 @@ function itemHtml(it) {
                     ? '<span class="ywpu-opthint">新版那条改名「' + esc(String(it.next.name || '条目') + suf) + '」，你的另存成一条</span>'
                     : '<span class="ywpu-opthint">两版都存下来，你以后再挑' + (packCameFromCard() ? '（这张包没带作者名 ⇒ 没改名）' : '') + '</span>';
             }
-            /* ★W124-乙：合二为一模式下，行里就把"点了哪几片、共几片"说成人话（与 `resultNote` 同源） */
-            if (mergeOn) acts += '<span class="ywpu-opthint">' + esc(mergeNoteOf(dec)) + '</span>';
+            /* ★W124-乙：合二为一模式下，行里就把"点了哪几片、还带进来什么"说成人话（与 `resultNote` 同源） */
+            if (mergeOn) acts += '<span class="ywpu-opthint">' + esc(mergeNoteOf(it, dec)) + '</span>';
             if (fieldDiff) acts += '<span class="ywpu-opthint" title="正文一字未动 —— 内核判它「两边不同」是因为这几个条目属性不同（它们决定这条在 ST 里怎么注入）">'
                 + '⚙ 正文一字未动，差在：' + esc(fieldDelta || '条目属性') + '</span>';
             // （★W101-甲①：这里原来还有一句 `开关：旧版开 → 新版关` —— 整句删掉，见上面那段注释）
@@ -5898,10 +5989,10 @@ function renderEffect(it, dec) {
          W101 第一版把它提到函数最前面无条件算 ⇒ 展开"只有我有 / 新版新增"的条目时
          `Cannot read properties of null (reading 'text')`（`run-updater-e2e` 当场抓到、生成路也炸）。
          所以这里回到"只在两边都有的时候才算"（与改前同一个调用点），单边那两支一个字节不碰它。 */
-    const pickbar = (pg, isMerge) => `<div class="ywpu-pickbar">
-        <span class="ywpu-chip ${pg.left ? 'ywpu-c-decide' : 'ywpu-c-same'}">${pg.left ? `还有 <b>${pg.left}</b> 处没选` : `✓ ${pg.total} 处都选过了`}</span>
+    const pickbar = (pg) => `<div class="ywpu-pickbar">
+        <span class="ywpu-chip ${pg.left ? 'ywpu-c-decide' : 'ywpu-c-same'}">${chipTextOf(it, dec, pg)}</span>
         ${whoPillHtml(it)}
-        <span class="ywpu-flex">${isMerge ? '<button class="ywpu-btn ywpu-mini" data-act="merge-all" title="把正文按原顺序整条收齐：没改动的段照原样、改过的地方用你已经点过的那些片（没点过的按新版）。会覆盖你现在点出来的顺序">按原顺序全收</button>' : ''}<button class="ywpu-btn ywpu-mini" data-act="pick-clear">撤销这一条的挑选</button></span>
+        <span class="ywpu-flex"><button class="ywpu-btn ywpu-mini" data-act="pick-clear">撤销这一条的挑选</button></span>
     </div>`;
     // 只有一方有：直接摊开完整内容（用户自己删的 / 作者删的都能看到）
     if (!it.mine || !it.next) {
@@ -5926,10 +6017,10 @@ function renderEffect(it, dec) {
     if (edited) {
         body = `<div class="ywpu-doc-head">这是你自己改过的文字（撤销见下面）</div>${plainLines(dec.customText)}`;
     } else if (mergeSeq) {
-        /* ★★W124-乙：合二为一的正文 —— 每一片都能点（点=收进来按点击先后编号，再点同一片=取消）。
-           顶上一行把"怎么用"说清（作者要的就是"点击按顺序选择"）。 */
-        body = `<div class="ywpu-doc-head">合二为一：点下面你想留的每一片，按你<b>点的先后</b>拼成一条新条目；再点同一片 = 取消（后面的号往前补）。<b>同文段也能点</b>（原样收进来）</div>`
-            + mergeBodyHtml(it, blocks, mergeSeq);
+        /* ★★W124-乙（★修订后口径）：合二为一的正文 —— 每一片都能点；**结果永远是一条完整正文**：
+           点过的片按点击顺序拼；没改动的段落**默认就收好**（点它一下 = 不要它）；没点过的地方按新版写进去。 */
+        body = `<div class="ywpu-doc-head">合二为一：点每处不同你想留的那一边，按你<b>点的先后</b>拼成一条新条目；再点同一片 = 取消（后面的号往前补）。<b>没改动的段落会自动收好</b>（点它一下 = 这次不要它，再点一下收回）；没点过的地方按新版写进去。</div>`
+            + mergeBodyHtml(it, blocks, mergeSeq, mergeExcludedOf(dec));
     } else if (dec.source === 'both') {
         const suf = bothNameSuffix();
         body = `<div class="ywpu-doc-head">保存为两版：这一条照<b>新版</b>（下面这个预览就是）`
@@ -5942,7 +6033,7 @@ function renderEffect(it, dec) {
         body = blocks.map(bl => bl.changed ? patchHtml(bl, blockSideOf(dec, bl), blockDecided(dec, bl)) : sameRowsHtml(bl)).join('');
     }
     return `<div class="ywpu-effect">
-    ${pickbar(pg, !!mergeSeq)}
+    ${pickbar(pg)}
     ${dims}
     <div class="ywpu-doc">${body}</div>
     <div class="ywpu-result">
@@ -5997,7 +6088,7 @@ function applyBlockEdit(key, it, cur, bd) {
                 : (all && sides.every(s => s === 'both')) ? 'both'
                     : 'custom';
     } else {
-        S.decisions[key] = { ...cur, source: null, blockDecision: {}, customText: '', customEdited: false, mergeSeq: null };
+        S.decisions[key] = { ...cur, source: null, blockDecision: {}, customText: '', customEdited: false, mergeSeq: null, mergeExcluded: null };
         S.keepVisible[key] = true;
         return;
     }
@@ -6007,8 +6098,10 @@ function applyBlockEdit(key, it, cur, bd) {
         customText: PM.assembleFromBlocks(blocks, bd, dflt),
         customEdited: false,
         /* ★W124-乙：这条路写出来的是**逐处挑**（不是合二为一）⇒ 顺手把 `mergeSeq` 清掉 ——
-           不然"先点过合二为一、又切回逐处挑"的条目会留着旧顺序，重开时被当成合二为一模式渲染。 */
+           不然"先点过合二为一、又切回逐处挑"的条目会留着旧顺序，重开时被当成合二为一模式渲染。
+           ★W124-修订：排除账（`mergeExcluded`）同理，一起清。 */
         mergeSeq: null,
+        mergeExcluded: null,
     };
     S.keepVisible[key] = true;
 }
@@ -6076,9 +6169,9 @@ function syncItemChips(key) {
     document.querySelectorAll('.ywpu-item[data-key="' + cssEsc(key) + '"]').forEach(node => {
         const chip = node.querySelector('.ywpu-pickbar .ywpu-chip');
         if (chip) {
-            /* ★W101-甲④：文案与 `renderEffect()` 那份**逐字同源**（作者把"没点过"改成"没选"）。 */
+            /* ★W101-甲④ / ★W124-修订：文案与 `renderEffect()` 那份**逐字同源**（`chipTextOf()` 一处决定）。 */
             chip.className = 'ywpu-chip ' + (pg.left ? 'ywpu-c-decide' : 'ywpu-c-same');
-            chip.innerHTML = pg.left ? `还有 <b>${pg.left}</b> 处没选` : `✓ ${pg.total} 处都选过了`;
+            chip.innerHTML = chipTextOf(it, dec, pg);
         }
         const m = node.querySelector('[data-act="opt-mine"]'), n = node.querySelector('[data-act="opt-next"]');
         if (m) m.classList.toggle('ywpu-on', ch.mineOn);
@@ -6407,8 +6500,8 @@ function handleItemAction(key, act) {
         const ch = choiceOf(it, cur);
         const on = which === 'mine' ? ch.mineOn : which === 'next' ? ch.nextOn : ch.bothOn;
         const source = on ? null : which;
-        // ★W124-乙：从「合二为一」换到这三颗任意一颗 ⇒ 合二为一那套账**整份清掉**（`mergeSeq: null`）
-        S.decisions[key] = { ...cur, source, blockDecision: {}, customText: '', customEdited: false, mergeSeq: null };
+        // ★W124-乙：从「合二为一」换到这三颗任意一颗 ⇒ 合二为一那套账**整份清掉**（`mergeSeq` + 排除账）
+        S.decisions[key] = { ...cur, source, blockDecision: {}, customText: '', customEdited: false, mergeSeq: null, mergeExcluded: null };
         // ★v4.0 用户："单纯点这个按钮就别展开了，我需要看内容时自己点进去" → 不再自动展开
         commitItemEdit(key);
         return;
@@ -6419,24 +6512,22 @@ function handleItemAction(key, act) {
        旁边三颗不展开是作者定的"我需要看内容时自己点进去"，这颗不展开则等于点了个寂寞）。 */
     if (act === 'opt-merge-one') {
         if (mergeSeqOf(cur)) {
-            S.decisions[key] = { ...cur, source: null, mergeSeq: null, blockDecision: {}, customText: '', customEdited: false };
+            S.decisions[key] = { ...cur, source: null, mergeSeq: null, mergeExcluded: null, blockDecision: {}, customText: '', customEdited: false };
             commitItemEdit(key);
             return;
         }
-        S.decisions[key] = { ...cur, source: 'custom', mergeSeq: [], blockDecision: {}, customText: '', customEdited: false };
+        /* ★W124-修订：进模式就按"完整正文"（点过的=空 + 没改动的照原位置 + 没点的按新版）先把预览算出来 ——
+           改前这里给空串，预览框是空的、还挂着"会是空的"那句警告（与新口径相反）。 */
+        writeMergeSeq(key, it, []);
         S.curKey = key;
         if (getSettings().accordion !== false) S.expanded = { [key]: true };
         else S.expanded[key] = true;
         commitItemEdit(key);
         return;
     }
-    /* ★W124-乙：那颗「按原顺序全收」的小按钮（可点可不点）—— 免得用户忘了把"同文段"收进去 */
-    if (act === 'merge-all') {
-        if (!mergeSeqOf(cur)) return;
-        writeMergeSeq(key, it, mergeSeqAll(it));
-        commitItemEdit(key);
-        return;
-    }
+    /* ★W124-修订：「按原顺序全收」那颗按钮**已删** —— 它的用途（"免得用户忘了把同文段收进去"）被
+       `assembleMergeSeq()` 的②（同文段默认收进结果、按它原本的位置）整份覆盖；留着就是一颗语义重叠的按钮。
+       它原来那份"整条按正文原顺序"的口径现在由用户自己点片的先后决定（想按原顺序就按原顺序点）。 */
     // 开关不同（正文一字未动）：保持新状态 / 还原旧状态 —— 选完这条就算处理完了（用户 v3.9）
     if (act === 'opt-en-next' || act === 'opt-en-mine') {
         const want = act === 'opt-en-mine' ? 'mine' : 'next';
@@ -6491,9 +6582,10 @@ function handleItemAction(key, act) {
     if (act === 'pick-clear') {
         /* ★W99-甲："撤销这一条的挑选" = **三个维度一起回到"没选"**（内容 / 开关 / 名字 ——
            内核 `itemDecided()` 就是这么判的；只清内容会留下"开关/名字还选着"的半截态）。
-           ★W124-乙：「合二为一」那套账（`mergeSeq`）也一起清 —— 不然那颗按钮会亮着、正文还画着号。 */
+           ★W124-乙：合二为一那套账（`mergeSeq`）也一起清 —— 不然那颗按钮会亮着、正文还画着号。
+           ★W124-修订：排除账（`mergeExcluded`）同理，一起清。 */
         const { name: _n, enabled: _e, ...rest } = cur;
-        S.decisions[key] = { ...rest, source: null, blockDecision: {}, customText: '', customEdited: false, mergeSeq: null };
+        S.decisions[key] = { ...rest, source: null, blockDecision: {}, customText: '', customEdited: false, mergeSeq: null, mergeExcluded: null };
         commitItemEdit(key);
         return;
     }
@@ -6565,8 +6657,9 @@ function rowMark(it) {
     if (!PM.itemDecided(it, d)) {
         if (d.source === 'custom') {
             const pg = decideProgress(it, d);
-            /* ★W124-乙：合二为一那句进度也照说（口径与旁边那句逐字同源，只是"挑"换"点"） */
-            if (pg.left) return { t: mergeSeqOf(d) ? `合二为一：还差 ${pg.left} 处` : `挑到一半（还差 ${pg.left} 处）`, cls: 'ywpu-m-pend' };
+            /* ★W124-乙（★修订后）：合二为一那句进度也照说 —— 改前写「还差 N 处」（像是"缺内容"），
+               修订后没点过的那些**按新版写进去**、同文段自动收好 ⇒ 如实说"还有 N 处没点"（不丢东西）。 */
+            if (pg.left) return { t: mergeSeqOf(d) ? `合二为一：还有 ${pg.left} 处没点` : `挑到一半（还差 ${pg.left} 处）`, cls: 'ywpu-m-pend' };
         }
         return { t: '点我处理', cls: 'ywpu-m-pend' };
     }
@@ -6574,8 +6667,10 @@ function rowMark(it) {
     // ★W19A ③b：两颗都按作者逐字改完并**成对**：「开关跟新版」/「开关跟旧版」
     //   （第 26 批回话："⒝ 肯定要啊 原本根本不通顺啊"）。旧字面「开关更新版」/「开关更旧版」一律不许再出现。
     if (!d.source && d.enabled) return { t: d.enabled === 'mine' ? '开关跟旧版' : '开关跟新版', cls: 'ywpu-m-ok' };
-    /* ★W124-乙：合二为一处理完的那一句（与"已逐处挑选"并列的一个新档，字面不含任何旧字面） */
-    if (d.source === 'custom' && mergeSeqOf(d)) return { t: `已合二为一（${mergeSeqOf(d).length} 片）`, cls: 'ywpu-m-ok' };
+    /* ★W124-乙（★修订后）：合二为一处理完的那一句（与"已逐处挑选"并列的一个新档，字面不含任何旧字面）。
+       改前写「已合二为一（N 片）」—— 修订后结果里还含"自动收回来的同文段 + 没点过的按新版"，
+       那个 N 会少报，所以明写"点"了几片（结果里到底有什么，看行里那句人话）。 */
+    if (d.source === 'custom' && mergeSeqOf(d)) return { t: `已合二为一（点 ${mergeSeqOf(d).length} 片）`, cls: 'ywpu-m-ok' };
     if (d.source === 'custom') return { t: '已逐处挑选', cls: 'ywpu-m-ok' };
     if (d.source === 'mine') return { t: '保存为旧版', cls: 'ywpu-m-ok' };
     if (d.source === 'both') return { t: '保存为两版', cls: 'ywpu-m-ok' };

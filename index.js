@@ -7546,7 +7546,10 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
         /* ★W95 收口（2026-10-06 · 发布准备 · 三戳同升）：v5.3.23 → **v5.3.24**（W95 = 对比页提示条去重+「跳过去」/ 来源块「展开」与删「作者备注」/ 正则块收起-展开重做 + 去掉那圈「圆角左边条」弧形 + 选择框三档适配 / `编辑时也跑` 改人话「你改消息时也跑一遍」；本波业务改动由 W95 交付，与 preset-updater.js 的 VERSION/BUILD 成对升） */
 /* ★W101 收口（2026-10-06 · 发布准备 · 三戳同升）：v5.3.26 → **v5.3.27**（W101 = 甲①~⑤ 条目精简与重排 / 乙⑥ 正则「两遍」真 BUG / 乙⑦ 正则真鼠标可点选 + 每行计数 / 丙⑧ 当前筛选可见；业务改动由 W101 交付，与 preset-updater.js 的 VERSION/BUILD 成对升） */
         /* ★W124 收口（2026-10-08）：v5.3.37 → **v5.3.38**（甲「保存为两版」缝进来那版改名「原名 by:作者」（内核新增可选参 `nextNameSuffix`，不传 = 老行为逐字不变）+ 乙 第四态「合二为一」（按点击顺序选片拼成一条；内核改动 0）；与 preset-updater.js 的 VERSION/BUILD 成对升） */
-        const updaterBuild = 'v5.3.38';
+        /* ★W124-修订 收口（2026-10-08）：v5.3.38 → **v5.3.39**（验收支两条"悄悄丢内容"⇒ 合二为一的结果改成"永远是一条完整正文"：
+           点过的片按点击顺序 + 没被点走的同文段默认收进原位 + 没点过的不同处按新版；「按原顺序全收」删掉（用途被覆盖）；
+           内核改动仍为 0；与 preset-updater.js 的 VERSION/BUILD 成对升） */
+        const updaterBuild = 'v5.3.39';
     import('./preset-updater.js?b=' + updaterBuild)
         .then(mod => {
             // 卡片插在「不常用」那张卡之前（和以前静态 HTML 的位置一致）
