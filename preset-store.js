@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.61';
+const VERSION = '2.2.62';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -240,10 +240,10 @@ const VERSION = '2.2.61';
    v2.2.58 → **v2.2.59**（VERSION/BUILD 两处 + index.js 的 storeBuild = 三处成对）。
    只改署名这一条链：拦在入口（诱导去取名）/ 装包草稿空则回退设置并回填 / 「确认」落盘顺手回填草稿 /
    向导里那颗「去取名」（与拦入口同一个函数）。 */
-const BUILD = 'v2.2.61';
+const BUILD = 'v2.2.62';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
- *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（`https://ywp-store-sakiprime.pages.dev`）：
+ *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
  *     那上面 `_worker.js` 是 `worker.js` 的**逐字节拷贝**、共用同一个 KV，所以跟 Worker 版**同源同数据**；
  *     国内直连实测可用。**结尾不带 `/`**（拼路径时自己带，别写成 `.../`）。
  *     ⚠ **别切回 `*.workers.dev`**：那个整域在国内被拦，用户会一直看到"商店离线"
@@ -255,7 +255,7 @@ const API_ID = 'openai';
  *     ★因为它就是 `STORE_API` 本身，下面 request() 里 `STORE_API + path` 用的是同一个值 ⇒
  *       **覆盖对 `api.*` 全部接口生效**（ping/list/stats/submit/update/withdraw/mine/pending/approve/reject/sew/pack）。 */
 const STORE_API = (() => {
-    const FALLBACK = 'https://ywp-store-sakiprime.pages.dev';
+    const FALLBACK = 'https://ywp-store-b.pages.dev';    // ★★2026-10-09 08:2x **切换**（作者："把用户切到备胎"）：默认后端 = **备胎**（D1 那台）。旧默认 `ywp-store-sakiprime.pages.dev` 的数据已逐字节迁移过去（对账绿 8/红 0）⇒ **留档不删、随时可人工回滚**（把这一行改回去 + 发一版即可）。★`*.workers.dev` 照旧禁用（国内整域被拦）。
     try {
         const o = (typeof window !== 'undefined') ? window.__YW_STORE_API__ : '';
         if (typeof o === 'string' && o.trim()) return o.trim().replace(/\/+$/, '');

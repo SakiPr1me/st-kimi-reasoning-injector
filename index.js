@@ -7761,8 +7761,8 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
    （复用既有横幅组件；「已阅」记本机账 `noticeSeen`；**只从"最近一次成功拉取"渲染**、绝不从缓存复活）
    + 「🔑 待审」页里作者侧那一条推送界面（多行框 + 推送 / 取消推送 + 当前在推什么）——
    ★本波**只动商店**（更新器 v5.3.35 / 工具箱 1.46.21 一个字节没动）。
-   ⇒ storeBuild v2.2.60 → **v2.2.61**（与 preset-store.js 的 VERSION/BUILD 成对）。 */
-const storeBuild = 'v2.2.61';
+   ⇒ storeBuild v2.2.61 → **v2.2.62**（★**切换**：商店默认后端改成备胎 `ywp-store-b.pages.dev`；与 preset-store.js 的 VERSION/BUILD 成对）。 */
+const storeBuild = 'v2.2.62';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();
