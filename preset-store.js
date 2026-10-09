@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.63';
+const VERSION = '2.2.64';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -240,7 +240,12 @@ const VERSION = '2.2.63';
    v2.2.58 → **v2.2.59**（VERSION/BUILD 两处 + index.js 的 storeBuild = 三处成对）。
    只改署名这一条链：拦在入口（诱导去取名）/ 装包草稿空则回退设置并回填 / 「确认」落盘顺手回填草稿 /
    向导里那颗「去取名」（与拦入口同一个函数）。 */
-const BUILD = 'v2.2.63';
+/* ★★W131（2026-10-09 · 商店三件之二）：v2.2.63 → **v2.2.64**（VERSION/BUILD 两处 + index.js 的 storeBuild = 三处成对）。
+   只改两条口径：① **热度排序 = 点赞（心）降序**（`sews` 退成二级键；作者原话"第一名 3 颗心 第二名 0 颗 第三名 2 颗"）；
+   ② **本机名色一次性种到服务端**（`pullMyProfile()`：服务端连档案键都没有时把本机那两个色推上去 ⇒
+   "改了色，所有人都能看到"对**老颜色**也成立）。★①的第三条相关件是 `r6-store-probe` 里那条
+   "热度 ⇒ sews 单调不减"的断言 —— 本波按新口径改写成"心数单调不增 + 同数档 sews 单调不增"（见 W131 报告 §回归）。 */
+const BUILD = 'v2.2.64';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -3425,13 +3430,20 @@ function searchOk(c) {
 }
 /** ★F1：排序（**官方分区恒置顶**；分区内部按这个排）
  *  · `new` = 最新（updatedAt 倒序）
- *  · `hot` = 热度（**缝入次数倒序**，同数再看点赞、再看更新时间 —— 保证 `sews` 单调不增） */
+ *  · `hot` = 热度（**点赞数（心）倒序** —— 同数再看缝入次数、再看更新时间）
+ *  ★★W131（2026-10-09 · 作者原话："用户条目里 按照**热度排序** 好像第一名 3 颗心 第二名 0 颗 第三名 2 颗 这是怎么回事"）：
+ *    改前 `hot` 的主键是 **`sews`（缝入次数）**，而卡片上**只显示心数**（`sews` 早在 §BJ-C7 就被作者点名
+ *    从卡片上删掉了、界面 0 处）⇒ 排序用的那把尺子**用户根本看不见**，看到的就是"心数乱跳"（3/0/2）。
+ *    ⇒ 口径改成 **热度 = 心数降序**（用户看得见的那把尺子），`sews` 退成**二级键**（心一样多时它先说话），
+ *      三级键仍是更新时间 ⇒ **同数档的次序是确定的、跨刷新不跳**。
+ *    ★`sews` 那一位**没有删**（服务端字段照旧、卡片照旧不显示）；将来若要"按真正被用了多少次排"，
+ *      那属于产品口径，得作者拍板（本波只把"看得见的那把尺子"扶正）。 */
 function sortCards(list) {
     const byNew = (a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
     if (S.sort === 'new') return list.slice().sort(byNew);
     return list.slice().sort((a, b) =>
-        (Number(b.sews) || 0) - (Number(a.sews) || 0) ||
-        (Number(b.likes) || 0) - (Number(a.likes) || 0) || byNew(a, b));
+        (Number(b.likes) || 0) - (Number(a.likes) || 0) ||
+        (Number(b.sews) || 0) - (Number(a.sews) || 0) || byNew(a, b));
 }
 /* ★★BM-I（作者第十五批 · 2026-09-22，§BM-I）：**排序 / 筛选（+ 搜索词）的默认值与记忆** ——
    作者原话："默认 = **热度 + 全部 + 10 条**；**用户改过就记住**（下次打开仍是他改的）"。
@@ -4015,7 +4027,9 @@ function toolbar(targetCell) {
         /* ★★W42 第 2 行（作者原话：**热度（最左）→ 下载最新预设（最右）**，随 PC/手机自适应）——
            排序 + 筛选 + 一键更新（条件）+ 下载最新预设；`officialBtn()` 自带 `margin-left:auto`（CSS）。 */
         '<div class="yws-tbrow yws-tbrow-flt">' +
-            '<span class="yws-tbgroup">' + segBtn('sort-hot', '热度', S.sort !== 'new', '按缝入次数排（多的在前）') +
+            /* ★★W131（2026-10-09）：这颗的 title 跟着新口径改写（旧文写的是"按缝入次数排"）——
+               人话讲清"看的是心数"；二级键也点到（心一样多再看缝入次数、再看更新时间）。 */
+            '<span class="yws-tbgroup">' + segBtn('sort-hot', '热度', S.sort !== 'new', '按点赞（心）排：心多的在前；心一样多再看缝入次数、再看更新时间') +
                 segBtn('sort-new', '最新', S.sort === 'new', '按更新时间排（新的在前）') + '</span>' +
             /* ★★AU7-④（作者第十四批 · 2026-09-22，§AU7-④）：三颗筛选按钮**是一组可切换的开关** ——
                亮着的那一颗（我缝过 / 没缝过）**再点一次 = 取消筛选、回到「全部」**；「全部」那颗点多少次都还是全部。
@@ -7498,7 +7512,21 @@ function pullMyProfile() {
     return api.profileGet().then((r) => {
         const nc = hexColorOf(r && r.nameColor);
         const av = hexColorOf(r && r.avColor);
-        if (!nc && !av) return;                               // 服务端没有资料 ⇒ 本机值就是权威（也顺手不推）
+        /* ★★W131（2026-10-09 · 作者原话："大萌1 的颜色怎么在我现在的电脑端看到是正常的黄色 但是我在手机端
+           （没填我电脑的凭证）看到大萌1是白色的 … 应该是要**即时更改**的啊 只要用户进行更改 所有人都要能看到"）：
+           改前这一支是 `if (!nc && !av) return;` —— **服务端没有资料时什么都不做**，而"往服务端推"只有
+           "用户亲手改一次色"（`connSaveNow`）那一条路 ⇒ 本机那些**在机制上线之前设的 / 在别的设备上设的 /
+           离线时设的**颜色，**永远**上不了服务端 ⇒ 别人（别的设备、别的用户）看到的还是默认色。
+           实测（W131 探针 · 改前档）：一整套流程里 POST /profile = **0 条**，服务端空白 ⇒ "别人档"渲染成默认色。
+           ⇒ 补这一步**一次性种子**：服务端**连档案键都没有**（`at` 空）而本机有颜色 ⇒ 把本机这份推上去。
+           ★边界（一个字都不许多）：**只在"服务端没有档案"时种** —— 用户亲手把颜色清空过的人，
+             服务端那把键是**在的**（`at` 非空、两个色是空串）⇒ 这里一个字节都不动（别把人家清掉的颜色种回来）。
+           ★幂等/成本：种成功之后再进来 `at` 就非空了 ⇒ 不再重复推；`pushMyProfile()` 自己还有 `_profLast` 去重。 */
+        const hasRec = !!(r && String(r.at || '').trim());
+        if (!nc && !av) {
+            if (!hasRec) { const mine0 = myColorsNow(); if (mine0.nameColor || mine0.avColor) void pushMyProfile(); }
+            return;                                           // 服务端没有资料 ⇒ 本机值就是权威
+        }
         const s = getSettings();
         const mine = myColorsNow();
         let filled = false;

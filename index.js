@@ -7762,7 +7762,9 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
    + 「🔑 待审」页里作者侧那一条推送界面（多行框 + 推送 / 取消推送 + 当前在推什么）——
    ★本波**只动商店**（更新器 v5.3.35 / 工具箱 1.46.21 一个字节没动）。
    ⇒ storeBuild v2.2.61 → **v2.2.62**（★**切换**：商店默认后端改成备胎 `ywp-store-b.pages.dev`；与 preset-store.js 的 VERSION/BUILD 成对）。 */
-const storeBuild = 'v2.2.63';
+/* ★★W131（2026-10-09 · 商店三件之②③）：v2.2.63 → **v2.2.64**（与 preset-store.js 的 VERSION/BUILD 成对）。
+   本波只动商店：**热度排序 = 点赞（心）降序** + **本机名色一次性种到服务端**；别的模块一个字节没动。 */
+const storeBuild = 'v2.2.64';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();
