@@ -194,7 +194,7 @@ async function doSwipe(targetId) {
    （工具箱侧交付：预设面板里拨任意条目的**开关键** ⇒ 勾着 B 时自动替你按一次酒馆「更新预设」
    （= 整份预设写进预设文件，含此刻开关状态）；委托监听 + **600ms 尾防抖** + 点击那一刻读 B。
    本支只升戳 + 三副本同步；与 manifest.json 的 version 成对升） */
-const PLUGIN_VERSION = '1.46.26'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.27'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
