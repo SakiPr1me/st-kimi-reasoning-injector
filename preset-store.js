@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.62';
+const VERSION = '2.2.63';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -240,7 +240,7 @@ const VERSION = '2.2.62';
    v2.2.58 → **v2.2.59**（VERSION/BUILD 两处 + index.js 的 storeBuild = 三处成对）。
    只改署名这一条链：拦在入口（诱导去取名）/ 装包草稿空则回退设置并回填 / 「确认」落盘顺手回填草稿 /
    向导里那颗「去取名」（与拦入口同一个函数）。 */
-const BUILD = 'v2.2.62';
+const BUILD = 'v2.2.63';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -5693,7 +5693,8 @@ function cardHtml(c) {
                ★**不许挤掉标题**（卡片头部"一行封顶"的既有教训）：它自己 `flex: 0 0 auto` + `nowrap`，
                  标题照旧 `flex: 1 1 auto; min-width: 0` 且**一个字都不裁**（自然换行）—— 四档几何要量（报告 §⑤）。
                ★解释走浏览器原生 tooltip（**不新增浮层元素** —— 与 W1 那条"不要鼠标跟随浮层"同一条纪律）。 */
-            (c.auto === true ? '<span class="yws-auto" title="这一条是在「免审」开着的时候自动通过的（没有经过你手动审批）">自动通过</span>' : '') +
+            /* ★★W130（作者 2026-10-09："用户条目的UI 把那个 自动通过 这几个字删掉吧"）⇒ **整颗「自动通过」标去掉**（数据里的 auto 位照旧留着、后端一个字节没动，只是不再画；★想"只有你自己看得到"再另说）。 */
+            '' +
             '<span class="yws-card-t">' + esc(mdPlain(c.title)) + '</span>' +
             favBtnHtml(c) +
         '</div>' +
@@ -10092,7 +10093,7 @@ function viewUpload() {
                               服务端在回执里给了 `auto:true`（= 它走的是"直接入库"那条路）⇒ 这里如实分开说。
                               ★作者自己那台带 `mine:true` ⇒ 照旧走下面那一支（"状态：待审核"）—— 那是他要的。 */
                            : (w.result.auto === true
-                                ? '已提交 ✅ 编号：<code>' + esc(w.result.id) + '</code>，<b>直接上架了</b>（免审开着，没有经过审核）。<br>你的凭证已经存进「🔌 连接」（改/撤都靠它）。商店里这一条带「自动通过」标。'
+                                ? '已提交 ✅ 编号：<code>' + esc(w.result.id) + '</code>，<b>直接上架了</b>（免审开着，没有经过审核）。<br>你的凭证已经存进「🔌 连接」（改/撤都靠它）。'
                                 : '已提交 ✅ 编号：<code>' + esc(w.result.id) + '</code>，状态：' + esc(w.result.status === 'pending' ? '待审核' : String(w.result.status)) + '<br>你的凭证已经存进「🔌 连接」（改/撤都靠它）。<b>审核通过后才会出现在商店列表里</b>。')) +
                 '</div>' +
                 '<div class="yws-wrow yws-wfoot">' +

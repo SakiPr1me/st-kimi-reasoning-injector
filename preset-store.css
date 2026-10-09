@@ -534,24 +534,9 @@
 }
 /* 「官方」那两个字保持原样（用户认这个字），前面加一颗小菱形当"图标感" */
 .yws-offi::before { content: ""; width: 5px; height: 5px; background: currentColor; transform: rotate(45deg); border-radius: 1px; flex: 0 0 auto; }
-/* ★★W77（2026-09-27 夜 · 作者拍板「免审窗口」· 台账 §HT ③）：卡片头部那一颗「自动通过」小标
-   （= 这条是在他开的免审窗口里**自动通过**的；服务端给只读回显 `auto`）。
-   **与 `.yws-offi`（官方）逐条同一套写法**（小菱形 + 字、无边框、`flex: 0 0 auto`），只有两处不同：
-     · 色族 = `--yws-ok-ink`（既有语义色里的"成功"那一档，**本来就在 `_INK_TOKENS` 名单里**
-       ⇒ 自动吃"按实际底色 ≥4.5"的兜底，与官方金标同一条纪律；**不新造令牌、不硬编码颜色**）；
-     · 字号收一档（`--yws-fs-xs`）：它四个字，跟官方那两个字一样宽就太占地方（"不许挤掉标题"那条教训）。
-   ★它是 `nowrap` + 固定宽 ⇒ 唯一的弹性都在标题上，而标题本来就是 `flex: 1 1 auto; min-width: 0`
-     且**一个字都不裁**（自然换行）—— 四档几何读数见报告 §⑤。 */
-.yws-auto {
-    color: var(--yws-ok-ink); border: 0; background: transparent;
-    border-radius: 0; padding: 0; font-size: var(--yws-fs-xs); font-weight: 700;
-    display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; line-height: 1.6;
-    flex: 0 0 auto;
-}
-.yws-auto::before { content: ""; width: 5px; height: 5px; background: currentColor; transform: rotate(45deg); border-radius: 1px; flex: 0 0 auto; }
+
 /* 头部是 `align-items: flex-start`（多行标题时两者 box top 要齐）⇒ 与 `.yws-offi` 一样给 3px 的光学补偿 */
-.yws-card-h > .yws-auto { margin-top: 3px; }
-/* ★★AU7-②（作者第十四批 · 2026-09-22，§AU7-②）：那一行**只写「已缝入」三个字** ——
+.yws-card-h > /* ★★AU7-②（作者第十四批 · 2026-09-22，§AU7-②）：那一行**只写「已缝入」三个字** ——
    作者原话："「已缝入」现在**盖住更新日期与作者**……**日期要显示完全**、**作者也被隐藏掉了**"。
    改前（§BD4 那一版）这一格是 `已缝入（预设名）`，名字最长 18 字；而整个元信息行是
    `flex-wrap: nowrap` + 每格 `min-width: 0`（当年为了让"同一排卡张张等高"量出来的口径）⇒
