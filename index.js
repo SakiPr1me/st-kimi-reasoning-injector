@@ -194,7 +194,7 @@ async function doSwipe(targetId) {
    （工具箱侧交付：预设面板里拨任意条目的**开关键** ⇒ 勾着 B 时自动替你按一次酒馆「更新预设」
    （= 整份预设写进预设文件，含此刻开关状态）；委托监听 + **600ms 尾防抖** + 点击那一刻读 B。
    本支只升戳 + 三副本同步；与 manifest.json 的 version 成对升） */
-const PLUGIN_VERSION = '1.46.27'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.28'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -7764,7 +7764,12 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
    ⇒ storeBuild v2.2.61 → **v2.2.62**（★**切换**：商店默认后端改成备胎 `ywp-store-b.pages.dev`；与 preset-store.js 的 VERSION/BUILD 成对）。 */
 /* ★★W131（2026-10-09 · 商店三件之②③）：v2.2.63 → **v2.2.64**（与 preset-store.js 的 VERSION/BUILD 成对）。
    本波只动商店：**热度排序 = 点赞（心）降序** + **本机名色一次性种到服务端**；别的模块一个字节没动。 */
-const storeBuild = 'v2.2.64';
+/* ★★W132（2026-10-09 · 作者两条手机反馈）：v2.2.64 → **v2.2.65**（与 preset-store.js 的 VERSION/BUILD 成对）。
+   本波只动商店：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（只留 emoji + 条数）；
+   ② 整份预设卡底部那一排（下载本预设/评论/点赞/缝入）**统一外形 + 收紧**（改前手机 360 档整排右溢出 28px）。
+   ★同时升工具箱 PLUGIN_VERSION（1.46.27 → 1.46.28）：用户的自更新是拿**远端 manifest 的版本号**比本机 ——
+     只升商店号、不升工具箱号，用户端就**不会**自动更新（作者今天当场踩到过）。 */
+const storeBuild = 'v2.2.65';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();

@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.64';
+const VERSION = '2.2.65';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -245,7 +245,12 @@ const VERSION = '2.2.64';
    ② **本机名色一次性种到服务端**（`pullMyProfile()`：服务端连档案键都没有时把本机那两个色推上去 ⇒
    "改了色，所有人都能看到"对**老颜色**也成立）。★①的第三条相关件是 `r6-store-probe` 里那条
    "热度 ⇒ sews 单调不减"的断言 —— 本波按新口径改写成"心数单调不增 + 同数档 sews 单调不增"（见 W131 报告 §回归）。 */
-const BUILD = 'v2.2.64';
+/* ★★W132（2026-10-09 · 作者两条手机反馈）：v2.2.64 → **v2.2.65**（VERSION/BUILD 两处 + index.js 的 storeBuild = 三处成对；
+   ★工具箱 PLUGIN_VERSION 同波 1.46.27 → 1.46.28 —— 用户自更新比的是远端 manifest 的版本号）。
+   只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
+   `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
+   手机档给「缝入」补 32 热区）。 */
+const BUILD = 'v2.2.65';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -6027,7 +6032,15 @@ function commentBtnHtml(c) {
         ' aria-expanded="' + (on ? 'true' : 'false') + '"' +
         ' title="' + esc(on ? '再点一下 = 收起评论，回到简介' : (n ? '看这 ' + n + ' 条评论（含楼中楼回复；默认按热度）' : '还没有人评论 —— 点开写第一条（支持 Markdown 与 emoji）')) + '">' +
         '<span class="yws-cmico" aria-hidden="true">💬</span>' +
-        '<span class="yws-cmn">' + (n ? '评论 ' + numOf(n) + ' 条' : '评论') + '</span></button>';
+        /* ★★W132（作者 2026-10-09 · 手机反馈）：「**评论这两个字可以删掉**来着……这样下面的空间又可以节省出一些」
+           —— emoji 前面已经在说这件事了，所以卡片上这颗**只留 emoji + 数字条数**（改前 `💬 评论 3 条` / 改后 `💬 3 条`）。
+           ★只改**卡片上这一颗**：`title` 照旧把"评论"两个字写清楚（hover 有解释）；
+             展开区那一块（`commentsHtml` 的表头 `💬 评论` + 空态"还没有人评论"）、
+             许愿卡那颗（`wishRepBtnHtml` 的「N 条回复 / 还没有回复」）**一个字都没动**。
+           ★零条那一档（改前只有一个光秃秃的「评论」两个字）：现在只留 emoji —— 有 title 兜着，不会变成没头没脑一颗图标。
+           ★改这个字面的**每一处**都要一起改：`syncCommentCount()` 里那句 `word()` 是"就地更新"那条路
+             （发完评论 / 拉完回复之后不许把「评论 N 条」又写回来）—— 两处口径必须逐字相同。 */
+        '<span class="yws-cmn">' + (n ? numOf(n) + ' 条' : '') + '</span></button>';
 }
 /** ★★W86（2026-10-04 · 作者拍板「许愿 / 交流」区）——**许愿卡上的那颗"楼"按钮**：
  *  · **同一个 `data-act="comments"`**（点开 = 看回复 / 再点收起，走既有评论/盖楼那套，**不另造评论系统**）；
@@ -6887,9 +6900,12 @@ function syncCommentCount(sid) {
         const seen = (S.cm.repSeen || {})[String(c.id)] || {};
         for (const k of Object.keys(seen)) n += Number(seen[k]) || 0;     // ★BJ-E11：+ 账本里那几楼的回复数
     }
-    /* ★★W86：许愿卡那颗写的是「N 条回复 / 还没有回复」（同一个 `.yws-cmn`，只是字面按 kind 换一份）。 */
+    /* ★★W86：许愿卡那颗写的是「N 条回复 / 还没有回复」（同一个 `.yws-cmn`，只是字面按 kind 换一份）。
+       ★★W132：非许愿卡那半句跟着 `commentBtnHtml` 一起改（「评论 N 条」→「N 条」、零条 ⇒ 空串）——
+         这是"就地更新"那条路（发评论 / 拉回复之后重写这一格），**两份字面必须逐字相同**，
+         否则发完一条评论，卡片上那颗会从「3 条」被写回「评论 4 条」。 */
     const wish = isWishCard(c);
-    const word = (n) => (wish ? (n ? numOf(n) + ' 条回复' : '还没有回复') : (n ? '评论 ' + numOf(n) + ' 条' : '评论'));
+    const word = (n) => (wish ? (n ? numOf(n) + ' 条回复' : '还没有回复') : (n ? numOf(n) + ' 条' : ''));
     for (const m of S.mounts) {
         if (!m.el || !m.el.isConnected) continue;
         for (const b of $$('[data-act="comments"]', m.el)) {

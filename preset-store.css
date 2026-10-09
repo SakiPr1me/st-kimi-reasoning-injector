@@ -760,7 +760,31 @@
    的右端（"右下角靠角落"），与左边的条目名胶囊**居中对齐**（`.yws-card-n` 是 `align-items: center`）。
    作者原话（W3）："「★」与「缝入」不要放这么高 → 放右下角靠角落，与左边内容对齐整齐"。
    ★A7：这张卡里**只有这一颗**「缝入」（展开态那颗已经删掉，见 JS 的 cardBodyHtml）。 */
-.yws-card-f { display: inline-flex; justify-content: flex-end; align-items: center; gap: 6px; margin-left: auto; min-width: 0; flex: 0 0 auto; }
+.yws-card-f { display: inline-flex; justify-content: flex-end; align-items: center; gap: 4px; margin-left: auto; min-width: 0; flex: 0 0 auto; }
+/* ★★W132（作者 2026-10-09 · 手机反馈，原话两段）：
+   "**整份预设**的……下面不是有那个**下载本预设**吗 然后它们就是下面的几个 就是几个按钮
+    **它的那个框怎么都不一样呢 你把它统一一下 然后做紧凑点**" +
+   "因为加入了下载本预设 然后**导致于最右边的那个框已经突破那个界限了 手机端**"。
+   ---- 改前实测（真界面 360×640，一张整份卡的四颗逐颗量）：
+     下载本预设  80×32 · pad 1px 9px · **圆角 999px** · 字 12px   ← 它挂着 `.yws-mini`，手机档被抬到 32 高
+     💬评论 3 条 87×24 · pad 1px 9px · 圆角 8px · 字 13px
+     ♡0          44×24 · pad 1px 9px · 圆角 8px · 字 13px
+     缝入        50×34 · pad 5px 11px · 圆角 8px · 字 13px          ← 主按钮那一档，比同排高 10px
+   ⇒ 四种高（32/24/24/34）· 两种圆角（999 / 8）· 两种内边距（1px 9px / 5px 11px）· 两种字号 ——
+     这就是"框都不一样"；而且四颗合计 **279px > 卡片行 259px** ⇒ **整排右溢出 28px**
+     （最右那颗「缝入」右缘 336 落在卡片行右缘 308 之外，卡片自身也横溢 18px）。
+   ---- 改法（**只动这一排**，一个类名都不新造）：四颗统一到**既有次要动作那一档**
+     （`.yws-cmbtn` / `.yws-like` 本来就是它，`.yws-mini` 那半档与主按钮那半档都收进来）——
+     同高 24 · 同内边距 **1px 8px** · 同圆角 **8px**（`--yws-r-sm`）· 同字号 **11px**（`--yws-fs-xs`）；
+     排内间距 6px → **4px**（上面 `.yws-card-f` 那条）；「缝入」仍保留主色底与 600 字重（主次照旧看得出）。
+   ---- 触摸目标**不缩**：可见盒 24px，热区仍由各颗的 `::after`（手机档那几条，≥32×34）给足 ——
+     与 W49-M2 / C5-② 同一套"视觉小、热区大"的手法（`.yws-sew` 那颗本波一并补上，见手机档那一段）。
+   ---- 为什么特异度取 (0,3,0)：后面还有 `.yws-btn.yws-mini { min-height: 32px }`（手机档，(0,2,0)）
+     与各颗自己的 `.yws-btn.yws-xxx`（(0,2,0)）—— 取到三档才不必挪规则位置、也不会被它们翻掉。 */
+.yws-card-n .yws-card-f .yws-btn {
+    min-height: 24px; padding: 1px 8px; border-radius: var(--yws-r-sm);
+    font-size: var(--yws-fs-xs); gap: 5px;
+}
 .yws-btn.yws-sew {
     border-color: color-mix(in srgb, var(--yws-accent) 52%, transparent);
     background: color-mix(in srgb, var(--yws-accent) 13%, transparent);
@@ -2616,6 +2640,14 @@
        （可见盒一个像素不动 —— 与 W49-M2 那条同一条手法：绝对定位伪元素不参与 flex 行高、不撑盒）。 */
     .yws-card-f .yws-btn.yws-dlbtn { position: relative; }
     .yws-card-f .yws-btn.yws-dlbtn::after {
+        content: ''; position: absolute; left: 50%; top: 50%; width: 100%; min-width: 34px; height: 32px;
+        transform: translate(-50%, -50%);
+    }
+    /* ★★W132：同排那颗「缝入」的 32 热区 —— 它改前是 34 高（主按钮那一档），本波统一到 24 高，
+       可见盒矮了 10px ⇒ 触摸下限改由这颗**不可见的**伪元素给足（与上面三颗**逐字同源**）。
+       手机档实测（elementFromPoint 逐点扫描）：可见盒 24、热区 **≥33 高**（含正控=中心必命中 / 负控=远点必不命中）。 */
+    .yws-card-f .yws-btn.yws-sew { position: relative; }
+    .yws-card-f .yws-btn.yws-sew::after {
         content: ''; position: absolute; left: 50%; top: 50%; width: 100%; min-width: 34px; height: 32px;
         transform: translate(-50%, -50%);
     }
