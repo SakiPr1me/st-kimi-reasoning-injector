@@ -194,7 +194,18 @@ async function doSwipe(targetId) {
    （工具箱侧交付：预设面板里拨任意条目的**开关键** ⇒ 勾着 B 时自动替你按一次酒馆「更新预设」
    （= 整份预设写进预设文件，含此刻开关状态）；委托监听 + **600ms 尾防抖** + 点击那一刻读 B。
    本支只升戳 + 三副本同步；与 manifest.json 的 version 成对升） */
-const PLUGIN_VERSION = '1.46.28'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+/* ★★W133（2026-10-13 · 作者报两条）：1.46.28 → **1.46.29**（工具箱单侧；商店/更新器本波未动）
+   ①「之前安装过余温工具箱的人 这次更新后 这几项居然是不自动勾选的吗？」——
+     真页面三快照实测：典型老用户（甲·inlineInsertBtn:true）**三颗全勾**、关过老总开关的（乙）Plus/Del 不勾
+     （= 尊重他当初关过，设计如此）+ Save 勾；**真缺陷只有 Save 一档（丙）**：`inlineInsSaveInit===true`
+     但值缺键时会被旗子整块挡住 ⇒ 永远补不回来（勾选框空 + 功能关着 + 刷新不自愈，副本 8001 真跑出这档）。
+     ⇒ 补一条**不受旗子阻挡**的 `=== undefined` 补默认（`false` 仍走 W115 按值一次性升级，语义不动）。
+   ②「只有最新的楼层 思维链有计算秒数 而前面的楼层…按钮上面没有字了」——
+     真聊天夹具逐楼读数：生成开始时代码清**全部**楼的 `.kimi-thinking-timer` span **却不摘** `.kimi-timer-active`
+     类 ⇒ 更早楼层"原生标题被盖住 + span 没了" = 一个字都不显示（生成中 15/16 楼空白；生成结束后 0 空白）；
+     ⇒ 改成**只清最后一楼**（重roll/swipe 目标永远只有最后一楼，见 triggerAutoSwipe），类与 span 成对摘。
+   （本支只升戳 + 三副本同步；与 manifest.json 的 version 成对升） */
+const PLUGIN_VERSION = '1.46.29'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -603,6 +614,15 @@ if (settings.inlineInsertBtn === undefined) settings.inlineInsertBtn = true;
    布尔值分不出这两者 ⇒ 照 W113「按值迁移」的先例一次性升级：值 ∈ {undefined, false} ⇒ 升成新默认（开）；
    旗立上之后他怎么改（含**再关掉**）都保持不动、永远不再覆盖。
    代价照旧可见：每次写盘横幅都会点名「已替你更新预设「P」」，随时能从这颗勾选框关回去。 */
+/* ★W133（作者 2026-10-13 报①"之前安装过的人这次更新后这几项居然不自动勾选？"）：
+   **缺键自愈** —— 旗已立（`inlineInsSaveInit === true`）但值缺键（`undefined`）时，下面那段（含旗判断）
+   整块跳过 ⇒ 值永远补不回来：勾选框显示**未勾**、`inlineInsSaveOn()` 为假、刷新也不自愈（真跑出来的坏态：
+   副本 8001 就是这一档）。这里补一条**不受旗子阻挡**的补默认；
+   ★只认 `undefined`（缺键）—— 用户自己关过的 `false` 依然由下面那段按 W115「按值一次性升级」处理，语义不动。 */
+if (settings.inlineInsertSavePreset === undefined) {
+    settings.inlineInsertSavePreset = defaultSettings.inlineInsertSavePreset;
+    try { saveSettingsDebounced(); } catch (e) { }   // 立刻落盘：下次打开不再依赖这段
+}
 if (settings.inlineInsSaveInit !== true) {
     if (settings.inlineInsertSavePreset === undefined || settings.inlineInsertSavePreset === false) {
         settings.inlineInsertSavePreset = defaultSettings.inlineInsertSavePreset;
@@ -6424,8 +6444,22 @@ try { rerollGuard.confirmBranch(); } catch (e) { } // v1.37.54 真实生成开�
     earlyRerollMessageId = -1;
     streamGotToken = false;    // 本次生成是否收到过 token（空回检测）
     isGenerating = true;
-    // 新生成开始：清掉所有残留计时 span（重roll/swipe 换分支后旧计时归零）
-    document.querySelectorAll('.kimi-thinking-timer').forEach(n => n.remove());
+    // ★W133（作者 2026-10-13 报②"只有最新楼层有秒数，前面楼层折叠按钮上没字了"）：**只清最后一楼**的残留计时。
+    //   重roll/swipe 的目标**永远只有最后一楼**（见 triggerAutoSwipe：目标实时取 chat.length-1；手动 swipe 的
+    //   箭头也只有最后一楼有）⇒ 需要"旧计时归零"的只有它。原来这里清**全部**楼的 `.kimi-thinking-timer` span，
+    //   却**不摘** `.kimi-timer-active` 类 —— 那个类把 ST 原生标题盖成 display:none、span 又没了
+    //   ⇒ 更早那些"已完成"的楼层折叠条上**一个字都不显示**（作者原话"没有字了 思考 没有 秒数 也没有"），
+    //   而且要等本次生成结束、空闲 tick 才补回来（他一次思考 200~450 秒 ⇒ 空白好几分钟；真页面读数：
+    //   生成中 15/16 楼"看不见字"，生成结束后才 0 空白）。
+    //   口径：**类与 span 永远成对** —— 摘 span 必摘类；更早楼层的定格读数原样保留。
+    {
+        const mesAll = document.querySelectorAll('#chat .mes');
+        const lastMes = mesAll.length ? mesAll[mesAll.length - 1] : null;
+        if (lastMes) {
+            lastMes.querySelectorAll('.kimi-thinking-timer').forEach(n => n.remove());
+            lastMes.querySelectorAll('.mes_reasoning_details.kimi-timer-active').forEach(n => n.classList.remove('kimi-timer-active'));
+        }
+    }
     reasoningStartMap.clear();
     startReasoningTimer(300);  // 生成中高频 tick：思考中显示秒数
     // 记录生成开始时的最后一条消息内容（空回重roll判别：JS-Slash-Runner 提示词查看器会触发真实生成
