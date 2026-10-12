@@ -227,7 +227,7 @@ async function doSwipe(targetId) {
      点「保存」= **照 `messageEditDone` 的口径逐条自己做**（mes / swipes[swipe_id] / bias / MESSAGE_EDITED+UPDATED / 重渲染 / 落盘）；
      Esc = 放弃（不写任何数据、原渲染原样回来）；点别处**不丢**编辑内容。
    ★设置开关：`dblEditInPlace`（默认**开**；那一行放在「保存条目的同时保存预设」后面；关 ⇒ 双击完全不响应 = 恢复原生选词）。 */
-const PLUGIN_VERSION = '1.46.31'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.32'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -8734,7 +8734,7 @@ const YWDBL_STYLE_ID = 'kimi-dbl-edit-style';
 const YWDBL_BTN_CLASS = 'yw-dbl-edit-save';
 const YWDBL_HOST_CLASS = 'yw-dbl-edit-host';   // 挂在 .mes_text 上：暂时只显示我们的编辑面
 const YWDBL_TA_CLASS = 'yw-dbl-edit-input';
-const ywDblEditDebug = { off: false, noAnchor: false };   // ★探针假证口：off=关双击入口；noAnchor=关锚定补偿
+const ywDblEditDebug = { off: false, noAnchor: false, noDblExit: false };   // ★探针假证口：off=关双击入口；noAnchor=关锚定补偿；noDblExit=关「再次双击退出」
 let ywDblEditSess = null;      // 本次就地编辑的账（编辑面 / 保存钮 / 锚点几何 / 监听清单）
 let ywDblEditObs = null;       // 盯我们的编辑面是否被外部重渲染摘掉
 let ywDblEditRepos = null;     // 滚动/缩放时把「保存」摆回那一行旁边
@@ -9164,6 +9164,19 @@ function ywDblEditOnDblClick(ev) {
         if (settings.dblEditInPlace === false) return;                 // ★W135 设置开关（默认开）：关 ⇒ 双击完全不响应（恢复原生选词）
         const tgt = ev.target;
         if (!tgt || !tgt.closest) return;
+        /* ★W136（作者：手机端哪里有 esc）：编辑进行中，**再双击这一楼**（正文 / 编辑面）⇒ 退出编辑 ——
+           与 Esc 同一条路：放弃、一个字都不写、渲染原样回来、同样锚定。双击**别的楼层**什么都不做（内容不丢）。
+           这一条要摆在下面两条守卫**之前**（「编辑面里双击=原生选词」与「已有编辑⇒幂等」都会把它挡住）。 */
+        if (ywDblEditSess && !ywDblEditSess.closing && !ywDblEditDebug.noDblExit) {
+            const sessNow = ywDblEditSess;
+            const inThisMes = !!((sessNow.mesEl && sessNow.mesEl.contains(tgt)) || (sessNow.ta && sessNow.ta.contains(tgt)));
+            if (inThisMes) {
+                if (ev.preventDefault) ev.preventDefault();                 // 免得顺手选了词
+                sessNow.userTouched = false;   // ★W136：双击"这一楼"本身就是退出这个动作 ⇒ 退出后的两档迟到纠偏照常跑（别被刚才那一下 mousedown 当成"用户自己滚了"）
+                ywDblEditCancel(sessNow, 'dblclick');
+                return;
+            }
+        }
         if (tgt.closest('textarea')) return;                            // 在（我们的/原生的）编辑面里双击 = 原生选词
         if (ywDblEditSess) return;                                      // 已有一个就地编辑开着 ⇒ 幂等（不重开、不清内容）
         if (document.getElementById('curEditTextarea')) return;         // 原生编辑开着 ⇒ 不响应（不出第二个编辑面）
@@ -9404,9 +9417,78 @@ function ywDblEditFindTextPos(root, idx) {
     } catch (e) { return null; }
 }
 
+/** ★W136：这一位是不是落在**关着的 <details>**（折叠起来的内容）里。
+ *  为什么要按"语义"单独判一次：折叠内容**能不能量到 rect** 看浏览器实现 ——
+ *  实测本机（无头 Edge）会给一个**陈旧布局**的 rect（高度不是 0、位置却在别处），
+ *  作者机上按现象是"rect 全 0"；**两档都会把锚定带沟里**（一个是量到别处的坐标，一个是量到 0 值）。
+ *  ⇒ 判据按语义写：位置落在关着的 `<details>` 里 ⇒ 一律当"没有可用的坐标"。 */
+function ywDblEditPosUnrendered(pos) {
+    try {
+        if (!pos || !pos.node) return true;
+        const el = pos.node.parentElement;
+        if (!el || !el.closest) return false;
+        const d = el.closest('details');
+        return !!(d && !d.open);
+    } catch (e) { return false; }
+}
+
+/** 量"渲染正文里某个字符位"此刻的屏幕矩形；**量不到有效高度一律返回 null**。
+ *  ★W136：0 值不是坐标 —— 折叠内容没有布局时 `getBoundingClientRect()` 会给 {top:0,height:0}，
+ *  带着它往下算 `delta = 0 - wantTop` 是个大负数、`scrollTop` 被夹到 0 ⇒ **画面跳到聊天最顶**（作者当场报的就是这个）。 */
+function ywDblEditRectAtPos(pos) {
+    try {
+        if (!pos || !pos.node) return null;
+        const len = pos.node.textContent ? pos.node.textContent.length : 0;
+        if (!len) return null;
+        const off = Math.max(0, Math.min(len - 1, pos.off));
+        const end = Math.min(off + 1, len);
+        const r1 = document.createRange();
+        r1.setStart(pos.node, off);
+        r1.setEnd(pos.node, end);
+        let rect = r1.getBoundingClientRect();
+        if (!rect || !(rect.height > 0)) {
+            const r2 = document.createRange();
+            r2.setStart(pos.node, off);
+            r2.collapse(true);
+            rect = r2.getBoundingClientRect();
+        }
+        if (!rect || !(rect.height > 0) || !isFinite(rect.top)) return null;
+        return rect;
+    } catch (e) { return null; }
+}
+
+/** ★W136：匹配位落在**看不见的内容**里（折叠起来的 <details>）时，往后/往前找**最近的一个"量得到坐标"的字符位**。
+ *  往后优先：作者正看的那一行就在折叠区**之后**（折叠区只有"被藏起来的内容"才会走到这一步）。
+ *  逐个文本节点一次 rect（不逐字符），节点里再精确定位；找不到 ⇒ 返回 null（调用方直接收手）。 */
+function ywDblEditVisiblePosNear(root, idx) {
+    try {
+        const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        let acc = 0, n;
+        const nodes = [];
+        while ((n = w.nextNode())) {
+            const pe = n.parentElement;
+            if (pe && pe.tagName && (pe.tagName === 'STYLE' || pe.tagName === 'SCRIPT')) continue;
+            if (n.textContent && n.textContent.length) { nodes.push({ node: n, start: acc, len: n.textContent.length }); acc += n.textContent.length; }
+        }
+        if (!nodes.length) return null;
+        let after = null, before = null;
+        for (let i = 0; i < nodes.length; i++) {
+            const nd = nodes[i];
+            const pos = { node: nd.node, off: Math.max(0, Math.min(nd.len - 1, idx - nd.start)) };
+            if (ywDblEditPosUnrendered(pos)) continue;
+            if (!ywDblEditRectAtPos(pos)) continue;
+            if (nd.start + nd.len <= idx) before = pos;      // 整个在匹配位之前
+            else { after = pos; break; }                     // 盖住匹配位 / 在它之后
+        }
+        return after || before;
+    } catch (e) { return null; }
+}
+
 /** 保存/取消之后：把"那一行"摆回原来的屏幕高度。
  *  认回来的办法：拿"原文里这一行行首之前的内容"去**新的渲染正文**里找（各自去空白后取后缀，长度阶梯 80/60/…/8）；
- *  全失败 ⇒ 按可见字符比例兜底；再失败 ⇒ 不动（宁可不动也不乱跳）。 */
+ *  全失败 ⇒ 按可见字符比例兜底；再失败 ⇒ 不动（宁可不动也不乱跳）。
+ *  ★W136：**认到的位置必须"量得到有效坐标"才允许滚** —— 认不到就换"最近看得见的一位"，再认不到就什么都不滚
+ *  （作者实测："双击就地改字 → 保存 ⇒ 画面跳到聊天最顶"，根因就是这里拿着折叠区里的 0 值/陈旧值当了坐标）。 */
 function ywDblEditAnchorRendered(sess, mesText, prefixRaw, wantTop) {
     const out = { ok: false, by: null, delta: null, charIdx: null };
     try {
@@ -9435,41 +9517,37 @@ function ywDblEditAnchorRendered(sess, mesText, prefixRaw, wantTop) {
         }
         if (charIdx === null) return out;
         out.charIdx = charIdx;
-        const pos = ywDblEditFindTextPos(mesText, charIdx);
-        if (!pos) return out;
-        const r = document.createRange();
-        const end = Math.min(pos.off + 1, pos.node.textContent.length);
-        r.setStart(pos.node, Math.min(pos.off, end));
-        r.setEnd(pos.node, end);
-        let rect = r.getBoundingClientRect();
-        if (!rect || rect.height <= 0) {
-            const r2 = document.createRange();
-            r2.setStart(pos.node, Math.min(pos.off, pos.node.textContent.length));
-            r2.collapse(true);
-            rect = r2.getBoundingClientRect();
+        /* ★W136：这一位量不到有效坐标（典型：落在**关着的折叠 <details>** 里，那一块没有布局）
+           ⇒ 换一个**看得见的**匹配位（往后优先）；换不到 / 换了还是量不到 ⇒ **直接收手、什么都不滚**。 */
+        let pos = ywDblEditFindTextPos(mesText, charIdx);
+        let rect = (pos && !ywDblEditPosUnrendered(pos)) ? ywDblEditRectAtPos(pos) : null;
+        if (!rect) {
+            const near = ywDblEditVisiblePosNear(mesText, charIdx);
+            if (near) {
+                const rect2 = ywDblEditRectAtPos(near);
+                if (rect2) { pos = near; rect = rect2; out.by = (out.by || '') + '+visible'; }
+            }
         }
-        if (!rect) return out;
-        /* 两轮收敛：每一轮先踢一下滚动范围再按残差滚（就地编辑把整楼高度换过一遍，范围可能被算错卡住） */
+        if (!rect || !pos) { out.by = (out.by || '') + '+norect'; out.why = 'no-usable-rect'; return out; }
+        /* 两轮收敛：每一轮先踢一下滚动范围再按残差滚（就地编辑把整楼高度换过一遍，范围可能被算错卡住）。
+           ★W136：基准 scrollTop 在**踢之前**取 —— 踢会把 overflow 换一下，踢完读到的值不一定是用户原来那个位置。 */
         for (let i = 0; i < 2; i++) {
             const delta = rect.top - wantTop;
             out.delta = delta;
             out.lineTop = rect.top;
-            out.by = out.by || null;
             if (ywDblEditDebug.noAnchor || Math.abs(delta) <= 1) break;
+            const cur = chatEl.scrollTop;
             ywDblEditKickScroller();
             const max = Math.max(0, chatEl.scrollHeight - chatEl.clientHeight);
-            chatEl.scrollTop = Math.max(0, Math.min(max, chatEl.scrollTop + delta));
-            const r3 = document.createRange();
-            r3.setStart(pos.node, Math.min(pos.off, end));
-            r3.setEnd(pos.node, end);
-            const rect2 = r3.getBoundingClientRect();
-            if (rect2 && rect2.height > 0) rect = rect2;
+            chatEl.scrollTop = Math.max(0, Math.min(max, cur + delta));
+            const rect3 = ywDblEditRectAtPos(pos);
+            if (!rect3) break;                 // ★W136：量不到就停手（原来会拿着旧 rect 再滚一次）
+            rect = rect3;
         }
         out.ok = true;
     } catch (e) { out.err = String(e); }
     return out;
 }
-
 /** 纯收摊：摘编辑面/保存钮/监听/观察器 + 把"藏内容"类摘干净（**不写任何数据、不动滚动**） */
 function ywDblEditDrop() {
     const sess = ywDblEditSess;
