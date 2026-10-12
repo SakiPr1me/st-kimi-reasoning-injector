@@ -1,5 +1,5 @@
 import { extension_settings } from "../../../extensions.js";
-import { saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, stopGeneration, Generate, getRequestHeaders, is_send_press } from "../../../../script.js";
+import { saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, stopGeneration, Generate, getRequestHeaders, is_send_press, saveChatConditional, appendMediaToMessage, addCopyToCodeBlocks, ensureSwipes, extractMessageBias, removeMacros, showSwipeButtons } from "../../../../script.js";
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
 import { toggleDrawer } from "../../../utils.js";
 import { stTagMountSettings } from "./tag-fixer.js";
@@ -214,8 +214,20 @@ async function doSwipe(targetId) {
    ③ 生成/滑动中**只拦最后一楼**（与原生那条 CSS 逐字同口径：style.css:4577-4583 此刻把 `#chat .last_mes .mes_buttons`
       整排隐藏 ⇒ 原生铅笔本身就点不到）；别的楼照旧。④ 幂等：已有编辑开着时双击不响应（不会开出第二个编辑框）。
    ★行为变化（作者点名要的）：双击正文不再选词。★探针假证口（只读）：`window.__ywDblEdit.debug`（off / noAnchor），
-      产品逻辑一个字节都不读它。本支只升戳 + 三副本同步；与 manifest.json 的 version 成对升。 */
-const PLUGIN_VERSION = '1.46.30'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+      产品逻辑一个字节都不读它。本支只升戳 + 三副本同步；与 manifest.json 的 version 成对升。
+   ★★已被 W135（同日）**整块替换**：作者验收打回"不许进小铅笔"⇒ 上面这套"替用户点铅笔"的形态作废，
+      改成就地编辑面（见本文件下方 `★★W135` 那一段；探针口 `window.__ywDblEdit` 名字不变、字段变了）。 */
+/* ★★W135（2026-10-13 · 作者验收打回 W134 形态后的重做）：「双击正文 · 就地改字」1.46.30 → **1.46.31**
+   作者原话：'我要的不是进入小铅笔这件事 而是在当前页面没有变化的情况下 进行修改 就只是多了个指针 以及保存图标'
+   + '保存之后不能乱跳 反正就是一定要稳定' + '入口放在 保存条目的同时保存预设 后面这里'。
+   ⇒ 双击消息正文**不再替用户点那颗原生小铅笔**（`#curEditTextarea` / 原生 ✔✕ 按钮排 / 弹窗 一个都不许出现）：
+     就地铺一层"原文编辑面"（透明、无边框、自动高度、字体/宽度/行距继承 `.mes_text`），内容 = `ctx.chat[id].mes` 逐字；
+     只多两样：**光标**（落在双击处的原文位置）+ 一颗 **fa-save「保存」小图标**（32×32，floats 在被点行旁、不遮字）；
+     进编辑 / 保存退出 / Esc 放弃 三个时刻都把"你正看着的那一行"锚回原屏幕高度（判据 Δ≤6px；保存后 220/500ms 再纠一次）；
+     点「保存」= **照 `messageEditDone` 的口径逐条自己做**（mes / swipes[swipe_id] / bias / MESSAGE_EDITED+UPDATED / 重渲染 / 落盘）；
+     Esc = 放弃（不写任何数据、原渲染原样回来）；点别处**不丢**编辑内容。
+   ★设置开关：`dblEditInPlace`（默认**开**；那一行放在「保存条目的同时保存预设」后面；关 ⇒ 双击完全不响应 = 恢复原生选词）。 */
+const PLUGIN_VERSION = '1.46.31'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -288,6 +300,7 @@ const defaultSettings = {
     inlineInsertPlusBtn: true,       // ★W84 行内「插入提示词」按钮（A′；默认**开** —— 作者要的就是打开就能看见那颗 `+`）
     inlineInsertDelBtn: true,        // ★W84 行内「删除」按钮（C；默认**开** —— 管那颗垃圾桶 + 点它先弹我们的确认框）
     inlineInsertSavePreset: true,    // ★W115（作者 2026-10-08 拍板）：保存条目的同时保存预设（B；默认**开** —— 与新装一致；老用户按值一次性升级，见下面那段迁移）
+    dblEditInPlace: true,            // ★W135（作者 2026-10-13 拍板）：双击正文 · 就地改字（默认**开** —— 与新装一致；关 ⇒ 双击完全不响应 = 恢复原生双击选词）
 };
 
 // ===== 双模式三语预设 =====
@@ -399,7 +412,8 @@ const UI = {
         apiBannerMsg: "检测到额度用尽（limit）。", apiBannerSwitch: "⇄ 切换到 {name}（{n}/{total}）", apiSwitched: "已切换到 {name}（{n}/{total}）",
         apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（感谢啊一串信息源）", clineSectionTitle: "Cline设置相关", clineModelOverride: "积分模型名前缀覆写", clineMethodLabel: "指定方式：订阅指定提供商（感谢啊一串信息源）", clineUpTitle: "上移（调整自动切换顺序）", clineDownTitle: "下移（调整自动切换顺序）", upBtn: "📊 各上游实时状况", upTitle: "kimi-k3 各上游实时状况", upLoading: "加载中…（数据源 OpenRouter，免key）", upRefreshing: "刷新中…", upFailed: "获取失败：国内网络可能无法直连 openrouter.ai，请挂梯子后点 ↻ 重试", upSwitch: "切", upProvider: "提供商", upIn: "输入$/M", upOut: "输出$/M", upCache: "缓存读$/M", upLat: "延迟", upTps: "吞吐", upUp5m: "可用(5m)", upUptime: "可用率(1d)", upHint: "✓=可在本插件切换 · ★=当前 · 排序：可切换优先、可用率降序。手动追加自定义提供商（上方输入框）后，对应行也会出现切按钮。数据来自 OpenRouter 公开接口，仅供选型参考。", clineDSTip: "用Cline吃DeepSeek，可指定 deepseek 作为上游（官方缓存生效）！", clineDSBtn: "⇄ 一键切换 deepseek 上游", clineDSSwitched: "已切换：提供商=deepseek（走官方上游带缓存）", clineOverrideWarn: "⚠️ 啊一串实测：消耗积分的模式！限定指定提供商，如果你不知道这是什么就不要勾选", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「不常用」里勾选 使用 Cline 提供商指定", clinePassWarn: "⚠️ 检测到模型名带 cline-pass/ 前缀：提供商指定不会生效（实测全部被忽略），请改用 moonshotai/kimi-k3 等厂商前缀", clineDeadWarn: "⚠️ 已失效：Cline 指定 K3 渠道现已无法指定！（但可指定 DS）", clineHint: "开启后每次请求自动注入指定提供商。请删掉附加参数里的任何内容！仅 cline 渠道需要，其它渠道请关闭。不同渠道K3风味不同，自行测试。", psnapTitle: "预设条目开关快照", psnapNamePh: "方案名…", psnapSaveBtn: "保存", psnapApply: "切", psnapDel: "✕", psnapEmpty: "还没有保存的方案", psnapRecovery: "恢复到最近一次未快照时的状态", psnapSaved: "已保存「{n}」", psnapNeedName: "请先填写方案名", psnapMenuEntry: "扩展菜单入口", psnapEntryLabel: "入口：", psnapFloatEntry: "悬浮按钮入口", psnapNoPreset: "未找到预设数据", psnapRecApply: "恢复", psnapRecTime: "可恢复快照", floatCardTitle: "悬浮条设置", floatCardTag: "一键修复标签（直接执行）", tagFixNow: "一键修复标签", baseTitle: "基础设置", inlineInsLabel: "在预设面板每行加「插入提示词」按钮", inlineInsDelLabel: "在预设面板每行加「删除」按钮", inlineInsSaveLabel: "保存条目的同时保存预设", inlineInsSaveHint: "", inlineInsBtnTitle: "插入提示词或复制这一条", inlineInsNewName: "新提示词", inlineInsNoId: "没能生成一个唯一的编号 ⇒ 这次没有插入", inlineInsNoDef: "酒馆没有把这条新提示词收下 ⇒ 这次没有插入（可以再试一次）", inlineInsNoOrder: "没找到预设的顺序表 ⇒ 一个字都没写（可以刷新页面再试）", inlineInsFail: "插入时出错了 ⇒ 没有写进预设", inlineInsFailNoBtn: "找不到酒馆的「更新预设」按钮 ⇒ 没有存盘（这次插入只在界面上）", inlineInsMsgPlaced: "已插到「{n}」后面", inlineInsAtTail: "原来那一行不在了 ⇒ 已放到预设最后", inlineInsMsgNoSave: "（只在界面上；要存进预设就点酒馆的「更新预设」）", inlineInsEntrySavedPreset: "条目已保存，并已替你更新预设「{p}」", inlineInsEntrySavedNoName: "条目已保存，但读不到你正在用的预设的名字 ⇒ 没有存进预设文件", inlineInsEntrySavedUnknown: "条目已保存，但没能确认写进预设文件 ⇒ 请按一下酒馆的「更新预设」（这次可能没存上）", inlineInsMsgSaved: "；条目已保存，并已替你更新预设「{p}」", inlineInsMsgSaveUnknown: "，但没能确认写进预设文件 ⇒ 请自己按一下酒馆的「更新预设」，或看控制台报错（这次可能没存上）", inlineInsMsgNoName: "，但读不到你正在用的预设的名字 ⇒ 没有存盘（这次插入只在界面上）", insAskTitle: "这一条怎么处理？", insAskWho: "这一条：{n}", insAskRemove: "移除", insAskRemoveHint: "酒馆原有的 Remove，仅隐藏，可插入提示词重链接回来", insAskDel: "删除", insAskDelHint: "确认不需要后彻底删除，无法找回", insAskIns: "插入新提示词", insAskInsHint: "在这一条后面插一条新的，填完内容点酒馆的「保存」", insAskCopy: "复制这一条", insAskCopyHint: "把这一条复制一份插到它后面，名字自动加「（副本）」", insAskCancel: "取消", insAskWi: "从世界书里选", insAskWiHint: "挑几条世界书条目，缝到这一条后面", wiTitle: "从世界书里选", wiSub: "挑好的条目会缝到「{n}」后面（按勾选先后）", wiNoBooks: "没有读到世界书（一本都没有）", wiBooksFail: "世界书列表读不出来 ⇒ 刷新页面再试", wiLoadFail: "这本世界书读不出来 ⇒ 换一本试试", wiNoEntries: "这本世界书里没有可用的条目", wiBack: "‹ 换一本", wiOk: "确定", wiLoading: "读取中…", wiCount: "已选 {n} 条", wiOff: "（世界书里是停用的）", wiUnnamed: "未命名条目", wiNone: "一条都没勾 ⇒ 什么都没做", wiDone: "已把 {n} 条世界书内容缝到「{x}」后面", wiDoneTail: "原来那一行不在了 ⇒ {n} 条已放到预设最后", wiNoBody: "（其中 {m} 条没有正文）", wiGone: "那一行已经不在了 ⇒ 没有缝", wiErr: "这一批没缝成 ⇒ 一个字都没写", wiExpand: "展开", wiCollapse: "收起", wiEmptyBody: "（这一条没有正文）",  insCopyDone: "已复制出「{n}」", insCopyTail: "原来那一行不在了 ⇒ 复制出来的「{n}」放到了预设最后", insCopyGone: "「{n}」已经不在了 ⇒ 没有复制", inlineInsCopySuffix: "（副本）", insDelDone: "已从预设里彻底删除「{n}」", insDelClean: "（顺手清掉了 {g} 张顺序表里的 {r} 行残留）", insDelNoSave: "（只在界面上；要存进预设就点酒馆的「更新预设」）", insDelGone: "「{n}」已经不在预设里了", insDelForbid: "「{n}」是系统提示词 ⇒ 不能删（酒馆也不让删）", insDelFail: "删除时出错了 ⇒ 没有删", autoUpdateLabel: "自动更新插件至最新", floatBarEnable: "开启悬浮窗", floatPanelClear: "清空", floatFuncLabel: "功能型（点图标直接执行）", floatPanelLabel: "面板型（点图标打开设置浮窗）", floatPanelAll: "全选面板", routeLabel: "本次Cline上游：", routeNone: "暂无数据", floatClineEntry: "Cline 提供商入口（点开选择）", floatRouteBadge: "悬浮条显示上游徽标", stopRerollName: "停止重roll", entryMenuGroup: "拓展菜单（左下角）", entryInlineGroup: "输入框旁（发送栏）", clineRouteAlertLabel: "实际路由与指定不符时提醒", opencodeLabel: "Opencode 请求标头（9/6 后红字需启用）", opencodeHint: "自动注入 X-Opencode-Session 请求头（CUSTOM 源生效）。同一聊天固定同一 ID（GPU 上下文缓存命中），不同聊天不同 ID。", opencodeSession: "本聊天 Session ID：",
         apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效。切换会同步改写 URL、密钥、模型名 三项，预置/采样等其它参数一概不动；命中 limit/quota/rate 即触发。",
-        dblSave: "保存"
+        dblSave: "保存",
+        dblEditLabel: "双击正文直接改字",
         },
     en: {
         pluginName: "🔥 Yu Wen Toolkit (Inject / Reroll / Replace / API-pool / Fix-tags)", enabled: "Plugin Toggle",
@@ -460,7 +474,8 @@ const UI = {
         apiBannerMsg: "Quota limit hit.", apiBannerSwitch: "⇄ Switch to {name} ({n}/{total})", apiSwitched: "Switched to {name} ({n}/{total})",
         apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (credit: the source)", clineSectionTitle: "Cline settings", clineModelOverride: "Credits model prefix override", clineMethodLabel: "Method: subscription provider routing (credit: the source)", clineUpTitle: "Move up (auto-switch order)", clineDownTitle: "Move down (auto-switch order)", upBtn: "📊 Live upstream status", upTitle: "kimi-k3 upstream live status", upLoading: "Loading... (OpenRouter, no key needed)", upRefreshing: "Refreshing...", upFailed: "Failed to fetch - openrouter.ai may be unreachable from your network; retry with ↻", upSwitch: "Use", upProvider: "Provider", upIn: "In $/M", upOut: "Out $/M", upCache: "Cache $/M", upLat: "Latency", upTps: "Throughput", upUp5m: "Up(5m)", upUptime: "Uptime(1d)", upHint: "✓ = switchable here · ★ = current · latency/throughput = last 30 min (blank when no traffic) · sorted: switchable first, uptime desc. Data from OpenRouter public API.", snapNamePh: "Profile name…", snapSaveBtn: "💾 Save current", snapApply: "Apply", snapDel: "Delete profile", snapEmpty: "No saved profiles yet: enter a name and hit Save", snapRecovery: "↩ Auto-recovery snapshot (saved before last switch)", snapSaved: "Saved profile \"{n}\"", snapNeedName: "Enter a profile name first", clineDSTip: "Use Cline for DeepSeek with deepseek as the upstream (official caching works)!", clineDSBtn: "⇄ One-click deepseek upstream", clineDSSwitched: "Switched: provider=deepseek (official upstream with caching)", clineOverrideWarn: "WARNING (tested): credits only - locks provider and overrides model to a vendor prefix like moonshotai/kimi-k3.", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Uncommon first", clinePassWarn: "Model has cline-pass/ prefix: provider routing will NOT work (tested). Use a vendor prefix like moonshotai/kimi-k3", clineDeadWarn: "⚠️ Deprecated: Cline can no longer route to the K3 provider! (DS still works)", clineHint: "Injects the selected provider into every request. Delete anything in Extra Parameters! Only needed for the cline channel; turn off elsewhere. Different providers give K3 different flavors - test them yourself.", psnapTitle: "Preset Toggle Snapshots", psnapNamePh: "Profile name…", psnapSaveBtn: "Save", psnapApply: "Use", psnapDel: "✕", psnapEmpty: "No saved profiles", psnapRecovery: "Restore to last unsaved state", psnapSaved: "Saved \"{n}\"", psnapNeedName: "Enter a profile name first", psnapMenuEntry: "Extensions menu entry", psnapEntryLabel: "Entries:", psnapFloatEntry: "Floating button entry", psnapNoPreset: "Preset data not found", psnapRecApply: "Restore", psnapRecTime: "Recovery snapshot", floatCardTitle: "Floating Bar", floatCardTag: "One-click tag fix (direct run)", tagFixNow: "Fix tags now", baseTitle: "Basics", inlineInsLabel: "Add an \"Insert prompt\" button to each row of the preset panel", inlineInsDelLabel: "Add a \"Delete\" button to each row of the preset panel", inlineInsSaveLabel: "Also save the preset when saving an entry", inlineInsSaveHint: "", inlineInsBtnTitle: "Insert a prompt or duplicate this entry", inlineInsNewName: "New Prompt", inlineInsNoId: "Could not generate a unique id - nothing was inserted", inlineInsNoDef: "The tavern did not accept this new prompt - nothing was inserted (you can try again)", inlineInsNoOrder: "Preset order list not found - nothing was written (try reloading the page)", inlineInsFail: "Something went wrong while inserting - nothing was written to the preset", inlineInsFailNoBtn: "Could not find the tavern's \"Update preset\" button - not saved (this insertion stays on screen only)", inlineInsMsgPlaced: "Inserted after \"{n}\"", inlineInsAtTail: "That row is gone - inserted at the end of the preset", inlineInsMsgNoSave: " (on screen only; press the tavern's \"Update preset\" to save it)", inlineInsEntrySavedPreset: "Entry saved, and we updated the preset \"{p}\" for you", inlineInsEntrySavedNoName: "Entry saved, but the name of your current preset is unreadable - not written to the preset file", inlineInsEntrySavedUnknown: "Entry saved, but we could not confirm it reached the preset file - please press the tavern's \"Update preset\" (it may not have been saved)", inlineInsMsgSaved: "; entry saved, and we updated the preset \"{p}\" for you", inlineInsMsgSaveUnknown: ", but we could not confirm it reached the preset file - please press the tavern's \"Update preset\" yourself, or check the console (it may not have been saved)", inlineInsMsgNoName: ", but the name of your current preset is unreadable - not saved (this insertion stays on screen only)", insAskTitle: "What should happen to this entry?", insAskWho: "Entry: {n}", insAskRemove: "Remove", insAskRemoveHint: "The tavern's own Remove - only hides it; link it back later by inserting a prompt", insAskDel: "Delete", insAskDelHint: "Deletes it for good once you are sure; it cannot be recovered", insAskIns: "Insert a new prompt", insAskInsHint: "Inserts a new one after this entry; fill in the content and press the tavern's Save", insAskCopy: "Duplicate this entry", insAskCopyHint: "Copies this entry and inserts the copy right after it; the name gets a (copy) suffix", insAskCancel: "Cancel", insAskWi: "Pick from a World Info book", insAskWiHint: "Pick several World Info entries and stitch them after this one", wiTitle: "Pick from a World Info book", wiSub: "The entries you pick go right after \"{n}\" (in the order you tick them)", wiNoBooks: "No World Info books found (none at all)", wiBooksFail: "Could not read the World Info list - reload the page and try again", wiLoadFail: "Could not read this book - try another one", wiNoEntries: "This book has no usable entries", wiBack: "< another book", wiOk: "OK", wiLoading: "Loading...", wiCount: "{n} selected", wiOff: "(disabled in the book)", wiUnnamed: "Unnamed entry", wiNone: "Nothing selected - nothing was done", wiDone: "Stitched {n} World Info entries after \"{x}\"", wiDoneTail: "That row was gone - the {n} entries were placed at the end", wiNoBody: " ({m} of them had no text)", wiGone: "That row is no longer there - nothing was stitched", wiErr: "This batch failed - nothing was written", wiExpand: "Expand", wiCollapse: "Collapse", wiEmptyBody: "(no text in this entry)",  insCopyDone: "Made a copy: {n}", insCopyTail: "The row was gone - the copy {n} was placed at the end of the preset", insCopyGone: "{n} is no longer there - nothing was duplicated", inlineInsCopySuffix: " (copy)", insDelDone: "Permanently deleted \"{n}\" from the preset", insDelClean: " (also cleaned {r} leftover row(s) in {g} order list(s))", insDelNoSave: " (on screen only; press the tavern's \"Update preset\" to save it)", insDelGone: "\"{n}\" is no longer in the preset", insDelForbid: "\"{n}\" is a system prompt - the tavern does not allow deleting it", insDelFail: "Something went wrong while deleting - nothing was deleted", autoUpdateLabel: "Auto-update plugin to latest", floatBarEnable: "Enable floating bar", floatPanelClear: "Clear", floatFuncLabel: "Actions (run directly)", floatPanelLabel: "Panels (open settings popup)", floatPanelAll: "Select all panels", routeLabel: "Upstream this time: ", routeNone: "No data yet", floatClineEntry: "Cline provider entry (click to pick)", floatRouteBadge: "Show upstream badge on bar", stopRerollName: "Stop reroll", entryMenuGroup: "Extensions menu (bottom-left)", entryInlineGroup: "Beside input (send bar)", clineRouteAlertLabel: "Alert when route mismatches", opencodeLabel: "Opencode request header (enable after 9/6)", opencodeHint: "Auto-inject X-Opencode-Session (works on Custom source). Same chat keeps one fixed ID (GPU context cache), different chats differ.", opencodeSession: "Session ID for this chat: ",
         apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections. Switching syncs three fields: URL, key and model name - presets/sampling untouched. Triggers on limit/quota/rate.",
-        dblSave: "Save"
+        dblSave: "Save",
+        dblEditLabel: "Double-click message text to edit it in place",
         },
     ko: {
         pluginName: "🔥 위온 툴킷 (주입 / 재롤 / 치환 / API풀 / 태그수정)", enabled: "플러그인 스위치",
@@ -521,7 +536,8 @@ const UI = {
         apiBannerMsg: "할당량 초과 감지.", apiBannerSwitch: "⇄ {name}(으)로 전환 ({n}/{total})", apiSwitched: "{name}(으)로 전환됨 ({n}/{total})",
         apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (정보원 감사)", clineSectionTitle: "Cline 설정", clineModelOverride: "크레딧 모델 접두사 덮어쓰기", clineMethodLabel: "방식: 구독 공급자 지정", clineUpTitle: "위로(자동 전환 순서)", clineDownTitle: "아래로(자동 전환 순서)", upBtn: "📊 업스트림 실시간 현황", upTitle: "kimi-k3 업스트림 현황", upLoading: "로딩 중... (OpenRouter)", upRefreshing: "새로고침 중...", upFailed: "가져오기 실패 - 네트워크에서 openrouter.ai 접근 불가 가능, ↻로 재시도", upSwitch: "전환", upProvider: "공급자", upIn: "입력$/M", upOut: "출력$/M", upCache: "캐시$/M", upLat: "지연", upTps: "처리량", upUp5m: "가동(5m)", upUptime: "가동률(1d)", upHint: "✓=여기서 전환 가능 · ★=현재 · 지연/처리량=최근 30분 · 정렬: 전환 가능 우선. OpenRouter 공개 API 기준.", snapNamePh: "프로필 이름…", snapSaveBtn: "💾 현재 상태 저장", snapApply: "적용", snapDel: "이 프로필 삭제", snapEmpty: "저장된 프로필 없음: 이름 입력 후 저장", snapRecovery: "↩ 복구 스냅샷(전환 전 자동 저장)", snapSaved: "\"{n}\" 프로필 저장됨", snapNeedName: "먼저 프로필 이름을 입력하세요", clineDSTip: "Cline으로 DeepSeek 사용 - deepseek 업스트림 지정(공식 캐시 적용)!", clineDSBtn: "⇄ 원클릭 deepseek 업스트림", clineDSSwitched: "전환됨: 공급자=deepseek(공식 업스트림, 캐시)", clineOverrideWarn: "주의(실측): 크레딧 소모 - 공급자 지정 및 moonshotai/kimi-k3 등 벤더 접두사로 모델 덮어쓰기.", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 비상용에서 Cline 공급자 지정을 체크하세요", clinePassWarn: "모델명에 cline-pass/ 접두사 감지: 공급자 지정 무효(실측). moonshotai/kimi-k3 같은 벤더 접두사 사용", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineDeadWarn: "⚠️ 만료: Cline에서 K3 공급자 지정이 더 이상 불가! (DS는 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입합니다. 추가 매개변수의 모든 내용을 삭제하세요! cline 채널에서만 필요, 다른 곳에서는 끄세요. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.", psnapTitle: "프리셋 토글 스냅샷", psnapNamePh: "프로필 이름…", psnapSaveBtn: "저장", psnapApply: "전환", psnapDel: "✕", psnapEmpty: "저장된 프로필 없음", psnapRecovery: "마지막 미스냅샷 상태로 복원", psnapSaved: "\"{n}\" 저장됨", psnapNeedName: "먼저 프로필 이름을 입력하세요", psnapMenuEntry: "확장 메뉴 항목", psnapEntryLabel: "입구:", psnapFloatEntry: "플로팅 버튼 항목", psnapNoPreset: "프리셋 데이터 없음", psnapRecApply: "복원", psnapRecTime: "복구 스냅샷", floatCardTitle: "플로팅 바", floatCardTag: "태그 원클릭 수리 (즉시 실행)", tagFixNow: "태그 지금 수리", baseTitle: "기본 설정", inlineInsLabel: "프리셋 패널의 각 행에 「프롬프트 삽입」 버튼 추가", inlineInsDelLabel: "프리셋 패널의 각 행에 「삭제」 버튼 추가", inlineInsSaveLabel: "항목을 저장할 때 프리셋도 함께 저장", inlineInsSaveHint: "", inlineInsBtnTitle: "프롬프트 삽입 또는 이 항목 복사", inlineInsNewName: "새 프롬프트", inlineInsNoId: "고유 번호를 만들지 못했습니다 ⇒ 이번에는 삽입하지 않았습니다", inlineInsNoDef: "술집이 이 새 프롬프트를 받지 않았습니다 ⇒ 이번에는 삽입하지 않았습니다 (다시 시도해 보세요)", inlineInsNoOrder: "프리셋 순서 목록을 찾지 못했습니다 ⇒ 아무것도 쓰지 않았습니다 (페이지를 새로고침해 보세요)", inlineInsFail: "삽입 중 오류 ⇒ 프리셋에 쓰지 않았습니다", inlineInsFailNoBtn: "술집의 「프리셋 업데이트」 버튼을 찾지 못했습니다 ⇒ 저장되지 않았습니다 (화면에만 반영)", inlineInsMsgPlaced: "「{n}」 뒤에 삽입했습니다", inlineInsAtTail: "그 행이 사라졌습니다 ⇒ 프리셋 맨 끝에 넣었습니다", inlineInsMsgNoSave: " (화면에만; 저장하려면 술집의 「프리셋 업데이트」를 누르세요)", inlineInsEntrySavedPreset: "항목이 저장되었고, 프리셋 「{p}」도 대신 업데이트했습니다", inlineInsEntrySavedNoName: "항목은 저장되었지만, 사용 중인 프리셋 이름을 읽을 수 없습니다 ⇒ 프리셋 파일에 저장하지 않았습니다", inlineInsEntrySavedUnknown: "항목은 저장되었지만, 프리셋 파일에 쓰였는지 확인하지 못했습니다 ⇒ 술집의 「프리셋 업데이트」를 눌러 보세요 (이번엔 저장되지 않았을 수 있습니다)", inlineInsMsgSaved: "; 항목이 저장되었고, 프리셋 「{p}」도 대신 업데이트했습니다", inlineInsMsgSaveUnknown: ", 프리셋 파일에 쓰였는지 확인하지 못했습니다 ⇒ 술집의 「프리셋 업데이트」를 직접 눌러 보세요 (이번엔 저장되지 않았을 수 있습니다)", inlineInsMsgNoName: ", 하지만 사용 중인 프리셋 이름을 읽을 수 없습니다 ⇒ 저장하지 않았습니다 (화면에만 반영)", insAskTitle: "이 항목을 어떻게 할까요?", insAskWho: "이 항목: {n}", insAskRemove: "제거", insAskRemoveHint: "술집의 원래 Remove - 목록에서만 숨기고, 나중에 프롬프트를 다시 끼워 연결할 수 있습니다", insAskDel: "삭제", insAskDelHint: "필요 없다고 확인되면 완전히 삭제하며 되찾을 수 없습니다", insAskIns: "새 프롬프트 삽입", insAskInsHint: "이 항목 뒤에 새로 하나 삽입합니다. 내용을 채우고 술집의 저장을 누르세요", insAskCopy: "이 항목 복사", insAskCopyHint: "이 항목을 복사해 바로 뒤에 넣습니다. 이름에 (복사)가 붙습니다", insAskCancel: "취소", insAskWi: "세계서(월드 인포)에서 고르기", insAskWiHint: "세계서 항목 몇 개를 골라 이 항목 뒤에 이어 붙입니다", wiTitle: "세계서에서 고르기", wiSub: "고른 항목은 「{n}」 뒤에 붙습니다 (체크한 순서대로)", wiNoBooks: "세계서를 읽지 못했습니다 (한 권도 없음)", wiBooksFail: "세계서 목록을 읽지 못했습니다 ⇒ 페이지를 새로고침 후 다시 시도", wiLoadFail: "이 책을 읽지 못했습니다 ⇒ 다른 책을 골라 보세요", wiNoEntries: "이 세계서에는 쓸 수 있는 항목이 없습니다", wiBack: "‹ 다른 책", wiOk: "확인", wiLoading: "불러오는 중...", wiCount: "{n}개 선택", wiOff: "(세계서에서 중지됨)", wiUnnamed: "이름 없는 항목", wiNone: "아무것도 고르지 않음 ⇒ 아무 일도 하지 않았습니다", wiDone: "세계서 {n}개를 「{x}」 뒤에 이어 붙였습니다", wiDoneTail: "그 줄이 사라졌습니다 ⇒ {n}개를 프리셋 맨 끝에 넣었습니다", wiNoBody: " (그중 {m}개는 본문이 없습니다)", wiGone: "그 줄이 이미 없습니다 ⇒ 이어 붙이지 않았습니다", wiErr: "이번 묶음은 실패했습니다 ⇒ 아무것도 쓰지 않았습니다", wiExpand: "펼치기", wiCollapse: "접기", wiEmptyBody: "(이 항목에는 본문이 없습니다)",  insCopyDone: "복사했습니다: {n}", insCopyTail: "원래 줄이 사라졌습니다 ⇒ 복사본 {n}을(를) 프리셋 맨 끝에 넣었습니다", insCopyGone: "{n}이(가) 이미 없습니다 ⇒ 복사하지 않았습니다", inlineInsCopySuffix: " (복사)", insDelDone: "프리셋에서 「{n}」을(를) 완전히 삭제했습니다", insDelClean: " (순서 목록 {g}개에서 남은 줄 {r}개도 정리했습니다)", insDelNoSave: " (화면에만; 저장하려면 술집의 「프리셋 업데이트」를 누르세요)", insDelGone: "「{n}」은(는) 이미 프리셋에 없습니다", insDelForbid: "「{n}」은(는) 시스템 프롬프트라 삭제할 수 없습니다", insDelFail: "삭제 중 오류 ⇒ 아무것도 삭제하지 않았습니다", autoUpdateLabel: "플러그인을 최신 버전으로 자동 업데이트", floatBarEnable: "플로팅 바 켜기", floatPanelClear: "비우기", floatFuncLabel: "기능형 (아이콘 즉시 실행)", floatPanelLabel: "패널형 (아이콘 클릭 시 설정 팝업)", floatPanelAll: "모든 패널 선택", routeLabel: "이번 Cline 업스트림: ", routeNone: "데이터 없음", floatClineEntry: "Cline 공급자 입구 (클릭하여 선택)", floatRouteBadge: "플로팅 바에 업스트림 배지 표시", stopRerollName: "리롤 중지", entryMenuGroup: "확장 메뉴 (좌하단)", entryInlineGroup: "입력창 옆 (보내기 바)", clineRouteAlertLabel: "라우팅 불일치 시 알림", opencodeLabel: "Opencode 요청 헤더 (9/6 이후 활성화 필요)", opencodeHint: "X-Opencode-Session 요청 헤더 자동 주입 (CUSTOM 소스). 같은 대화는 동일 ID (GPU 컨텍스트 캐시), 다른 대화는 다른 ID.", opencodeSession: "이 대화의 Session ID: ",
         apiHint: "키는 로컬 settings.json에 평문 저장됨 - 파일 공유 금지. Custom(OpenAI 호환) 연결에서만 동작. 전환 시 URL·키·모델명 세 항목을 함께 변경, 프리셋/샘플링은 불변. limit/quota/rate 에서 트리거.",
-        dblSave: "저장"
+        dblSave: "저장",
+        dblEditLabel: "메시지 본문을 두 번 클릭하면 그 자리에서 바로 수정",
         }
 };
 // 按当前语言取文案；缺 key 时回退中文
@@ -643,6 +659,9 @@ if (settings.inlineInsSaveInit !== true) {
     }
     settings.inlineInsSaveInit = true;
 }
+/* ★W135（作者 2026-10-13 拍板 · 铁律 32：升级态必须与新装态一致）：双击正文就地改字（新键）——
+   缺键（老用户/首次升级）就按 `defaultSettings` **同一个来源**补默认（开）；他自己关过的 `false` 永远尊重。 */
+if (settings.dblEditInPlace === undefined) settings.dblEditInPlace = defaultSettings.dblEditInPlace;
 /* ★W84：**一颗开关拆成两颗**的迁移 —— 口径选的是"**两颗新键都以老键的值为初值**"：
      · 老键没写过（undefined / true）⇒ 两颗都 true ⇒ 与升级前**一模一样**（老用户不会突然看不到按钮）；
      · 老键是 false（他自己关过）⇒ 两颗都 false ⇒ 也是他当初的选择（现在起他能一颗一颗单独开回来）。
@@ -7117,6 +7136,11 @@ ${t('inlineInsDelLabel')}
      会出现"勾选框显示勾着、功能其实是关的"这种刻度≠真值；作者报"打开着却都不写"时先查的就是它） -->
 ${t('inlineInsSaveLabel')}
 </label>
+<!-- ★W135（作者点名："入口放在 保存条目的同时保存预设 后面这里"）：双击正文就地改字（默认开；关 ⇒ 双击不响应）-->
+<label class="checkbox_label">
+<input id="${extensionName}_dbl_edit" type="checkbox" ${settings.dblEditInPlace !== false ? 'checked' : ''}/>
+${t('dblEditLabel')}
+</label>
 <div style="margin-top:6px">
 <label class="kimi-label" for="${extensionName}_language">${t('langLabel')}</label>
 <select id="${extensionName}_language" class="text_pole" style="width:100%">
@@ -8064,6 +8088,12 @@ const storeBuild = 'v2.2.65';
         saveSettingsDebounced();
         try { inlineInsApplySwitch(); } catch (e) { /* 开关本身绝不出错 */ }
     });
+    // ★W135：双击正文 · 就地改字 —— 关 ⇒ 双击完全不响应（恢复原生双击选词）；若此刻正开着就地编辑，顺手按"放弃"收摊（不写数据）
+    $("#" + extensionName + "_dbl_edit").on("change", function () {
+        settings.dblEditInPlace = $(this).is(":checked");
+        saveSettingsDebounced();
+        try { if (!settings.dblEditInPlace && ywDblEditSess) ywDblEditCancel(ywDblEditSess, 'setting-off'); } catch (e) { /* 关开关绝不出错 */ }
+    });
 // 悬浮条设置卡：一键修复标签（直接执行）显隐
     $("#" + extensionName + "_float_tagfix").on("change", function () {
         settings.floatShowTagFix = $(this).is(":checked");
@@ -8684,33 +8714,88 @@ eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, (generateData) => {
 });
 
 /* ============================================================================================
-   ★★W134（2026-10-13 · 作者要求）「双击正文直接改字」—— 双击消息正文的某个位置 ⇒ **替用户点了那颗原生小铅笔**。
-   全程走 ST 自己那条编辑路（`script.js:11829` 的 `.mes_edit` click → `messageEdit()`）；本功能只做三件事：
-     · 把"这次双击"接到那颗铅笔上（含与原生同口径的拦截：生成/滑动中只拦最后一楼）；
-     · 进编辑后把"你双击的那一行"锚回原来的屏幕高度（两级补偿：先 textarea 自己的内滚动、再补 #chat），
-       并把光标放到双击处对应的**原文**位置；
-     · 在你点的那一行旁边放一颗原生样式（`.menu_button`）的「保存」，点它 = 原生 `.mes_edit_done` 的 click。
-   不造伪编辑、不弹窗、不新造按钮样式；正则/美化一个字都不碰（框里天然是"替换前的原文、含标签"，这是原生行为）。
-   ★行为变化（作者点名要的）：双击正文不再选词。★探针假证口（只读，产品逻辑不读）：window.__ywDblEdit。
+   ★★W135（2026-10-13 · 作者验收打回 W134 形态后的重做）「双击正文 · 就地改字（不进小铅笔）」——
+   作者原话（硬口径）："我有要的不是进入小铅笔这件事 而是在当前页面没有变化的情况下 进行修改
+   就只是多了个指针 以及保存图标" + "保存之后不能乱跳 反正就是一定要稳定"。
+   形态（与 W134 的差别就是**不许进小铅笔**）：
+     · 双击消息正文 ⇒ **就地**把这一楼的正文换成"原文编辑面"：透明、无边框、自动高度、字体/宽度/行距照抄消息本体
+       （不是"大输入框"观感 —— 没有底色块、没有边框、没有原生那排 ✔/✕、零弹窗、零 #curEditTextarea）；
+     · 内容 = ctx.chat[id].mes **逐字**（含 <content> 这类标签）—— 这是唯一能正确回写的形态：
+       显示是正则替换后的样子（标签被换成装饰、文字会被改写），显示 ≠ 原文，反推不可能；
+     · 只多两样：**光标**（落在你双击处的原文位置）+ 一颗**「保存」小图标**（floats 在被点行旁、不遮字、热区 32×32）；
+     · 版式不乱跳：进编辑 / 保存退出 / Esc 放弃 —— 三个时刻都把"你正看着的那一行"锚回原来的屏幕高度（判据 Δ≤6px）；
+     · 点「保存」= 照酒馆 messageEditDone 那份口径**逐条自己做**（mes / swipes[swipe_id] / bias / 两个事件 / 重渲染 / 落盘）；
+       不替用户点任何原生按钮 ⇒ 显示立刻回到美化后的样子（显示类正则自然重跑）。
+   ★行为变化（作者点名要的）：双击正文不再选词、也不再进小铅笔；Esc = 放弃（恢复原样）；点别处**不丢**编辑内容。
+   ★探针假证口（只读，产品逻辑一个字节都不读）：window.__ywDblEdit（off / noAnchor / state()）。
+   本支只升戳 + 三副本同步；与 manifest.json 的 version 成对升。
    ============================================================================================ */
 const YWDBL_STYLE_ID = 'kimi-dbl-edit-style';
 const YWDBL_BTN_CLASS = 'yw-dbl-edit-save';
-const ywDblEditDebug = { off: false, noAnchor: false };   // ★探针假证口：off=关双击入口；noAnchor=关两级滚动补偿
-let ywDblEditBtn = null;        // 屏幕上那颗「保存」
-let ywDblEditAgent = null;      // 本次编辑的锚点账（按钮重定位 + 迟到纠偏都靠它）
-let ywDblEditObs = null;        // 盯 #curEditTextarea 是否被摘掉（原生 ✔/✕/Esc/换楼/重渲染都会摘）
-let ywDblEditReposition = null; // 滚动/缩放时把按钮摆回锚点旁边
+const YWDBL_HOST_CLASS = 'yw-dbl-edit-host';   // 挂在 .mes_text 上：暂时只显示我们的编辑面
+const YWDBL_TA_CLASS = 'yw-dbl-edit-input';
+const ywDblEditDebug = { off: false, noAnchor: false };   // ★探针假证口：off=关双击入口；noAnchor=关锚定补偿
+let ywDblEditSess = null;      // 本次就地编辑的账（编辑面 / 保存钮 / 锚点几何 / 监听清单）
+let ywDblEditObs = null;       // 盯我们的编辑面是否被外部重渲染摘掉
+let ywDblEditRepos = null;     // 滚动/缩放时把「保存」摆回那一行旁边
+let ywDblEditEngine = null;    // null=还没查过 / false=查不到 / {getRegexedString,regex_placement}=可用（动态 import，失败不拖垮插件）
+let ywDblEditOaPrev = null;    // 编辑期间"冻结滚动锚定"时`#chat`原来的 overflow-anchor 值（收尾还原）
+let ywDblEditOaTimer = null;   // 解冻定时器（保存/放弃之后多冻 700ms，等迟到纠偏走完）
+
+/** 编辑期间把 `#chat` 的**滚动锚定**冻掉（`overflow-anchor:none`）：
+ *  就地编辑是"整楼内容换一遍"（美化版 ⇄ 原文版，高度差几百像素）—— 浏览器的滚动锚定会自己算一个补偿量往 scrollTop 上加，
+ *  与我们的"点击哪里就锚回哪里"互相打架（实测：不冻就漂 587px）。收尾后再多冻 700ms（等 220/500ms 两档迟到纠偏走完）。 */
+function ywDblEditAnchorFreeze(on) {
+    try {
+        const chatEl = document.getElementById('chat');
+        if (!chatEl) return;
+        if (on) {
+            if (ywDblEditOaTimer) { clearTimeout(ywDblEditOaTimer); ywDblEditOaTimer = null; }
+            if (ywDblEditOaPrev === null) ywDblEditOaPrev = chatEl.style.overflowAnchor || '';
+            chatEl.style.overflowAnchor = 'none';
+        } else {
+            if (ywDblEditOaTimer) { clearTimeout(ywDblEditOaTimer); ywDblEditOaTimer = null; }
+            ywDblEditOaTimer = setTimeout(function () {
+                ywDblEditOaTimer = null;
+                try {
+                    if (ywDblEditSess) return;      // 又开了新的一轮 ⇒ 继续冻着（别把它解开）
+                    const c = document.getElementById('chat');
+                    if (c) c.style.overflowAnchor = ywDblEditOaPrev || '';
+                    ywDblEditOaPrev = null;
+                } catch (e) { }
+            }, 700);
+        }
+    } catch (e) { }
+}
+
+function ywDblEditCtx() {
+    try { return (typeof window !== 'undefined' && window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null; } catch (e) { return null; }
+}
 
 function ywDblEditEnsureStyle() {
     if (document.getElementById(YWDBL_STYLE_ID)) return;
     try {
         const st = document.createElement('style');
         st.id = YWDBL_STYLE_ID;
-        /* 只写"布局那几行"；按钮本体沿用酒馆原生 .menu_button（不另起一套视觉语言）。
-           z-index=999：压过 #chat（style.css:861 那层是 30），又不抢抽屉/弹窗（3000+）—— 抽屉一开它就该退到后面。 */
-        st.textContent = '.' + YWDBL_BTN_CLASS + '{position:fixed;z-index:999;width:auto;margin:0;min-width:52px;min-height:32px;padding:4px 12px;box-sizing:border-box;filter:none;font-size:.9em;line-height:1.1}'
-            + '.' + YWDBL_BTN_CLASS + ':hover{filter:brightness(1.18)}'
-            + '.' + YWDBL_BTN_CLASS + ':focus-visible{outline:2px solid var(--SmartThemeQuoteColor);outline-offset:1px}';
+        /* 编辑面：**照抄消息本体**（font/line-height 继承 .mes_text）＋ 透明无边框无底色、自动高度、零内滚动。
+           ★W135 实测两处必须带 !important（照抄不到就会"像大输入框"）：
+             ① 酒馆全局 `textarea{ background-color:var(--black30a); border:1px solid var(--SmartThemeBorderColor); padding:5px 10px; resize:vertical; max-height:90dvh }`（style.css:1547）
+                —— max-height 那条会把编辑面**掐到 90dvh**、下半截看不见（探针实测 815px 截 1598px）；
+             ② 主题/用户自定义 CSS 里 `textarea:not([type=search]){ background-color:… !important; border:1px solid … !important }`（inline#custom-style）
+                —— `!important` 不拼优先级，只能同样 `!important` 才盖得住。
+           保存钮：只写"布局那几行"，按钮本体沿用酒馆原生 .menu_button（不另起一套视觉语言）。
+           z-index=999：压过 #chat（style.css:861 那层 30），又不抢抽屉/弹窗（3000+）。 */
+        st.textContent = '#chat .mes_text .' + YWDBL_TA_CLASS + '{display:block !important;width:100% !important;box-sizing:border-box !important;margin:0 !important;padding:0 !important;'
+            + 'border:0 !important;background:transparent !important;background-color:transparent !important;outline:none !important;box-shadow:none !important;'
+            + 'color:inherit;font:inherit;line-height:inherit;letter-spacing:inherit;text-align:inherit;'
+            + 'white-space:pre-wrap;overflow-wrap:break-word;'
+            + 'resize:none !important;overflow:hidden !important;max-height:none !important;min-height:1.2em !important}'
+            + '#chat .mes_text .' + YWDBL_TA_CLASS + ':focus{outline:none !important;border:0 !important;box-shadow:none !important}'
+            + '#chat .mes_text.' + YWDBL_HOST_CLASS + '>:not(.' + YWDBL_TA_CLASS + '){display:none !important}'
+            + '.' + YWDBL_BTN_CLASS + '{position:fixed;z-index:999;margin:0;width:32px;height:32px;min-width:32px;min-height:32px;'
+            + 'padding:0;box-sizing:border-box;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.95em;line-height:1}'
+            + '.' + YWDBL_BTN_CLASS + ':focus-visible{outline:2px solid var(--SmartThemeQuoteColor);outline-offset:1px}'
+            + '.' + YWDBL_BTN_CLASS + '>i{pointer-events:none}';
         document.head.appendChild(st);
     } catch (e) { /* 样式进不去也不许拖垮功能 */ }
 }
@@ -8727,23 +8812,34 @@ function ywDblEditSquashWithMap(s) {
     return { out: out.join(''), map: map };
 }
 
-/** 把"光标之前的渲染文本"映射回**原文**里的光标位置（长度阶梯取后缀 + lastIndexOf；命中即用）。
- *  返回原文下标（光标落点：最后一个可见字符的下一位）；找不到返回 null（调用方退回按比例、光标不动）。 */
-function ywDblEditMapRenderedToRaw(beforeText, raw) {
+/** 把"光标之前的渲染文本"映射回**原文**里的光标位置（长度阶梯取后缀；命中即用）。
+ *  ★W135 实测坑：同一个后缀在原文里可能有**多处**（占位句/重复台词很常见，短后缀更是满地都是）——
+ *  取 `lastIndexOf`（最后一个）会把光标**甩到文末**（实测一次双击被映射到 2184/2246、那一行整整差了 1082px）。
+ *  ⇒ 改成"在**所有**出现位置里取**离点击比例最近**的那一个"（ratio = 你点在这条消息纵向的百分之几，
+ *     用渲染高度算的，粗糙但足够把"哪一处"分清）；没有 ratio 时才退回"最后一个"。
+ *  返回原文下标（光标落点：最后一个可见字符的下一位）；找不到返回 null（调用方退回"文末"、不硬猜）。 */
+function ywDblEditMapRenderedToRaw(beforeText, raw, ratio) {
     const b = String(beforeText || '');
     if (!b.length) return 0;                       // 双击在正文最开头
     const rb = ywDblEditSquashWithMap(b);
     if (!rb.out.length) return 0;
     const rr = ywDblEditSquashWithMap(raw);
     if (!rr.out.length) return null;
+    const guess = (typeof ratio === 'number' && isFinite(ratio))
+        ? Math.max(0, Math.min(1, ratio)) * rr.out.length
+        : null;
     const steps = [80, 60, 45, 32, 22, 14, 8];
     for (let k = 0; k < steps.length; k++) {
         const L = steps[k];
         if (rb.out.length < L) continue;
         const snippet = rb.out.slice(-L);
-        const idx = rr.out.lastIndexOf(snippet);
-        if (idx < 0) continue;
-        return rr.map[idx + L - 1] + 1;
+        let best = -1, bestD = Infinity, idx = rr.out.indexOf(snippet);
+        while (idx >= 0) {
+            const d = (guess === null) ? (rr.out.length - idx) : Math.abs(idx - guess);
+            if (d < bestD) { bestD = d; best = idx; }
+            idx = rr.out.indexOf(snippet, idx + 1);
+        }
+        if (best >= 0) return rr.map[best + L - 1] + 1;
     }
     return null;
 }
@@ -8751,7 +8847,7 @@ function ywDblEditMapRenderedToRaw(beforeText, raw) {
 /** 用镜像 div 量"原文第 upto 个字符"所在**视觉行**的 (上沿 y, 行高, 这一行右缘 x, 这一行第一个字符的下标)。
  *  镜像的排版规则逐项复制自 textarea 自己（font / line-height / padding / 宽度 / white-space / overflow-wrap…）。
  *  ★y 只是"候选"：真正落地的 y 由 ywDblEditPrefixHeight()（textarea 本体排版）说了算；
- *    这里还负责"这一行是**哪一行**"（视觉行判定）与"这一行的右缘"（按钮横向摆放用）。量不到返回 null 值。 */
+ *    这里还负责"这一行是**哪一行**"（视觉行判定）与"这一行的右缘"（保存钮横向摆放用）。量不到返回 null 值。 */
 function ywDblEditMeasureLine(ta, fullText, upto) {
     const out = { y: null, lineH: null, lineRight: null, x: null, lineStart: null };
     try {
@@ -8823,24 +8919,48 @@ function ywDblEditMeasureLine(ta, fullText, upto) {
     return out;
 }
 
-/** ★权威尺：拿 **textarea 本体**量"第 upto 个字符之前的内容有多高"（相对内容盒顶部）。
- *  做法：把值临时截到 upto 再读 scrollHeight（浏览器自己排版出来的高度），随即原样还原
- *  （同步完成、不派发 input 事件、用户看不见）。比镜像 div "猜换行"可靠：换行位置/滚动条/字体全由 textarea 自己说了算。 */
-function ywDblEditPrefixHeight(ta, upto) {
+/** **脱离文档流**的同款 textarea 量具：算"这段文字按这个宽度排出来有多高"（内容盒高度）。
+ *  ★为什么不直接问本体：本体的高度/值一动，整楼高度就变 ⇒ `#chat` 的滚动范围会被算错并卡住
+ *  （见 ywDblEditKickScroller 上面那段），而且会派发 scroll 事件把我们的重摆钩子再拉起来（恶性循环）。
+ *  widthOverride：本体还在 `display:none`（尚未入流、clientWidth=0）时，由调用方把宽度给进来。 */
+function ywDblEditMeasureTextHeight(ta, text, widthOverride) {
     try {
-        const full = String(ta.value || '');
-        if (!(upto >= 0) || upto > full.length) return null;
         const cs = getComputedStyle(ta);
-        const padT = parseFloat(cs.paddingTop) || 0;
-        const padB = parseFloat(cs.paddingBottom) || 0;
-        const selS = ta.selectionStart, selE = ta.selectionEnd, sc = ta.scrollTop;
-        ta.value = full.slice(0, upto);
-        const h = ta.scrollHeight;
-        ta.value = full;
-        ta.scrollTop = sc;
-        try { ta.setSelectionRange(selS, selE); } catch (e) { }
-        return Math.max(0, h - padT - padB);
+        const padL = parseFloat(cs.paddingLeft) || 0;
+        const padR = parseFloat(cs.paddingRight) || 0;
+        const innerW = (widthOverride !== undefined && widthOverride !== null)
+            ? Math.max(0, widthOverride)
+            : Math.max(0, ta.clientWidth - padL - padR);
+        const m = document.createElement('textarea');
+        m.setAttribute('aria-hidden', 'true');
+        m.tabIndex = -1;
+        const st = m.style;
+        st.position = 'fixed'; st.left = '-100000px'; st.top = '0';
+        st.visibility = 'hidden'; st.pointerEvents = 'none';
+        st.margin = '0'; st.border = '0'; st.boxSizing = 'content-box';
+        st.width = innerW + 'px';
+        st.height = '0px'; st.minHeight = '0'; st.maxHeight = 'none';
+        st.padding = '0'; st.resize = 'none'; st.overflow = 'hidden';
+        st.fontFamily = cs.fontFamily; st.fontSize = cs.fontSize; st.fontWeight = cs.fontWeight;
+        st.fontStyle = cs.fontStyle; st.fontVariant = cs.fontVariant;
+        st.letterSpacing = cs.letterSpacing; st.wordSpacing = cs.wordSpacing;
+        st.lineHeight = cs.lineHeight; st.textAlign = cs.textAlign;
+        st.textIndent = cs.textIndent; st.tabSize = cs.tabSize;
+        st.whiteSpace = cs.whiteSpace; st.overflowWrap = cs.overflowWrap;
+        st.wordBreak = cs.wordBreak; st.direction = cs.direction;
+        m.value = String(text || '');
+        document.body.appendChild(m);
+        const h = m.scrollHeight;
+        document.body.removeChild(m);
+        return Math.max(1, h);
     } catch (e) { return null; }
+}
+
+/** ★权威尺：量"第 upto 个字符之前的内容有多高"（相对内容盒顶部）—— 走上面那个脱离文档流的同款量具。 */
+function ywDblEditPrefixHeight(ta, upto) {
+    const full = String(ta.value || '');
+    if (!(upto >= 0) || upto > full.length) return null;
+    return ywDblEditMeasureTextHeight(ta, full.slice(0, upto));
 }
 
 /** 合成"那一行"的落地数据：{ y, lineH, lineRight, lineStart, byBrowser }
@@ -8865,7 +8985,7 @@ function ywDblEditLineY(ta, raw, caretRaw) {
     return { y: y, lineH: mirror.lineH || L, lineRight: mirror.lineRight, lineStart: mirror.lineStart, byBrowser: byBrowser, L: L };
 }
 
-/** 双击那一刻的读数：光标之前的渲染文本（拿去原文里匹配）+ 被点那一行的几何（行上沿/行右缘/行左缘/你点在这行的哪里） */
+/** 双击那一刻的读数：光标之前的渲染文本（拿去原文里匹配）+ 被点那一行的几何（行上沿/左右缘/你点在这行的哪里） */
 function ywDblEditProbeClick(mesText, ev) {
     const out = { x: ev.clientX, y: ev.clientY, beforeText: '', ratio: null, lineH: null, lineRight: null, lineLeft: null, lineTop: null, caretX: null };
     try {
@@ -8913,286 +9033,672 @@ function ywDblEditProbeClick(mesText, ev) {
     return out;
 }
 
-/** 编辑框一开出来：① 光标放到双击处的原文位置 ② 两级滚动补偿把"被点那一行"锚回原来的屏幕高度 ③ 挂「保存」 */
-function ywDblEditAnchorAndArm(mesid, info, ta) {
-    let caretRaw = null;                                   // null = 匹配不上（保持原生"光标在结尾"）
-    let line = { y: null, lineH: null, lineRight: null, lineStart: null, byBrowser: false, L: null };
-    let raw = '';
+/** 自动高度：把高度交还给内容（就地编辑面**不许**有内滚动条 —— 作者要的是"页面本身在长高"，不是"框里滚"）。
+ *  走脱离文档流的量具，**绝不**动本体（动本体会把 `#chat` 的滚动范围算错并卡住）。 */
+function ywDblEditAutosize(ta) {
     try {
-        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-        raw = String((ctx && ctx.chat && ctx.chat[mesid] && ctx.chat[mesid].mes) || '');
-        caretRaw = ywDblEditMapRenderedToRaw(info.beforeText, raw);
-        /* ★映射天生有 ±1 字的不确定性：正落在"行首/行尾"这种边界上时，用"你点在被点那一行的偏左还是偏右"选相邻两行 */
-        if (caretRaw !== null && raw.length > 1) {
-            const atBoundary = (caretRaw > 0 && caretRaw < raw.length && (raw.charAt(caretRaw) === '\n' || raw.charAt(caretRaw - 1) === '\n'));
-            if (atBoundary) {
-                const hasLine = (info.lineLeft !== null && info.lineRight !== null && info.caretX !== null);
-                const leftHalf = hasLine ? (info.caretX <= (info.lineLeft + info.lineRight) / 2) : true;
-                if (leftHalf) { while (caretRaw < raw.length && raw.charAt(caretRaw) === '\n') caretRaw++; }
-                else { while (caretRaw > 0 && raw.charAt(caretRaw - 1) === '\n') caretRaw--; }
-            }
-        }
-        if (caretRaw === null) caretRaw = -1;
-        /* 光标先放到双击处（顺序要紧：先落光标，再量行 —— 量的那一步会临时改值再还原，不会动已经设好的光标） */
-        if (caretRaw >= 0) { try { ta.setSelectionRange(caretRaw, caretRaw); } catch (e) { } }
-        line = ywDblEditLineY(ta, raw, caretRaw);
-    } catch (e) { /* 量不到就退回按比例 */ }
-    const cs = getComputedStyle(ta);
-    const padT = parseFloat(cs.paddingTop) || 0;
-    const padL = parseFloat(cs.paddingLeft) || 0;
-    const bTop = parseFloat(cs.borderTopWidth) || 0;
-    const bLeft = parseFloat(cs.borderLeftWidth) || 0;
-    let yInContent = line.y;
-    if (yInContent === null || yInContent === undefined) {
-        const ratio = (info.ratio === null || info.ratio === undefined) ? 0 : Math.max(0, Math.min(1, info.ratio));
-        yInContent = ratio * ta.scrollHeight;
-    }
-    const lineH = line.lineH || (parseFloat(cs.lineHeight) || 20);
-    /* 锚定目标 = **被点那一行的上沿**（不是点击的 y —— 点在行中间时两者差小半个行高） */
-    const wantTop = (info.lineTop !== null && info.lineTop !== undefined) ? info.lineTop : (info.y - lineH / 2);
-    const acc = { residual: 0, clamped: false, taScroll: ta.scrollTop, wantTop: wantTop, driftLate: null };
-    const doCompensate = function () {
-        const taRect = ta.getBoundingClientRect();
-        /* ① textarea 自己的内滚动：让这一行的上沿就落回你双击时的那个屏幕高度（内容比 75vh 高时它自己会滚） */
-        const wantInner = wantTop - (taRect.top + bTop + padT);
-        const maxTa = Math.max(0, ta.scrollHeight - ta.clientHeight);
-        const wantTa = yInContent - wantInner;
-        if (wantTa < 0 || wantTa > maxTa) acc.clamped = true;
-        ta.scrollTop = Math.max(0, Math.min(maxTa, wantTa));
-        acc.taScroll = ta.scrollTop;
-        /* ② 残余量交给 #chat：让这一行的屏幕高度 = 你双击时它的高度 */
-        const taRect2 = ta.getBoundingClientRect();
-        const lineVp = taRect2.top + bTop + padT + yInContent - ta.scrollTop;
-        acc.residual = lineVp - wantTop;
-        const chatEl = document.getElementById('chat');
-        if (chatEl && Math.abs(acc.residual) > 0.5) {
-            const maxChat = Math.max(0, chatEl.scrollHeight - chatEl.clientHeight);
-            chatEl.scrollTop = Math.max(0, Math.min(maxChat, chatEl.scrollTop + acc.residual));
-        }
-    };
-    if (!ywDblEditDebug.noAnchor) doCompensate();
-    ywDblEditArmButton(mesid, ta, {
-        info: info, caretRaw: caretRaw, wantTop: wantTop, yInContent: yInContent, lineH: lineH,
-        lineRight: line.lineRight, lineStart: line.lineStart, byBrowser: line.byBrowser,
-        acc: acc, padT: padT, padL: padL, bTop: bTop, bLeft: bLeft,
-    });
-}
-
-/** 挂「保存」按钮 + 锚点账 + 收摊观察器（幂等：每次都先把上一颗收干净） */
-function ywDblEditArmButton(mesid, ta, anchor) {
-    ywDblEditTeardown();
-    ywDblEditEnsureStyle();
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'menu_button ' + YWDBL_BTN_CLASS;
-    try { btn.textContent = t('dblSave'); btn.title = t('dblSave'); btn.setAttribute('aria-label', t('dblSave')); } catch (e) { btn.textContent = '保存'; }
-    btn.addEventListener('click', function (ev) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        const mesEl = document.querySelector('#chat .mes[mesid="' + mesid + '"]');
-        const done = mesEl ? mesEl.querySelector('.mes_edit_done') : null;
-        if (done && done.click) done.click();      // ★原生确定：写回 + 落盘都走 ST 自己的 messageEditDone
-    });
-    btn.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
-    btn.addEventListener('dblclick', function (ev) { ev.stopPropagation(); });
-    document.body.appendChild(btn);
-    ywDblEditBtn = btn;
-    const agent = {
-        mesid: mesid, ta: ta, btn: btn,
-        lineH: anchor.lineH,
-        lineRightContent: (anchor.lineRight === null || anchor.lineRight === undefined) ? null : anchor.lineRight,
-        caretRaw: anchor.caretRaw,
-        wantTop: anchor.wantTop,
-        yByBrowser: !!anchor.byBrowser,
-        lineStart: anchor.lineStart,
-        yInContent: anchor.yInContent,
-        residual: anchor.acc.residual,
-        clamped: anchor.acc.clamped,
-        bTop: anchor.bTop, padT: anchor.padT, bLeft: anchor.bLeft, padL: anchor.padL,
-        clickX: anchor.info.x, clickY: anchor.info.y, clickTop: anchor.info.lineTop,
-        beforeTextLen: String(anchor.info.beforeText || '').length,
-        contentY: null, userTouched: false,
-    };
-    const chatEl = document.getElementById('chat');
-    if (chatEl) {
-        const taRect = ta.getBoundingClientRect();
-        const chatRect = chatEl.getBoundingClientRect();
-        const lineVp = taRect.top + agent.bTop + agent.padT + agent.yInContent - ta.scrollTop;
-        agent.contentY = (lineVp - chatRect.top) + chatEl.scrollTop;
-    }
-    ywDblEditAgent = agent;
-    ywDblEditReposition = function () { ywDblEditPlaceButton(); };
-    ywDblEditPlaceButton();
-    /* 跟随：聊天滚动 / 编辑框自己滚动 / 窗口变化 ⇒ 按钮跟着锚点走 */
-    try { if (chatEl) chatEl.addEventListener('scroll', ywDblEditReposition, { passive: true }); } catch (e) { }
-    try { ta.addEventListener('scroll', ywDblEditReposition, { passive: true }); } catch (e) { }
-    try { window.addEventListener('resize', ywDblEditReposition); } catch (e) { }
-    /* 用户一动手（滚轮/触摸/按下/键盘）就不再替他纠偏（绝不跟用户抢） */
-    const touch = function () { if (ywDblEditAgent === agent) agent.userTouched = true; };
-    try { if (chatEl) { chatEl.addEventListener('wheel', touch, { passive: true }); chatEl.addEventListener('touchstart', touch, { passive: true }); chatEl.addEventListener('mousedown', touch, { passive: true }); } } catch (e) { }
-    try { ta.addEventListener('keydown', touch); ta.addEventListener('wheel', touch, { passive: true }); } catch (e) { }
-    /* 收摊：原生 ✔/✕ / Esc / 换楼 / 重渲染都会把 #curEditTextarea 摘掉 ⇒ 一被摘就撤 */
-    try {
-        const watch = document.getElementById('chat') || document.body;
-        ywDblEditObs = new MutationObserver(function () {
-            if (!document.getElementById('curEditTextarea')) ywDblEditTeardown();
-        });
-        ywDblEditObs.observe(watch, { childList: true, subtree: true });
-    } catch (e) { }
-    /* 迟到纠偏：编辑框高度/字体是异步定型的，早摆那次容易差几像素 ⇒ 两档后再量一次（用户没动手才纠） */
-    try { [220, 500].forEach(function (ms) { setTimeout(function () { ywDblEditLateFix(agent); }, ms); }); } catch (e) { }
-}
-
-/** 迟到纠偏：编辑框的高度/字体/滚动条是异步定型的 ⇒ 再量一次"那一行在哪"，漂了超过 3px 才补（用户动过手就一律不补） */
-function ywDblEditLateFix(agent) {
-    try {
-        if (ywDblEditAgent !== agent || agent.userTouched || ywDblEditDebug.noAnchor) return;
-        const chatEl = document.getElementById('chat');
-        if (!chatEl || !agent.ta || !document.body.contains(agent.ta)) return;
-        let yFresh = null;
-        try {
-            const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-            const raw = String((ctx && ctx.chat && ctx.chat[agent.mesid] && ctx.chat[agent.mesid].mes) || '');
-            const l2 = ywDblEditLineY(agent.ta, raw, agent.caretRaw);
-            if (l2 && l2.y !== null) yFresh = l2.y;
-            if (l2 && l2.lineRight !== null && l2.lineRight !== undefined && l2.byBrowser) agent.lineRightContent = l2.lineRight;
-        } catch (e) { }
-        if (yFresh !== null) agent.yInContent = yFresh;
-        const taRect = agent.ta.getBoundingClientRect();
-        const lineVp = taRect.top + agent.bTop + agent.padT + agent.yInContent - agent.ta.scrollTop;
-        const drift = lineVp - agent.wantTop;
-        agent.driftLate = drift;
-        if (Math.abs(drift) > 3) {
-            const maxChat = Math.max(0, chatEl.scrollHeight - chatEl.clientHeight);
-            chatEl.scrollTop = Math.max(0, Math.min(maxChat, chatEl.scrollTop + drift));
-        }
-        const chatRect = chatEl.getBoundingClientRect();
-        const taRect2 = agent.ta.getBoundingClientRect();
-        agent.contentY = ((taRect2.top + agent.bTop + agent.padT + agent.yInContent - agent.ta.scrollTop) - chatRect.top) + chatEl.scrollTop;
-        ywDblEditPlaceButton();
+        if (!ta) return;
+        const h = ywDblEditMeasureTextHeight(ta, ta.value);
+        if (h !== null && h !== undefined) ta.style.height = h + 'px';
     } catch (e) { }
 }
 
-/** 摆按钮：优先"被点那一行文字的右边 +10"；右边放不下 ⇒ 放到该行**下方** +6。
- *  两档都不可能与"被点那一行"的文字相交（这正是作者要的"避让"）。 */
+/** 重新量"当前光标所在的这一行"并更新锚点几何（进编辑/打字/缩放/迟到纠偏 都走它） */
+function ywDblEditRefreshAnchor(sess, idx) {
+    try {
+        const raw = String(sess.ta.value || '');
+        const i = Number.isFinite(idx) ? Math.max(0, Math.min(raw.length, idx)) : 0;
+        const line = ywDblEditLineY(sess.ta, raw, i);
+        if (line) {
+            if (line.y !== null && line.y !== undefined) sess.yInContent = line.y;
+            if (line.lineH) sess.lineH = line.lineH;
+            if (line.lineRight !== null && line.lineRight !== undefined) sess.lineRightContent = line.lineRight;
+            if (line.lineStart !== null && line.lineStart !== undefined) sess.lineStartRaw = line.lineStart;
+            sess.byBrowser = !!line.byBrowser;
+        }
+        sess.anchorIdx = i;
+        return line;
+    } catch (e) { return null; }
+}
+
+/** "那一行"此刻的屏幕上沿（就地编辑面没有内滚动，直接由 ta 的 rect + 内容坐标算出来） */
+function ywDblEditLineTopVp(sess) {
+    try {
+        if (!sess || !sess.ta || !document.body.contains(sess.ta)) return null;
+        const r = sess.ta.getBoundingClientRect();
+        if (!r || r.height <= 0) return null;
+        return r.top + (sess.bTop || 0) + (sess.padT || 0) + (sess.yInContent || 0) - (sess.ta.scrollTop || 0);
+    } catch (e) { return null; }
+}
+
+/** ★W135 实测坑：就地编辑是"整楼内容换一遍"，`#chat` 的**可滚动范围**会被浏览器按"换的过程中某一帧"算错并**卡住**
+ *  （实测：编辑面入流时先以默认高度 44px 提交过一次布局 ⇒ 范围按 958px 内容算死；此后高度改成 1598px，
+ *   `scrollTop` 却再也写不过 115 —— 页面自己报的 `scrollHeight-clientHeight` 明明是 1669）。
+ *  抖一下 `overflow-y` 并强制重排，可以让它重算（内容一变它本来也会重算，这里是我们主动踢一脚）。 */
+function ywDblEditKickScroller() {
+    try {
+        const c = document.getElementById('chat');
+        if (!c) return;
+        const prev = c.style.overflowY;
+        c.style.overflowY = (prev === 'scroll') ? 'visible' : 'scroll';
+        void c.offsetHeight;
+        c.style.overflowY = prev;
+        void c.offsetHeight;
+    } catch (e) { }
+}
+
+/** 锚定补偿：把"那一行"摆回你双击它时所在的屏幕高度。
+ *  就地编辑面没有内滚动 ⇒ 只有 `#chat` 这一级；每一轮先踢一下滚动范围、再按残差滚，最多 3 轮（收敛判据 |残差|≤1px）。 */
+function ywDblEditCompensate(sess) {
+    const tries = [];
+    try {
+        const chatEl = document.getElementById('chat');
+        for (let i = 0; i < 3; i++) {
+            const lineVp = ywDblEditLineTopVp(sess);
+            if (lineVp === null || !chatEl) break;
+            const drift = lineVp - sess.wantTop;
+            if (i === 0) sess.residual = drift;
+            tries.push(Math.round(drift * 100) / 100);
+            if (ywDblEditDebug.noAnchor) break;
+            if (Math.abs(drift) <= 1) break;
+            ywDblEditKickScroller();
+            const max = Math.max(0, chatEl.scrollHeight - chatEl.clientHeight);
+            const want = chatEl.scrollTop + drift;
+            if (want < 0 || want > max) sess.clamped = true;
+            chatEl.scrollTop = Math.max(0, Math.min(max, want));
+        }
+        sess.tries = tries;
+        return tries.length ? tries[tries.length - 1] : null;
+    } catch (e) { return null; }
+}
+
+/** 摆「保存」：优先"那一行文字的右边 +10"；右边放不下 ⇒ 摆该行**下方** +6。
+ *  两档都不会与"那一行"的文字相交（这正是作者要的"避让"：不遮字）。 */
 function ywDblEditPlaceButton() {
-    const agent = ywDblEditAgent;
-    if (!agent || !agent.btn || !document.body.contains(agent.btn) || agent.contentY === null) return;
-    const chatEl = document.getElementById('chat');
-    if (!chatEl) return;
-    const mesEl = chatEl.querySelector('.mes[mesid="' + agent.mesid + '"]');
-    const mesText = mesEl ? mesEl.querySelector('.mes_text') : null;
-    if (!mesText || !document.body.contains(agent.ta)) return;
-    const chatRect = chatEl.getBoundingClientRect();
-    const mRect = mesText.getBoundingClientRect();
-    const taRect = agent.ta.getBoundingClientRect();
-    const bw = agent.btn.offsetWidth || 56;
-    const bh = agent.btn.offsetHeight || 32;
-    const lineY = chatRect.top + agent.contentY - chatEl.scrollTop;   // 被点那一行此刻的屏幕高度
+    const sess = ywDblEditSess;
+    if (!sess || !sess.btn || !sess.ta) return;
+    if (!document.body.contains(sess.btn) || !document.body.contains(sess.ta)) return;
+    const lineVp = ywDblEditLineTopVp(sess);
+    if (lineVp === null) return;
+    const taRect = sess.ta.getBoundingClientRect();
+    let mesRect = taRect;
+    try { mesRect = sess.mesText.getBoundingClientRect(); } catch (e) { }
+    const bw = sess.btn.offsetWidth || 32, bh = sess.btn.offsetHeight || 32;
+    const lineH = sess.lineH || 20;
     let left = null, top = null;
-    if (agent.lineRightContent !== null && agent.lineRightContent !== undefined) {
-        const rightEdgeVp = taRect.left + agent.bLeft + agent.padL + agent.lineRightContent;
+    if (sess.lineRightContent !== null && sess.lineRightContent !== undefined) {
+        const rightEdgeVp = taRect.left + (sess.bLeft || 0) + (sess.padL || 0) + sess.lineRightContent;
         const candLeft = rightEdgeVp + 10;
-        const limit = Math.min(taRect.right, window.innerWidth - 6, mRect.right);
-        if (candLeft >= mRect.left && candLeft + bw <= limit) { left = candLeft; top = lineY + (agent.lineH - bh) / 2; }
+        const limit = Math.min(taRect.right, window.innerWidth - 6, Math.max(mesRect.right, taRect.right) + 80);
+        if (candLeft >= Math.max(mesRect.left, taRect.left) && candLeft + bw <= limit) {
+            left = candLeft;
+            top = lineVp + (lineH - bh) / 2;
+        }
     }
     if (left === null) {
-        const lo = Math.max(mRect.left + 2, 4);
-        const hi = Math.max(lo, Math.min(mRect.right - bw - 2, window.innerWidth - bw - 6));
-        left = Math.max(lo, Math.min(agent.clickX - bw / 2, hi));
-        top = lineY + agent.lineH + 6;
+        const lo = Math.max(taRect.left + 2, 4);
+        const hi = Math.max(lo, Math.min(taRect.right - bw - 2, window.innerWidth - bw - 6));
+        left = Math.max(lo, Math.min((sess.clickX || taRect.left) - bw / 2, hi));
+        top = lineVp + lineH + 6;
     }
     top = Math.max(4, Math.min(window.innerHeight - bh - 4, top));
-    agent.btn.style.left = Math.round(left) + 'px';
-    agent.btn.style.top = Math.round(top) + 'px';
+    left = Math.max(4, Math.min(window.innerWidth - bw - 4, left));
+    sess.btn.style.left = Math.round(left) + 'px';
+    sess.btn.style.top = Math.round(top) + 'px';
 }
 
-function ywDblEditTeardown() {
+/** 删除模式（原生那颗铅笔此刻整排不可用）：拿酒馆自己那个删除工具条的可见性当判据（style.css 里默认 display:none） */
+function ywDblEditIsDeleteMode() {
     try {
-        const chatEl = document.getElementById('chat');
-        if (chatEl && ywDblEditReposition) chatEl.removeEventListener('scroll', ywDblEditReposition);
-        if (ywDblEditAgent && ywDblEditAgent.ta && ywDblEditReposition) ywDblEditAgent.ta.removeEventListener('scroll', ywDblEditReposition);
-        if (ywDblEditReposition) window.removeEventListener('resize', ywDblEditReposition);
-    } catch (e) { }
-    try { if (ywDblEditObs) ywDblEditObs.disconnect(); } catch (e) { }
-    ywDblEditObs = null;
-    ywDblEditReposition = null;
-    if (ywDblEditBtn && ywDblEditBtn.parentNode) { try { ywDblEditBtn.parentNode.removeChild(ywDblEditBtn); } catch (e) { } }
-    ywDblEditBtn = null;
-    ywDblEditAgent = null;
+        const dm = document.getElementById('dialogue_del_mes');
+        if (!dm) return false;
+        return getComputedStyle(dm).display !== 'none';
+    } catch (e) { return false; }
 }
 
-/** 双击入口（捕获阶段；委托在 #chat .mes_text 上） */
+/** 双击入口（捕获阶段；委托在 #chat .mes_text 上）。命中 ⇒ **就地**开编辑面（不进小铅笔、不弹窗）。 */
 function ywDblEditOnDblClick(ev) {
     try {
         if (ywDblEditDebug.off) return;
         if (!settings.enabled) return;
+        if (settings.dblEditInPlace === false) return;                 // ★W135 设置开关（默认开）：关 ⇒ 双击完全不响应（恢复原生选词）
         const tgt = ev.target;
         if (!tgt || !tgt.closest) return;
-        if (tgt.closest('.edit_textarea') || (tgt.tagName && String(tgt.tagName).toLowerCase() === 'textarea')) return;  // 在编辑框里双击：原生行为
+        if (tgt.closest('textarea')) return;                            // 在（我们的/原生的）编辑面里双击 = 原生选词
+        if (ywDblEditSess) return;                                      // 已有一个就地编辑开着 ⇒ 幂等（不重开、不清内容）
+        if (document.getElementById('curEditTextarea')) return;         // 原生编辑开着 ⇒ 不响应（不出第二个编辑面）
         const mesText = tgt.closest('#chat .mes_text');
         if (!mesText) return;
-        if (document.getElementById('curEditTextarea')) return;   // 已有编辑开着 ⇒ 不响应（幂等：不会出现第二个编辑框）
+        if (mesText.classList.contains(YWDBL_HOST_CLASS)) return;
         const mesEl = mesText.closest('.mes');
         if (!mesEl) return;
         const mesid = Number(mesEl.getAttribute('mesid'));
         if (!Number.isFinite(mesid)) return;
-        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        const ctx = ywDblEditCtx();
         if (!ctx || !ctx.chat || !ctx.chat[mesid]) return;
+        /* 与原生同口径的"这楼受不受理"：酒馆自己给不受理的消息不画铅笔；删除模式下铅笔整排不可用 */
+        const pencil = mesEl.querySelector('.mes_edit');
+        if (!pencil) return;
+        if (ywDblEditIsDeleteMode()) return;
         /* 与原生那条 CSS 逐字同口径：生成/滑动中只拦**最后一楼**（style.css:4577-4583 此刻把 .last_mes 那排按钮整排隐藏） */
         const ds = (document.body && document.body.dataset) ? document.body.dataset : {};
         if ((ds.generating === 'true' || ds.swiping === 'true') && mesEl.classList && mesEl.classList.contains('last_mes')) return;
-        const pencil = mesEl.querySelector('.mes_edit');
-        if (!pencil) return;
-        if (ev.preventDefault) ev.preventDefault();               // 双击不再选词（作者点名要的形态）
+        if (ev.preventDefault) ev.preventDefault();                     // 双击不再选词（作者点名要的形态）
         try { const sel = window.getSelection && window.getSelection(); if (sel && sel.removeAllRanges) sel.removeAllRanges(); } catch (e) { }
         const info = ywDblEditProbeClick(mesText, ev);
-        pencil.click();                                           // ★真编辑：替用户点了那颗原生小铅笔
-        ywDblEditWaitEditor(mesid, info, 0);
+        ywDblEditEnter(mesid, mesEl, mesText, info);
     } catch (err) { console.warn('[余温工具箱] 双击改字失败：', err); }
 }
-function ywDblEditWaitEditor(mesid, info, tries) {
-    let ta = null;
+
+/** 开编辑面：就地铺一层"原文可编辑面"（透明/无边框/自动高度/字体照抄本体），光标落在双击处，然后锚定 + 挂保存钮 */
+function ywDblEditEnter(mesid, mesEl, mesText, info) {
+    const ctx = ywDblEditCtx();
+    const mes = (ctx && ctx.chat) ? ctx.chat[mesid] : null;
+    if (!mes) return;
+    ywDblEditDrop();                                   // 幂等：正常这里没东西；有残留就先收干净
+    const raw = String(mes.mes || '');
+    ywDblEditEnsureStyle();
+    const ta = document.createElement('textarea');
+    ta.className = YWDBL_TA_CLASS + ' mdHotkeys';      // mdHotkeys：沿用酒馆原生 Ctrl+B/I/U/K 那几个 markdown 快捷键
+    ta.spellcheck = false;
+    ta.value = raw;
+    ta.style.display = 'none';                         // ★先别让它进流（见下面那段"不许提交 44px 那一帧"）
+    mesText.classList.add(YWDBL_HOST_CLASS);
+    mesText.appendChild(ta);
+    ywDblEditEnsureStyle();
+    /* ★W135 实测坑：编辑面**入流的第一帧**会以默认高度(≈44px)提交一次布局 ⇒ `#chat` 的**可滚动范围**被按
+       "那一刻的内容高度"算死（此后高度改成 1598px，`scrollTop` 再也写不过 115，页面自己报的 max 却是 1669）。
+       ⇒ 先把最终高度算出来、写进 style，**再**让它入流（中间一个强制布局都不做）。
+       宽度从 .mes_text 的内容盒取（ta 是 width:100%，还在 display:none 时 clientWidth=0 取不到）。 */
     try {
-        const mesEl = document.querySelector('#chat .mes[mesid="' + mesid + '"]');
-        ta = mesEl ? mesEl.querySelector('#curEditTextarea') : null;
+        const mtcs = getComputedStyle(mesText);
+        const innerW = Math.max(0, mesText.clientWidth - (parseFloat(mtcs.paddingLeft) || 0) - (parseFloat(mtcs.paddingRight) || 0));
+        const need = ywDblEditMeasureTextHeight(ta, raw, innerW);
+        if (need) ta.style.height = need + 'px';
     } catch (e) { }
-    if (!ta) {
-        if ((tries || 0) < 45) { requestAnimationFrame(function () { ywDblEditWaitEditor(mesid, info, (tries || 0) + 1); }); }
-        return;                                                   // 45 帧还没开出来（原生守卫拦了等）⇒ 静静收手
+    ta.style.display = '';
+    /* 光标：双击处 → 原文位置（映射天生有 ±1 字的不确定性：正落在"行首/行尾"边界时，用"你点在被点行的偏左还是偏右"选相邻两行） */
+    let caretRaw = null;
+    try { caretRaw = ywDblEditMapRenderedToRaw(info.beforeText, raw, info.ratio); } catch (e) { caretRaw = null; }
+    if (caretRaw !== null && raw.length > 1) {
+        const atBoundary = (caretRaw > 0 && caretRaw < raw.length && (raw.charAt(caretRaw) === '\n' || raw.charAt(caretRaw - 1) === '\n'));
+        if (atBoundary) {
+            const hasLine = (info.lineLeft !== null && info.lineLeft !== undefined && info.lineRight !== null && info.lineRight !== undefined && info.caretX !== null && info.caretX !== undefined);
+            const leftHalf = hasLine ? (info.caretX <= (info.lineLeft + info.lineRight) / 2) : true;
+            if (leftHalf) { while (caretRaw < raw.length && raw.charAt(caretRaw) === '\n') caretRaw++; }
+            else { while (caretRaw > 0 && raw.charAt(caretRaw - 1) === '\n') caretRaw--; }
+        }
     }
-    ywDblEditAnchorAndArm(mesid, info, ta);
+    if (caretRaw === null) caretRaw = raw.length;      // 匹配不上 ⇒ 光标放文末（不硬猜位置）
+    try { ta.focus({ preventScroll: true }); } catch (e) { try { ta.focus(); } catch (e2) { } }
+    try { ta.setSelectionRange(caretRaw, caretRaw); } catch (e) { }
+    const cs = getComputedStyle(ta);
+    const lineH = parseFloat(cs.lineHeight) || 20;
+    const sess = {
+        mesid: mesid, mesEl: mesEl, mesText: mesText, ta: ta,
+        rawAtEntry: raw, rawSquashLen: ywDblEditSquashWithMap(raw).out.length,
+        bTop: parseFloat(cs.borderTopWidth) || 0, bLeft: parseFloat(cs.borderLeftWidth) || 0,
+        padT: parseFloat(cs.paddingTop) || 0, padL: parseFloat(cs.paddingLeft) || 0,
+        lineH: lineH,
+        yInContent: null, lineRightContent: null, lineStartRaw: null, anchorIdx: caretRaw,
+        wantTop: (info.lineTop !== null && info.lineTop !== undefined) ? info.lineTop : (info.y - lineH / 2),
+        residual: 0, clamped: false, driftLate: null, userTouched: false, closing: false,
+        byBrowser: false, clickX: info.x, clickY: info.y, _ls: [], _raf: 0,
+        ratio: info.ratio, beforeTextLen: String(info.beforeText || '').length, tries: null, lastResult: null,
+    };
+    ywDblEditSess = sess;
+    ywDblEditAnchorFreeze(true);                       // ★冻结滚动锚定（别让浏览器的自动补偿跟我们的锚定打架）
+    ywDblEditRefreshAnchor(sess, caretRaw);
+    if (sess.yInContent === null || sess.yInContent === undefined) {   // 量不到 ⇒ 按"点在整段的哪个比例"兜底
+        const ratio = (info.ratio === null || info.ratio === undefined) ? 0 : Math.max(0, Math.min(1, info.ratio));
+        sess.yInContent = ratio * ta.scrollHeight;
+    }
+    ywDblEditCompensate(sess);                         // ← 一进来就锚：Δ 判据在这里
+    ywDblEditArmButton(sess);
+    ywDblEditArmWatchers(sess);
+    /* 迟到纠偏：字体/滚动条是异步定型的，早摆那次容易差几像素 ⇒ 两档后再量一次（用户没动手才纠） */
+    try { [220, 500].forEach(function (ms) { setTimeout(function () { ywDblEditLateFix(sess); }, ms); }); } catch (e) { }
 }
+
+/** 挂「保存」小图标（只多这一颗；点它 = 我们自己按 messageEditDone 的口径写回） */
+function ywDblEditArmButton(sess) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'menu_button ' + YWDBL_BTN_CLASS;
+    try { btn.title = t('dblSave'); btn.setAttribute('aria-label', t('dblSave')); } catch (e) { btn.setAttribute('aria-label', 'save'); }
+    const ico = document.createElement('i');
+    ico.className = 'fa-solid fa-save';
+    ico.setAttribute('aria-hidden', 'true');
+    btn.appendChild(ico);
+    const stop = function (ev) { ev.stopPropagation(); };
+    btn.addEventListener('mousedown', stop);
+    btn.addEventListener('pointerdown', stop);
+    btn.addEventListener('dblclick', stop);
+    btn.addEventListener('click', function (ev) {
+        ev.preventDefault(); ev.stopPropagation();
+        ywDblEditCommit(sess);
+    });
+    document.body.appendChild(btn);                    // 挂在 body 上（fixed）—— 它不是弹层，也不挡消息本体
+    sess.btn = btn;
+    ywDblEditPlaceButton();
+}
+
+/** 挂跟随/收摊/键盘/输入那一堆（全部登记在 sess._ls 上，收摊时一条不落摘干净） */
+function ywDblEditArmWatchers(sess) {
+    const chatEl = document.getElementById('chat');
+    const on = function (el, type, fn, opt) {
+        if (!el || !el.addEventListener) return;
+        try { el.addEventListener(type, fn, opt); } catch (e) { return; }
+        sess._ls.push({ el: el, type: type, fn: fn, opt: opt });
+    };
+    const reposition = function () {
+        if (ywDblEditSess !== sess || sess.closing) return;
+        ywDblEditAutosize(sess.ta);                    // 宽度变了（缩放/换主题字体）⇒ 换行也会变，高度要重算
+        if (sess._raf2) return;
+        sess._raf2 = requestAnimationFrame(function () {
+            sess._raf2 = 0;
+            if (ywDblEditSess !== sess || sess.closing) return;
+            ywDblEditRefreshAnchor(sess, sess.ta.selectionStart);
+            ywDblEditPlaceButton();
+        });
+    };
+    ywDblEditRepos = reposition;
+    on(chatEl, 'scroll', reposition, { passive: true });
+    on(window, 'resize', reposition);
+    /* 用户一动手（滚轮/触摸/按下/键盘/打字）就不再替他纠偏（绝不跟用户抢） */
+    const touch = function () { if (ywDblEditSess === sess) sess.userTouched = true; };
+    on(chatEl, 'wheel', touch, { passive: true });
+    on(chatEl, 'touchstart', touch, { passive: true });
+    on(chatEl, 'mousedown', touch, { passive: true });
+    on(sess.ta, 'wheel', touch, { passive: true });
+    on(sess.ta, 'keydown', touch);
+    on(sess.ta, 'input', touch);
+    /* 打字 ⇒ 自动高度 + 让「保存」跟着你正写的这一行（别被顶到别处/盖住字） */
+    on(sess.ta, 'input', function () { ywDblEditOnInput(sess); });
+    /* Esc = 放弃（恢复原样，同样锚定）；其余键一律放行（回车换行、快捷键都是原生行为）。
+       ★挂在文档层（捕获）而不是只挂编辑面：作者要的交互是"点过别处再按 Esc 也能放弃"——
+       只挂编辑面时，点过别处焦点就跑了，Esc 落不到编辑面上（探针实测：D3 那条）。 */
+    on(document, 'keydown', function (ev) {
+        if (ev.key !== 'Escape' && ev.key !== 'Esc') return;
+        if (ywDblEditSess !== sess || sess.closing) return;
+        if (ev.preventDefault) ev.preventDefault();
+        if (ev.stopPropagation) ev.stopPropagation();
+        ywDblEditCancel(sess, 'esc');
+    }, true);
+    on(sess.ta, 'keydown', function (ev) {
+        if (ev.key === 'Escape' || ev.key === 'Esc') { ev.preventDefault(); ev.stopPropagation(); }
+    });
+    /* 收摊观察器：外部重渲染（updateMessageBlock / 整楼重建 / 原生编辑抢走）会把我们的编辑面摘掉
+       ⇒ 静静地收手（**不写任何用户数据**），并把可能残留的"藏内容"类摘干净。 */
+    try {
+        const watch = chatEl || document.body;
+        ywDblEditObs = new MutationObserver(function () {
+            const s = ywDblEditSess;
+            if (!s || s.closing) return;
+            if (!document.body.contains(s.ta)) ywDblEditDrop();
+        });
+        ywDblEditObs.observe(watch, { childList: true, subtree: true });
+    } catch (e) { }
+}
+
+/** 打字：先把高度交还给内容，再（下一帧）重算"你正写的那一行"并把保存钮摆过去 */
+function ywDblEditOnInput(sess) {
+    if (ywDblEditSess !== sess || sess.closing) return;
+    ywDblEditAutosize(sess.ta);
+    if (sess._raf) return;
+    sess._raf = requestAnimationFrame(function () {
+        sess._raf = 0;
+        if (ywDblEditSess !== sess || sess.closing) return;
+        ywDblEditRefreshAnchor(sess, sess.ta.selectionStart);
+        ywDblEditPlaceButton();
+    });
+}
+
+/** 迟到纠偏：编辑面高度/滚动条是异步定型的 ⇒ 再量一次"那一行在哪"，漂了超过 3px 才补（用户动过手就一律不补） */
+function ywDblEditLateFix(sess) {
+    try {
+        if (ywDblEditSess !== sess || sess.closing || sess.userTouched) return;
+        if (!document.body.contains(sess.ta)) return;
+        ywDblEditAutosize(sess.ta);
+        ywDblEditRefreshAnchor(sess, sess.ta.selectionStart);
+        const lineVp = ywDblEditLineTopVp(sess);
+        if (lineVp === null) return;
+        sess.driftLate = lineVp - sess.wantTop;
+        if (Math.abs(sess.driftLate) > 3) ywDblEditCompensate(sess);   // 收敛式补偿（内部 3 轮 + 踢滚动范围）
+        ywDblEditPlaceButton();
+    } catch (e) { }
+}
+
+/** 取一段渲染出来的正文文本（**跳过 <style>/<script>** —— 美化正则注入的装饰里带 CSS，不能混进"正文"） */
+function ywDblEditTextOf(root) {
+    try {
+        const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        let out = '', n;
+        while ((n = w.nextNode())) {
+            const pe = n.parentElement;
+            if (pe && pe.tagName && (pe.tagName === 'STYLE' || pe.tagName === 'SCRIPT')) continue;
+            out += n.textContent;
+        }
+        return out;
+    } catch (e) { return ''; }
+}
+
+/** 在渲染出来的 DOM 里找"**第 idx 个字符本身**"落在哪个文本节点上（保存/取消之后把那一行认回来用）。
+ *  ★W135 实测坑：口径必须是"**第 idx 个字符**"，不能写成"第 idx-1 个字符之后"——
+ *  idx 正好落在两个文本节点的**边界**上时（美化后每段是一个 `<p>`，行与行之间天然就是节点边界），
+ *  后者会返回**上一段末尾**的位置 ⇒ 量到的是上一行的 rect ⇒ 整行锚偏一行（实测 41px）。 */
+function ywDblEditFindTextPos(root, idx) {
+    try {
+        const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        let acc = 0, n, last = null;
+        while ((n = w.nextNode())) {
+            const pe = n.parentElement;
+            if (pe && pe.tagName && (pe.tagName === 'STYLE' || pe.tagName === 'SCRIPT')) continue;
+            last = n;
+            const len = n.textContent.length;
+            if (acc + len > idx) return { node: n, off: Math.max(0, Math.min(len - 1, idx - acc)) };
+            acc += len;
+        }
+        if (last) return { node: last, off: Math.max(0, last.textContent.length - 1) };
+        return null;
+    } catch (e) { return null; }
+}
+
+/** 保存/取消之后：把"那一行"摆回原来的屏幕高度。
+ *  认回来的办法：拿"原文里这一行行首之前的内容"去**新的渲染正文**里找（各自去空白后取后缀，长度阶梯 80/60/…/8）；
+ *  全失败 ⇒ 按可见字符比例兜底；再失败 ⇒ 不动（宁可不动也不乱跳）。 */
+function ywDblEditAnchorRendered(sess, mesText, prefixRaw, wantTop) {
+    const out = { ok: false, by: null, delta: null, charIdx: null };
+    try {
+        if (!mesText || wantTop === null || wantTop === undefined) return out;
+        const chatEl = document.getElementById('chat');
+        if (!chatEl) return out;
+        const text = ywDblEditTextOf(mesText);
+        const rr = ywDblEditSquashWithMap(text);
+        const pb = ywDblEditSquashWithMap(prefixRaw);
+        let charIdx = null;
+        if (!pb.out.length) { charIdx = 0; out.by = 'head'; }
+        if (charIdx === null) {
+            const steps = [80, 60, 45, 32, 22, 14, 8];
+            for (let k = 0; k < steps.length; k++) {
+                const L = steps[k];
+                if (pb.out.length < L) continue;
+                const idx = rr.out.lastIndexOf(pb.out.slice(-L));
+                if (idx >= 0) { charIdx = rr.map[idx + L - 1] + 1; out.by = 'suffix-' + L; break; }
+            }
+        }
+        if (charIdx === null && sess && sess.rawSquashLen && rr.out.length) {
+            const frac = Math.max(0, Math.min(1, pb.out.length / sess.rawSquashLen));
+            const si = Math.round(frac * rr.out.length);
+            charIdx = (si > 0 && rr.map.length >= si) ? rr.map[si - 1] + 1 : 0;
+            out.by = 'ratio';
+        }
+        if (charIdx === null) return out;
+        out.charIdx = charIdx;
+        const pos = ywDblEditFindTextPos(mesText, charIdx);
+        if (!pos) return out;
+        const r = document.createRange();
+        const end = Math.min(pos.off + 1, pos.node.textContent.length);
+        r.setStart(pos.node, Math.min(pos.off, end));
+        r.setEnd(pos.node, end);
+        let rect = r.getBoundingClientRect();
+        if (!rect || rect.height <= 0) {
+            const r2 = document.createRange();
+            r2.setStart(pos.node, Math.min(pos.off, pos.node.textContent.length));
+            r2.collapse(true);
+            rect = r2.getBoundingClientRect();
+        }
+        if (!rect) return out;
+        /* 两轮收敛：每一轮先踢一下滚动范围再按残差滚（就地编辑把整楼高度换过一遍，范围可能被算错卡住） */
+        for (let i = 0; i < 2; i++) {
+            const delta = rect.top - wantTop;
+            out.delta = delta;
+            out.lineTop = rect.top;
+            out.by = out.by || null;
+            if (ywDblEditDebug.noAnchor || Math.abs(delta) <= 1) break;
+            ywDblEditKickScroller();
+            const max = Math.max(0, chatEl.scrollHeight - chatEl.clientHeight);
+            chatEl.scrollTop = Math.max(0, Math.min(max, chatEl.scrollTop + delta));
+            const r3 = document.createRange();
+            r3.setStart(pos.node, Math.min(pos.off, end));
+            r3.setEnd(pos.node, end);
+            const rect2 = r3.getBoundingClientRect();
+            if (rect2 && rect2.height > 0) rect = rect2;
+        }
+        out.ok = true;
+    } catch (e) { out.err = String(e); }
+    return out;
+}
+
+/** 纯收摊：摘编辑面/保存钮/监听/观察器 + 把"藏内容"类摘干净（**不写任何数据、不动滚动**） */
+function ywDblEditDrop() {
+    const sess = ywDblEditSess;
+    try { if (ywDblEditObs) ywDblEditObs.disconnect(); } catch (e) { }
+    ywDblEditObs = null;
+    ywDblEditRepos = null;
+    if (sess) {
+        sess.closing = true;
+        try { if (sess._raf) cancelAnimationFrame(sess._raf); } catch (e) { }
+        try { if (sess._raf2) cancelAnimationFrame(sess._raf2); } catch (e) { }
+        try {
+            if (Array.isArray(sess._ls)) {
+                for (let i = 0; i < sess._ls.length; i++) {
+                    const l = sess._ls[i];
+                    try { l.el.removeEventListener(l.type, l.fn, l.opt); } catch (e) { }
+                }
+            }
+        } catch (e) { }
+        sess._ls = [];
+        try { if (sess.ta && sess.ta.parentNode) sess.ta.parentNode.removeChild(sess.ta); } catch (e) { }
+        try { if (sess.mesText) sess.mesText.classList.remove(YWDBL_HOST_CLASS); } catch (e) { }
+        try { if (sess.btn && sess.btn.parentNode) sess.btn.parentNode.removeChild(sess.btn); } catch (e) { }
+    }
+    /* 安全网：任何还挂着"编辑面"类、却没有我们编辑面的容器 ⇒ 摘类（防外部重渲染之后新内容被 CSS 藏住） */
+    try {
+        const hosts = document.querySelectorAll('.' + YWDBL_HOST_CLASS);
+        for (let i = 0; i < hosts.length; i++) {
+            if (!hosts[i].querySelector('.' + YWDBL_TA_CLASS)) hosts[i].classList.remove(YWDBL_HOST_CLASS);
+        }
+    } catch (e) { }
+    ywDblEditSess = null;
+    ywDblEditAnchorFreeze(false);      // 解冻滚动锚定（延后 700ms：等保存/放弃那两档迟到纠偏先走完）
+}
+
+/** Esc / 关开关 ⇒ 放弃：**不写任何数据**，原渲染原样回来（类一摘，被藏起来的原内容就回来了），同样锚定 */
+function ywDblEditCancel(sess, why) {
+    if (!sess || ywDblEditSess !== sess || sess.closing) return null;
+    let wantTop = null, prefix = '';
+    try {
+        ywDblEditRefreshAnchor(sess, sess.ta.selectionStart >= 0 ? sess.ta.selectionStart : sess.anchorIdx);
+        wantTop = ywDblEditLineTopVp(sess);
+        const v = String(sess.ta.value || '');
+        const ls = (sess.lineStartRaw === null || sess.lineStartRaw === undefined) ? 0 : sess.lineStartRaw;
+        prefix = v.slice(0, ls);
+        sess.rawSquashLen = ywDblEditSquashWithMap(v).out.length;
+    } catch (e) { }
+    const mesText = sess.mesText;
+    ywDblEditDrop();
+    const res = ywDblEditAnchorRendered(sess, mesText, prefix, wantTop);
+    sess.lastResult = { what: 'cancel', why: why || '', res: res };
+    /* 放弃也是一次"整楼高度换回来" ⇒ 同样补两档迟到纠偏（用户动过手就不补） */
+    try {
+        [220, 500].forEach(function (ms) {
+            setTimeout(function () {
+                try {
+                    if (sess.userTouched) return;
+                    if (!mesText || !document.body.contains(mesText)) return;
+                    const r2 = ywDblEditAnchorRendered(sess, mesText, prefix, wantTop);
+                    sess.lastResult = { what: 'cancel-late', why: why || '', res: r2 };
+                } catch (e) { }
+            }, ms);
+        });
+    } catch (e) { }
+    return res;
+}
+
+/** 酒馆的正则引擎（动态 import：读不到就跳过"编辑时正则"这一步，其余照常 —— 绝不让它拖垮插件加载） */
+async function ywDblEditRegexEngine() {
+    if (ywDblEditEngine !== null) return ywDblEditEngine;
+    try {
+        const m = await import('../../regex/engine.js');
+        if (m && typeof m.getRegexedString === 'function' && m.regex_placement) {
+            ywDblEditEngine = { getRegexedString: m.getRegexedString, regex_placement: m.regex_placement };
+        } else { ywDblEditEngine = false; }
+    } catch (e) {
+        console.warn('[余温工具箱] 双击改字：读不到酒馆的正则引擎 ⇒ 保存时不跑「编辑时正则」（其余照常）', e);
+        ywDblEditEngine = false;
+    }
+    return ywDblEditEngine;
+}
+
+/** 点「保存」：照酒馆 messageEditDone 那份口径**逐条同效**地写回（mes / swipes[swipe_id] / bias / 两个事件 / 重渲染 / 落盘） */
+async function ywDblEditCommit(sess) {
+    if (!sess || ywDblEditSess !== sess || sess.closing) return;
+    const ctx = ywDblEditCtx();
+    if (!ctx || !ctx.chat) return;
+    const mesid = sess.mesid;
+    const mes = ctx.chat[mesid];
+    if (!mes) return;
+    const newText = String(sess.ta.value || '');
+    /* 先在"当前编辑面"上取锚定读数（保存前的这一刻），再动任何东西 */
+    let wantTop = null, prefix = '';
+    try {
+        ywDblEditRefreshAnchor(sess, sess.ta.selectionStart >= 0 ? sess.ta.selectionStart : sess.anchorIdx);
+        wantTop = ywDblEditLineTopVp(sess);
+        const ls = (sess.lineStartRaw === null || sess.lineStartRaw === undefined) ? 0 : sess.lineStartRaw;
+        prefix = newText.slice(0, ls);
+        sess.rawSquashLen = ywDblEditSquashWithMap(newText).out.length;
+    } catch (e) { }
+    const mesElAt = sess.mesEl;
+    const chname = mes.name || (mes.is_user ? ctx.name1 : ctx.name2);
+    try {
+        /* —— ① 写回（= updateMessage() 那几步）—— */
+        let text = newText;
+        const eng = await ywDblEditRegexEngine();
+        if (eng) {
+            const extraType = mes.extra && mes.extra.type;
+            const placement = mes.is_user ? eng.regex_placement.USER_INPUT
+                : (extraType === 'NARRATOR' ? eng.regex_placement.SLASH_COMMAND : eng.regex_placement.AI_OUTPUT);
+            text = eng.getRegexedString(text, placement, {
+                characterOverride: extraType === 'NARRATOR' ? undefined : mes.name,
+                isEdit: true,
+            });
+        }
+        try {
+            const pu = ctx.powerUserSettings;
+            if (pu && pu.trim_spaces) text = String(text).trim();
+        } catch (e) { }
+        let bias = '';
+        try {
+            bias = substituteParams(extractMessageBias(text));
+            text = substituteParams(text);
+            if (bias) text = removeMacros(text);
+        } catch (e) { }
+        if (!mes.extra || typeof mes.extra !== 'object') mes.extra = {};
+        mes.mes = text;
+        if (mes.swipe_id !== undefined) {
+            try { ensureSwipes(mes); } catch (e) { }
+            if (Array.isArray(mes.swipes)) mes.swipes[mes.swipe_id] = text;
+        }
+        if (mes.is_system || mes.is_user || (mes.extra && mes.extra.type === 'NARRATOR')) mes.extra.bias = bias || null;
+        else mes.extra.bias = null;
+        try { if (ctx.chatMetadata) ctx.chatMetadata.tainted = true; } catch (e) { }
+        /* —— ② 摘掉我们的编辑面（数据已写好，下面这一楼整个重渲染）—— */
+        ywDblEditDrop();
+        /* —— ③ 事件 + 重渲染 + 落盘（照 messageEditDone 的顺序）—— */
+        await ctx.eventSource.emit(ctx.eventTypes.MESSAGE_EDITED, mesid);
+        let text2 = (ctx.chat[mesid] && ctx.chat[mesid].mes !== undefined) ? String(ctx.chat[mesid].mes) : String(text);
+        const mesElNow = document.querySelector('#chat .mes[mesid="' + mesid + '"]') || mesElAt;
+        const mesTextNow = mesElNow ? mesElNow.querySelector('.mes_text') : null;
+        if (mesTextNow) {
+            const $t = $(mesTextNow);
+            $t.empty();
+            $t.append(messageFormatting(text2, chname, mes.is_system, mes.is_user, mesid, {}, false));
+            try {
+                const $mb = $(mesElNow).find('.mes_block');
+                $mb.find('.mes_bias').empty();
+                $mb.find('.mes_bias').append(messageFormatting(bias, '', false, false, -1, {}, false));
+            } catch (e) { }
+            try { appendMediaToMessage(mes, $(mesElNow)); } catch (e) { }
+            try { addCopyToCodeBlocks(mesElNow); } catch (e) { }
+        }
+        await ctx.eventSource.emit(ctx.eventTypes.MESSAGE_UPDATED, mesid);
+        try { await saveChatConditional(); } catch (e) { console.warn('[余温工具箱] 双击改字：落盘失败（界面已改，请手动保存）：', e); }
+        try { showSwipeButtons(); } catch (e) { }
+        /* —— ④ 保存之后不许乱跳：把"那一行"摆回原来的屏幕高度（+ 220/500ms 再纠一次异步定型）—— */
+        const res = ywDblEditAnchorRendered(sess, mesTextNow, prefix, wantTop);
+        sess.lastResult = { what: 'save', res: res };
+        try {
+            [220, 500].forEach(function (ms) {
+                setTimeout(function () {
+                    try {
+                        if (!mesTextNow || !document.body.contains(mesTextNow)) return;
+                        const r2 = ywDblEditAnchorRendered(sess, mesTextNow, prefix, wantTop);
+                        sess.lastResult = { what: 'save-late', res: r2 };
+                    } catch (e) { }
+                }, ms);
+            });
+        } catch (e) { }
+    } catch (err) {
+        console.warn('[余温工具箱] 双击改字：保存时出错：', err);
+        try { ywDblEditDrop(); } catch (e) { }
+    }
+}
+
 document.addEventListener('dblclick', ywDblEditOnDblClick, true);
-/* 探针口：只读状态 + 假证开关（产品逻辑不消费它；探针脚本用它做两条假证与逐项读数） */
+/* 探针口：只读状态 + 假证开关（产品逻辑一个字节都不读它） */
 try {
     window.__ywDblEdit = {
         debug: ywDblEditDebug,
         version: PLUGIN_VERSION,
         state: function () {
-            const out = { hasBtn: false, editors: 0, btnRect: null, btnText: null, agent: null, styleTag: !!document.getElementById(YWDBL_STYLE_ID) };
-            try { out.editors = document.querySelectorAll('#curEditTextarea').length; } catch (e) { }
+            const out = {
+                version: PLUGIN_VERSION, styleTag: !!document.getElementById(YWDBL_STYLE_ID),
+                hostCount: 0, taCount: 0, btnCount: 0, nativeTaCount: 0, nativeEditBtnsVisible: 0,
+                hasBtn: false, btnRect: null, btnCls: null, btnTitle: null,
+                taValueLen: null, taValueIsRaw: null, taHead: null, taSel: null,
+                active: false, mesid: null, lineTopVp: null, yInContent: null, lineH: null,
+                lineRightContent: null, lineStartRaw: null, wantTop: null, residual: null, clamped: null,
+                driftLate: null, userTouched: false, byBrowser: false, lastResult: null, engine: ywDblEditEngine,
+            };
+            try { out.hostCount = document.querySelectorAll('.' + YWDBL_HOST_CLASS).length; } catch (e) { }
+            try { out.taCount = document.querySelectorAll('.' + YWDBL_TA_CLASS).length; } catch (e) { }
+            try { out.btnCount = document.querySelectorAll('.' + YWDBL_BTN_CLASS).length; } catch (e) { }
+            try { out.nativeTaCount = document.querySelectorAll('#curEditTextarea').length; } catch (e) { }
             try {
-                if (ywDblEditBtn && document.body.contains(ywDblEditBtn)) {
-                    const r = ywDblEditBtn.getBoundingClientRect();
+                let n = 0;
+                const list = document.querySelectorAll('#chat .mes_edit_buttons');
+                for (let i = 0; i < list.length; i++) { if (getComputedStyle(list[i]).display !== 'none') n++; }
+                out.nativeEditBtnsVisible = n;
+            } catch (e) { }
+            try {
+                const b = document.querySelector('.' + YWDBL_BTN_CLASS);
+                if (b) {
+                    const r = b.getBoundingClientRect();
                     out.hasBtn = true;
-                    out.btnRect = { l: Math.round(r.left), t: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
-                    out.btnText = String(ywDblEditBtn.textContent || '');
-                    out.btnCls = String(ywDblEditBtn.className || '');
+                    out.btnRect = { l: Math.round(r.left), t: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), r: Math.round(r.right), b: Math.round(r.bottom) };
+                    out.btnCls = String(b.className || '');
+                    out.btnTitle = String(b.title || '');
                 }
             } catch (e) { }
             try {
-                const a = ywDblEditAgent;
-                if (a) {
-                    out.agent = {
-                        mesid: a.mesid, contentY: a.contentY, yInContent: a.yInContent, lineH: a.lineH,
-                        lineRightContent: a.lineRightContent, residual: a.residual, clamped: a.clamped,
-                        clickX: a.clickX, clickY: a.clickY, clickTop: a.clickTop, wantTop: a.wantTop,
-                        caretRaw: a.caretRaw, lineStart: a.lineStart, yByBrowser: a.yByBrowser, driftLate: a.driftLate,
-                        userTouched: !!a.userTouched,
-                        taScroll: a.ta ? a.ta.scrollTop : null, taScrollH: a.ta ? a.ta.scrollHeight : null,
-                        taClientH: a.ta ? a.ta.clientHeight : null, beforeTextLen: a.beforeTextLen,
-                    };
+                const s = ywDblEditSess;
+                if (s) {
+                    out.active = true;
+                    out.mesid = s.mesid;
+                    out.taValueLen = String(s.ta.value || '').length;
+                    const c = ywDblEditCtx();
+                    const rawNow = (c && c.chat && c.chat[s.mesid]) ? String(c.chat[s.mesid].mes || '') : null;
+                    out.taValueIsRaw = (rawNow !== null) ? (s.ta.value === rawNow) : null;
+                    out.taHead = String(s.ta.value || '').slice(0, 60);
+                    out.taSel = { start: s.ta.selectionStart, end: s.ta.selectionEnd };
+                    out.lineTopVp = ywDblEditLineTopVp(s);
+                    out.yInContent = s.yInContent; out.lineH = s.lineH;
+                    out.lineRightContent = s.lineRightContent; out.lineStartRaw = s.lineStartRaw;
+                    out.wantTop = s.wantTop; out.residual = s.residual; out.clamped = s.clamped;
+                    out.driftLate = s.driftLate; out.userTouched = !!s.userTouched; out.byBrowser = !!s.byBrowser;
+                    out.ratio = s.ratio; out.beforeTextLen = s.beforeTextLen; out.tries = s.tries;
+                    out.lastResult = s.lastResult || null;
                 }
             } catch (e) { }
             return out;
