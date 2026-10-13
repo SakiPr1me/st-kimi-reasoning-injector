@@ -231,17 +231,33 @@ async function doSwipe(targetId) {
    作者原话："有时候…要及时截断的情况 就是思维链思考完毕 然后结果正文部分又思考了一遍 然后这次思考结束后 直接就结束了…
    我可以在原生思维链出来之后 一旦检测到 比如说 **phase** 就**自动截断 然后重roll** 然后放在**自动重roll分页**里 写上
    **正文出现___（填写的地方）即重roll** 功能如名字所说 **并非检测原生思维链 而是检测生成的正文部分**…**注意不要伪重roll**"。
-   ⇒ 新增独立触发「正文标记」：新设置 `rerollOnBodyMarker`（默认**开**）+ `rerollBodyMarkers`（默认**空** = 不启用；
+   ⇒ 新增独立触发「正文标记」：新设置 `rerollOnBodyMarker`（★W138-追加：作者拍板**默认不勾选** ——
+     原话"不管新用户新安装 还是旧用户更新 都不会勾选"；未发布的 1.46.34 里短暂默认过开 ⇒ 用
+     `rerollOnBodyMarkerInit` 旗做**一次性强制回默认**）+ `rerollBodyMarkers`（默认**空** = 不启用；
      英文逗号多值、不区分大小写）；**只扫 mes（正文内容流），绝不扫 reasoning（原生思维链）** —— 作者的原生思维链起手就是
      `Phase 0：`（见上面 reasoningContent 默认种子），扫思维链会当场误伤。命中 ⇒ 走既有 W66 那条路：流式立即 `stopGeneration()`
      （省token）→ `earlyRerollReason='bodymarker'` → 真·新分支重roll（不造伪重roll）。
    接线（与 keyword 完全同构、三处清单各自补一项，**没有**合并成一个函数）：流式总门 / `anyRerollSwitchOn` /
      `rerollReasonSwitchOn('bodymarker')` / 完成时早退 / 完成兜底（只看 mes）/ 切分支提示（只看 mes）；
-     各闸的"算不算开着"统一走 `bodyMarkerArmed()`（勾着 **且** 列表非空 —— 默认"勾着+空"不算开，否则会把 W66 的
-     "全部关掉"顶成"还有一枪开着"）。「一键锁住重roll」把新勾也纳入（6 个勾选），老快照（无 bodymarker 键）解锁时回新装默认「开」。
+     各闸的"算不算开着"统一走 `bodyMarkerArmed()`（**`=== true`** fail-closed —— false/undefined/缺键 一律当没开；
+     且列表非空。"全部关掉"判据不会被一个空的勾顶着）。「一键锁住重roll」把新勾也纳入（6 个勾选），
+     老快照（无 bodymarker 键）解锁时回**新装默认**（取 `defaultSettings.rerollOnBodyMarker` 同一个来源，现在是 false）。
    ★探针：`e2e/w138-body-marker-reroll.js`（8002 + 自带的 `e2e/w138-mock.js`）：A 正文命中⇒真重roll（第二次请求+分支+1）·
      B 标记只在思维链里⇒不触发 · C 末尾出现⇒兜底触发 · C2 完成兜底直证 · D 留空⇒不动 · E 关勾⇒不动 · F keyword 回归。 */
-const PLUGIN_VERSION = '1.46.34'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+/* ★★W139（2026-10-14 · 协调方对 W138 §7 的定夺 = **修**）：1.46.34 → **1.46.35**（工具箱单侧）
+   W138 实测暴露：**完成兜底档不写 `earlyRerollReason`** ⇒ `triggerAutoSwipe` 在"300ms + 等 ST 收尾(≤6s)"窗口里
+   按**残留的上一条路径**复查（W66"取消勾选强制生效"），把这次真重roll**悄悄取消**（真机读数：命中日志有了、
+   0 次新请求 0 个新分支）。W138 已修 `bodymarker` 那处；本波**同款最小改**补上 keyword 完成兜底档的
+   `earlyRerollReason = 'keyword';` —— **keyword 的判据 / 流式路径 / 其它语义一个字没动**。
+   证据（8002 真页面）：K-A 撤修态（1.46.34）= 命中日志 + 0 新请求 0 新分支；修复后 = 2 请求 + 分支 1→2 +
+   新分支内容显示；K-ARM/K-B/K-C 与 A~G 全绿（详见 `waveW138-正文标记即重roll-日间.md` §8）。
+   ★★同批还有一件（作者 2026-10-14 拍板，同批 1.46.35）：**「正文出现以下内容即重roll」默认改不勾选** ——
+   原话"你要保证 这一项 不管新用户新安装 还是旧用户更新 都不会勾选 默认不勾选"。
+   三处：①`defaultSettings.rerollOnBodyMarker = false`；②`rerollOnBodyMarkerInit` 旗做**一次性强制回默认**
+   （未发布的 1.46.34 短暂默认过开，只补 undefined 补不回来；照 W115/W113 先例，之后尊重用户手改）；
+   ③`bodyMarkerArmed()` / 界面渲染 / 一键锁的快照与还原统一改 **`=== true`**（fail-closed；老快照解锁回
+   `defaultSettings.rerollOnBodyMarker` 同一个来源，不硬编码）。读数见同报告 §9（V1~V4）。 */
+const PLUGIN_VERSION = '1.46.35'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -258,7 +274,7 @@ const defaultSettings = {
     rerollOnNoMutter: false,        // 生成结束全文没有截断标记（半截楼）→ 自动重roll（swipe新分支；默认关：手动停止易误判，知情后再开）
     rerollOnKeyword: true,          // 检测到指定关键词（如 CSAM）→ 停止 → 自动重roll（开新分支）
     rerollKeywords: 'CSAM,',        // 触发重roll的关键词，逗号分隔（英文逗号，可含空格；不区分大小写）
-    rerollOnBodyMarker: true,       // ★W138：**正文**（mes）出现指定内容（如 phase）→ 停止 → 自动重roll；只看正文、**绝不看原生思维链**
+    rerollOnBodyMarker: false,      // ★W138-追加：**默认不勾选**（作者 2026-10-14 拍板："这一项不管新用户新安装 还是旧用户更新 都不会勾选 默认不勾选"）—— 会改生成行为的激进项，一律让用户自己开
     rerollBodyMarkers: '',          // ★W138：正文触发内容，英文逗号分隔（不区分大小写；留空=不启用。新装默认空 —— 与"关键词"不同，这个不预设任何值）
     mutterSoundEnabled: true,       // 完整生成（含截断标记）→ 播放提示音（内置beep）
     mutterSoundType: 'ding',        // 提示音色：ding=柔和叮咚(默认) | crisp=清脆 | chord=治愈和弦 | soft=低柔单音
@@ -593,8 +609,19 @@ if (settings.rerollOnNoMutter === undefined) settings.rerollOnNoMutter = false;
 if (settings.rerollOnKeyword === undefined) settings.rerollOnKeyword = true;
 if (settings.rerollKeywords === undefined) settings.rerollKeywords = 'CSAM,';
 // ★W138（铁律 32）：新增两项的默认值**同一个来源**（defaultSettings）—— 升级补默认 = 新装默认。
-if (settings.rerollOnBodyMarker === undefined) settings.rerollOnBodyMarker = defaultSettings.rerollOnBodyMarker;
 if (settings.rerollBodyMarkers === undefined) settings.rerollBodyMarkers = defaultSettings.rerollBodyMarkers;
+// ★★W138-追加（作者 2026-10-14 拍板）：**这一项不管新装还是更新都默认不勾选** ——
+//   原话："你要保证 这一项 不管**新用户新安装** 还是**旧用户更新** 都**不会勾选** 默认**不勾选**"。
+//   为什么不能只写 `=== undefined` 补默认：这个键在**未发布的 1.46.34** 里短暂存在过（当时默认 true）
+//   ⇒ 本机/内测机器可能已经把它写成 true，只补 undefined **补不回来**。
+//   ⇒ 照 W115/W113 那套"初始化旗"先例：**一次性**强制回默认（值取同一个来源 defaultSettings），
+//     之后**永远尊重用户手改**（包括他主动勾上）—— 旗立上就不再覆盖。
+if (settings.rerollOnBodyMarkerInit !== true) {
+    settings.rerollOnBodyMarker = defaultSettings.rerollOnBodyMarker;   // 同一个来源（现在是 false）
+    settings.rerollOnBodyMarkerInit = true;
+    try { saveSettingsDebounced(); } catch (e) { }   // 值与旗一起立刻落盘（防"下次加载又变回来"）
+}
+if (settings.rerollOnBodyMarker === undefined) settings.rerollOnBodyMarker = defaultSettings.rerollOnBodyMarker;   // 铁律 32 兜底：旗已立但值缺键 ⇒ 仍补成同一个来源的默认（fail-closed，见下）
 if (settings.mutterSoundEnabled === undefined) settings.mutterSoundEnabled = true;
 if (!settings.mutterSoundType) settings.mutterSoundType = 'ding';
 if (settings.mutterVibrate === undefined) settings.mutterVibrate = false;
@@ -1821,12 +1848,14 @@ function checkAutoStop(text) {
  *  ★W138：三处清单**各自**按同一口径补了「正文标记」一项（不是合并成一个函数）：流式总门 3→4 项、
  *    完成早退 4→5 项、本函数 5→6 项；新项的"算不算开着"一律由 bodyMarkerArmed() 判（勾着+列表非空）。 */
 /** ★W138（作者 2026-10-14）：正文标记这条检测"**算不算开着**"的唯一口径 ——
- *  勾着（`!== false`）且列表**非空**才算开。为什么这里要比关键词那行多一个"列表非空"：
- *  新装默认是「勾着 + 列表空」= 等于没开；若按 `!== false` 无条件计入，**默认态**就会把
- *  `anyRerollSwitchOn()` 的"全部关掉"顶成"还有一枪开着"（W66 的"取消勾选强制生效"会当场失色）。
+ *  **必须 `=== true`**（默认不勾选 ⇒ fail-closed：false / undefined / 缺键 一律当"没开"），且列表**非空**。
+ *  · 为什么 `=== true` 而不是 `!== false`：这是作者拍板的"激进项默认不勾"，缺值/坏值绝不能把它当成"开着"
+ *    （`!== false` 会把 undefined 当开 —— 正是要避免的方向）。
+ *  · 为什么还要"列表非空"：与 keyword 同构（勾着但列表空 = 等于没开）；也保证 `anyRerollSwitchOn()` 的
+ *    "全部关掉"判据不会被一个空的勾顶着（W66）。
  *  判定只读设置、不碰 DOM，任意处调用零成本。 */
 function bodyMarkerArmed() {
-    return settings.rerollOnBodyMarker !== false && !!String(settings.rerollBodyMarkers ?? '').trim();
+    return settings.rerollOnBodyMarker === true && !!String(settings.rerollBodyMarkers ?? '').trim();
 }
 function anyRerollSwitchOn() {
     return !!(settings.rerollOnEnglishThinking || settings.rerollOnNoThinking || settings.rerollOnEmpty
@@ -1960,6 +1989,12 @@ function checkNativeReroll(messageId) {
                 if (hitKw2) {
                     shouldReroll = true;
                     reason = '出现关键词「' + hitKw2 + '」';
+                    // ★W139（2026-10-14 · 协调方对 W138 §7 的定夺=**修**）：与 bodymarker 兜底那处**同款最小改** ——
+                    //   完成兜底档也必须把"是哪条路径开的枪"记上，否则 triggerAutoSwipe 在"300ms + 等 ST 收尾(≤6s)"
+                    //   的窗口里会按 **earlyRerollReason 的残留值**复查（W66 的"取消勾选强制生效"），
+                    //   把这次真重roll **悄悄取消**。真机读数（K-A 撤修态）：命中日志有了、但 **0 次新请求 0 个新分支**。
+                    //   只加这一行：keyword 的判据 / 流式路径 / 其它语义一个字没动。
+                    earlyRerollReason = 'keyword';
                     // v1.37.66（§AY-4）：完成后兜底命中同样给位置 + 前后 40 字（判据不变，只加可见性）
                     console.log(`[余温工具箱] 关键词命中「${hitKw2}」（完成后兜底）${hitContext(reasoning + '\n' + mes, hitKw2)}（全表匹配，URL/HTML 里的字符同样会命中）`);
                 }
@@ -2690,7 +2725,8 @@ window.__kimiStopReroll = () => {
  *        在飞的待办当场作废、横幅收掉）；解锁 = 把快照原样写回。锁住期间 6 个勾选框 disabled（防手改打架）。
  *  ★W138：新勾「正文出现以下内容即重roll」也纳入锁（作者口径"暂时关掉重roll"要真的全关；
  *         不纳入的话锁着它照样能开枪 = "关了没真的关"）。老快照（W138 之前存的、没有 bodymarker 键）
- *         仍是合法快照（shapeOk 放行）—— 解锁时**回新装默认「开」**（它当时就相当于默认态，铁律 32）。
+ *         仍是合法快照（shapeOk 放行）—— 解锁时回**该键自己的新装默认**（★W138-追加后 = false；
+ *         取 `defaultSettings.rerollOnBodyMarker` 同一个来源，**不硬编码 true**，铁律 32）。
  *  ★坏数据防御（铁律 27）：快照从用户 settings 读 ⇒ 形状不对就当作"没有快照"（解锁时退回全关，不乱猜）。
  *  与「暂停自动重roll」（rerollPaused，横幅那个⏹）**互不干扰**：本按钮一个字都不动 rerollPaused。 */
 const REROLL_LOCK_SWITCHES = [
@@ -2724,8 +2760,8 @@ function applyRerollLockUI() {
     }
     const kwEl = document.getElementById(extensionName + '_reroll_keyword');
     if (kwEl) { kwEl.disabled = locked; kwEl.checked = locked ? false : (settings.rerollOnKeyword !== false); }
-    const bmEl = document.getElementById(extensionName + '_reroll_bodymarker');   // ★W138：同 keyword 口径
-    if (bmEl) { bmEl.disabled = locked; bmEl.checked = locked ? false : (settings.rerollOnBodyMarker !== false); }
+    const bmEl = document.getElementById(extensionName + '_reroll_bodymarker');   // ★W138-追加：渲染口径 = `=== true`（false/undefined 都画成不勾；默认不勾选）
+    if (bmEl) { bmEl.disabled = locked; bmEl.checked = locked ? false : (settings.rerollOnBodyMarker === true); }
 }
 function toggleRerollLock() {
     try {
@@ -2736,7 +2772,7 @@ function toggleRerollLock() {
                 empty: !!settings.rerollOnEmpty,
                 nomutter: !!settings.rerollOnNoMutter,
                 keyword: settings.rerollOnKeyword !== false,
-                bodymarker: settings.rerollOnBodyMarker !== false,   // ★W138：第 6 个勾也进快照
+                bodymarker: settings.rerollOnBodyMarker === true,   // ★W138：第 6 个勾也进快照（★W138-追加：默认不勾 ⇒ 这里同样 `=== true`）
             };
             settings.rerollOnEnglishThinking = false;
             settings.rerollOnNoThinking = false;
@@ -2755,9 +2791,10 @@ function toggleRerollLock() {
             settings.rerollOnEmpty = s ? !!s.empty : false;
             settings.rerollOnNoMutter = s ? !!s.nomutter : false;
             settings.rerollOnKeyword = s ? !!s.keyword : false;
-            // ★W138：老快照（W138 之前存的、没有 bodymarker 键）⇒ 回**新装默认「开」**
-            //   （那个键当时根本不存在，用户的状态就相当于默认态；与铁律 32 的"升级补默认=新装默认"同口径）。
-            settings.rerollOnBodyMarker = s ? (typeof s.bodymarker === 'boolean' ? s.bodymarker : true) : false;
+            // ★W138：老快照（W138 之前存的、没有 bodymarker 键）⇒ 回**新装默认**（★W138-追加后 = false）
+            //   —— 取**同一个来源** `defaultSettings.rerollOnBodyMarker`，**不硬编码**（作者拍板"默认不勾选"，
+            //   这条解锁路径必须跟着走；锁存/还原两条路都核过：锁存 `=== true` 捕获、还原走这里）。
+            settings.rerollOnBodyMarker = s ? (typeof s.bodymarker === 'boolean' ? s.bodymarker : defaultSettings.rerollOnBodyMarker) : false;
             settings.rerollLockOn = false;
             notifyReroll('🔓 重roll 已还原到你上次的勾选', 'info');
             rerollBannerHideTimer = setTimeout(() => { rerollBannerHideTimer = null; clearRerollBanner(); }, 2600);
@@ -7488,7 +7525,7 @@ ${t('rerollKeyword')}
 <input id="${extensionName}_reroll_keywords" type="text" class="text_pole" style="width:100%" value="${String(settings.rerollKeywords ?? 'CSAM,')}" placeholder="CSAM, xxx"/>
 </div>
 <label class="checkbox_label">
-<input id="${extensionName}_reroll_bodymarker" type="checkbox" ${settings.rerollOnBodyMarker !== false ? 'checked' : ''} ${settings.rerollLockOn ? 'disabled' : ''}/>
+<input id="${extensionName}_reroll_bodymarker" type="checkbox" ${settings.rerollOnBodyMarker === true ? 'checked' : ''} ${settings.rerollLockOn ? 'disabled' : ''}/>
 ${t('rerollBodyMarker')}
 </label>
 <div style="margin-top:3px">
