@@ -270,7 +270,7 @@ async function doSwipe(targetId) {
    证据（8002 真页面 · 真鼠标点老楼原生箭头 · `e2e/w140-historical-floor-silent.js`）：
      改前（1.46.35）老楼切到坏分支 ⇒ 弹提示 + 打「切分支判定」+ 记 key（同一条再切不再弹）· 老楼 MESSAGE_EDITED 同样插嘴；
      改后（1.46.36）同两条路**全静默**，而**最后一楼**切坏分支提示照旧 + 关键词自动重roll 照旧（28/0 两档对照）。 */
-const PLUGIN_VERSION = '1.46.36'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.37'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -6365,6 +6365,12 @@ function showTpsForMessage(messageId) {
 // ST 原生：思考中显示 "Thinking..."（无时间），结束后 humanize 只精确到分钟。
 // 插件接管标题：思考中每秒刷新「思考中 Xs」，STREAM_REASONING_DONE 拿精确时长定格。
 const reasoningStartMap = new Map(); // messageId -> 思考开始时间戳（插件自计，近似）
+// ★W141（作者 2026-10-14 原话："思考时间…应该是思维链结束就暂停，而不是一直等着正文结束才停"）：
+//   messageId -> { ms, rLen } = **思维链结束那一刻**钉住的冻结值（毫秒）+ 钉住时思维链的长度。
+//   口径（硬判据）：`ms` 一旦钉住，只许被"与它一致的更精确值"替换，**不许再涨** —— 正文再流多久，表上的数字都不再变。
+//   来源：① STREAM_REASONING_DONE（酒馆自己宣布思维链结束，载荷就是精确时长）；
+//        ② 正文已开始而事件还没来 ⇒ 第一次看到正文就"只取一次"冻住（见 reasoningTimerTick 分支）。
+const reasoningFrozenMap = new Map();
 let reasoningTimerInterval = null;
 
 function fmtThinkingTime(ms, live) {
@@ -6400,18 +6406,33 @@ function reasoningTimerTick() {
             const genStart = new Date(msg?.gen_started || Date.now()).getTime();
             const startMs = Number.isFinite(genStart) ? genStart : Date.now();
             const dur = Number(msg?.extra?.reasoning_duration || 0);
+            // ★W141：思维链结束那一刻钉住的冻结值（{ms, rLen}；拿不到就是 undefined）
+            const frozen = reasoningFrozenMap.get(id);
 
             let done = null;
-            if (dur > 0) {
-                // ST 精确时长优先
+            if (dur > 0 && !(frozen && dur > frozen.ms + 1000)) {
+                // ST 精确时长优先（★W141：与冻结值一致（差 ≤1s）才采纳；明显更大 = 酒馆把思维链拖到
+                //   生成收尾才定稿，那个"时长"里混进了正文时间 ⇒ 不许用它把已经钉住的数字抬上去）
                 done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(dur, false));
+            } else if (frozen) {
+                // ★W141：冻结值（思维链结束那一刻的读数；此后不再重算）
+                done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(frozen.ms, false));
             } else if (isGenerating && isThinkingTitle && mesEl.querySelector('.mes_text')?.textContent?.trim()) {
                 // 无精确时长但正文已开始输出 → 用累计值定格（≈思考时长）
                 // ★v1.37.63 两处（ac-verify §B.4 B-改 + §C.4 C-4）：
                 //   ① `isGenerating &&`：生成结束后不再每 tick 用 Date.now() 往上跳，而是落到下面作者当年那条定格分支（用 gen_finished - gen_started）；生成中那一小段行为不变。
                 //   ② 正文有无改成"用到才算"：原来在 dur>0 判定之前无条件把整条 .mes_text 序列化（本轮 O(楼层) 扫描里最贵的一项，dur>0 / 非思考标题的楼层根本用不到）。
                 //      零语义变化：这个值只在下面当布尔用，纯重排、无副作用。
-                done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(Date.now() - startMs, false));
+                // ★W141：**只取一次** —— 第一次看到"正文已开始"就把累计值冻存到 reasoningFrozenMap，
+                //   之后每一拍都读冻结值，不再用 Date.now() 重算（作者原话："应该思维链结束就暂停，而不是一直等正文结束才停"）。
+                const frozenNow = Math.max(0, Date.now() - startMs);
+                //   ★门：**只有"已经出过思维链"才把这一刻当作思维链结束** —— 建楼那一瞬 ST 先塞一个
+                //   `'...'` 占位（script.js:3568 firstMessageText，渲染出来是 1 个字的"…"），那时推理还没开始，
+                //   拿它当"正文已开始"会把数字冻在 0.x 秒（本波实测到过一次这种假冻结）。
+                if (msg?.extra?.reasoning) {
+                    reasoningFrozenMap.set(id, { ms: frozenNow, rLen: String(msg.extra.reasoning).length });
+                }
+                done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(frozenNow, false));
             } else if (!isGenerating && isThinkingTitle) {
                 // 生成已结束但标题仍是"思考中"且无精确时长/无正文 = 思维链被截断或生成被打断。
                 // 修正：用 gen_started → gen_finished 定格显示，不再永远跳动（用户反馈 BUG）
@@ -6440,6 +6461,32 @@ function reasoningTimerTick() {
     } catch (e) { /* 静默 */ }
 }
 
+// ★W141：酒馆宣布"思维链结束"的那一刻 —— ST 1.19 在 `ReasoningHandler.finish()` 里发这个事件
+//   （public/scripts/reasoning.js:549，载荷 duration 就是酒馆的精确思维链时长）。在这一刻把这一楼的
+//   冻结值钉下；之后正文再流多久，表上的数字都不许再变。
+//   ★实测（本波 §根因）：数据源把思维链与正文分开流时，酒馆**不在正文开始时定稿**，而是拖到生成收尾
+//   （script.js finalizeIntermediaryMessage → finish()）才发这个事件 —— 那时载荷里的 duration 已经把
+//   正文时间算进去了（本波实测：思维链 4.1s ⇒ 载荷 21.4s）。⇒ 口径：**已钉住的值不许被"明显更大的
+//   载荷"抬上去**；只在「没冻过值」「思维链在冻结之后还在长（真·交错流，载荷更大是真结束）」
+//   「载荷与冻结值一致（差 ≤1s，正常路径，用更精确的那个）」三种情况下采纳事件值。
+eventSource.on(event_types.STREAM_REASONING_DONE, (reasoning, duration, messageId) => {
+    try {
+        const rid = Number(messageId);
+        if (!Number.isFinite(rid) || rid < 0) return;
+        const ctx2 = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        const msg2 = ctx2?.chat?.[rid];
+        const gs = new Date(msg2?.gen_started || Date.now()).getTime();
+        const sm = Number.isFinite(gs) ? gs : Date.now();
+        const d = Number(duration);
+        const ms = (Number.isFinite(d) && d > 0) ? d : Math.max(0, Date.now() - sm);
+        const rLen2 = msg2?.extra?.reasoning ? String(msg2.extra.reasoning).length : 0;
+        const prev = reasoningFrozenMap.get(rid);
+        if (!prev || rLen2 > prev.rLen || ms <= prev.ms + 1000) {
+            reasoningFrozenMap.set(rid, { ms, rLen: rLen2 });
+        }
+    } catch (e) { /* 静默 */ }
+});
+
 let reasoningTimerRate = 0;
 function startReasoningTimer(rate = 300) {
     if (!settings.enabled || !settings.reasoningTimer) return;
@@ -6454,6 +6501,7 @@ function stopReasoningTimer() {
         reasoningTimerInterval = null;
     }
     reasoningStartMap.clear();
+    reasoningFrozenMap.clear();
     // 清理残留计时 span 与接管类
     document.querySelectorAll('.kimi-thinking-timer').forEach(n => n.remove());
     document.querySelectorAll('.mes_reasoning_details.kimi-timer-active').forEach(n => n.classList.remove('kimi-timer-active'));
@@ -6663,6 +6711,7 @@ try { rerollGuard.confirmBranch(); } catch (e) { } // v1.37.54 真实生成开�
         }
     }
     reasoningStartMap.clear();
+    reasoningFrozenMap.clear();
     startReasoningTimer(300);  // 生成中高频 tick：思考中显示秒数
     // 记录生成开始时的最后一条消息内容（空回重roll判别：JS-Slash-Runner 提示词查看器会触发真实生成
     // 但在发出 API 请求前 stopGeneration → 零token 且不新增消息 → 最后一条没变 → 不该重roll）
@@ -6898,6 +6947,7 @@ eventSource.on(event_types.CHAT_CHANGED, () => {
     autoRerollCount = 0;
     emptyRerollStreak = 0; // v1.37.66：换聊天清"切换连败"计数（跨聊天不继承）
     judgedBranchIds.clear(); // v1.37.66 通用门：messageId 在新聊天里会复用 → 已判定集合必须清空
+    reasoningFrozenMap.clear(); // ★W141：同理由 —— 冻结值也按 messageId 挂，换聊天必须清
     streamGateSeq = -1; streamGateAllowed = true; // 通用门：缓存也作废（下一帧重新判）
     autoSwipeBusy = false; // v1.37.34 切聊天释放自动swipe锁（防残留挡后续自动重roll）
     clearRerollBanner(); // 切聊天 → 收起重roll横幅
