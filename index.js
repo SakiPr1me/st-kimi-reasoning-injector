@@ -227,7 +227,21 @@ async function doSwipe(targetId) {
      点「保存」= **照 `messageEditDone` 的口径逐条自己做**（mes / swipes[swipe_id] / bias / MESSAGE_EDITED+UPDATED / 重渲染 / 落盘）；
      Esc = 放弃（不写任何数据、原渲染原样回来）；点别处**不丢**编辑内容。
    ★设置开关：`dblEditInPlace`（默认**开**；那一行放在「保存条目的同时保存预设」后面；关 ⇒ 双击完全不响应 = 恢复原生选词）。 */
-const PLUGIN_VERSION = '1.46.33'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+/* ★★W138（2026-10-14 · 作者要求「正文出现 ___ 即重roll」）：1.46.33 → **1.46.34**（工具箱单侧；商店/更新器本波未动）
+   作者原话："有时候…要及时截断的情况 就是思维链思考完毕 然后结果正文部分又思考了一遍 然后这次思考结束后 直接就结束了…
+   我可以在原生思维链出来之后 一旦检测到 比如说 **phase** 就**自动截断 然后重roll** 然后放在**自动重roll分页**里 写上
+   **正文出现___（填写的地方）即重roll** 功能如名字所说 **并非检测原生思维链 而是检测生成的正文部分**…**注意不要伪重roll**"。
+   ⇒ 新增独立触发「正文标记」：新设置 `rerollOnBodyMarker`（默认**开**）+ `rerollBodyMarkers`（默认**空** = 不启用；
+     英文逗号多值、不区分大小写）；**只扫 mes（正文内容流），绝不扫 reasoning（原生思维链）** —— 作者的原生思维链起手就是
+     `Phase 0：`（见上面 reasoningContent 默认种子），扫思维链会当场误伤。命中 ⇒ 走既有 W66 那条路：流式立即 `stopGeneration()`
+     （省token）→ `earlyRerollReason='bodymarker'` → 真·新分支重roll（不造伪重roll）。
+   接线（与 keyword 完全同构、三处清单各自补一项，**没有**合并成一个函数）：流式总门 / `anyRerollSwitchOn` /
+     `rerollReasonSwitchOn('bodymarker')` / 完成时早退 / 完成兜底（只看 mes）/ 切分支提示（只看 mes）；
+     各闸的"算不算开着"统一走 `bodyMarkerArmed()`（勾着 **且** 列表非空 —— 默认"勾着+空"不算开，否则会把 W66 的
+     "全部关掉"顶成"还有一枪开着"）。「一键锁住重roll」把新勾也纳入（6 个勾选），老快照（无 bodymarker 键）解锁时回新装默认「开」。
+   ★探针：`e2e/w138-body-marker-reroll.js`（8002 + 自带的 `e2e/w138-mock.js`）：A 正文命中⇒真重roll（第二次请求+分支+1）·
+     B 标记只在思维链里⇒不触发 · C 末尾出现⇒兜底触发 · C2 完成兜底直证 · D 留空⇒不动 · E 关勾⇒不动 · F keyword 回归。 */
+const PLUGIN_VERSION = '1.46.34'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -244,6 +258,8 @@ const defaultSettings = {
     rerollOnNoMutter: false,        // 生成结束全文没有截断标记（半截楼）→ 自动重roll（swipe新分支；默认关：手动停止易误判，知情后再开）
     rerollOnKeyword: true,          // 检测到指定关键词（如 CSAM）→ 停止 → 自动重roll（开新分支）
     rerollKeywords: 'CSAM,',        // 触发重roll的关键词，逗号分隔（英文逗号，可含空格；不区分大小写）
+    rerollOnBodyMarker: true,       // ★W138：**正文**（mes）出现指定内容（如 phase）→ 停止 → 自动重roll；只看正文、**绝不看原生思维链**
+    rerollBodyMarkers: '',          // ★W138：正文触发内容，英文逗号分隔（不区分大小写；留空=不启用。新装默认空 —— 与"关键词"不同，这个不预设任何值）
     mutterSoundEnabled: true,       // 完整生成（含截断标记）→ 播放提示音（内置beep）
     mutterSoundType: 'ding',        // 提示音色：ding=柔和叮咚(默认) | crisp=清脆 | chord=治愈和弦 | soft=低柔单音
     autoRerollLimit: 30,             // 连续自动重roll次数（无上限）
@@ -258,8 +274,8 @@ const defaultSettings = {
     autoStopMarker: '<mutter>',    // 自动截断标记（可自定义，如 <mutter>）
     autoStopFrom: '</content>,<talk>', // ★W113：截断的「起始标记」——支持**多值**（英文逗号分隔，如 </content>,<talk>）；新装默认两个都填（任一出现即算过起点；留空 = 全文检测/旧行为）
     rerollPaused: false,             // 暂停自动重roll（横幅按钮/设置开关控制）
-    rerollLockOn: false,             // ★W105b：一键锁住重roll（5 个勾选暂存在 rerollLockSnap，按钮一键还原）
-    rerollLockSnap: null,            // ★W105b：锁住前的勾选快照 {english,nothink,empty,nomutter,keyword}
+    rerollLockOn: false,             // ★W105b：一键锁住重roll（6 个勾选暂存在 rerollLockSnap，按钮一键还原；★W138 起含「正文出现以下内容即重roll」）
+    rerollLockSnap: null,            // ★W105b：锁住前的勾选快照 {english,nothink,empty,nomutter,keyword,bodymarker}（老快照无 bodymarker 键仍合法）
     dsThinkingMode: 'native',        // DeepSeek 思维链开关：native=原生思维链(thinking enabled) | disabled=正文思维链(thinking disabled)
     dsReasoningEffort: "max",        // DeepSeek 思考强度：off=不注入(用DeepSeek默认high) | low | high | xhigh | max
     wordReplaceEnabled: true,        // 词汇替换总开关（默认开=自动应用）
@@ -370,6 +386,8 @@ const UI = {
         usageTitle: "使用方法：", usage1: "· 只打开step 1：原生思维链不进正文，正文质量理论最高。有概率极端内容夺舍失败（AI 道歉），好在出现英文可手动截停，重roll可破，主要看渠道。", usage2: "· 同时打开step 1和step2：思维链放进正文，破限较强，稳定夺舍。有概率在思考完就截断。这种截断在使用无限能源时会扣费！", usage3: "⚠️注意：两种破限方式都需要搭配专用预设，渠道仅测试opencode，其它自测。",
         rerollSectionTitle: "自动重ROLL：", alertSectionTitle: "完成提醒：",
         rerollNoMutter: "结束仍无截断标记（半截楼/截断）", mutterSound: "完整生成播放", mutterVibrate: "同时震动提醒（Android；iOS不支持）", rcReset: "复原默认注入", rcLockedHint: "内置预设（不可修改）；需要自定义请用「＋ 追加模板」。", rcPresetHint: "切换 KIMI/DS 时此框会自动换成对应默认预设（KIMI：Meta 起手 / DS：We need 起手）。想保存自己的模板请用「＋ 追加模板」。", rcResetDone: "已复原为当前模式的默认预设", rcResetCustom: "自定义模板没有内置默认可复原", mutterTrigMarker: "检测到截断标记（K3/余温预设适用）", mutterTrigDone: "输出完成即提醒（不用截断标记的模型适用）", mutterSndDing: "柔和叮咚（推荐）", mutterSndCrisp: "清脆两声", mutterSndChord: "治愈和弦", mutterSndSoft: "低柔单音", mutterSndMelody: "八音盒旋律（约2秒）", mutterSndLongbell: "长铃余音（约2秒）", mutterSndLullaby: "摇篮琶音（约5秒）", mutterSndHarp: "竖琴流水（约5秒）", mutterSndTest: "试听", mutterHint: "两项均以「自动截断」卡的截断标记（默认 <mutter>）为准：有标记＝完整→响两声beep；无标记＝半截楼→swipe进新分支继续roll（受连续上限约束；手动停止的楼不会被判半截）。提示音为内置音，不依赖酒馆音效设置。", rerollLabel: "自动重roll：", rerollLockOn: "暂时关掉重roll", rerollLockOff: "已锁住 · 点此还原", rerollLockOnTitle: "一键把你勾选的重roll全部暂时关掉（随时可一键还原）", rerollLockOffTitle: "还原到你上次锁住前的勾选", rerollEnglish: "思维链是英文（触审易道歉）", rerollNoThink: "无思维链直接出正文（没思考 or 少思考）", rerollEmpty: "空回复（PVP）", rerollKeyword: "出现以下关键词即重roll", rerollKeywordsLabel: "关键词（逗号分隔）：", rerollKeywordsHint: "生成内容（含思维链）出现任一关键词 → 立即停止并重roll开新分支。多个用英文逗号 , 分隔，不区分大小写；留空=关闭该功能。★这一栏是<b>全文匹配</b>：URL 与 HTML 标签里的字符（http、jpg、&lt;mutter&gt; 等）同样会命中；命中时控制台会打出「位置 + 前后 40 字」，方便判断是不是配置问题。",
+        rerollBodyMarker: "正文出现以下内容即重roll",
+        rerollBodyMarkersHint: "只检测正文（不检测思维链）：正文一出现下面这些内容 → 立即停止并重roll开新分支。多个用英文逗号 , 分隔，不区分大小写；留空=关闭该功能。",
         rerollLimitLabel: "连续自动重roll上限：", rerollTimes: " 次", rerollMinTokensLabel: "思考太短截断阈值：", rerollMinTokensHint: "",
         rerollWarning: "注意：玩极端的内容时，容易出现英文思维链，重roll虽然可以避免大概率道歉的英文思维链，但是中文思维链也有道歉几率，只是比较低！你要多关注下手动截断。",
         foldHeightLabel: "思维链区域固定高度滚动", foldHeightHint: "给思维链区域加最大高度 + 滚动条（长思维链不再撑爆楼层；注入等效自定义 CSS）",
@@ -433,6 +451,8 @@ const UI = {
         usageTitle: "Usage: ", usage1: "· Step 1 only: native CoT stays out of the body - theoretically best body quality. Extreme content may fail takeover (AI apologizes); stop manually if English thinking appears, reroll usually fixes it (depends on the channel).", usage2: "· Step 1 + Step 2: CoT goes into the body - stronger jailbreak, stable takeover. May stop right after thinking. That stop still costs tokens on unlimited-energy plans!", usage3: "⚠️ Both modes need the matching preset. Only tested on opencode channel.",
         rerollSectionTitle: "AUTO REROLL:", alertSectionTitle: "COMPLETION ALERT:",
         rerollNoMutter: "No stop marker at end (truncated reply)", mutterSound: "Complete reply → play beep", rcReset: "Reset default injection", rcLockedHint: "Built-in preset (read-only). To customize, use “+ Add template”.", rcPresetHint: "Switching KIMI/DS replaces this box with that mode's default preset (KIMI: Meta opener / DS: We need opener). To keep your own template, use + Add template.", rcResetDone: "Restored the default preset for this mode", rcResetCustom: "Custom templates have no built-in default to restore", mutterVibrate: "Also vibrate (Android; not on iOS)", mutterTrigMarker: "On stop marker detected (K3 / YuWen presets)", mutterTrigDone: "When output finishes (models without stop marker)", mutterSndDing: "Soft ding-dong (recommended)", mutterSndCrisp: "Crisp double", mutterSndChord: "Healing chord", mutterSndSoft: "Low soft tone", mutterSndMelody: "Music-box melody (~2s)", mutterSndLongbell: "Long bell (~2s)", mutterSndLullaby: "Lullaby arpeggio (~5s)", mutterSndHarp: "Harp cascade (~5s)", mutterSndTest: "Test", mutterHint: "Both use the Auto-Stop marker (default <mutter>): marker found = complete → two beeps; missing = truncated → swipe to a new branch (bounded by the reroll limit; manually stopped replies are exempt). Beep is built-in, independent of ST sound settings.", rerollLabel: "Auto Reroll: ", rerollLockOn: "Temporarily turn off reroll", rerollLockOff: "Locked — click to restore", rerollLockOnTitle: "One click: temporarily turn off all reroll options you picked (restore anytime)", rerollLockOffTitle: "Restore the options you had before locking", rerollEnglish: "English thinking (easily triggers moderation apology)", rerollNoThink: "No thinking, straight to body (no/little thinking)", rerollEmpty: "Empty reply (PVP)", rerollKeyword: "Reroll when any of the following keywords appear", rerollKeywordsLabel: "Keywords (comma-separated): ", rerollKeywordsHint: "If any keyword appears in generated content (incl. thinking) → stop and reroll to a new branch. Separate with English commas , ; case-insensitive. Leave empty to disable. ★This box matches the <b>whole text</b>: characters inside URLs and HTML tags (http, jpg, &lt;mutter&gt;, ...) hit too; on a hit the console logs the position + 40 chars around it, so you can tell a config problem at a glance.",
+        rerollBodyMarker: "Reroll when the reply body contains",
+        rerollBodyMarkersHint: "Checks the reply body only, never the thinking chain: as soon as the body contains any of these → stop and reroll to a new branch. Separate with English commas , ; case-insensitive. Leave empty to disable.",
         rerollLimitLabel: "Max consecutive auto rerolls: ", rerollTimes: " times", rerollMinTokensLabel: "Short-thinking cutoff threshold: ", rerollMinTokensHint: "",
         rerollWarning: "Note: extreme content often produces English thinking. Reroll avoids the high-risk English thinking, but Chinese thinking can still trigger apologies (lower chance). Watch for manual stops.",
         foldHeightLabel: "Fixed-height scroll for reasoning", foldHeightHint: "Give the reasoning area a max-height + scrollbar (long CoT won't blow up the message; same as injecting custom CSS)",
@@ -495,6 +515,8 @@ const UI = {
         usageTitle: "사용법: ", usage1: "· step 1만: 네이티브 CoT가 본문에 안 들어가서 본문 품질이 이론상 최고. 극단적 내용은 탈취 실패(AI 사과) 가능성이 있고, 영어 사고가 나오면 수동 중단 + reroll로 해결(채널에 따라 다름).", usage2: "· step 1+2 동시: CoT가 본문에 들어가 탈옥이 강하고 안정적. 사고 직후 끊길 수 있음. 무제한 에너지 요금제에서는 이 끊김이 과금될 수 있음!", usage3: "⚠️ 두 방식 모두 전용 프리셋 필요. opencode 채널에서만 테스트됨.",
         rerollSectionTitle: "자동 REROLL:", alertSectionTitle: "완료 알림:",
         rerollNoMutter: "끝에 중단 마커 없음(잘린 응답)", mutterSound: "완전한 응답 → 비프음 재생", rcReset: "기본 주입으로 복원", rcLockedHint: "내장 프리셋(수정 불가). 사용자 지정은 “＋ 템플릿 추가”를 사용하세요.", rcPresetHint: "KIMI/DS 전환 시 이 칸은 해당 모드의 기본 프리셋으로 자동 교체됩니다 (KIMI: Meta 시작 / DS: We need 시작). 직접 만든 템플릿은 「＋ 템플릿 추가」를 사용하세요.", rcResetDone: "현재 모드의 기본 프리셋으로 복원됨", rcResetCustom: "커스텀 템플릿은 복원할 내장 기본값이 없습니다", mutterVibrate: "진동 알림 함께(Android; iOS 미지원)", mutterTrigMarker: "중단 마커 감지 시 (K3/여온 프리셋)", mutterTrigDone: "출력 완료 시 (마커 없는 모델)", mutterSndDing: "부드러운 딩동(추천)", mutterSndCrisp: "맑은 두 소리", mutterSndChord: "힐링 코드", mutterSndSoft: "낮은 부드러운 소리", mutterSndMelody: "오르골 멜로디(약 2초)", mutterSndLongbell: "긴 종소리(약 2초)", mutterSndLullaby: "자장가 아르페지오(약 5초)", mutterSndHarp: "하프 흐름(약 5초)", mutterSndTest: "시청", mutterHint: "두 항목 모두 자동 중단 마커(기본 <mutter>) 기준: 마커 있음=완전→비프 2회; 없음=잘림→새 분기로 swipe(상한 제한 있음, 수동 정지 응답 제외). 비프음은 내장, ST 사운드 설정과 무관.", rerollLabel: "자동 reroll: ", rerollLockOn: "reroll 잠시 끄기", rerollLockOff: "잠김 — 클릭해 복원", rerollLockOnTitle: "선택한 reroll 옵션을 한 번에 잠시 꺼 둡니다(언제든 한 번에 복원)", rerollLockOffTitle: "잠그기 전의 선택으로 복원", rerollEnglish: "영어 사고(심사 사과 유발 쉬움)", rerollNoThink: "사고 없이 바로 본문 (사고 없음/적음)", rerollEmpty: "빈 응답 (PVP)", rerollKeyword: "다음 키워드 등장 시 reroll", rerollKeywordsLabel: "키워드(쉬표 구분): ", rerollKeywordsHint: "생성 내용(사고 포함)에 키워드가 나타나면 즉시 중단하고 새 분기로 reroll. 영문 쉬표 , 로 구분, 대소문자 무시. 비우면 비활성화. ★이 칸은 <b>전문 매칭</b>: URL·HTML 태그 안의 문자(http, jpg, &lt;mutter&gt; 등)도 걸립니다. 걸리면 콘솔에 위치 + 앞뒤 40자가 찍혀 설정 문제인지 바로 판단할 수 있습니다.",
+        rerollBodyMarker: "본문에 다음 내용이 나오면 reroll",
+        rerollBodyMarkersHint: "본문만 검사하고 사고(thinking)는 검사하지 않습니다: 본문에 아래 내용이 나오면 즉시 중단하고 새 분기로 reroll. 영문 쉼표 , 로 구분, 대소문자 무시. 비우면 비활성화.",
         rerollLimitLabel: "연속 자동 reroll 상한: ", rerollTimes: " 회", rerollMinTokensLabel: "사고 너무 짧음 절단 기준: ", rerollMinTokensHint: "",
         rerollWarning: "주의: 극단적 콘텐츠에서는 영어 사고가 자주 나옵니다. reroll로 사과 확률 높은 영어 사고를 피할 수 있지만, 한국어 사고도 사과 확률이 낮지만 있습니다! 수동 중단에 신경 쓰세요.",
         foldHeightLabel: "사고 영역 고정 높이 스크롤", foldHeightHint: "사고 영역에 최대 높이 + 스크롤바 추가 (긴 CoT가 메시지를 부풀리지 않음; 커스텀 CSS 주입과 동일)",
@@ -570,6 +592,9 @@ if (settings.rerollOnEmpty === undefined) settings.rerollOnEmpty = defaultSettin
 if (settings.rerollOnNoMutter === undefined) settings.rerollOnNoMutter = false;
 if (settings.rerollOnKeyword === undefined) settings.rerollOnKeyword = true;
 if (settings.rerollKeywords === undefined) settings.rerollKeywords = 'CSAM,';
+// ★W138（铁律 32）：新增两项的默认值**同一个来源**（defaultSettings）—— 升级补默认 = 新装默认。
+if (settings.rerollOnBodyMarker === undefined) settings.rerollOnBodyMarker = defaultSettings.rerollOnBodyMarker;
+if (settings.rerollBodyMarkers === undefined) settings.rerollBodyMarkers = defaultSettings.rerollBodyMarkers;
 if (settings.mutterSoundEnabled === undefined) settings.mutterSoundEnabled = true;
 if (!settings.mutterSoundType) settings.mutterSoundType = 'ding';
 if (settings.mutterVibrate === undefined) settings.mutterVibrate = false;
@@ -1482,7 +1507,9 @@ function checkStreamingAbort(messageId) {
     if (earlyStopTriggered) return;
     // ★W45A：本行原来把「阈值 > 0」也当作「思维太短这项还开着」，于是五个勾全取消、阈值仍是默认 300 时
     //   这里不退 → 流式照样截断重roll（作者实机 BUG）。修法：阈值不再单独当开关，它归下面的「没思考 or 少思考」勾。
-    if (!settings.rerollOnEnglishThinking && !settings.rerollOnNoThinking && settings.rerollOnKeyword === false) return;
+    // ★W138：新增「正文标记」—— 同 keyword 口径加进这道总门（这一档也走流式截断）；
+    //   判据用 bodyMarkerArmed()（勾着 + 列表非空；默认"勾着+空"不放行，免得白跑检测）。
+    if (!settings.rerollOnEnglishThinking && !settings.rerollOnNoThinking && settings.rerollOnKeyword === false && !bodyMarkerArmed()) return;
     // v1.37.15：只检测"本次生成正在写入的新分支"，跳过历史/静态内容——
     // ① observer 会因 swipe 动画/计数器捕获旧消息 DOM 变化，若旧消息是英文会误触发；
     // ② 用户手动往分支填英文 / 加载历史分支（gen_started 是旧时间）也绝不能触发截断——
@@ -1599,6 +1626,29 @@ function checkStreamingAbort(messageId) {
                             console.log(`[余温工具箱] 关键词命中「${hitKw}」${hitContext(reasoning + '\n' + mes, hitKw)}（全表匹配，URL/HTML 里的字符同样会命中）`);
                         }
                     }
+                }
+            }
+        }
+
+        // ★W138（作者 2026-10-14："原生思维链出来之后，一旦检测到（比如 phase）就自动截断、然后重roll…
+        // 功能如名字所说 —— **并非检测原生思维链，而是检测生成的正文部分**"）：
+        // 正文标记重roll —— **只扫 mes（正文内容流），绝不扫 reasoning（原生思维链）**。
+        // 场景：原生思维链正常，但模型在正文里又写了一遍"思考"（正文中出现 Phase 0: 之类），那轮写完直接结束、没有正文
+        //   ⇒ 正文一流出标记就立即截断（省 token）→ 走既有 W66 路径真重roll（开新分支）。
+        // 与上面关键词那条**完全分开**：keyword 是"全文（含思维链）匹配"，这里是"只正文匹配"——
+        //   作者的原生思维链起手就是「Phase 0：」，扫思维链会当场误伤。
+        // 防静态残留：与 keyword 同款守卫、但**只看 mes 快照变化**（reasoning 的增量绝不能当触发源）。
+        if (!stopReason && bodyMarkerArmed()) {
+            const bmRaw = String(settings.rerollBodyMarkers ?? '').trim();
+            const bms = bmRaw.split(',').map(k => k.trim()).filter(Boolean);
+            const mesChangedBm = (generationStartLastMes !== null) ? (mes !== generationStartLastMes) : true;
+            if (bms.length && mesChangedBm) {
+                const bmText = mes.toLowerCase();   // ★只 lower mes：命中源=正文
+                const hitBm = bms.find(k => k && bmText.includes(k.toLowerCase()));
+                if (hitBm) {
+                    stopReason = `正文出现「${hitBm}」`; earlyRerollReason = 'bodymarker';   // ★W66 按路径作废用（与 keyword 同构）
+                    // 与 keyword 同款可见性：命中位置 + 前后 40 字（上下文取自 mes 原文）—— 写明"正文匹配"，一眼可判
+                    console.log(`[余温工具箱] 正文标记命中「${hitBm}」${hitContext(mes, hitBm)}（正文匹配，不检测思维链）`);
                 }
             }
         }
@@ -1767,10 +1817,20 @@ function checkAutoStop(text) {
  *      · `1438`（生成完成早退）有 **4 项**：英文 / 没思考 / 无截断标记 / 关键词；
  *      · 本函数是 **5 项**（多 `rerollOnEmpty`，因为它是"完成时"的判据）。
  *    换成同一个函数 = **改语义**（会让"只开无截断标记/空回复"这两种配置开始走流式截断），
- *    不是等价重构 ⇒ 那三处各自保持原样。★改这个函数就等于同时改 1820/1830 两处，改前想清楚。 */
+ *    不是等价重构 ⇒ 那三处各自保持原样。★改这个函数就等于同时改 1820/1830 两处，改前想清楚。
+ *  ★W138：三处清单**各自**按同一口径补了「正文标记」一项（不是合并成一个函数）：流式总门 3→4 项、
+ *    完成早退 4→5 项、本函数 5→6 项；新项的"算不算开着"一律由 bodyMarkerArmed() 判（勾着+列表非空）。 */
+/** ★W138（作者 2026-10-14）：正文标记这条检测"**算不算开着**"的唯一口径 ——
+ *  勾着（`!== false`）且列表**非空**才算开。为什么这里要比关键词那行多一个"列表非空"：
+ *  新装默认是「勾着 + 列表空」= 等于没开；若按 `!== false` 无条件计入，**默认态**就会把
+ *  `anyRerollSwitchOn()` 的"全部关掉"顶成"还有一枪开着"（W66 的"取消勾选强制生效"会当场失色）。
+ *  判定只读设置、不碰 DOM，任意处调用零成本。 */
+function bodyMarkerArmed() {
+    return settings.rerollOnBodyMarker !== false && !!String(settings.rerollBodyMarkers ?? '').trim();
+}
 function anyRerollSwitchOn() {
     return !!(settings.rerollOnEnglishThinking || settings.rerollOnNoThinking || settings.rerollOnEmpty
-        || settings.rerollOnNoMutter || settings.rerollOnKeyword !== false);
+        || settings.rerollOnNoMutter || settings.rerollOnKeyword !== false || bodyMarkerArmed());   // ★W138：正文标记（有值才算开，同 keyword 同构）
 }
 /** ★★W66（作者 2026-09-27 当场要求："取消勾选强制生效 …… 关于**这条路径**的重roll就不会生效"）。
  *  **按路径**问一句："当初开这一枪的那条规则，现在还开着吗？"
@@ -1784,6 +1844,7 @@ function rerollReasonSwitchOn(reason) {
     if (reason === 'english') return !!settings.rerollOnEnglishThinking;
     if (reason === 'nothink') return !!settings.rerollOnNoThinking;   // "无思考"与"思考太短"共用这一个勾
     if (reason === 'keyword') return settings.rerollOnKeyword !== false && !!String(settings.rerollKeywords || '').trim();
+    if (reason === 'bodymarker') return bodyMarkerArmed();   // ★W138：与 keyword 同构（勾着 + 列表非空才算还开着）
     return anyRerollSwitchOn();
 }
 /** ★★W66：**取消勾选的那一刻**就把"已经武装、还没落地"的那次作废 + 收掉屏幕上那条横幅。
@@ -1809,8 +1870,9 @@ function applyRerollSwitchChange() {
 // 在生成完成时检测夺舍是否失败，按设置自动重roll（触发新的 swipe 分支）
 function checkNativeReroll(messageId) {
     if (!settings.enabled) return;
-    if (!settings.rerollOnEnglishThinking && !settings.rerollOnNoThinking && !settings.rerollOnNoMutter && settings.rerollOnKeyword === false) {
+    if (!settings.rerollOnEnglishThinking && !settings.rerollOnNoThinking && !settings.rerollOnNoMutter && settings.rerollOnKeyword === false && !bodyMarkerArmed()) {
         // v1.37.56：全部检测项关闭时不会走到下面的"通过检测"分支，这里补一次收尾（否则计数/横幅会一直挂着）
+        // ★W138：这道早退的总门同样接进「正文标记」（勾着 + 列表非空才放行；默认"勾着+空"照旧早退）
         if (autoRerollCount !== 0 || rerollBlockedNotified) { autoRerollCount = 0; rerollBlockedNotified = false; clearRerollBanner(); updateRerollStatus(); }
         return;
     }
@@ -1901,6 +1963,26 @@ function checkNativeReroll(messageId) {
                     // v1.37.66（§AY-4）：完成后兜底命中同样给位置 + 前后 40 字（判据不变，只加可见性）
                     console.log(`[余温工具箱] 关键词命中「${hitKw2}」（完成后兜底）${hitContext(reasoning + '\n' + mes, hitKw2)}（全表匹配，URL/HTML 里的字符同样会命中）`);
                 }
+            }
+        }
+        // ★W138：正文标记（完成后兜底）——流式中若漏检（如标记只出现在最末尾 / 流式检测被节流错过）
+        // 在此补上；**同样只看 mes**（reasoning 一个字符都不扫）。判据/开关口径与流式档一致。
+        if (!shouldReroll && bodyMarkerArmed()) {
+            const bmRaw2 = String(settings.rerollBodyMarkers ?? '').trim();
+            const bms2 = bmRaw2.split(',').map(k => k.trim()).filter(Boolean);
+            const bmText2 = mes.toLowerCase();
+            const hitBm2 = bms2.find(k => k && bmText2.includes(k.toLowerCase()));
+            if (hitBm2) {
+                shouldReroll = true;
+                reason = '正文出现「' + hitBm2 + '」';
+                // ★W138 实测抓到（C2 探针）：**必须**把"是哪条路径开的枪"记上 —— triggerAutoSwipe 在
+                //   300ms + 等 ST 收尾（≤6s）的窗口里会按 earlyRerollReason 复查"这条路径现在还开着吗"；
+                //   不记的话读到的是**上一条路径的残留值**（实测：上一次流式截断留下 'english'，而用户此刻
+                //   没开英文那条 ⇒ `rerollReasonSwitchOn('english')` 判假 ⇒ 这次真重roll被当场取消：
+                //   C2 读数 = 命中日志有了、但 0 次新请求 0 个新分支）。keyword 那条既有分支同样是"不记"的
+                //   （同样的残留面），但作者口径"不得改变现有 keyword 行为"⇒ 本波只修 bodymarker 这一条。
+                earlyRerollReason = 'bodymarker';
+                console.log(`[余温工具箱] 正文标记命中「${hitBm2}」（完成后兜底）${hitContext(mes, hitBm2)}（正文匹配，不检测思维链）`);
             }
         }
 
@@ -2419,6 +2501,13 @@ if (Date.now() < deleteGuardUntil) return; // v1.37.55 删除后的抑制窗口�
                 if (hitKw) hitReason = '命中了关键词「' + hitKw + '」';
             }
         }
+        // ★W138：正文标记（切分支/换楼只提示不自动动的那条路）——**只看 mes**，与流式/完成两档同口径
+        if (!hitReason && bodyMarkerArmed()) {
+            const bmRaw0 = String(settings.rerollBodyMarkers ?? '').trim();
+            const bms0 = bmRaw0.split(',').map(k => k.trim()).filter(Boolean);
+            const bmHit0 = bms0.find(k => k && mes.toLowerCase().includes(k.toLowerCase()));
+            if (bmHit0) hitReason = '的正文出现了「' + bmHit0 + '」';
+        }
         if (!hitReason && settings.rerollOnEmpty && (mes.trim() === '' || mes.trim() === '...')) hitReason = '是空回（没有正文）';
         if (hitReason) {
             judgedBranchKey = key; // 同一条分支只提示一次
@@ -2597,8 +2686,11 @@ window.__kimiStopReroll = () => {
 
 /** ★★W105b（作者 2026-10-06 深夜）：「一键锁住重roll / 一键还原」。
  *  用户场景（作者原话）："有时候用户是想一键将自己选择的重roll取消的 但是有时候又想一键还原"。
- *  语义：锁住 = 把 5 个重roll勾选**快照进 rerollLockSnap** 再全部关掉（复用 W66 的"取消勾选强制生效"：
- *        在飞的待办当场作废、横幅收掉）；解锁 = 把快照原样写回。锁住期间 5 个勾选框 disabled（防手改打架）。
+ *  语义：锁住 = 把 6 个重roll勾选**快照进 rerollLockSnap** 再全部关掉（复用 W66 的"取消勾选强制生效"：
+ *        在飞的待办当场作废、横幅收掉）；解锁 = 把快照原样写回。锁住期间 6 个勾选框 disabled（防手改打架）。
+ *  ★W138：新勾「正文出现以下内容即重roll」也纳入锁（作者口径"暂时关掉重roll"要真的全关；
+ *         不纳入的话锁着它照样能开枪 = "关了没真的关"）。老快照（W138 之前存的、没有 bodymarker 键）
+ *         仍是合法快照（shapeOk 放行）—— 解锁时**回新装默认「开」**（它当时就相当于默认态，铁律 32）。
  *  ★坏数据防御（铁律 27）：快照从用户 settings 读 ⇒ 形状不对就当作"没有快照"（解锁时退回全关，不乱猜）。
  *  与「暂停自动重roll」（rerollPaused，横幅那个⏹）**互不干扰**：本按钮一个字都不动 rerollPaused。 */
 const REROLL_LOCK_SWITCHES = [
@@ -2610,7 +2702,8 @@ const REROLL_LOCK_SWITCHES = [
 function rerollLockSnapShapeOk(s) {
     return !!s && typeof s === 'object'
         && typeof s.english === 'boolean' && typeof s.nothink === 'boolean' && typeof s.empty === 'boolean'
-        && typeof s.nomutter === 'boolean' && typeof s.keyword === 'boolean';
+        && typeof s.nomutter === 'boolean' && typeof s.keyword === 'boolean'
+        && (s.bodymarker === undefined || typeof s.bodymarker === 'boolean');   // ★W138：老快照没这个键 = 合法
 }
 /** 按 settings.rerollLockOn 把按钮/勾选框/容器刷成对应形态（构建后与每次切换后都调）。 */
 function applyRerollLockUI() {
@@ -2631,6 +2724,8 @@ function applyRerollLockUI() {
     }
     const kwEl = document.getElementById(extensionName + '_reroll_keyword');
     if (kwEl) { kwEl.disabled = locked; kwEl.checked = locked ? false : (settings.rerollOnKeyword !== false); }
+    const bmEl = document.getElementById(extensionName + '_reroll_bodymarker');   // ★W138：同 keyword 口径
+    if (bmEl) { bmEl.disabled = locked; bmEl.checked = locked ? false : (settings.rerollOnBodyMarker !== false); }
 }
 function toggleRerollLock() {
     try {
@@ -2641,12 +2736,14 @@ function toggleRerollLock() {
                 empty: !!settings.rerollOnEmpty,
                 nomutter: !!settings.rerollOnNoMutter,
                 keyword: settings.rerollOnKeyword !== false,
+                bodymarker: settings.rerollOnBodyMarker !== false,   // ★W138：第 6 个勾也进快照
             };
             settings.rerollOnEnglishThinking = false;
             settings.rerollOnNoThinking = false;
             settings.rerollOnEmpty = false;
             settings.rerollOnNoMutter = false;
             settings.rerollOnKeyword = false;
+            settings.rerollOnBodyMarker = false;   // ★W138：锁住 = 真的全关（不带上它的话，锁着它照样能开枪）
             settings.rerollLockOn = true;
             try { applyRerollSwitchChange(); } catch (e) { }   // ★W66 同款：勾选被关掉 ⇒ 在飞的待办当场作废 + 横幅收掉
             notifyReroll('🔒 重roll 已暂时关掉（点「还原重roll」一键恢复你上次的勾选）', 'info');
@@ -2658,6 +2755,9 @@ function toggleRerollLock() {
             settings.rerollOnEmpty = s ? !!s.empty : false;
             settings.rerollOnNoMutter = s ? !!s.nomutter : false;
             settings.rerollOnKeyword = s ? !!s.keyword : false;
+            // ★W138：老快照（W138 之前存的、没有 bodymarker 键）⇒ 回**新装默认「开」**
+            //   （那个键当时根本不存在，用户的状态就相当于默认态；与铁律 32 的"升级补默认=新装默认"同口径）。
+            settings.rerollOnBodyMarker = s ? (typeof s.bodymarker === 'boolean' ? s.bodymarker : true) : false;
             settings.rerollLockOn = false;
             notifyReroll('🔓 重roll 已还原到你上次的勾选', 'info');
             rerollBannerHideTimer = setTimeout(() => { rerollBannerHideTimer = null; clearRerollBanner(); }, 2600);
@@ -2665,7 +2765,7 @@ function toggleRerollLock() {
         saveSettingsDebounced();
         applyRerollLockUI();
         try { updateRerollStatus(); } catch (e) { }
-        console.log('[余温工具箱] 重roll ' + (settings.rerollLockOn ? '已锁住（5 个勾选已暂存、全部关闭）' : '已解锁（勾选已还原）'));
+        console.log('[余温工具箱] 重roll ' + (settings.rerollLockOn ? '已锁住（6 个勾选已暂存、全部关闭）' : '已解锁（勾选已还原）'));
     } catch (e) { console.warn('[余温工具箱] 重roll 锁定切换失败:', e); }
 }
 $(document).off('click.kimiRerollLock').on('click.kimiRerollLock', '.kimi-reroll-lock', function () { toggleRerollLock(); });
@@ -7387,6 +7487,14 @@ ${t('rerollKeyword')}
 <div style="margin-top:3px">
 <input id="${extensionName}_reroll_keywords" type="text" class="text_pole" style="width:100%" value="${String(settings.rerollKeywords ?? 'CSAM,')}" placeholder="CSAM, xxx"/>
 </div>
+<label class="checkbox_label">
+<input id="${extensionName}_reroll_bodymarker" type="checkbox" ${settings.rerollOnBodyMarker !== false ? 'checked' : ''} ${settings.rerollLockOn ? 'disabled' : ''}/>
+${t('rerollBodyMarker')}
+</label>
+<div style="margin-top:3px">
+<input id="${extensionName}_reroll_bodymarkers" type="text" class="text_pole" style="width:100%" value="${String(settings.rerollBodyMarkers ?? '')}" placeholder="phase, Phase 0:"/>
+</div>
+<div id="${extensionName}_bodymarkers_hint" class="kimi-hint" style="margin-top:2px">${t('rerollBodyMarkersHint')}</div>
 </div>
 <div style="margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
 <label class="kimi-label" for="${extensionName}_reroll_limit" style="display:inline-block;margin:0">${t('rerollLimitLabel')}</label>
@@ -7975,6 +8083,15 @@ const storeBuild = 'v2.2.65';
         settings.rerollKeywords = String($(this).val() || '').trim();
         saveSettingsDebounced();
     });
+    // ★W138：正文标记（勾 + 输入框）—— 与上面 keyword 两条同款
+    $("#" + extensionName + "_reroll_bodymarker").on("change", function () {
+        settings.rerollOnBodyMarker = $(this).is(":checked");
+        saveSettingsDebounced();
+    });
+    $("#" + extensionName + "_reroll_bodymarkers").on("input", function () {
+        settings.rerollBodyMarkers = String($(this).val() || '').trim();
+        saveSettingsDebounced();
+    });
     /* ★★W66（作者 2026-09-27 原话："关每项开关就不会自动重roll 取消勾选强制生效"）：
        上面那批 handler 各自把 `settings.*` 写好之后，**统一**再走一次"就地作废 + 收横幅"。
        · 用事件委托（一条绑定覆盖 7 个元素），不逐个改 handler ⇒ 改动面小、以后加勾只要往这个
@@ -7984,7 +8101,8 @@ const storeBuild = 'v2.2.65';
        · 只在真的"有关系"时才碰 DOM（`applyRerollSwitchChange` 里先判两个条件）。 */
     $(document).on('change input', '#' + extensionName + '_reroll_english, #' + extensionName + '_reroll_nothink, #' + extensionName +
         '_reroll_empty, #' + extensionName + '_reroll_nomutter, #' + extensionName + '_reroll_keyword, #' + extensionName +
-        '_reroll_keywords, #' + extensionName + '_enabled', function () { setTimeout(() => { try { applyRerollSwitchChange(); } catch (e) { } }, 0); });
+        '_reroll_keywords, #' + extensionName + '_reroll_bodymarker, #' + extensionName + '_reroll_bodymarkers, #' + extensionName +
+        '_enabled', function () { setTimeout(() => { try { applyRerollSwitchChange(); } catch (e) { } }, 0); });
     $("#" + extensionName + "_mutter_sound").on("change", function () {
         settings.mutterSoundEnabled = $(this).is(":checked");
         saveSettingsDebounced();
