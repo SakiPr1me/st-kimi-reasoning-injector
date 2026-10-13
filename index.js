@@ -257,7 +257,20 @@ async function doSwipe(targetId) {
    （未发布的 1.46.34 短暂默认过开，只补 undefined 补不回来；照 W115/W113 先例，之后尊重用户手改）；
    ③`bodyMarkerArmed()` / 界面渲染 / 一键锁的快照与还原统一改 **`=== true`**（fail-closed；老快照解锁回
    `defaultSettings.rerollOnBodyMarker` 同一个来源，不硬编码）。读数见同报告 §9（V1~V4）。 */
-const PLUGIN_VERSION = '1.46.35'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+/* ★★W140（2026-10-14 日间 · 作者裁定"切历史楼层分支不许插嘴"）：1.46.35 → **1.46.36**（工具箱单侧；商店/更新器本波未动）
+   作者原话："改变分支 进入一些之前已经判定过重roll的 会触发我们这个插件的重roll"。
+   冲突根因：**一键云同步 0.13.49** 给"非最后一楼"补装了酒馆**原生**滑动箭头，点它走的就是
+   `ctx().swipe.to(event, dir, { source:'swipe_picker', forceMesId, forceSwipeId })` —— 原生照发 MESSAGE_SWIPED
+   （ST 的切分支本来就能作用于**任意楼层**）。而我们的「切分支判定」(`judgeDisplayedBranch`) 原来**不限制只判最后一楼**
+   ⇒ 用那个箭头翻看历史楼层、落到一条"该重roll"的旧分支上时，我们也弹提示（作者不要这个）。
+   作者裁定：**前面的楼层只供翻看，一句话都不插**（那个插件不用动，我们适配）——本波就这一条守卫收窄。
+   ⇒ 在 `judgeDisplayedBranch` 里加一条早退：`Number(messageId) === ctx.chat.length - 1` 才判；
+     非最后一楼 ⇒ 直接 return（**不判定、不提示、不记 judgedBranchKey**）。其它守卫 / 提示文案 / 流式与完成那两条
+     真重roll 的路**一个字没动**（它们的目标本来就是最后一楼）。
+   证据（8002 真页面 · 真鼠标点老楼原生箭头 · `e2e/w140-historical-floor-silent.js`）：
+     改前（1.46.35）老楼切到坏分支 ⇒ 弹提示 + 打「切分支判定」+ 记 key（同一条再切不再弹）· 老楼 MESSAGE_EDITED 同样插嘴；
+     改后（1.46.36）同两条路**全静默**，而**最后一楼**切坏分支提示照旧 + 关键词自动重roll 照旧（28/0 两档对照）。 */
+const PLUGIN_VERSION = '1.46.36'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -2486,6 +2499,17 @@ function judgeDisplayedBranch(messageId) {
 if (Date.now() < deleteGuardUntil) return; // v1.37.55 删除后的抑制窗口内不做重roll判定
     if (!settings.enabled || settings.rerollPaused) return;
     if (isGenerating) return; // 生成中由流式检测负责
+    // ★W140（作者 2026-10-13 裁定）：**只判「当前生成的那一楼」**（聊天最后一楼）。
+    //   为什么要有这条：酒馆原生的切分支能作用于**任意楼层** —— 一键云同步 0.13.49 给前面楼层补装了原生箭头，
+    //   点它走的就是 ST 原生 swipe()（source:'swipe_picker' + forceMesId/forceSwipeId），原生照发 MESSAGE_SWIPED。
+    //   作者原话：「改变分支 进入一些之前已经判定过重roll的 会触发我们这个插件的重roll」⇒ 历史楼层只供翻看，
+    //   我们一句话都不插（不判定、不提示、不记 judgedBranchKey）；前面的楼层该不该重roll，由它自己那一轮的判定负责。
+    try {
+        const ctxL = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        const chatL = ctxL?.chat;
+        if (!Array.isArray(chatL) || chatL.length === 0) return;
+        if (Number(messageId) !== chatL.length - 1) return;
+    } catch (e) { }
     // v1.37.56（根因修复）：只判定「数据上真的是这一条分支」的时候。
     // 依据（ST 1.19 script.js 10271-10324 animateSwipe）：
     //   MESSAGE_SWIPED 是在【新分支 load 之前、Generate 之前】就发出的（10315 行 emit，10319 行才 Generate）。
