@@ -227,7 +227,7 @@ async function doSwipe(targetId) {
      点「保存」= **照 `messageEditDone` 的口径逐条自己做**（mes / swipes[swipe_id] / bias / MESSAGE_EDITED+UPDATED / 重渲染 / 落盘）；
      Esc = 放弃（不写任何数据、原渲染原样回来）；点别处**不丢**编辑内容。
    ★设置开关：`dblEditInPlace`（默认**开**；那一行放在「保存条目的同时保存预设」后面；关 ⇒ 双击完全不响应 = 恢复原生选词）。 */
-const PLUGIN_VERSION = '1.46.32'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.33'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -3621,7 +3621,16 @@ function inlineInsStart() {
        这里只是把同一个动态 import 提前做掉；失败也无妨（内部已 catch、返回 null）。 */
     try { inlineInsGetPm(); } catch (e) { /* 预热失败不影响任何功能 */ }
     try {
-        inlineInsObserver = new MutationObserver(() => inlineInsSchedule());
+        /* ★W137（作者实测："保存条目 / 切开关时，前面那颗 + 会消失一秒钟、旁边几颗图标的间距跟着变一下"）：
+           **同步补挂**（就在观察器回调里，不等 80ms 去抖）——
+           MutationObserver 回调是**微任务**、跑在浏览器**重画之前** ⇒ 酒馆把那一行重画掉的同一帧里，
+           我们就把 + 补回原位 ⇒ 屏幕上永远看不到"少一颗 +"、别的图标也不会挪窝。
+           （实测：改前"缺 +"至少跨 2 帧、旁边的垃圾桶横移 16px；改后 0 个采样点缺 +、横移 0px。）
+           80ms 那趟去抖**保留**当安全网（幂等、便宜；真被绕过时的兜底）。 */
+        inlineInsObserver = new MutationObserver(() => {
+            try { inlineInsMountAll(); } catch (e) { /* 单趟失败不拖垮观察器 */ }
+            inlineInsSchedule();
+        });
         inlineInsObserver.observe(box, { subtree: true, childList: true });
     } catch (e) { inlineInsObserver = null; }
     try {
@@ -8738,6 +8747,7 @@ const ywDblEditDebug = { off: false, noAnchor: false, noDblExit: false };   // �
 let ywDblEditSess = null;      // 本次就地编辑的账（编辑面 / 保存钮 / 锚点几何 / 监听清单）
 let ywDblEditObs = null;       // 盯我们的编辑面是否被外部重渲染摘掉
 let ywDblEditRepos = null;     // 滚动/缩放时把「保存」摆回那一行旁边
+let ywDblEditAnchorLog = [];   // ★W137 只读诊断环（锚定函数每次返回的 out；产品逻辑一个字节都不读它）
 let ywDblEditEngine = null;    // null=还没查过 / false=查不到 / {getRegexedString,regex_placement}=可用（动态 import，失败不拖垮插件）
 let ywDblEditOaPrev = null;    // 编辑期间"冻结滚动锚定"时`#chat`原来的 overflow-anchor 值（收尾还原）
 let ywDblEditOaTimer = null;   // 解冻定时器（保存/放弃之后多冻 700ms，等迟到纠偏走完）
@@ -8812,36 +8822,56 @@ function ywDblEditSquashWithMap(s) {
     return { out: out.join(''), map: map };
 }
 
-/** 把"光标之前的渲染文本"映射回**原文**里的光标位置（长度阶梯取后缀；命中即用）。
- *  ★W135 实测坑：同一个后缀在原文里可能有**多处**（占位句/重复台词很常见，短后缀更是满地都是）——
- *  取 `lastIndexOf`（最后一个）会把光标**甩到文末**（实测一次双击被映射到 2184/2246、那一行整整差了 1082px）。
- *  ⇒ 改成"在**所有**出现位置里取**离点击比例最近**的那一个"（ratio = 你点在这条消息纵向的百分之几，
- *     用渲染高度算的，粗糙但足够把"哪一处"分清）；没有 ratio 时才退回"最后一个"。
- *  返回原文下标（光标落点：最后一个可见字符的下一位）；找不到返回 null（调用方退回"文末"、不硬猜）。 */
-function ywDblEditMapRenderedToRaw(beforeText, raw, ratio) {
-    const b = String(beforeText || '');
-    if (!b.length) return 0;                       // 双击在正文最开头
-    const rb = ywDblEditSquashWithMap(b);
-    if (!rb.out.length) return 0;
+/** ★W137 通用匹配器：把"一段文本"在**原文**里认回来。返回**原文下标**；认不到返回 null。
+ *  mode='suffix'：这段文本的**结尾**紧挨着要找的那一位（返回"它之后的下一位"）—— W135 起的老口径；
+ *  mode='prefix'：这段文本的**开头**就是那一位（返回"它自己的开头"）—— ★W137 新增：
+ *   双击那一刻"光标之后的正文"就是这种口径（前缀被美化改过时的第二把钥匙）。
+ *  ★多次命中一律取**离预期最近**的一次（预期 = ratio × 原文可见字数）——
+ *   **不许再盲取"最后一次"**：2026-10-13 作者实测"跳到末端"这一族里，
+ *   通用句（夹具里那段重复 261 次的占位句）用 lastIndexOf 会被认到文末去（铁律 2/5：先复现再定案）。 */
+function ywDblEditMatchToRaw(snippet, raw, ratio, mode) {
     const rr = ywDblEditSquashWithMap(raw);
     if (!rr.out.length) return null;
+    const rb = ywDblEditSquashWithMap(snippet);
+    if (!rb.out.length) return null;
     const guess = (typeof ratio === 'number' && isFinite(ratio))
         ? Math.max(0, Math.min(1, ratio)) * rr.out.length
         : null;
-    const steps = [80, 60, 45, 32, 22, 14, 8];
+    const steps = (mode === 'prefix') ? [40, 30, 22, 14, 8] : [80, 60, 45, 32, 22, 14, 8];
     for (let k = 0; k < steps.length; k++) {
         const L = steps[k];
         if (rb.out.length < L) continue;
-        const snippet = rb.out.slice(-L);
-        let best = -1, bestD = Infinity, idx = rr.out.indexOf(snippet);
+        const snip = (mode === 'prefix') ? rb.out.slice(0, L) : rb.out.slice(-L);
+        let best = -1, bestD = Infinity, idx = rr.out.indexOf(snip);
         while (idx >= 0) {
             const d = (guess === null) ? (rr.out.length - idx) : Math.abs(idx - guess);
             if (d < bestD) { bestD = d; best = idx; }
-            idx = rr.out.indexOf(snippet, idx + 1);
+            idx = rr.out.indexOf(snip, idx + 1);
         }
-        if (best >= 0) return rr.map[best + L - 1] + 1;
+        if (best >= 0) return (mode === 'prefix') ? rr.map[best] : (rr.map[best + L - 1] + 1);
     }
     return null;
+}
+
+/** 把"光标之前的渲染文本"映射回**原文**里的光标位置（长度阶梯取后缀；命中即用）。
+ *  ★W135 实测坑：同一个后缀在原文里可能有**多处**（占位句/重复台词很常见）——
+ *  取 `lastIndexOf`（最后一个）会把光标**甩到文末**（实测一次双击被映射到 2184/2246、那一行整整差了 1082px）。
+ *  ⇒ "在所有出现位置里取**离点击比例最近**的那一个"（见上面的匹配器）。
+ *  返回原文下标（光标落点：最后一个可见字符的下一位）；找不到返回 null（★W137 起调用方**不会再丢文末**）。 */
+function ywDblEditMapRenderedToRaw(beforeText, raw, ratio) {
+    const b = String(beforeText || '');
+    if (!b.length) return 0;                       // 双击在正文最开头
+    if (!ywDblEditSquashWithMap(b).out.length) return 0;
+    return ywDblEditMatchToRaw(b, raw, ratio, 'suffix');
+}
+
+/** ★W137：拿"光标**之后**的正文"认回原文光标位（前缀口径 —— 那段字的开头就是光标）。
+ *  认不到返回 null（调用方继续往下兜底：比例 → 文末）。 */
+function ywDblEditMapAfterToRaw(afterText, raw, ratio) {
+    const a = String(afterText || '');
+    if (!a.length) return null;                    // 光标已在文末 ⇒ 这把钥匙没内容
+    if (!ywDblEditSquashWithMap(a).out.length) return null;
+    return ywDblEditMatchToRaw(a, raw, ratio, 'prefix');
 }
 
 /** 用镜像 div 量"原文第 upto 个字符"所在**视觉行**的 (上沿 y, 行高, 这一行右缘 x, 这一行第一个字符的下标)。
@@ -8987,7 +9017,7 @@ function ywDblEditLineY(ta, raw, caretRaw) {
 
 /** 双击那一刻的读数：光标之前的渲染文本（拿去原文里匹配）+ 被点那一行的几何（行上沿/左右缘/你点在这行的哪里） */
 function ywDblEditProbeClick(mesText, ev) {
-    const out = { x: ev.clientX, y: ev.clientY, beforeText: '', ratio: null, lineH: null, lineRight: null, lineLeft: null, lineTop: null, caretX: null };
+    const out = { x: ev.clientX, y: ev.clientY, beforeText: '', afterText: '', ratio: null, lineH: null, lineRight: null, lineLeft: null, lineTop: null, caretX: null };
     try {
         let cr = null;
         try {
@@ -9024,6 +9054,15 @@ function ywDblEditProbeClick(mesText, ev) {
             const r2 = document.createRange();
             try { r2.setStart(mesText, 0); r2.setEnd(node, off); } catch (e) { }
             out.beforeText = r2.toString();
+            /* ★W137：光标**之后**那一整段渲染正文 —— "认回原文位置"的第二把钥匙。
+               作者两条实测都栽在"前缀的尾巴被美化正则改过"（场记去标签 / —— 变 — / 标签成元素）：
+               那时"光标之前"整段都认不回去，但"光标之后"的字往往一字不改。 */
+            try {
+                const r3 = document.createRange();
+                r3.setStart(node, off);
+                r3.setEnd(mesText, mesText.childNodes.length);
+                out.afterText = r3.toString();
+            } catch (e) { }
         }
     } catch (e) { }
     try {
@@ -9242,7 +9281,19 @@ function ywDblEditEnter(mesid, mesEl, mesText, info) {
             else { while (caretRaw > 0 && raw.charAt(caretRaw - 1) === '\n') caretRaw--; }
         }
     }
-    if (caretRaw === null) caretRaw = raw.length;      // 匹配不上 ⇒ 光标放文末（不硬猜位置）
+    /* ★W137（作者 2026-10-13 实测："靠近前面和靠近后面…点击了之后…当时跳到末端"）：
+       **认不出位置时绝不放文末** —— 原来这句 `caretRaw = raw.length` 把"你点的那一行"变成
+       "整条消息的最后一行"，补偿就把画面滚到聊天最底（跳到末端）。改成分级兜底：
+         ① 拿"光标**之后**的正文"去原文里认（前缀口径，通常一眼命中）；
+         ② 再认不出 ⇒ 按"你点在整条消息的百分之几"折到原文（有偏差，但一定在原地附近）；
+         ③ 连比例都拿不到（理论上不会）才落文末。 */
+    if (caretRaw === null) {
+        try { caretRaw = ywDblEditMapAfterToRaw(info.afterText, raw, info.ratio); } catch (e) { caretRaw = null; }
+    }
+    if (caretRaw === null && typeof info.ratio === 'number' && isFinite(info.ratio)) {
+        caretRaw = Math.round(Math.max(0, Math.min(1, info.ratio)) * raw.length);
+    }
+    if (caretRaw === null) caretRaw = raw.length;      // 真到这一步：连比例都没有（兜底，理论上到不了）
     try { ta.focus({ preventScroll: true }); } catch (e) { try { ta.focus(); } catch (e2) { } }
     try { ta.setSelectionRange(caretRaw, caretRaw); } catch (e) { }
     const cs = getComputedStyle(ta);
@@ -9489,8 +9540,9 @@ function ywDblEditVisiblePosNear(root, idx) {
  *  全失败 ⇒ 按可见字符比例兜底；再失败 ⇒ 不动（宁可不动也不乱跳）。
  *  ★W136：**认到的位置必须"量得到有效坐标"才允许滚** —— 认不到就换"最近看得见的一位"，再认不到就什么都不滚
  *  （作者实测："双击就地改字 → 保存 ⇒ 画面跳到聊天最顶"，根因就是这里拿着折叠区里的 0 值/陈旧值当了坐标）。 */
-function ywDblEditAnchorRendered(sess, mesText, prefixRaw, wantTop) {
+function ywDblEditAnchorRendered(sess, mesText, prefixRaw, wantTop, lineText) {
     const out = { ok: false, by: null, delta: null, charIdx: null };
+    try { ywDblEditAnchorLog.push(out); if (ywDblEditAnchorLog.length > 8) ywDblEditAnchorLog.shift(); } catch (e) { }
     try {
         if (!mesText || wantTop === null || wantTop === undefined) return out;
         const chatEl = document.getElementById('chat');
@@ -9498,22 +9550,61 @@ function ywDblEditAnchorRendered(sess, mesText, prefixRaw, wantTop) {
         const text = ywDblEditTextOf(mesText);
         const rr = ywDblEditSquashWithMap(text);
         const pb = ywDblEditSquashWithMap(prefixRaw);
+        const fracGuess = (sess && sess.rawSquashLen && rr.out.length)
+            ? Math.max(0, Math.min(1, pb.out.length / sess.rawSquashLen)) : null;
+        const guessSq = (fracGuess === null) ? null : Math.round(fracGuess * rr.out.length);
+        /* ★W137：所有命中里取**离预期最近**的一次；返回 {idx, n}（n = 命中几次，>1 ⇒ 这一认是"含糊的"） */
+        const pickNearest = function (snip) {
+            let best = -1, bestD = Infinity, n = 0, idx = rr.out.indexOf(snip);
+            while (idx >= 0) {
+                n++;
+                const d = (guessSq === null) ? (rr.out.length - idx) : Math.abs(idx - guessSq);
+                if (d < bestD) { bestD = d; best = idx; }
+                idx = rr.out.indexOf(snip, idx + 1);
+            }
+            return { idx: best, n: n };
+        };
         let charIdx = null;
-        if (!pb.out.length) { charIdx = 0; out.by = 'head'; }
+        /* ★★W137 第一把钥匙：**这一行自己的文字**（保存之后 = 你刚写下去的那行新字）。
+           为什么先试它：作者两条都栽在"前缀的尾巴被美化正则改过"（场记去标签 / —— 变 — / 标签成元素）
+           ⇒ 后缀匹配整条链全灭、老代码拿比例兜底把人带沟里。而行内文字在渲染正文里一般一字不动。 */
+        try {
+            const lineSq = ywDblEditSquashWithMap(String(lineText || ''));
+            if (lineSq.out.length >= 8) {
+                const stepsL = [40, 30, 22, 14, 8];
+                for (let k = 0; k < stepsL.length; k++) {
+                    const L = stepsL[k];
+                    if (lineSq.out.length < L) continue;
+                    const hit = pickNearest(lineSq.out.slice(0, L));
+                    if (hit.idx >= 0) {
+                        charIdx = rr.map[hit.idx];
+                        out.by = 'line-' + L + (hit.n > 1 ? 'x' + hit.n : '');
+                        if (hit.n > 1) out.amb = true;
+                        break;
+                    }
+                }
+            }
+        } catch (e) { }
+        if (charIdx === null && !pb.out.length) { charIdx = 0; out.by = 'head'; }
         if (charIdx === null) {
             const steps = [80, 60, 45, 32, 22, 14, 8];
             for (let k = 0; k < steps.length; k++) {
                 const L = steps[k];
                 if (pb.out.length < L) continue;
-                const idx = rr.out.lastIndexOf(pb.out.slice(-L));
-                if (idx >= 0) { charIdx = rr.map[idx + L - 1] + 1; out.by = 'suffix-' + L; break; }
+                const hit = pickNearest(pb.out.slice(-L));
+                if (hit.idx >= 0) {
+                    charIdx = rr.map[hit.idx + L - 1] + 1;
+                    out.by = 'suffix-' + L + (hit.n > 1 ? 'x' + hit.n : '');
+                    if (hit.n > 1) out.amb = true;
+                    break;
+                }
             }
         }
-        if (charIdx === null && sess && sess.rawSquashLen && rr.out.length) {
-            const frac = Math.max(0, Math.min(1, pb.out.length / sess.rawSquashLen));
-            const si = Math.round(frac * rr.out.length);
+        if (charIdx === null && fracGuess !== null) {
+            const si = Math.round(fracGuess * rr.out.length);
             charIdx = (si > 0 && rr.map.length >= si) ? rr.map[si - 1] + 1 : 0;
             out.by = 'ratio';
+            out.amb = true;
         }
         if (charIdx === null) return out;
         out.charIdx = charIdx;
@@ -9525,10 +9616,22 @@ function ywDblEditAnchorRendered(sess, mesText, prefixRaw, wantTop) {
             const near = ywDblEditVisiblePosNear(mesText, charIdx);
             if (near) {
                 const rect2 = ywDblEditRectAtPos(near);
-                if (rect2) { pos = near; rect = rect2; out.by = (out.by || '') + '+visible'; }
+                if (rect2) { pos = near; rect = rect2; out.by = (out.by || '') + '+visible'; out.amb = true; }
             }
         }
         if (!rect || !pos) { out.by = (out.by || '') + '+norect'; out.why = 'no-usable-rect'; return out; }
+        /* ★W137 兜底闸（only-ratio）：**按比例兜底**认来的位（`by='ratio'`，本就是"猜"）如果算出来的
+           残差大得离谱（滚一下就是一大段）⇒ **宁可不滚**（判据：不许跳顶也不许跳底）。
+           ★实测教训（W137 抓到的假阳性）："换过最近看得见的一位"（+visible）**不能**一起闸 ——
+           k3（题记行，命中落在折叠里 ⇒ 换最近可见）残差 677px 是**合法补偿**（消息重渲染后折叠收起来，
+           本来就该滚这一大段；W136 基线就是滚这一下换来 Δ=81.5px）；一刀切会把 k3 弄成 595px。 */
+        const ambLimit = Math.max(400, chatEl.clientHeight * 0.75);
+        const firstDelta = rect.top - wantTop;
+        if (out.by === 'ratio' && Math.abs(firstDelta) > ambLimit) {
+            out.delta = firstDelta; out.lineTop = rect.top;
+            out.why = 'amb-far-skip'; out.skipped = true;
+            return out;
+        }
         /* 两轮收敛：每一轮先踢一下滚动范围再按残差滚（就地编辑把整楼高度换过一遍，范围可能被算错卡住）。
            ★W136：基准 scrollTop 在**踢之前**取 —— 踢会把 overflow 换一下，踢完读到的值不一定是用户原来那个位置。 */
         for (let i = 0; i < 2; i++) {
@@ -9585,18 +9688,20 @@ function ywDblEditDrop() {
 /** Esc / 关开关 ⇒ 放弃：**不写任何数据**，原渲染原样回来（类一摘，被藏起来的原内容就回来了），同样锚定 */
 function ywDblEditCancel(sess, why) {
     if (!sess || ywDblEditSess !== sess || sess.closing) return null;
-    let wantTop = null, prefix = '';
+    let wantTop = null, prefix = '', lineText = '';
     try {
         ywDblEditRefreshAnchor(sess, sess.ta.selectionStart >= 0 ? sess.ta.selectionStart : sess.anchorIdx);
         wantTop = ywDblEditLineTopVp(sess);
         const v = String(sess.ta.value || '');
         const ls = (sess.lineStartRaw === null || sess.lineStartRaw === undefined) ? 0 : sess.lineStartRaw;
         prefix = v.slice(0, ls);
+        /* ★W137：这一行自己的文字（锚定的第一把钥匙） */
+        (function () { const le = v.indexOf('\n', ls); lineText = v.slice(ls, le < 0 ? v.length : le); })();
         sess.rawSquashLen = ywDblEditSquashWithMap(v).out.length;
     } catch (e) { }
     const mesText = sess.mesText;
     ywDblEditDrop();
-    const res = ywDblEditAnchorRendered(sess, mesText, prefix, wantTop);
+    const res = ywDblEditAnchorRendered(sess, mesText, prefix, wantTop, lineText);
     sess.lastResult = { what: 'cancel', why: why || '', res: res };
     /* 放弃也是一次"整楼高度换回来" ⇒ 同样补两档迟到纠偏（用户动过手就不补） */
     try {
@@ -9605,7 +9710,7 @@ function ywDblEditCancel(sess, why) {
                 try {
                     if (sess.userTouched) return;
                     if (!mesText || !document.body.contains(mesText)) return;
-                    const r2 = ywDblEditAnchorRendered(sess, mesText, prefix, wantTop);
+                    const r2 = ywDblEditAnchorRendered(sess, mesText, prefix, wantTop, lineText);
                     sess.lastResult = { what: 'cancel-late', why: why || '', res: r2 };
                 } catch (e) { }
             }, ms);
@@ -9639,12 +9744,14 @@ async function ywDblEditCommit(sess) {
     if (!mes) return;
     const newText = String(sess.ta.value || '');
     /* 先在"当前编辑面"上取锚定读数（保存前的这一刻），再动任何东西 */
-    let wantTop = null, prefix = '';
+    let wantTop = null, prefix = '', lineText = '';
     try {
         ywDblEditRefreshAnchor(sess, sess.ta.selectionStart >= 0 ? sess.ta.selectionStart : sess.anchorIdx);
         wantTop = ywDblEditLineTopVp(sess);
         const ls = (sess.lineStartRaw === null || sess.lineStartRaw === undefined) ? 0 : sess.lineStartRaw;
         prefix = newText.slice(0, ls);
+        /* ★W137：这一行自己的文字（锚定的第一把钥匙；保存之后它就是新写的那行字） */
+        (function () { const le = newText.indexOf('\n', ls); lineText = newText.slice(ls, le < 0 ? newText.length : le); })();
         sess.rawSquashLen = ywDblEditSquashWithMap(newText).out.length;
     } catch (e) { }
     const mesElAt = sess.mesEl;
@@ -9704,14 +9811,14 @@ async function ywDblEditCommit(sess) {
         try { await saveChatConditional(); } catch (e) { console.warn('[余温工具箱] 双击改字：落盘失败（界面已改，请手动保存）：', e); }
         try { showSwipeButtons(); } catch (e) { }
         /* —— ④ 保存之后不许乱跳：把"那一行"摆回原来的屏幕高度（+ 220/500ms 再纠一次异步定型）—— */
-        const res = ywDblEditAnchorRendered(sess, mesTextNow, prefix, wantTop);
+        const res = ywDblEditAnchorRendered(sess, mesTextNow, prefix, wantTop, lineText);
         sess.lastResult = { what: 'save', res: res };
         try {
             [220, 500].forEach(function (ms) {
                 setTimeout(function () {
                     try {
                         if (!mesTextNow || !document.body.contains(mesTextNow)) return;
-                        const r2 = ywDblEditAnchorRendered(sess, mesTextNow, prefix, wantTop);
+                        const r2 = ywDblEditAnchorRendered(sess, mesTextNow, prefix, wantTop, lineText);
                         sess.lastResult = { what: 'save-late', res: r2 };
                     } catch (e) { }
                 }, ms);
@@ -9738,6 +9845,7 @@ try {
                 active: false, mesid: null, lineTopVp: null, yInContent: null, lineH: null,
                 lineRightContent: null, lineStartRaw: null, wantTop: null, residual: null, clamped: null,
                 driftLate: null, userTouched: false, byBrowser: false, lastResult: null, engine: ywDblEditEngine,
+                anchorLog: ywDblEditAnchorLog.slice(-6),
             };
             try { out.hostCount = document.querySelectorAll('.' + YWDBL_HOST_CLASS).length; } catch (e) { }
             try { out.taCount = document.querySelectorAll('.' + YWDBL_TA_CLASS).length; } catch (e) { }
