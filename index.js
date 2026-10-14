@@ -1,5 +1,9 @@
 import { extension_settings } from "../../../extensions.js";
-import { saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, stopGeneration, Generate, getRequestHeaders, is_send_press, saveChatConditional, appendMediaToMessage, addCopyToCodeBlocks, ensureSwipes, extractMessageBias, removeMacros, showSwipeButtons } from "../../../../script.js";
+import { saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, stopGeneration, Generate, getRequestHeaders, is_send_press, saveChatConditional, appendMediaToMessage, addCopyToCodeBlocks, extractMessageBias, removeMacros, showSwipeButtons } from "../../../../script.js";
+// ★W142 旧版酒馆兼容：同上那句**不再**命名导入 `ensureSwipes` —— 它是 ST 1.15.0 才有的导出，
+//   命名导入会在**链接期**（模块体执行之前）把整个插件炸掉（作者 2026-10-14 报的"拓展里看不到、管理拓展里还在"）。
+//   这里改用命名空间取法：宿主没有那个名字时只是一个 `undefined` 属性，链接期永远安全。详见下方 ywEnsureSwipes。
+import * as ST_Script from "../../../../script.js";
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
 import { toggleDrawer } from "../../../utils.js";
 import { stTagMountSettings } from "./tag-fixer.js";
@@ -35,6 +39,45 @@ async function doSwipe(targetId) {
         }
     } catch (e) { console.warn('[余温工具箱] swipe 调用失败:', e); }
     return false;
+}
+
+/* ★★W142 旧版酒馆兼容（2026-10-14 · 作者："更新了之后有人在拓展里面看不到工具箱了，但是管理拓展界面里还有"）
+ *  根因：`ensureSwipes` 是 **ST 1.15.0 才有的导出** —— 1.13.0 / 1.13.5 / 1.14.0 的 script.js 里
+ *  这个名字**一次都没出现**（`git show 1.14.0:public/script.js | grep -c ensureSwipes` = 0；1.15.0 起 = 5）。
+ *  W135（双击就地改字）把它写进了文件顶部的**命名导入** ⇒ 旧版酒馆加载插件时，ESM 在**链接期**
+ *  （模块体执行之前）就抛 `SyntaxError: ... does not provide an export named 'ensureSwipes'`
+ *  ⇒ 整个 index.js **一行都不执行** ⇒ 文件末尾那句 `jQuery(initSettingsPanel)` 不跑 ⇒
+ *  **设置抽屉里的卡片不出现**；而"管理扩展"那页读的是扩展目录、不看加载成功与否，所以还在。
+ *  ★行内的 `try { ensureSwipes(mes) } catch {}` **救不了** —— 链接期早于任何一行代码。
+ *  ⇒ 改法（两条一起）：① 顶部不再命名导入它，改从命名空间 `ST_Script` 取（缺了就是 `undefined`，链接期永远安全）；
+ *    ② **同值本地副本**兜底（照本文件上方 SWIPE_DIRECTION / SWIPE_SOURCE 的做法）。
+ *  ★新版零变化：宿主有这个函数时**优先调宿主那只**，行为一个字都不变；只有旧版才落到本地副本。
+ *  验证：`node --experimental-vm-modules e2e/w142-legacy-load.mjs 1.13.5`（旧档）/ `current`（反档）。 */
+function ywEnsureSwipes(message) {
+    try { if (ST_Script && typeof ST_Script.ensureSwipes === 'function') return ST_Script.ensureSwipes(message); } catch (e) { /* 落本地副本 */ }
+    return ywEnsureSwipesFallback(message);
+}
+/** 同值本地副本：ST 1.15.0 与现行 1.19 里 `ensureSwipes` 的实现逐字相同，这里只做「宿主没有」时的等价补齐。
+ *  返回值语义与原版一致：动过就 true、没动就 false（本插件的调用点不看返回值，留着以便将来对齐）。 */
+function ywEnsureSwipesFallback(message) {
+    let updated = false;
+    if (!message || typeof message !== 'object') return updated;
+    // 小系统消息与用户消息不带 swipe（与原版同判据）
+    if (message.is_user || (message.extra && message.extra.isSmallSys)) return updated;
+    if (!Array.isArray(message.swipes)) { message.swipes = [message.mes ?? '']; updated = true; }
+    if (typeof message.swipe_id !== 'number') { message.swipe_id = 0; updated = true; }
+    const createSwipeInfo = () => ({
+        send_date: message.send_date,
+        gen_started: message.gen_started,
+        gen_finished: message.gen_finished,
+        extra: {},
+    });
+    if (!Array.isArray(message.swipe_info)) { message.swipe_info = message.swipes.map(() => createSwipeInfo()); updated = true; }
+    for (let i = 0; i < message.swipes.length; i++) {
+        if (typeof message.swipes[i] !== 'string') { message.swipes[i] = ''; updated = true; }
+        if (!message.swipe_info[i] || typeof message.swipe_info[i] !== 'object') { message.swipe_info[i] = createSwipeInfo(); updated = true; }
+    }
+    return updated;
 }
 
 /* ★W23 收口（2026-09-25 · 发布准备那一步）：1.40.0 → **1.41.0**（本轮动了工具箱本体：设置页「小剧场」两项勾选 + 「小剧场收藏」入口；与 manifest.json version 同步升） */
@@ -270,8 +313,33 @@ async function doSwipe(targetId) {
    证据（8002 真页面 · 真鼠标点老楼原生箭头 · `e2e/w140-historical-floor-silent.js`）：
      改前（1.46.35）老楼切到坏分支 ⇒ 弹提示 + 打「切分支判定」+ 记 key（同一条再切不再弹）· 老楼 MESSAGE_EDITED 同样插嘴；
      改后（1.46.36）同两条路**全静默**，而**最后一楼**切坏分支提示照旧 + 关键词自动重roll 照旧（28/0 两档对照）。 */
-const PLUGIN_VERSION = '1.46.37'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
-console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 + 旧WebView；标签修复拆分 tag-fixer.js）");
+/* ★★W142（2026-10-14 日间 · 作者："更新了之后有人在拓展里面看不到工具箱了，但是管理拓展界面里还有——
+   是因为里面用到了旧版本酒馆没有的函数"）：1.46.37 → **1.46.38**（工具箱单侧；商店/更新器本波未动）
+   审计范围 = `394e450..ba8fe36`（1.46.28 → 1.46.37 共 9 个提交）新增用到的**酒馆接口**逐档对照 1.13.0 / 1.13.5 / 1.14.0 /
+   … / 1.19（读 `git show <tag>:public/script.js` 的导出名单）。**全批只有一处真会炸**：
+     · `ensureSwipes`（W135 双击就地改字引进）**是 ST 1.15.0 才有的导出**（1.13.0/1.13.5/1.14.0 里 0 处；
+       1.15.0 起 5 处）。它原在顶部**命名导入**里 ⇒ 旧版加载插件时 ESM **链接期**就抛
+       `SyntaxError: ... does not provide an export named 'ensureSwipes'` ⇒ 模块体一行不跑
+       ⇒ 末尾 `jQuery(initSettingsPanel)` 不执行 ⇒ **卡片不出现**（管理扩展那页读目录，所以还在）。
+       改法见文件顶部 `ywEnsureSwipes`（命名空间取法 + 同值本地副本兜底；宿主有则**优先调宿主那只**）。
+     · 其余全是**虚惊**（逐条有原文串为证，对照表见 `waveW142-旧版酒馆兼容加固-日间.md`）：
+       `event_types.STREAM_REASONING_DONE` 1.13.0 就有（W141 无风险）· `getContext()` 的 `chat / name1 / name2 /
+       chatMetadata / powerUserSettings / eventSource / eventTypes / swipe` 1.13.0 起全在 · `swipe.to` 1.15.0 起才有
+       （W134/135 那处只有**注释**提到它，真代码走的 `doSwipe()` 本来就有"有没有 `swipe.to`"的检查）·
+       `messageFormatting / substituteParams / extractMessageBias / removeMacros / appendMediaToMessage /
+       addCopyToCodeBlocks / showSwipeButtons / saveChatConditional` 1.13.0 起全在 ·
+       `EventEmitter.on(undefined)` / `.emit(undefined)` 在酒馆库里本身就是**安全的空操作**（有源码）⇒ 就算某个事件键
+       在更老的版本上不存在，也只会"静默不注册"，不会抛。
+     · 顺手补两处**运行时能力检查**（只在宿主缺对象时才生效，新版一行不变）：双击改字保存路径的两发
+       `ctx.eventSource.emit(ctx.eventTypes.X, id)` 改成"缺 `eventSource`/`eventTypes` ⇒ 静默跳过"——
+       免得事件的缺失把"重渲染 + 落盘"一起带崩。
+   实证（`e2e/w142-legacy-load.mjs`，纯 Node 真链接、无浏览器）：改前 1.13.0/1.13.5/1.14.0 **三档全红**
+     （都报缺 `ensureSwipes`）→ 改后 **1.13.0 ~ 1.19 全绿**；`--revert-guard` 假证档把守卫撤回去 ⇒ 旧档当场红回来。
+    ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
+     `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
+     本波**没动**（详见报告 §未验项）。 */
+const PLUGIN_VERSION = '1.46.38'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
     enabled: true,
@@ -10011,7 +10079,7 @@ async function ywDblEditCommit(sess) {
         if (!mes.extra || typeof mes.extra !== 'object') mes.extra = {};
         mes.mes = text;
         if (mes.swipe_id !== undefined) {
-            try { ensureSwipes(mes); } catch (e) { }
+            try { ywEnsureSwipes(mes); } catch (e) { }
             if (Array.isArray(mes.swipes)) mes.swipes[mes.swipe_id] = text;
         }
         if (mes.is_system || mes.is_user || (mes.extra && mes.extra.type === 'NARRATOR')) mes.extra.bias = bias || null;
@@ -10020,7 +10088,9 @@ async function ywDblEditCommit(sess) {
         /* —— ② 摘掉我们的编辑面（数据已写好，下面这一楼整个重渲染）—— */
         ywDblEditDrop();
         /* —— ③ 事件 + 重渲染 + 落盘（照 messageEditDone 的顺序）—— */
-        await ctx.eventSource.emit(ctx.eventTypes.MESSAGE_EDITED, mesid);
+        /* ★W142 能力检查：这两发事件要 `ctx.eventSource` + `ctx.eventTypes`（1.13.0 起两者都在 getContext 里）。
+           缺任一就**静默跳过**——事件的订阅方是别的扩展，少了只影响它们，绝不能因此把下面"重渲染 + 落盘"带崩。 */
+        if (ctx.eventSource && ctx.eventTypes) await ctx.eventSource.emit(ctx.eventTypes.MESSAGE_EDITED, mesid);
         let text2 = (ctx.chat[mesid] && ctx.chat[mesid].mes !== undefined) ? String(ctx.chat[mesid].mes) : String(text);
         const mesElNow = document.querySelector('#chat .mes[mesid="' + mesid + '"]') || mesElAt;
         const mesTextNow = mesElNow ? mesElNow.querySelector('.mes_text') : null;
@@ -10036,8 +10106,10 @@ async function ywDblEditCommit(sess) {
             try { appendMediaToMessage(mes, $(mesElNow)); } catch (e) { }
             try { addCopyToCodeBlocks(mesElNow); } catch (e) { }
         }
-        await ctx.eventSource.emit(ctx.eventTypes.MESSAGE_UPDATED, mesid);
+        /* ★W142 能力检查：同上（缺了就静默跳过，落盘照做） */
+        if (ctx.eventSource && ctx.eventTypes) await ctx.eventSource.emit(ctx.eventTypes.MESSAGE_UPDATED, mesid);
         try { await saveChatConditional(); } catch (e) { console.warn('[余温工具箱] 双击改字：落盘失败（界面已改，请手动保存）：', e); }
+        /* ★W142：`showSwipeButtons` 1.13.0 起就有（签名在 1.14 起多一个可选参数 mesId；不传 = 老行为）*/
         try { showSwipeButtons(); } catch (e) { }
         /* —— ④ 保存之后不许乱跳：把"那一行"摆回原来的屏幕高度（+ 220/500ms 再纠一次异步定型）—— */
         const res = ywDblEditAnchorRendered(sess, mesTextNow, prefix, wantTop, lineText);
