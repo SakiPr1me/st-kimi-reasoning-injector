@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.38'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.39'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -8556,10 +8556,29 @@ const storeBuild = 'v2.2.65';
     // v1.37.37 流式帧速率滑条：官方滑条的「镜像」——值自动取官方当前(#streaming_fps)，
     // 拖动本滑条只同步给官方滑条并触发其 input（由官方 handler 落盘 power_user 并更新官方数字框）。
     // 插件自身不读不写 power_user、不改任何参数；用户要调就拖这里或拖官方，效果等同。
+    // ★W144 修复（作者 2026-10-15 转来用户反馈："修改流式传输速率之后 它会拉回默认的 30"）：
+    //   根因 = 写路径上那句 `Math.round(Number(v) || 30)`：**空值/非法值会被兜底成 30 并推给官方**
+    //   （清空数字框 ⇒ `Number('') = 0` ⇒ `0 || 30` ⇒ 30 ⇒ 官方滑条被改成 30 + 触发官方 input ⇒
+    //    power_user.streaming_fps=30 并落盘；真页面读数 8002：45 ⇒ 30，内存/官方滑条/官方数字框/磁盘四处全变）。
+    //   改法：**写路径永不用 30 兜底** —— 解析不出「非空 + 可解析 + 落在 5~100」就**静默不推**
+    //   （也不回写用户正在打的那半截字）；"30" 只保留在"读不到官方值时的**显示**占位"那一处（下面 offInit 那句）。
     const $fps = $('#kimi_streaming_fps'), $fpsNum = $('#kimi_streaming_fps_num');
     if ($fps.length) {
+        // ★W144：只认「非空 + 可解析 + 5~100」；其余（空串 / 'e' / 300 / NaN）一律 null。
+        //   注意 `Number('') === 0`、`Number(' ') === 0` ⇒ 必须先看 trim 后是不是空串，不能只信 Number 的结果（**清空 ≠ 0**）。
+        const fpsParse = (v) => {
+            if (v === null || v === undefined) return null;
+            const s = String(v).trim();
+            if (s === '') return null;
+            const n = Number(s);
+            if (!Number.isFinite(n)) return null;
+            const r = Math.round(n);
+            if (r < 5 || r > 100) return null;
+            return r;
+        };
         const syncFpsView = (v) => {
-            const n = Math.min(100, Math.max(5, Math.round(Number(v) || 30)));
+            const n = fpsParse(v);
+            if (n === null) return;   // ★W144：解析不出有效值 ⇒ 什么都不动（旧行为会把空框拽成 30、把"6"拽成 5）
             if (Number($fps.val()) !== n) $fps.val(n);
             if (Number($fpsNum.val()) !== n) $fpsNum.val(n);
         };
@@ -8567,15 +8586,22 @@ const storeBuild = 'v2.2.65';
         const offInit = Number($('#streaming_fps').val());
         syncFpsView(Number.isFinite(offInit) ? offInit : 30);
         // 拖动本滑条/数字框 → 同步给官方滑条并触发官方 input（官方自己落盘，含 counter）
-        const pushToOfficial = () => {
+        // ★W144：值从"触发它的那个控件"取（原来恒读滑条 ⇒ 数字框那条路拿到的是被兜底过的滑条值）
+        const pushToOfficial = (raw) => {
             const $off = $('#streaming_fps');
             if (!$off.length) return;
-            const n = Math.min(100, Math.max(5, Math.round(Number($fps.val()) || 30)));
+            const n = fpsParse(raw);
+            if (n === null) return;   // ★W144：**静默不推**（旧行为就是在这里把空值推成 30、把"6"推成 5）
             if (Number($off.val()) !== n) $off.val(n);
             try { $off.trigger('input'); } catch (e) { }
         };
-        $fps.on('input', function () { syncFpsView($(this).val()); pushToOfficial(); });
-        $fpsNum.on('input', function () { syncFpsView($(this).val()); pushToOfficial(); });
+        $fps.on('input', function () { const v = $(this).val(); syncFpsView(v); pushToOfficial(v); });   // 滑条：拖动即生效（range 的值恒有效）
+        /* ★W144：数字框改「**打完再提交**」（change = 失焦/回车，与 ST 官方那对"滑条+数字框"同一口径）。
+           为什么：原来每敲一键就推 —— 实测（8002 真页面）清空后敲 "6"（本意是打 60）⇒ 我们框被改成 5、
+           官方也变 5（官方滑条 step=5 把 6 夹成 5，官方 handler 回写 counter，我们的镜像再把 5 搬回数字框）
+           ⇒ 接着敲 "0" 就变成 50：用户打的两个字变成了别的数（与"拉回 30"同族：我的修改被改掉）。
+           ⇒ input 不再推、也不再拖滑条（打一半不惊动任何东西）；change 才落值。 */
+        $fpsNum.on('change', function () { const v = $(this).val(); syncFpsView(v); pushToOfficial(v); });
         // 官方滑条改动 → 镜像回本滑条（off 防语言重建重复绑定）
         $(document).off('input.kimiFps').on('input.kimiFps', '#streaming_fps, #streaming_fps_counter', function () {
             const v = Number($(this).val());
