@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.40'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.41'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -3217,7 +3217,6 @@ try {
 } catch { window.__kimiSelfFolder = 'st-kimi-reasoning-injector'; }
 const PLUGIN_REPO_MANIFEST = 'https://api.github.com/repos/SakiPr1me/st-kimi-reasoning-injector/contents/manifest.json';
 const GITEE_API_MANIFEST = 'https://gitee.com/api/v5/repos/satosaki/st-kimi-reasoning-injector/contents/manifest.json'; // 权威源：手机/国内直连可达（gitee raw 直链在 WebView 下无 CORS 头被拦，必须走 API contents）
-const GITEE_READ_TOKEN = '2bf7029efdcafba86f4ed28968f85f25'; // 只读令牌（公开仓不涉密，与 st-chat-sync 同款做法：避免匿名限流403）
 function compareVer(a, b) {
     const pa = String(a).split('.').map(Number);
     const pb = String(b).split('.').map(Number);
@@ -3239,7 +3238,7 @@ async function fetchRemoteVersion(report) {
     // 多源抓取：权威 API 在前（Gitee API 手机国内可达 / GitHub API），raw/CDN 在后（可能旧缓存）。
     // 并发抓取取最大版本——防 CDN 旧缓存误判；gitee 用 raw 直链在 WebView 下被 CORS 拦，故必须走 API contents。
     const sources = [
-        GITEE_API_MANIFEST + '?t=' + Date.now(), // ① Gitee API（权威，带 token，手机可达）
+        GITEE_API_MANIFEST + '?t=' + Date.now(), // ① Gitee API（权威、匿名直达，手机可达）
         PLUGIN_REPO_MANIFEST + '?t=' + Date.now(), // ② GitHub API（权威）
         'https://raw.githubusercontent.com/SakiPr1me/st-kimi-reasoning-injector/main/manifest.json', // ③ GitHub raw（手机可能被墙）
         'https://cdn.jsdelivr.net/gh/SakiPr1me/st-kimi-reasoning-injector@main/manifest.json', // ④ jsDelivr（缓存较久，仅兜底）
@@ -3249,7 +3248,6 @@ async function fetchRemoteVersion(report) {
     window.__kimiRemoteAuthoritative = false; // 权威API源是否至少一个成功（决定"已是最新"是否可信）
     const results = await Promise.allSettled(sources.map(async (url) => {
         const headers = {};
-        if (url.includes('gitee.com/api')) headers['Authorization'] = 'token ' + GITEE_READ_TOKEN;
         if (url.includes('api.github.com')) headers['Accept'] = 'application/vnd.github+json';
         const r = await fetch(url, { cache: 'no-store', headers, signal: AbortSignal.timeout(6000) });
         if (!r.ok) throw new Error('HTTP ' + r.status);
