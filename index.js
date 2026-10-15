@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.39'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.40'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -1986,6 +1986,21 @@ function checkNativeReroll(messageId) {
         if (autoRerollCount !== 0 || rerollBlockedNotified) { autoRerollCount = 0; rerollBlockedNotified = false; clearRerollBanner(); updateRerollStatus(); }
         return;
     }
+    /* ★W144b（2026-10-16 · 扩展矩阵在真 1.13 上抓到的格子）：**空占位不是一条"分支"**。
+       ST 1.13 在 swipe 建新槽后、真生成开始前会先发一次「空占位」MESSAGE_RECEIVED（token=false、mes 为 ''/'...'）。
+       原来这发会走 §BA 门 → 把这个「新分支」记成"已判定" ⇒ 紧接着真生成流式时被判"已判定过的同一条分支"、
+       流式判定（关键词/英文/正文标记）整轮不开 ⇒ 重roll 链停在第 2 条分支上（8003 实测：1:kw/aborted → 2:kw 不再截断、
+       停在含 TESTKW 的分支；两跑逐字一致）。
+       ⇒ 空占位一律**不进判定、也不记账**（连续计数保持原样 = 与既有"空回占位不当作通过检测"逐字同口径）。
+       非空消息（含真实空回收尾）一个字节都不走这条路 —— 空回有自己的主路径 + GENERATED_ENDED 兜底，各自记账。 */
+    try {
+        const cw0 = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        const mw0 = cw0?.chat?.[messageId];
+        if (mw0 && !mw0.is_user && !mw0.is_system && isEmptyMes(String(mw0.mes ?? ''))) {
+            console.log('[余温工具箱] 空占位（无正文）→ 不进 §BA 判定、也不记账（等它的真生成/空回主路径）');
+            return;
+        }
+    } catch (e) { }
     // ★v1.37.66 通用门（§BA）：**先确认"这条是不是还没判定过的新分支"，再开判定**。
     //   同一分支只判一次（判完记账）；不是新分支 ⇒ 直接返回：既不判定、也不重roll。
     //   判据本身（下面的每一项算式/阈值/正则）与"判完怎么动手"的既有逻辑**一个字没动**。
