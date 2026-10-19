@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.41'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.42'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -8619,6 +8619,22 @@ const storeBuild = 'v2.2.65';
         $(document).off('input.kimiFps').on('input.kimiFps', '#streaming_fps, #streaming_fps_counter', function () {
             const v = Number($(this).val());
             if (Number.isFinite(v)) syncFpsView(v);
+        });
+        // ★W149（作者 2026-10-19："点击别处也要修改"）：酒馆官方数字框 #streaming_fps_counter 自身没有
+        //   change/blur 处理 —— 用户打完字直接点别处，值**不会保存**（实测：打 45 + 失焦 ⇒ 内存/滑条/磁盘全不动；
+        //   只有按回车那条路会存）。这里补上"失焦即提交"：change 时走与滑条相同的推值路径（官方 handler 负责落盘）。
+        //   ★无效/空值仍然**静默不推**（W144 铁律：永不把空值兜底成 30），并把框恢复成官方当前值（显示 = 已保存值）。
+        $(document).off('change.kimiFpsCommit').on('change.kimiFpsCommit', '#streaming_fps_counter', function () {
+            const $c = $(this), $o = $('#streaming_fps');
+            const n = fpsParse($c.val());
+            if (n === null) {
+                const cur = Number($o.val());
+                if (Number.isFinite(cur)) { $c.val(cur); syncFpsView(cur); }
+                return;
+            }
+            pushToOfficial(n);
+            const now = Number($o.val());
+            if (Number.isFinite(now)) syncFpsView(now);   // 官方 handler 已把 counter 更新为落盘值（含 step 吸附）
         });
     }
     $("#" + extensionName + "_fix_now").on("click", function () {
