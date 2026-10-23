@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.49'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.50'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -6378,15 +6378,15 @@ const KIMI_SETTINGS_CSS = `
 /* ★W46：本次动到的两个「小剧场」行按 §5 触摸档抬到 ≥32（行 = 图标+文字那族，勾选框本体仍是 11px，
    **视觉不变大、热区变大**；同族其它行一起受益，免得这两行比邻居高出一截）。
    实测：PC 档行热区 317x32；行内那颗「立即打开一次」也一起抬到 32。 */
-#kimi_reasoning_injector_settings .kimi-entry-panel label.kimi-entry-row { min-height: 32px; }
+#kimi_reasoning_injector_settings .kimi-entry-panel label.kimi-entry-row { min-height: 26px; }   /* ★W159：32→26（作者："勾选项的间距 还是太高了 再缩窄一点"） */
 #kimi_reasoning_injector_settings .kimi-entry-panel label.kimi-entry-row > .kimi-btn { min-height: 32px; }
 #kimi_reasoning_injector_settings .kimi-entry-panel label.kimi-entry-row {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 6px;
     font-size: 0.88em;
-    line-height: 1.2;
-    padding: 2px 0;
+    line-height: 1.15;
+    padding: 0;
     margin: 0;
     cursor: pointer;
     user-select: none;
@@ -7733,21 +7733,18 @@ ${t('foldHeightLabel')}
 <input id="${extensionName}_reasoning_height_value" type="number" min="50" max="2000" step="10" class="text_pole kimi-num" value="${settings.reasoningHeightCssValue || 250}"/>
 <span class="kimi-hint" style="display:inline">px</span>
 </label>
-<p class="kimi-hint">${t('foldHeightHint')}</p>
 </div>
 <div style="margin-top:6px">
 <label class="checkbox_label">
 <input id="${extensionName}_reasoning_timer" type="checkbox" ${settings.reasoningTimer ? 'checked' : ''}/>
 ${t('reasoningTimerLabel')}
 </label>
-<p class="kimi-hint">${t('reasoningTimerHint')}</p>
 </div>
 <div style="margin-top:6px">
 <label class="checkbox_label">
 <input id="${extensionName}_show_tps" type="checkbox" ${settings.showTps ? 'checked' : ''}/>
 ${t('showTpsLabel')}
 </label>
-<p class="kimi-hint">${t('showTpsHint')}</p>
 </div>
 <div class="kimi-sep"></div>
 
