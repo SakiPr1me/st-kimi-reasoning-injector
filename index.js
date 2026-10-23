@@ -8441,7 +8441,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
    ② 整份预设卡底部那一排（下载本预设/评论/点赞/缝入）**统一外形 + 收紧**（改前手机 360 档整排右溢出 28px）。
    ★同时升工具箱 PLUGIN_VERSION（1.46.27 → 1.46.28）：用户的自更新是拿**远端 manifest 的版本号**比本机 ——
      只升商店号、不升工具箱号，用户端就**不会**自动更新（作者今天当场踩到过）。 */
-const storeBuild = 'v2.2.68';
+const storeBuild = 'v2.2.69';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();

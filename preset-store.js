@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.68';
+const VERSION = '2.2.69';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.68';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.68';
+const BUILD = 'v2.2.69';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -8193,8 +8193,9 @@ function viewFav() {
                 : '还没有收藏。到商店里点卡片标题右边那颗「☆」。') + '</div>');   // ★W79：同上
     return '<div class="yws-wstep"><b>⭐ 收藏记录</b> <span class="yws-dim">（' + numOf(isLocal ? nLocal : rows.length) + ' 条）</span>' +
         favSegBarHtml(tab, nCard, nPlay, nLocal) +
-        '<div class="yws-wrow"><button class="yws-btn yws-mini" data-act="to-main">← 回商店</button>' +
-            (isLocal ? '' : '<span class="yws-dim">点卡片标题能回去看那张卡。</span>') + '</div>' +
+        /* ★W160（作者 2026-10-23）：收藏记录里**删掉「← 回商店」按钮**（退出走商店自己的关闭 ✕）。
+           那句"点卡片标题能回去看那张卡"的提示保留（只在云端段显示；本地段连空行都不占）。 */
+        (isLocal ? '' : '<div class="yws-wrow"><span class="yws-dim">点卡片标题能回去看那张卡。</span></div>') +
         body +
     '</div>';
 }
