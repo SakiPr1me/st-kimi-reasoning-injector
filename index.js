@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.46'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.47'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -5190,7 +5190,7 @@ function __kimiSvgIcon(ico, color) {
  *  ★纯字符串处理，标题来自 i18n 静态文案（无用户数据）⇒ 不做转义；输出里**没有**反引号 / `${`（铁律 16）。 */
 function kimiCardTitleHtml(titleKey) {
     const raw = String(t(titleKey) || '');
-    return raw.replace(/[（(][^（）()]*[）)]/g, (m) => '<span class="kimi-card-sub">' + m + '</span>');
+    return kimiCardTitleHtmlFromText(raw);
 }
 /** ★W155：给**别的模块**挂上来的卡（api-pool.js 的「API 池」/ tag-fixer.js 的「标签修复」）补同一层括号弱化 ——
  *  那两个 summary 不在本文件里，改不了字符串 ⇒ 挂载完成后在 DOM 上就地包一层。
@@ -5221,9 +5221,14 @@ function decorateCardTitles(root) {
     });
     return n;
 }
-/** 与 kimiCardTitleHtml 同一套包裹逻辑，但输入是**已经渲染好的文本**（DOM 装饰用）。 */
+/** 与 kimiCardTitleHtml 同一套包裹逻辑，但输入是**已经渲染好的文本**（DOM 装饰用）。
+ *  ★W156（作者 2026-10-23）：括号那截**去掉加粗 + 靠右**（作者："还是太明显了…不要加粗功能" + "括号内字体向右对齐"）。
+ *  ⇒ 从**第一个括号**处切开：前半截包 `.kimi-card-main`（flex:1 撑开 ⇒ 把后半截推到右边），后半截包 `.kimi-card-sub`（右对齐）。 */
 function kimiCardTitleHtmlFromText(text) {
-    return String(text || '').replace(/[（(][^（）()]*[）)]/g, (m) => '<span class="kimi-card-sub">' + m + '</span>');
+    const s = String(text || '');
+    const i = s.search(/[（(]/);
+    if (i < 0) return '<span class="kimi-card-main">' + s + '</span>';
+    return '<span class="kimi-card-main">' + s.slice(0, i) + '</span><span class="kimi-card-sub">' + s.slice(i) + '</span>';
 }
 
 /* ==================================================================================
@@ -6177,12 +6182,21 @@ const KIMI_SETTINGS_CSS = `
 /* ★W155（作者 2026-10-23 第 3 条）：标题里**括号及其内容**的弱化档（由 kimiCardTitleHtml() 包出来）——
    "小一点、淡一点，但看得清，不喧宾夺主"。色走既有说明档 --kimi-ink-3（78%，量过的安全档，≥4.5），
    不新造平行色；主面板与卡浮窗两处同款（两个容器上都定义了 --kimi-ink-3，见上面令牌块）。 */
+#kimi_reasoning_injector_settings .kimi-card-main,
+#kimi_reasoning_injector_card_float .kimi-card-main {
+    flex: 1 1 auto;              /* ★W156：主标题撑开 ⇒ 把括号那截推到右边（右对齐） */
+    min-width: 0;
+    text-align: left;
+}
 #kimi_reasoning_injector_settings .kimi-card-sub,
 #kimi_reasoning_injector_card_float .kimi-card-sub {
-    font-size: .85em;
-    font-weight: 600;
+    flex: none;
+    font-size: .82em;
+    font-weight: 400;            /* ★W156：去掉加粗（原来 600 ⇒ 跟标题的 700 一起显得太显眼） */
     color: var(--kimi-ink-3);
     opacity: .95;
+    margin-left: auto;           /* 兜底：主标题不在时也能贴右 */
+    white-space: nowrap;
 }
 #kimi_reasoning_injector_settings .kimi-card[open] > summary::after {
     transform: rotate(90deg);
