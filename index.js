@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.45'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.46'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -399,7 +399,7 @@ const defaultSettings = {
     clineRouteAlert: false,          // 实际路由与指定不符时提醒（默认关）
     opencodeHeadersEnabled: false,   // Opencode 请求标头：自动注入 X-Opencode-Session（每聊天固定ID，GPU缓存命中）
     autoUpdate: true,                // 默认自动更新：每次检测到云端有新版直接更新到最新
-    floatPanelKeys: ['inject', 'reroll', 'word', 'api', 'tag', 'psnap', 'fix'], // 悬浮条面板区显示哪些卡（★W150：顺序 = 主面板卡片顺序）
+    floatPanelKeys: ['inject', 'reroll', 'word', 'tag', 'api', 'psnap', 'fix'], // 悬浮条面板区显示哪些卡（★W150：顺序 = 主面板卡片顺序；★W155：「标签修复」与「API 池」互换 ⇒ 标签修复在前）
     floatPanelAllKey: 'all',
     clineModelOverride: false,       // 模型名前缀覆写：请求层把 model 改写为 指定提供商/基础模型名（⚠️脱离cline-pass前缀=按积分计费）
     clineProvider: 'modal',          // 当前选中的 Cline 提供商（默认 modal，据称质量最好）
@@ -473,7 +473,7 @@ const UI = {
         dsEffortLabel: "Deepseek思考强度：", dsEffortOff: "off（不注入，用 DeepSeek 默认 high）", dsEffortLow: "low（flash: low / pro: high）", dsEffortHigh: "high（flash: high / pro: high）", dsEffortXhigh: "xhigh（flash: high / pro: max）", dsEffortMax: "max（flash: max / pro: max）",
         k3EffortLabel: "Kimi3 思考强度：", k3EffortOff: "off（不注入，用 K3 默认 max）", k3EffortLow: "low（思考快）", k3EffortHigh: "high", k3EffortMax: "max（思考最久）",
         injectLabel: "注入破限：", injectStep1: "step 1：中破限·原生思维链夺舍（gemini需要关闭我）", injectStep2: "step 2：强破限·正文输出思维链夺舍（大多数渠道已失效，别选我）",
-        injectTitle: "注入（模型相关）", modelTitle: "模型参数", rerollTitle: "自动重Roll/截断（妙妙方法）", autoStopTitle: "自动截断", beautifyTitle: "思维链", presetUpdTitle: "预设更新器（对比/缝入）", presetStoreTitle: "条目商店", playFavTitle: "小剧场收藏", playFavNow: "立即打开一次", playFavNotReady: "条目商店还没准备好（正在加载，或者这个包里没有它）—— 过一两秒再点一次。", playFavJumpFail: "商店打开了，但没能跳到「小剧场收藏」—— 在商店里点一下「⭐ 收藏记录」，再切到「小剧场收藏」那一段。",
+        injectTitle: "注入（模型相关）", modelTitle: "模型参数", rerollTitle: "自动重Roll/截断（妙妙方法）", autoStopTitle: "自动截断", beautifyTitle: "思维链", presetUpdTitle: "预设更新器（对比/缝入）", presetStoreTitle: "条目商店", playFavTitle: "小剧场收藏", playFavNow: "立即打开一次", playFavNotReady: "条目商店还没准备好（正在加载，或者这个包里没有它）—— 过一两秒再点一次。", playFavJumpFail: "商店打开了，但没能打开「收藏记录」—— 在商店里点一下「⭐ 收藏记录」。",
         playLatestTitle: "最新小剧场", playLatestNow: "立即打开一次",
         playLatestNotReady: "条目商店还没准备好（正在加载，或者这个包里没有它）—— 过一两秒再点一次。",
         playLatestJumpFail: "商店打开了，但没找到「🎭 小剧场」那一区 —— 商店里现在可能还没有小剧场（等有人上传，或者你自己到「⬆ 发布」发一条）。", fixTitle: "不常用", wordTitle: "替换（清理标签、烦人字）",
@@ -538,7 +538,7 @@ const UI = {
         dsEffortLabel: "DeepSeek Effort: ", dsEffortOff: "off (no inject, DeepSeek default high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 Effort: ", k3EffortOff: "off (no inject, K3 default max)", k3EffortLow: "low (fast thinking)", k3EffortHigh: "high", k3EffortMax: "max (longest thinking)",
         injectLabel: "Injection Modes: ", injectStep1: "step 1: medium jailbreak - native CoT takeover (turn me off for gemini)", injectStep2: "step 2: strong jailbreak - body CoT takeover (defunct on most channels - don't pick me)",
-        injectTitle: "Injection (Model)", modelTitle: "Model Settings", rerollTitle: "Auto Reroll / Truncate (the neat trick)", autoStopTitle: "Auto-Stop", beautifyTitle: "Chain of Thought", presetUpdTitle: "Preset Updater (Compare / Stitch)", presetStoreTitle: "Entry Store", playFavTitle: "Play favorites", playFavNow: "Open once", playFavNotReady: "The entry store isn't ready yet (still loading, or not included in this build) — try again in a second.", playFavJumpFail: "The store opened but did not jump — click the ⭐ favorites button in the store, then switch to the Play favorites tab.",
+        injectTitle: "Injection (Model)", modelTitle: "Model Settings", rerollTitle: "Auto Reroll / Truncate (the neat trick)", autoStopTitle: "Auto-Stop", beautifyTitle: "Chain of Thought", presetUpdTitle: "Preset Updater (Compare / Stitch)", presetStoreTitle: "Entry Store", playFavTitle: "Play favorites", playFavNow: "Open once", playFavNotReady: "The entry store isn't ready yet (still loading, or not included in this build) — try again in a second.", playFavJumpFail: "The store opened but the favorites view did not — click the ⭐ favorites button in the store.",
         playLatestTitle: "Latest plays", playLatestNow: "Open once",
         playLatestNotReady: "The entry store isn't ready yet (still loading, or not included in this build) — try again in a second.",
         playLatestJumpFail: "The store opened, but there is no Play section — the store may have no plays yet (wait for someone to upload, or post one yourself via ⬆ 发布).", fixTitle: "Uncommon", wordTitle: "Replace (Cleanup Tags & Words)",
@@ -602,7 +602,7 @@ const UI = {
         dsEffortLabel: "DeepSeek 강도: ", dsEffortOff: "off (주입 안 함, DeepSeek 기본 high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 강도: ", k3EffortOff: "off (주입 안 함, K3 기본 max)", k3EffortLow: "low (빠른 사고)", k3EffortHigh: "high", k3EffortMax: "max (가장 긴 사고)",
         injectLabel: "주입 모드: ", injectStep1: "step 1: 중간 탈옥·네이티브 CoT 탈취 (gemini는 끄세요)", injectStep2: "step 2: 강한 탈옥·본문 CoT 탈취 (대부분 채널에서 무효 — 고르지 마세요)",
-        injectTitle: "주입 (모델 관련)", modelTitle: "모델 설정", rerollTitle: "자동 reroll/중단 (꿀팁 방법)", autoStopTitle: "자동 중단", beautifyTitle: "사고 과정", presetUpdTitle: "프리셋 업데이터 (비교/이어붙이기)", presetStoreTitle: "항목 상점", playFavTitle: "소극장 즐겨찾기", playFavNow: "한 번 열기", playFavNotReady: "항목 상점이 아직 준비되지 않았습니다(불러오는 중이거나 이 빌드에 없음) — 잠시 후 다시 눌러 주세요.", playFavJumpFail: "상점은 열렸지만 이동하지 못했습니다 — 상점에서 ⭐ 즐겨찾기 버튼을 누른 뒤 소극장 즐겨찾기 탭으로 바꿔 주세요.",
+        injectTitle: "주입 (모델 관련)", modelTitle: "모델 설정", rerollTitle: "자동 reroll/중단 (꿀팁 방법)", autoStopTitle: "자동 중단", beautifyTitle: "사고 과정", presetUpdTitle: "프리셋 업데이터 (비교/이어붙이기)", presetStoreTitle: "항목 상점", playFavTitle: "소극장 즐겨찾기", playFavNow: "한 번 열기", playFavNotReady: "항목 상점이 아직 준비되지 않았습니다(불러오는 중이거나 이 빌드에 없음) — 잠시 후 다시 눌러 주세요.", playFavJumpFail: "상점은 열렸지만 즐겨찾기를 열지 못했습니다 — 상점에서 ⭐ 즐겨찾기 버튼을 눌러 주세요.",
         playLatestTitle: "최신 소극장", playLatestNow: "한 번 열기",
         playLatestNotReady: "항목 상점이 아직 준비되지 않았습니다(불러오는 중이거나 이 빌드에 없음) — 잠시 후 다시 눌러 주세요.",
         playLatestJumpFail: "상점은 열렸지만 「🎭 소극장」 구역을 찾지 못했습니다 — 상점에 아직 소극장이 없을 수 있습니다(누가 올리기를 기다리거나, ⬆ 发布에서 직접 올려 주세요).", fixTitle: "비상용", wordTitle: "치환 (태그·거슬리는 단어 정리)",
@@ -750,7 +750,7 @@ if (settings.floatRouteBadge === undefined) settings.floatRouteBadge = true;
 if (settings.clineRouteAlert === undefined) settings.clineRouteAlert = false;
 if (settings.opencodeHeadersEnabled === undefined) settings.opencodeHeadersEnabled = false;
 if (settings.autoUpdate === undefined) settings.autoUpdate = true;
-if (!Array.isArray(settings.floatPanelKeys)) settings.floatPanelKeys = ['inject', 'reroll', 'word', 'api', 'tag', 'psnap', 'fix'];   // ★W150：与新装默认同一份（顺序 = 主面板卡片顺序）
+if (!Array.isArray(settings.floatPanelKeys)) settings.floatPanelKeys = ['inject', 'reroll', 'word', 'tag', 'api', 'psnap', 'fix'];   // ★W150：与新装默认同一份（顺序 = 主面板卡片顺序；★W155：「标签修复」与「API 池」互换）
 if (settings.floatPanelAllKey === undefined) settings.floatPanelAllKey = defaultSettings.floatPanelAllKey;   // ★W114（铁律 32）：新装默认 'all'；缺键时补上，和老用户/新装口径一致
 if (settings.clineModelOverride === undefined) settings.clineModelOverride = false;
 delete settings.clineRouteFormat;
@@ -4943,13 +4943,17 @@ function updatePsnapEntries() {
 /* ★W150（作者 2026-10-19）：顺序与主面板卡片顺序**逐一对应**（作者第 1/6 条）——
    「API 池」挪到「标签修复」紧邻之上；「思维链」卡整张撤掉（内容并入基础设置）⇒ 这里同步去掉 beautify。
    ★这一份同时决定**悬浮条面板区实际顺序**（panelDefs 遍历本表）与**勾选清单顺序**（floatPanelListHtml 遍历本表）
-   ⇒ 只要本表与主面板一致，两处就不可能不一致（作者第 6 条）。 */
+   ⇒ 只要本表与主面板一致，两处就不可能不一致（作者第 6 条）。
+   ★★W155（作者 2026-10-23）：**与「标签修复」互换** —— 现为「标签修复」紧邻在「API 池」之上（主面板模板里
+   两个挂载点 `_tag_slot` / `_api_slot` 同步换了位；基础设置卡的勾选清单、悬浮条面板区都遍历本表 ⇒ 一处改、三处跟）。
+   ★渲染顺序一律以**本表**为准，勾选状态仍读 `settings.floatPanelKeys`（它只记"勾了哪些"）⇒ **老用户不必迁移**
+   （已存的数组顺序与本表不一致也不影响显示顺序）。 */
 const KIMI_CARD_DEFS = [
     { key: 'inject', ico: 'fa-bolt', titleKey: 'injectTitle' },
     { key: 'reroll', ico: 'fa-arrows-rotate', titleKey: 'rerollTitle' },
     { key: 'word', ico: 'fa-broom', titleKey: 'wordTitle' },
-    { key: 'api', ico: 'fa-plug', titleKey: 'apiTitle' },
     { key: 'tag', ico: 'fa-tag', titleKey: 'tagTitle' },
+    { key: 'api', ico: 'fa-plug', titleKey: 'apiTitle' },
     { key: 'psnap', ico: 'fa-list-check', titleKey: 'psnapTitle' },
     { key: 'fix', ico: 'fa-wrench', titleKey: 'fixTitle' },
 ];
@@ -5179,12 +5183,56 @@ function __kimiSvgIcon(ico, color) {
     return `<svg viewBox="${m.v}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:15px;height:15px;fill:${color || 'currentColor'};flex:none"><path d="${m.d}"/></svg>`;
 }
 
+/** ★W155（作者 2026-10-23 第 3 条）：**卡片标题渲染助手** —— 所有卡片 `<summary>` 的标题都走这里，别逐个手改字符串。
+ *  做一件事：把标题里**括号及其内容**单独包一层 `<span class="kimi-card-sub">`（CSS 里做"小一点、淡一点但看得清"，
+ *  = 不喧宾夺主），括号外的正文保持原样大小与颜色。
+ *  ★三语通用：中文全角 `（…）` 与 en/ko 半角 `(…)` 都认（同一条正则的两个括号字符类）。
+ *  ★纯字符串处理，标题来自 i18n 静态文案（无用户数据）⇒ 不做转义；输出里**没有**反引号 / `${`（铁律 16）。 */
+function kimiCardTitleHtml(titleKey) {
+    const raw = String(t(titleKey) || '');
+    return raw.replace(/[（(][^（）()]*[）)]/g, (m) => '<span class="kimi-card-sub">' + m + '</span>');
+}
+/** ★W155：给**别的模块**挂上来的卡（api-pool.js 的「API 池」/ tag-fixer.js 的「标签修复」）补同一层括号弱化 ——
+ *  那两个 summary 不在本文件里，改不了字符串 ⇒ 挂载完成后在 DOM 上就地包一层。
+ *  ★幂等：已经是 `.kimi-card-sub` 里的文本不再包（重复调用安全）；只动**直接子文本节点**，不碰图标/子元素。 */
+function decorateCardTitles(root) {
+    const host = root || document.getElementById(extensionName + '_settings');
+    if (!host || !host.querySelectorAll) return 0;
+    let n = 0;
+    host.querySelectorAll('details.kimi-card > summary').forEach((sum) => {
+        if (sum.querySelector('.kimi-card-sub')) return;               // 幂等守卫：这份 summary 已处理过
+        const walk = (node) => {
+            [...node.childNodes].forEach((ch) => {
+                if (ch.nodeType === 3) {                                  // 文本节点
+                    if (!/[（(][^（）()]*[）)]/.test(ch.nodeValue || '')) return;
+                    const html = kimiCardTitleHtmlFromText(ch.nodeValue);
+                    const tmp = document.createElement('span');
+                    tmp.innerHTML = html;
+                    node.replaceChild(tmp, ch);
+                    while (tmp.firstChild) node.insertBefore(tmp.firstChild, tmp);
+                    node.removeChild(tmp);
+                    n++;
+                } else if (ch.nodeType === 1 && ch.tagName !== 'I' && !ch.classList.contains('kimi-card-sub')) {
+                    walk(ch);                                             // 进 <span id="..."> 这类包裹里找
+                }
+            });
+        };
+        walk(sum);
+    });
+    return n;
+}
+/** 与 kimiCardTitleHtml 同一套包裹逻辑，但输入是**已经渲染好的文本**（DOM 装饰用）。 */
+function kimiCardTitleHtmlFromText(text) {
+    return String(text || '').replace(/[（(][^（）()]*[）)]/g, (m) => '<span class="kimi-card-sub">' + m + '</span>');
+}
+
 /* ==================================================================================
  * ★W21B（2026-09-25）**小剧场收藏** + 面板型勾选列表的两处补丁（作者第 7 / 9 条）
  * ==================================================================================
  * 这一块只做四件事，全部**照现成机制**，不新造任何东西：
  *   ① `floatPanelListHtml()` / `renderFloatPanelList()` —— 面板型勾选列表的**单一出口** + 就地重画；
  *   ② `openStorePlayFav()` —— 「小剧场收藏」的**唯一动作出口**（悬浮条那颗图标与基础设置那颗按钮共用）；
+ *      ★W155（作者 2026-10-23）：它现在只"打开收藏记录"，**段沿用商店自己记住的那一段**（不再强制切到 play）。
  *   ③ `notice()` —— 一句人话（ST 全局 toastr，与更新器/商店同一套），**不静默失败**；
  *   ④ `storeApi` —— 商店模块的引用（`import()` 成功后才赋值）。★只能调商店**导出的** `openStorePage()`，
  *      **绝不**去猜/改它的内部状态（`S` 是那个模块私有的，这里碰不到）。
@@ -5214,11 +5262,19 @@ function notice(msg, titleKey) {
     try { if (typeof toastr !== 'undefined') toastr.info(String(msg), t(titleKey || 'playFavTitle'), { timeOut: 6000 }); else console.log('[余温工具箱]', msg); }
     catch (e) { console.log('[余温工具箱]', msg); }
 }
-/** ★「小剧场收藏」的唯一动作出口：打开商店卡片 → 让它跳到「小剧场收藏」那一段。
+/** ★「小剧场收藏」的唯一动作出口：打开商店卡片 → **打开「收藏记录」页**（不再强制切到哪一段）。
+ *  ★W155（作者 2026-10-23 第 2 条）**改口径**：原来这里是"打开商店 + 强制跳到「小剧场收藏」那一段"
+ *   （`openStorePage('playfav')`，商店侧会写 `S.favSeg='play'`）⇒ 用户每次点出来都被拽到同一段，
+ *   而收藏记录里「条目收藏 / 小剧场收藏 / 本地小剧场收藏」三段本来**各自有记忆**（`S.favSeg`，商店模块维护）。
+ *   ⇒ 现在只"打开收藏记录"，**段沿用商店自己记住的那一段**（不传任何"切哪一段"的意图）。
+ *  ★调用点/参数（给协调方核对）：`storeApi.openStorePage('playfav')` —— **只传一个参数**；
+ *   第二个参数 `seg` **故意不传** ⇒ 商店侧"沿用记忆段"（传了合法段才会切过去并写回设置）。
+ *   ★商店侧契约（`preset-store.js` 的 `openStorePage(name, seg)`）：`name` 只认 `'playfav'`；
+ *    `seg` 省略 = 用 `S.favSeg` 那个跨会话记忆（脏值/越界值同样当没传）。**不许**再传 `'play'`。
  *  ★步骤要按顺序，每一步失败都给人话（铁律 27：不静默、不白屏）：
  *    ① 商店卡片在不在（发布包里没有 preset-store.js ⇒ 它不存在）；
  *    ② 打开它（主设置面板开着 = 面板内展开，否则开浮窗 —— 与悬浮条其它图标**同一套分派**）；
- *    ③ 跳段（走商店导出的 `openStorePage('playfav')`）。 */
+ *    ③ 打开收藏记录（走商店导出的 `openStorePage('playfav')`，**不传段** ⇒ 段由商店自己记）。 */
 function openStorePlayFav() {
     const body = document.getElementById('kimi_presetstore_body');
     if (!body) { notice(t('playFavNotReady')); return false; }
@@ -5226,8 +5282,10 @@ function openStorePlayFav() {
         if (isKimiSettingsVisible()) openCardInPanel('presetstore'); else openCardFloat('presetstore');
     } catch (e) { /* 打开那一步抛了也别把悬浮条带崩 */ }
     let moved = false;
-    try { if (storeApi && typeof storeApi.openStorePage === 'function') moved = storeApi.openStorePage('playfav') !== false; }
-    catch (e) { moved = false; }
+    try {
+        // ★W155：**不传第二参** ⇒ 商店沿用"上次看的那一段"（不再强制 play）。
+        if (storeApi && typeof storeApi.openStorePage === 'function') moved = storeApi.openStorePage('playfav') !== false;
+    } catch (e) { moved = false; }
     if (!moved) notice(t('playFavJumpFail'));
     return moved;
 }
@@ -5550,7 +5608,7 @@ function updateComboFloat() {
         { key: 'tag', ico: 'fa-wand-magic-sparkles', label: t('tagFixNow'), color: '#6fce6f', on: !!settings.floatShowTagFix },
         { key: 'cline', ico: 'fa-route', label: t('floatClineEntry'), color: '#6fb7f0', on: !!settings.floatShowCline },
         { key: 'stop', ico: 'fa-pause', label: t('stopRerollName'), color: '#ef6f6f', on: !!settings.floatShowStopReroll },
-        // ★W21B：小剧场收藏（功能型 = 点图标直接执行：打开商店并停在小剧场收藏那一段）。★W46 换专属色（--kimi-play-fav，见 KIMI_SETTINGS_CSS 顶部注释）。
+        // ★W21B：小剧场收藏（功能型 = 点图标直接执行：打开商店并打开收藏记录）。★W46 换专属色（--kimi-play-fav，见 KIMI_SETTINGS_CSS 顶部注释）。★W155：不再强制切到 play 段（沿用商店记忆段）。
         { key: 'playfav', ico: 'fa-masks-theater', label: t('playFavTitle'), color: 'var(--kimi-play-fav)', on: !!settings.floatShowPlayFav },
         // ★W25B：最新小剧场（功能型 = 点图标直接执行：打开商店并露出「🎭 小剧场」那一区）。★W46 换专属色（--kimi-play-latest）。
         { key: 'playlatest', ico: 'fa-clapperboard', label: t('playLatestTitle'), color: 'var(--kimi-play-latest)', on: !!settings.floatShowPlayLatest },
@@ -5724,7 +5782,7 @@ function updateComboFloat() {
                 return;
             }
                         if (act === 'playfav') {
-                // ★W21B：小剧场收藏 —— 打开商店卡片并跳到「小剧场收藏」那一段（不重绘、不碰输入框）
+                // ★W21B：小剧场收藏 —— 打开商店卡片并**打开收藏记录**（★W155：段沿用商店记住的那一段，不再强制切到 play；不重绘、不碰输入框）
                 openStorePlayFav();
                 return;
             }
@@ -6083,7 +6141,10 @@ const KIMI_SETTINGS_CSS = `
 #kimi_reasoning_injector_settings .kimi-card > summary {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    /* ★W155（作者 2026-10-23 第 3 条）：标题**全部左对齐** —— 原来是 space-between，
+       图标/标题/箭头三件被摊开 ⇒ 标题看着像居中。改成 flex-start（图标+标题从左排起），
+       箭头 ::after 单独 margin-left:auto 推到最右 ⇒ 展开箭头位置与悬停样式都不变。 */
+    justify-content: flex-start;
     gap: 12px;
     flex-wrap: wrap;
     padding: 10px 12px;
@@ -6104,6 +6165,7 @@ const KIMI_SETTINGS_CSS = `
     opacity: 0.7;
     font-size: 13px;
     line-height: 1;
+    margin-left: auto;   /* ★W155：标题左对齐后，把展开箭头单独推到最右（原来是 space-between 撑开的） */
 }
 #kimi_reasoning_injector_settings .kimi-card > summary .kimi-card-ico {
     margin-right: 6px;
@@ -6111,6 +6173,16 @@ const KIMI_SETTINGS_CSS = `
     line-height: 1;
     color: var(--SmartThemeQuoteColor);
     opacity: 0.85;
+}
+/* ★W155（作者 2026-10-23 第 3 条）：标题里**括号及其内容**的弱化档（由 kimiCardTitleHtml() 包出来）——
+   "小一点、淡一点，但看得清，不喧宾夺主"。色走既有说明档 --kimi-ink-3（78%，量过的安全档，≥4.5），
+   不新造平行色；主面板与卡浮窗两处同款（两个容器上都定义了 --kimi-ink-3，见上面令牌块）。 */
+#kimi_reasoning_injector_settings .kimi-card-sub,
+#kimi_reasoning_injector_card_float .kimi-card-sub {
+    font-size: .85em;
+    font-weight: 600;
+    color: var(--kimi-ink-3);
+    opacity: .95;
 }
 #kimi_reasoning_injector_settings .kimi-card[open] > summary::after {
     transform: rotate(90deg);
@@ -7529,7 +7601,7 @@ function initSettingsPanel() {
                     </div>
                     <!-- ═══ 基础设置（总开关 + 语言）═══ -->
 <details class="kimi-card">
-<summary><i class="fa-solid fa-gear kimi-card-ico" aria-hidden="true"></i>${t('baseTitle')}</summary>
+<summary><i class="fa-solid fa-gear kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('baseTitle')}</summary>
 <div class="kimi-card-body">
 <label class="checkbox_label kimi-master-row">
 <input id="${extensionName}_enabled" type="checkbox" ${settings.enabled ? 'checked' : ''}/>
@@ -7633,7 +7705,7 @@ ${t('showTpsLabel')}
         <span class="kimi-entry-txt" style="color:#ef6f6f">${t('stopRerollName')}</span>
     </label>
     <!-- ★W21B（作者第 9 条）：小剧场收藏 = 一个可勾选的功能型图标 + 一颗「立即打开一次」的按钮。
-         勾选 = 悬浮条上多一颗图标（点了直接展开商店的「小剧场收藏」那一段）；按钮 = 不管勾没勾都能立刻去一次。
+         勾选 = 悬浮条上多一颗图标（点了打开商店的「收藏记录」，★W155：段沿用商店记住的那一段，不强制切到小剧场）；按钮 = 不管勾没勾都能立刻去一次。
          ★图标走现成的 __kimiSvgIcon()，颜色走主题变量（不硬编码色值）；★按钮必须拦掉冒泡 —— 它长在 label 里。 -->
     <label class="kimi-entry-row">
         <input type="checkbox" id="${extensionName}_float_playfav" ${settings.floatShowPlayFav ? 'checked' : ''}/>
@@ -7720,7 +7792,7 @@ ${t('showTpsLabel')}
 
 <!-- ═══ 注入（默认展开）═══ -->
 <details class="kimi-card">
-<summary><i class="fa-solid fa-bolt kimi-card-ico" aria-hidden="true"></i>${t('injectTitle')}</summary>
+<summary><i class="fa-solid fa-bolt kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('injectTitle')}</summary>
 <div class="kimi-card-body">
 
 <div class="kimi-section-label">${t('targetLabel')}</div>
@@ -7810,7 +7882,7 @@ ${t('usage3')}
 
 <!-- ═══ 自动重roll ═══ -->
 <details class="kimi-card">
-<summary><i class="fa-solid fa-arrows-rotate kimi-card-ico" aria-hidden="true"></i>${t('rerollTitle')}</summary>
+<summary><i class="fa-solid fa-arrows-rotate kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('rerollTitle')}</summary>
 <div class="kimi-card-body">
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
 <div class="kimi-section-label" style="margin:0">${t('rerollSectionTitle')}</div>
@@ -7928,7 +8000,7 @@ ${t('mutterSound')}
 
 <!-- ═══ 替换 ═══ -->
 <details class="kimi-card">
-<summary><i class="fa-solid fa-broom kimi-card-ico" aria-hidden="true"></i>${t('wordTitle')}</summary>
+<summary><i class="fa-solid fa-broom kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('wordTitle')}</summary>
 <div class="kimi-card-body">
 
 <label class="checkbox_label">
@@ -7946,15 +8018,15 @@ ${renderWordReplaceRows()}
 </details>
 
 
-<!-- ═══ API 池（额度轮换）★W150（作者第 1 条）：挪到「标签修复」紧邻之上 ═══ -->
-<div id="${extensionName}_api_slot"></div>
-
-<!-- ═══ 标签修复(原st-tag) ═══ -->
+<!-- ═══ 标签修复(原st-tag) ★W155（作者 2026-10-23）：与「API 池」互换 ⇒ 现在在 API 池之上 ═══ -->
 <div id="${extensionName}_tag_slot"></div>
+
+<!-- ═══ API 池（额度轮换）★W155：与「标签修复」互换（原 W150 把它放在标签修复之上）═══ -->
+<div id="${extensionName}_api_slot"></div>
 
 <!-- ═══ 预设条目开关（和其他功能平级）═══ -->
 <details class="kimi-card">
-<summary><i class="fa-solid fa-list-check kimi-card-ico" aria-hidden="true"></i>${t('psnapTitle')}</summary>
+<summary><i class="fa-solid fa-list-check kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('psnapTitle')}</summary>
 <div class="kimi-card-body">
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <input id="${extensionName}_psnap_name" type="text" class="text_pole" placeholder="${t('psnapNamePh')}" style="flex:1;min-width:90px"/>
@@ -7968,7 +8040,7 @@ ${renderWordReplaceRows()}
 <!-- 其他功能已拆分：显示tps →「思维链」卡，保持滚动位置 →「不常用」卡 -->
 <!-- ═══ 修正（最不常用，放最下面）═══ -->
 <details class="kimi-card kimi-last">
-<summary><i class="fa-solid fa-wrench kimi-card-ico" aria-hidden="true"></i>${t('fixTitle')}</summary>
+<summary><i class="fa-solid fa-wrench kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('fixTitle')}</summary>
 <div class="kimi-card-body">
 
 <label class="checkbox_label">
@@ -8128,7 +8200,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
             if (anchor && anchor.parentNode) {
                 const det = document.createElement('details');
                 det.className = 'kimi-card';
-                det.innerHTML = '<summary><i class="fa-solid fa-file-import kimi-card-ico" aria-hidden="true"></i>' + t('presetUpdTitle') + '</summary>'
+                det.innerHTML = '<summary><i class="fa-solid fa-file-import kimi-card-ico" aria-hidden="true"></i>' + kimiCardTitleHtml('presetUpdTitle') + '</summary>'
                     + '<div class="kimi-card-body" id="kimi_presetupd_body"></div>';
                 anchor.parentNode.insertBefore(det, anchor);
                 if (!KIMI_CARD_DEFS.some(d => d.key === 'presetupd')) {
@@ -8283,7 +8355,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
    ② 整份预设卡底部那一排（下载本预设/评论/点赞/缝入）**统一外形 + 收紧**（改前手机 360 档整排右溢出 28px）。
    ★同时升工具箱 PLUGIN_VERSION（1.46.27 → 1.46.28）：用户的自更新是拿**远端 manifest 的版本号**比本机 ——
      只升商店号、不升工具箱号，用户端就**不会**自动更新（作者今天当场踩到过）。 */
-const storeBuild = 'v2.2.67';
+const storeBuild = 'v2.2.68';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();
@@ -8292,7 +8364,7 @@ const storeBuild = 'v2.2.67';
                     if (first && first.parentNode) {
                         const sdet = document.createElement('details');
                         sdet.className = 'kimi-card';
-                        sdet.innerHTML = '<summary><i class="fa-solid fa-cart-shopping kimi-card-ico" aria-hidden="true"></i><span id="kimi_presetstore_title">🛒 ' + t('presetStoreTitle') + '</span></summary>'
+                        sdet.innerHTML = '<summary><i class="fa-solid fa-cart-shopping kimi-card-ico" aria-hidden="true"></i><span id="kimi_presetstore_title">🛒 ' + kimiCardTitleHtml('presetStoreTitle') + '</span></summary>'
                             + '<div class="kimi-card-body" id="kimi_presetstore_body"></div>';
                         first.parentNode.insertBefore(sdet, first);       // ★插在**第一张卡**前面 = 列表最前
                         if (!KIMI_CARD_DEFS.some(d => d.key === 'presetstore')) {
@@ -9223,6 +9295,9 @@ const storeBuild = 'v2.2.67';
     try { mountApiPoolCard('#kimi_reasoning_injector_api_slot'); } catch (e) { console.warn('[余温工具箱] API池卡挂载失败:', e); }
     // 所有卡挂载完毕后统一恢复展开记忆（含标签卡/API卡）
     if (typeof bindCardMemory === 'function') bindCardMemory();
+    // ★W155（作者 2026-10-23 第 3 条）：给"别的模块挂上来的卡"（API 池 / 标签修复）补同款括号弱化 ——
+    //   它们的 summary 不在本文件里 ⇒ 挂载完成后在 DOM 上就地包一层（幂等，见 decorateCardTitles）。
+    try { decorateCardTitles(); } catch (e) { /* 绝不因为这一块拖垮设置面板 */ }
     // ★W80：行内「插入提示词」—— A 开关开着就把观察器/委托监听起起来（幂等；拿不到 DOM 就静默不挂）
     try { inlineInsBoot(); } catch (e) { /* 绝不因为这一块拖垮设置面板 */ }
     // v1.37.39：浮窗开着时展开本设置面板 → 自动关浮窗（卡移回），避免主面板里"缺卡"

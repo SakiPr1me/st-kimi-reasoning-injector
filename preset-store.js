@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.67';
+const VERSION = '2.2.68';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.67';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.67';
+const BUILD = 'v2.2.68';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -6188,7 +6188,7 @@ function localPlaySave() {
     /* 存完直接落在「本地小剧场收藏」那一段（并写回本机设置，与 case 'fav-seg' 同一个口径） */
     S.view = 'fav'; S.favSeg = 'local';
     try { getSettings().favSeg = 'local'; saveSettings(); } catch (e) { warn('记不住收藏筛选（不影响这次跳转）', e); }
-    toast('success', '存好了 —— 就在「本地小剧场收藏」里（只存在你这台机器上）。');
+    toast('success', '存好了。');
     renderAll();
 }
 /** 删一条本地小剧场（**真正动手**那一步；二次确认在 `case 'lp-del-yes'`） */
@@ -8079,7 +8079,7 @@ function favSegBarHtml(tab, nCard, nPlay, nLocal) {
     return '<div class="yws-wrow yws-mrow2">' +
         b(tab === 'card', '条目收藏 · ' + numOf(nCard) + ' 条', 'card') +
         b(tab === 'play', '小剧场收藏 · ' + numOf(nPlay) + ' 条', 'play') +
-        b(tab === 'local', '本地小剧场收藏 · ' + numOf(nLocal) + ' 条', 'local') + '</div>';
+        b(tab === 'local', '本地小剧场 · ' + numOf(nLocal) + ' 条', 'local') + '</div>';
 }
 /** ★★W151：**本地小剧场收藏**那一段的行（自己攒的小剧场）—— 复用 `.yws-myrow` 的卡片骨架与按钮族，
  *  **零新增类名**（只借 `.yws-lprow` 这一个"没有就退回默认观感"的抓手，CSS 那边给了它一条同族左边线）。
@@ -8090,7 +8090,7 @@ function localPlayRowsHtml() {
     const list = localPlayList().slice().sort((a, b) => (Number(b.t) || 0) - (Number(a.t) || 0));
     if (!list.length) {
         return '<div class="yws-empty"><span class="yws-empty-ic">🎭</span>' +
-            '还没有本地小剧场。点上面的「＋ 创建本地小剧场」，把一段文字存进来 —— 只存在你这台机器上。</div>';
+            '还没有本地小剧场。点上面的「＋ 创建本地小剧场」，把一段文字存进来。</div>';
     }
     return list.map(it => {
         const open = !!S.lpView[String(it.id)];
@@ -8145,7 +8145,7 @@ function viewFav() {
     const body = isLocal
         ? ('<div class="yws-wrow yws-mrow2">' +
                 '<button class="yws-btn yws-mini yws-primary" data-act="lp-new">＋ 创建本地小剧场</button>' +
-                '<span class="yws-dim">别人的条目、没上传到商店的那种也能攒进来 —— 只存在你这台机器上。</span></div>' +
+                '<span class="yws-dim">只存你这台机器上，不上传、别人看不到。</span></div>' +
             localPlayRowsHtml())
         : (rows.length ? rows.map(r => {
             /* ★★W154（作者 2026-10-23）：**云端「小剧场收藏」那一段也要能直接看内容** ——
@@ -8194,9 +8194,7 @@ function viewFav() {
     return '<div class="yws-wstep"><b>⭐ 收藏记录</b> <span class="yws-dim">（' + numOf(isLocal ? nLocal : rows.length) + ' 条）</span>' +
         favSegBarHtml(tab, nCard, nPlay, nLocal) +
         '<div class="yws-wrow"><button class="yws-btn yws-mini" data-act="to-main">← 回商店</button>' +
-            '<span class="yws-dim">' + (isLocal
-                ? '本地小剧场只存在你这台机器上（没有上传、别人看不到）。'
-                : '收藏只存在你这台机器上（没有上传、别人看不到）。点卡片标题能回去看那张卡。') + '</span></div>' +
+            (isLocal ? '' : '<span class="yws-dim">点卡片标题能回去看那张卡。</span>') + '</div>' +
         body +
     '</div>';
 }
@@ -10398,16 +10396,14 @@ function lpDialogHtml() {
                 '<button type="button" class="yws-btn yws-mini yws-ghost" data-act="dlg-close" title="关掉（不保存）">✕</button></div>' +
             '<div class="yws-dlg-b">' +
                 '<div class="yws-wrow"><label class="yws-lbl yws-lbl-in">名称<input class="yws-inp" data-in="lp-name" maxlength="60"' +
-                    ' placeholder="给这段起个名（列表里认得出就行）" value="' + esc(String(d.name || '')) + '"></label></div>' +
+                    ' placeholder="起个名字" value="' + esc(String(d.name || '')) + '"></label></div>' +
                 '<div class="yws-wrow"><label class="yws-lbl yws-lbl-wide"><span class="yws-lbl-t">正文</span>' +
                     '<textarea class="yws-inp yws-ta yws-ta-full" data-in="lp-text" maxlength="20000"' +
                     ' placeholder="把要玩的那段文字粘进来（支持 Markdown：**粗体** *斜体* `代码` - 列表 [链接](http://…)）">' + esc(String(d.text || '')) + '</textarea></label></div>' +
-                '<div class="yws-dim">只存在你这台机器上 —— 不上传、别人看不到。</div>' +
             '</div>' +
             '<div class="yws-dlg-f">' +
                 '<button type="button" class="yws-btn yws-primary" data-act="lp-save">保存</button>' +
                 '<button type="button" class="yws-btn yws-ghost" data-act="lp-cancel">取消</button>' +
-                '<span class="yws-dim">存好之后就在「本地小剧场收藏」里。</span>' +
             '</div>' +
         '</div></div>';
 }
@@ -14662,17 +14658,32 @@ function registerStoreApiPortal() {
 /** ★W21B：**给工具箱用的一个窄出口** —— 「小剧场收藏」那颗按钮（index.js）只调它，别的什么都不碰。
  *  name === 'playfav' ⇒ 切到「收藏记录」页。★为什么要有它：S 是这个模块私有的，工具箱那边够不到；
  *  不导出的话它只能去猜内部状态（那是明确禁止的）。
- *  ★W4 落地后会在这里顺手把筛选切到「小剧场收藏」那一段（现在只切页，如实记在报告里）。
+ *  ★★W155（作者 2026-10-23）：第二参 `seg` = **显式指定落在哪一段**（'card' / 'play' / 'local'；见 FAV_SEGS）。
+ *     · **不传**（undefined / null）= 沿用「上次看的那一段」那个记忆（`S.favSeg`，跨会话，与顶栏「⭐ 收藏记录」同一条口径）；
+ *     · 传了合法值 = 切到那一段并写回本机设置（`getSettings().favSeg`，即「改成新的记忆」）；
+ *     · 传了脏值 / 越界值 = 当没传（沿用记忆）。
+ *  ★这是**唯一的对外打开接口**：`index.js` 那颗悬浮窗图标走 `openStorePage('playfav')`（不传第二参 ⇒ 落记忆段）；
+ *    e2e 另可走 `window.__ywstore.openStorePage(name, seg)`（同一个函数）。
+ *  @param {string} name 目前只认 'playfav'（其它值一律 false，什么都不做）
+ *  @param {string} [seg] 显式要落的段（可省；省 = 用记忆）
  *  @returns {boolean} 真的跳过去了没有（工具箱据此决定要不要给人话） */
-export function openStorePage(name) {
+export function openStorePage(name, seg) {
     if (String(name || '') !== 'playfav') return false;
     try {
         S.view = 'fav';
-        /* ★W22（W4）：**顺手把筛选切到「小剧场收藏」那一段** —— 工具箱那颗按钮叫「小剧场收藏」，
-           只切页不切筛选的话，用户看到的还是「条目收藏」（改前就是这么写的，见原注释的「现在只切页」）。
-           ★一起写回本机设置（与 case 'fav-seg' 同一个口径：这是「上次看哪一段」的记忆）。 */
-        S.favSeg = 'play';
-        try { getSettings().favSeg = 'play'; saveSettings(); } catch (e) { warn('记不住收藏筛选（不影响这次跳转）', e); }
+        /* ★★W155（作者 2026-10-23）：**任何入口打开收藏记录，都沿用「上次看的那一段」**（`S.favSeg` 的跨会话记忆，
+           与顶栏「⭐ 收藏记录」那颗按钮同一条口径）—— 作者原话："对于收藏记录里 条目收藏 小剧场收藏 和 本地小剧场收藏
+           应该是 有一个记忆的 点击到哪里 下次再点出来 它这里也是显示上次的页面 悬浮窗唤出同理"。
+           改前：这里**无条件**把筛选切成 'play' ⇒ 从悬浮窗那颗「小剧场收藏」进来永远落在小剧场那一段（记忆被覆盖掉）。
+           改后：**不显式传段就沿用记忆**；只有调用方**显式**传了合法段才切过去并写回本机设置
+           （第二参 `seg`，合法档 = FAV_SEGS；脏值 / 越界值一律忽略 = 当没传）。 */
+        const want = (seg === undefined || seg === null) ? '' : String(seg);
+        if (want && FAV_SEGS.includes(want)) {
+            if (S.favSeg !== want) {
+                S.favSeg = want;
+                try { getSettings().favSeg = want; saveSettings(); } catch (e) { warn('记不住收藏筛选（不影响这次跳转）', e); }
+            }
+        }
         renderAll();
         return true;
     } catch (e) { warn('打开小剧场收藏失败', e); return false; }
@@ -14884,6 +14895,9 @@ export function initStoreDebug() {
         cardTitle: () => { const e = document.getElementById('kimi_presetstore_title'); return e ? e.textContent : null; },
         // 给"陌生人文本不许当 HTML"的用例用：注入一张**本地假卡片**（不走后端）
         __injectCard: (c) => { S.cards = [c].concat(S.cards); renderAll(); },
+        /* ★★W155：**打开收藏记录那个对外接口**也给探针一份（`window.__ywstore.openStorePage(name, seg)`）——
+           与 `index.js` 调的是**同一个函数**（探针不另写一份判据）；不传 `seg` = 沿用记忆段。 */
+        openStorePage,
         readPreset, listPresetNames, savePresetNew,
         /* ★W10（只读出口，给 e2e 读数用）：现在"关着的条目"是怎么算出来的 ——
            一眼看清 ① 向导那份 / 正在看的那份分别是谁 ② 是不是走的"实时内存"那条路 ③ 指纹与缓存代号。 */
