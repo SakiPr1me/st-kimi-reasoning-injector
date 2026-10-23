@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.48'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.49'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -5349,7 +5349,7 @@ function openStorePlayLatest() {
  *  背景：那张卡的标题由 preset-store.js 自己改（updateCardTitle()：el.textContent = TITLE + （新 N） + （N待审），
  *  TITLE = '🛒 条目商店'）——它只认 #kimi_presetstore_title 这一个 id，而且写的是**整串标题**。
  *  ⇒ 本波把描述性括号改成「（上传/缝入条目/小剧场收藏）」之后，**未读数不能丢**：
- *    做法 = ① 主标题 + 描述括号由我们画（kimiCardTitleHtmlFromText('🛒 ' + t('presetStoreTitle'))）；
+ *    做法 = ① 主标题 + 描述括号由我们画（kimiCardTitleHtmlFromText(t('presetStoreTitle'))；★W158 作者：去掉前面的 🛒 emoji）；
  *           ② 留一个**隐藏的兼容位**（id 仍是 kimi_presetstore_title）给商店模块写 —— 它自己的测试助手
  *              （cardTitle() 读那个 id 的 textContent）读到的仍是完整原文，商店侧**一个字节都不用改**；
  *           ③ 这里挂一个观察器，把兼容位里**第一个括号之后的全部**（=（新 N）/（N待审））摘出来，
@@ -8457,7 +8457,7 @@ const storeBuild = 'v2.2.68';
                            隐藏的 #kimi_presetstore_title 是给 preset-store.js 写的**兼容位**（它只认这个 id）——
                            见 kimiStoreUnreadBadgeBoot() 的注释。 */
                         sdet.innerHTML = '<summary><i class="fa-solid fa-cart-shopping kimi-card-ico" aria-hidden="true"></i>'
-                            + kimiCardTitleHtmlFromText('🛒 ' + t('presetStoreTitle'))
+                            + kimiCardTitleHtmlFromText(t('presetStoreTitle'))
                             + '<span class="kimi-card-sub" id="kimi_presetstore_unread"></span>'
                             + '<span id="kimi_presetstore_title" hidden style="display:none" aria-hidden="true"></span>'
                             + '</summary>'
