@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.66';
+const VERSION = '2.2.67';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.66';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.66';
+const BUILD = 'v2.2.67';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -649,11 +649,15 @@ const S = {
          · `lpDlg`     = 创建弹窗的草稿（`null` = 弹窗没开）；`{ name, text }` ——
            与 `S.nadmDraft` / `S.connD` 同一条口径：**重绘必须从它取值**，不然打到一半的内容会被一次后台重绘吃掉。
          · `lpDel`     = 正在等二次确认的那一条（`null` = 没在确认）；值是那条的 id。
-         · `lpView`    = 哪几条展开了全文（id -> true；只看、不落盘）。 */
+         · `lpView`    = 哪几条展开了全文（id -> true；只看、不落盘）。
+       ★★W154（作者 2026-10-23）：**云端「小剧场收藏」那一段也要能直接看全文** ——
+         `fpView` = 那一段里哪几张卡展开了全文（cardId -> true；只看、不落盘，与 `lpView` 同一条口径）。
+         两段各用各的账（id 空间不同：云端是卡 id，本地是 `lp…`），互不干扰。 */
     localPlays: null,
     lpDlg: null,
     lpDel: null,
     lpView: {},
+    fpView: {},
     showKey: false,           // ★P11：审核密钥是否明文显示（默认遮蔽）；★§21 E18：开关改成输入框里的小眼睛
     // ★§21 E16：**没有 credsText / credsMsg 了** —— 凭证不再"导出/导入"，而是
     //   ① 一个只读凭证框（渲染时现算 = 永远是当前凭证，上传成功后自动带上新钥匙）
@@ -6197,19 +6201,37 @@ function localPlayDel(id) {
     toast('info', '删掉了。');
     renderAll();
 }
-/** 复制一段正文到剪贴板（拿不稳就退化成"让你自己选中"的人话，绝不静默失败） */
-function localPlayCopy(id) {
-    const it = localPlayList().find(x => String(x.id) === String(id));
-    if (!it) return;
-    const txt = String(it.text || '');
-    const ok = () => toast('success', '正文复制好了 —— 粘到你想放的地方就行。');
+/** 复制一段纯文本到剪贴板（拿不稳就退化成"让你自己选中"的人话，绝不静默失败）。
+ *  ★★W154：从 `localPlayCopy` 里抽出来 —— 「本地小剧场收藏」那颗「复制正文」与云端「小剧场收藏」
+ *     那颗「复制正文」共用同一套（两段的动作集合要一致，复制这条路也就该是同一个实现）。 */
+function copyPlainText(txt, okMsg) {
+    const s = String(txt || '');
+    const ok = () => toast('success', okMsg || '正文复制好了 —— 粘到你想放的地方就行。');
     try {
         if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-            navigator.clipboard.writeText(txt).then(ok, () => toast('warning', '浏览器不让自动复制 —— 点「看全文」自己选中复制。'));
+            navigator.clipboard.writeText(s).then(ok, () => toast('warning', '浏览器不让自动复制 —— 点「看全文」自己选中复制。'));
             return;
         }
     } catch (e) { warn('剪贴板用不了，退化成"自己选中复制"', e); }
     toast('warning', '浏览器不让自动复制 —— 点「看全文」自己选中复制。');
+}
+/** 复制一段正文到剪贴板（本地小剧场；正文就是本机存的那一份，永远全文） */
+function localPlayCopy(id) {
+    const it = localPlayList().find(x => String(x.id) === String(id));
+    if (!it) return;
+    copyPlainText(it.text, '正文复制好了 —— 粘到你想放的地方就行。');
+}
+/** ★★W154：云端「小剧场收藏」那一段的**复制正文**（只读动作，与本地那段统一）。
+ *  正文取 `S.cards` 里那张卡的 `playText`（与卡片展开、`playGet` 同一个来源）。
+ *  ★离线守卫（与 `playGet` 同口径）：缓存里只有正文前 `PLAY_CACHE_MAX` 字（`playCut === 1`）⇒ **不许复制残文**
+ *    （复制出去用户就当它是全文了），给人话让他联网刷新再复制。 */
+function favPlayCopy(id) {
+    const c = (S.cards || []).find(x => String(x.id) === String(id)) || null;
+    if (!c) { toast('warning', '这张卡不在列表里了 —— 点一下顶栏的刷新再试。'); return; }
+    if (c.playCut) { toast('warning', '离线：这份只留下了正文前 ' + numOf(PLAY_CACHE_MAX) + ' 字，联网后刷新一次再复制。'); return; }
+    const txt = String(c.playText || '');
+    if (!txt) { toast('warning', '正文还没拉下来 —— 点一下顶栏的刷新再试。'); return; }
+    copyPlainText(txt, '正文复制好了 —— 粘到你想放的地方就行。');
 }
 /** ★★W110-D 的防抖窗口（毫秒）。口径（协调方 2026-10-07 补的一条）：**不做"会话内只读一次"**
  *  （那样别人新发的回复看不到）—— 每次展开都拉一次**最新的**；只有"几秒内刚拉过"才跳过（防连点/手抖）。
@@ -8061,7 +8083,9 @@ function favSegBarHtml(tab, nCard, nPlay, nLocal) {
 }
 /** ★★W151：**本地小剧场收藏**那一段的行（自己攒的小剧场）—— 复用 `.yws-myrow` 的卡片骨架与按钮族，
  *  **零新增类名**（只借 `.yws-lprow` 这一个"没有就退回默认观感"的抓手，CSS 那边给了它一条同族左边线）。
- *  动作：看全文（就地展开）/ 复制正文 / 放进输入框（真"拿去玩"，复用 playGet 那套 fillSendBox）/ 删掉（二次确认）。 */
+ *  动作：看全文（就地展开）/ 复制正文 / 放进输入框（真"拿去玩"，复用 playGet 那套 fillSendBox）/ 删掉（二次确认）。
+ *  ★★W154（作者 2026-10-23）：① 卡片上那行元信息（"自己攒的 · 存于 … · N 字"）**整行删掉**（作者原话"有必要吗？删掉"）；
+ *     ② 正文预览**最多 3 行**（走 `.yws-pv3` 行夹；点「看全文」照旧看完整正文）。 */
 function localPlayRowsHtml() {
     const list = localPlayList().slice().sort((a, b) => (Number(b.t) || 0) - (Number(a.t) || 0));
     if (!list.length) {
@@ -8071,15 +8095,16 @@ function localPlayRowsHtml() {
     return list.map(it => {
         const open = !!S.lpView[String(it.id)];
         const txt = String(it.text || '');
-        const cut = clip(txt, 160);
+        /* ★★W154：预览文本截到 400 字（原来 160）—— 行夹最多显示 3 行，剩下的都藏着；留 400 是为了让
+           "3 行"在任何宽度下都能被填满（160 字在宽屏上往往还不到 3 行 ⇒ 夹等于没夹，看着像没生效）。 */
+        const cut = clip(txt, 400);
         return '<div class="yws-myrow yws-lprow" data-id="' + esc(it.id) + '">' +
             '<div class="yws-myh"><b>' + esc(mdPlain(it.name) || '(没名字)') + '</b></div>' +
-            '<div class="yws-dim">自己攒的 · 存于 ' + (it.t ? new Date(it.t).toLocaleString() : '') +
-                ' · ' + numOf([...txt].length) + ' 字</div>' +
-            /* 正文预览（收起态一行、展开态全文）—— 与"我的"那边预览同一个类族（.yws-myrow-pv / -pvtxt） */
+            /* ★★W154：正文预览（收起态**最多 3 行**、展开态全文）—— 与云端「小剧场收藏」那一段同一套类族
+               （`.yws-pv3` = 行夹；`.yws-pre.yws-full` = 展开后的完整正文，不受行数限制）。 */
             (open
                 ? '<pre class="yws-pre yws-full">' + esc(txt) + '</pre>'
-                : '<div class="yws-dim yws-myrow-pv"><span class="yws-myrow-pvtxt">' + esc(cut) + '</span></div>') +
+                : '<div class="yws-dim yws-pv3"><span class="yws-myrow-pvtxt">' + esc(cut) + '</span></div>') +
             '<div class="yws-mrow2">' +
                 '<button class="yws-btn yws-mini" data-act="lp-view" data-id="' + esc(it.id) + '">' + (open ? '收起' : '看全文') + '</button>' +
                 '<button class="yws-btn yws-mini" data-act="lp-copy" data-id="' + esc(it.id) + '">复制正文</button>' +
@@ -8122,19 +8147,45 @@ function viewFav() {
                 '<button class="yws-btn yws-mini yws-primary" data-act="lp-new">＋ 创建本地小剧场</button>' +
                 '<span class="yws-dim">别人的条目、没上传到商店的那种也能攒进来 —— 只存在你这台机器上。</span></div>' +
             localPlayRowsHtml())
-        : (rows.length ? rows.map(r => '<div class="yws-myrow yws-favrow" data-id="' + esc(r.id) + '">' +
+        : (rows.length ? rows.map(r => {
+            /* ★★W154（作者 2026-10-23）：**云端「小剧场收藏」那一段也要能直接看内容** ——
+               作者原话："小剧场收藏和本地小剧场收藏里面的条目要统一啊 而且 小剧场收藏里 应该也有一个看全文"、
+               "存在这里的小剧场收藏 这里不能直接看里面的内容 这是怎么回事 太不方便了"。
+               ⇒ 与「本地小剧场收藏」统一：收起态给**最多 3 行**正文预览（`.yws-pv3`），
+                 一颗「看全文」就地展开完整正文（`.yws-pre.yws-full`），一颗「复制正文」（都只读）。
+               正文来自 `r.card.playText`（在线 = 全文；离线缓存里只有前 `PLAY_CACHE_MAX` 字 ⇒ 复制那颗有守卫）。
+               ★动作集合对照（两段**只读动作齐**：看全文 / 复制正文）：
+                 · 云端「获取剧场」= 本地「放进输入框」（同一条 `fillSendBox` 路）；
+                 · 云端「取消收藏」= 本地「删掉」的对应物（云端收藏是书签、取消可逆；**没有"删掉别人云端那张卡"
+                   这种能力，故按作者口径不硬加**）；
+                 · 云端另有「看这张卡」（跳回商店那张卡）—— 本地攒的没有云端卡，这一颗天然只在云端。
+               ★卡片不在列表里（已下架 / 刷新没拉到）⇒ `r.card` 为 null ⇒ 没有正文可看 ⇒ 预览与那两颗不渲染。 */
+            const isPlay = (r.seg === 'play');
+            const ptxt = (r.card && isPlay) ? String(r.card.playText || '') : '';
+            const pOpen = isPlay && !!S.fpView[String(r.id)];
+            /* ★★W154：预览截到 400 字（与本地那段同一条口径）—— 行夹最多显示 3 行，剩下的都藏着。 */
+            const pCut = clip(ptxt, 400);
+            return '<div class="yws-myrow yws-favrow" data-id="' + esc(r.id) + '">' +
             '<div class="yws-myh"><b>' + esc(r.card ? mdPlain(r.card.title) : (r.rec.title || '(已不在商店)')) + '</b>' +
                 (r.card ? '' : ' <span class="yws-st yws-st-miss">已下架</span>') + '</div>' +
             '<div class="yws-dim">BY ' + esc(String((r.card && r.card.author) || r.rec.author || '匿名')) + ' · 收藏于 ' +
                 (r.rec.at ? new Date(r.rec.at).toLocaleString() : '') + '</div>' +
+            (ptxt
+                ? (pOpen
+                    ? '<pre class="yws-pre yws-full">' + esc(ptxt) + '</pre>'
+                    : '<div class="yws-dim yws-pv3"><span class="yws-myrow-pvtxt">' + esc(pCut) + '</span></div>')
+                : '') +
             '<div class="yws-mrow2">' +
                 (r.card ? '<button class="yws-btn yws-mini" data-act="fav-see" data-id="' + esc(r.id) + '">看这张卡</button>' : '') +
+                (ptxt ? '<button class="yws-btn yws-mini" data-act="fp-view" data-id="' + esc(r.id) + '">' + (pOpen ? '收起' : '看全文') + '</button>' : '') +
+                (ptxt ? '<button class="yws-btn yws-mini" data-act="fp-copy" data-id="' + esc(r.id) + '">复制正文</button>' : '') +
                 /* ★W22（W4）：小剧场那一段**多一颗「获取剧场」** —— 收藏了就是想再用一次，
                    **不必先跳回商店找那张卡**（复用同一个 playGet()：输入框有草稿照样先问一句）。 */
-                (r.card && r.seg === 'play' ? '<button class="yws-btn yws-mini yws-sew" data-act="play-get" data-id="' + esc(r.id) + '"' +
+                (r.card && isPlay ? '<button class="yws-btn yws-mini yws-sew" data-act="play-get" data-id="' + esc(r.id) + '"' +
                     ' title="把这段小剧场放进酒馆下面那个输入框（不会改你的预设、不会替你发出去）">获取剧场</button>' : '') +
                 '<button class="yws-btn yws-mini" data-act="fav" data-id="' + esc(r.id) + '">取消收藏</button>' +
-            '</div></div>').join('')
+            '</div></div>';
+        }).join('')
             /* ★W22（W4）：各段**各有一句人话**（play-ui.md §6 点名「不共用同一句」）——
                在「剧场那一段是空的」时说「还没有收藏」，会让用户以为**收藏丢了**（其实条目那一段里有）。 */
             : '<div class="yws-empty"><span class="yws-empty-ic">⭐</span>' + (tab === 'play'
@@ -13672,6 +13723,11 @@ function onClick(m, ev) {
         case 'lp-del': S.lpDel = String(id || ''); renderAll(); break;
         case 'lp-del-yes': localPlayDel(id); break;
         case 'lp-del-cancel': S.lpDel = null; renderAll(); break;
+        /* ★★W154（作者 2026-10-23）：**云端「小剧场收藏」**那一段的两颗只读动作（与本地那段统一）——
+           fp-view = 就地展开/收起完整正文（状态存 S.fpView）；fp-copy = 复制正文（见 favPlayCopy）。
+           ★都**不碰云端**（纯读 S.cards 里那张卡的 playText），也不改本机数据。 */
+        case 'fp-view': { const sid = String(id || ''); if (S.fpView[sid]) delete S.fpView[sid]; else S.fpView[sid] = true; renderAll(); break; }
+        case 'fp-copy': favPlayCopy(id); break;
         case 'fav-see': S.view = 'main'; S.who = ''; S.only = 'all'; S.cm.openId = ''; renderAll(); toggleCard(id); break;
         // —— 上传向导
         /* ★A6a（文案二次评审 M-05 · 2026-09-23）：换「范围」**不再把勾掉的条目/正则清空**。

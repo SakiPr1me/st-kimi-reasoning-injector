@@ -1645,6 +1645,19 @@
 .yws-myh { display: flex; flex-wrap: wrap; gap: var(--yws-s2); align-items: center; font-size: var(--yws-fs-md); font-weight: 600; overflow-wrap: anywhere; }
 .yws-myrow .yws-dim, .yws-rvrow .yws-dim { display: block; margin-top: 2px; }
 .yws-mrow2 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--yws-s2); margin-top: var(--yws-s2); }
+/* ★★W154（作者 2026-10-23）：**小剧场收藏 / 本地小剧场收藏 两段卡片的正文预览最多 3 行** ——
+   作者原话："对于小剧场收藏和本地小剧场收藏里 预览的内容没必要这么多行 3行即可"。
+   实现 = 标准行夹（`-webkit-box` + `-webkit-line-clamp:3`），超出用省略号收掉；
+   点「看全文」照旧能看到完整正文（那条路走 `.yws-pre.yws-full`，**不受这条限制**）。
+   ★选择器写成 `.yws-myrow .yws-pv3`（(0,2,0)）而不是单个 `.yws-pv3`（(0,1,0)）：
+     上面那条 `.yws-myrow .yws-dim { display:block }` 的优先级更高，单类选择器会被它按成 `display:block`
+     ⇒ 行夹当场失效（这是"写了没生效"最容易踩的坑）；本条放在它**后面**、同优先级 ⇒ 覆盖得住。
+   ★颜色/字号全继承（元素上仍带 `.yws-dim`）⇒ 深浅两色主题都跟着走，**零硬编码色**。
+   ★`cursor: default`：这是纯预览、不可点（可点的是下面那颗「看全文」），不要给出"能点"的假象。 */
+.yws-myrow .yws-pv3 {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3;
+    overflow: hidden; line-height: 1.5; margin-top: 2px; overflow-wrap: anywhere; cursor: default;
+}
 /* ★★BM-F（作者第十五批 · 2026-09-22，§BM-F）：「📌 缝入记录」那一页 —— 每条右边的「删掉记录」、
    以及上面那个可以**就地改**的条数（`.yws-sewnnum`：等宽数字，删一条时数字不跳宽度）。
    ★删除按钮走现成的 `.yws-btn.yws-mini.yws-danger`（与"我的"里那颗撤回同一套观感）——
