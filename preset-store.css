@@ -1114,6 +1114,10 @@
 .yws-cmnote > .yws-cmnote { margin-top: 2px; }
 /* 收藏记录页里那一行（复用 .yws-myrow，只补一条金色左条，跟"缝入记录"一眼分开） */
 .yws-favrow { border-left: 3px solid var(--yws-offi); }
+/* ★★W151（作者 2026-10-19 点名）：**本地小剧场收藏**那一行 —— 与上面那条同一条写法（复用 .yws-myrow 骨架，
+   只补一条左条把它跟"条目收藏"一眼分开）。色族走 `--yws-accent-line`（本面板自己的强调色，零硬编码、
+   深浅两档主题都跟着走）—— 不新造任何平行样式，只是一个"哪里是本地攒的"的抓手。 */
+.yws-lprow { border-left: 3px solid var(--yws-accent-line); }
 
 /* ---------------------------------------------------------------- 4b. ★展开态（就地只读预览，§17 B） */
 .yws-card-body {

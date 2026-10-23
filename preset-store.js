@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.65';
+const VERSION = '2.2.66';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.65';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.65';
+const BUILD = 'v2.2.66';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -438,10 +438,12 @@ const defaultSettings = {
     /* ★★AA-2（作者第六批反馈）：**收藏**（本地，只存这台机器）—— cardId -> { at, title, author }
        （与"缝入记账"分开：缝入是"我缝过"，收藏是"我想留着看"，两件事） */
     fav: {},
-    /* ★★W22（W4）：收藏记录的**两个筛选**（条目 / 小剧场）里「上次点的是哪一段」（'card' | 'play'）。
+    /* ★★W22（W4）：收藏记录的**分段筛选**里「上次点的是哪一段」（'card' | 'play' | 'local'）。
        ★这是**跨会话记忆**（存本机设置，与 q/sort/only 同一族）—— 作者口径：上次点哪这次展开哪。
        ★与 S.mySeg（「我的」页那个分段条，界面态**不落盘**）**不是一回事**：那一条是本页临时态，
-         这一条要真的记住（关掉窗口再回来还是你上次看的那一段）。 */
+         这一条要真的记住（关掉窗口再回来还是你上次看的那一段）。
+       ★★W151：从两段扩成**三段**（条目收藏 / 小剧场收藏 / **本地小剧场收藏**）——
+         老值 'card' / 'play' 照旧合法、零迁移；脏值 / 越界值一律落回 'card'（见 restoreUiPrefs）。 */
     favSeg: 'card',
     /* ★★BM-E / §BJ-E18（作者第十五批 · 2026-09-22）：**我自己的名字颜色 / 头像底色**（都是本机、只影响"你自己看到的"）
        —— 作者原话："设置里填自己的作者名 + 名字颜色 + 头像底色"（§BJ-E18）、
@@ -640,6 +642,18 @@ const S = {
        ★★W42-③⑤：形状从 `{ id }` 扩成 `{ id, kind }` —— `kind:'drop'` = 下架或撤销提交（两套文案按卡状态分），
        `kind:'purge'` = 彻底删除（作者点名要它跟「撤回」用**同一条确认条**）。缺省当 `'drop'`（老调用点兼容）。 */
     myDrop: null,
+    /* ★★W151（作者 2026-10-19 当面点名）：**本地小剧场收藏** —— 用户自己攒的小剧场（别人的条目、没上传到商店的那种）。
+       三格状态（都**只活在这台机器的 localStorage**，与云端商店零关系）：
+         · `localPlays` = 读回来的那一份（**null = 还没读**；读一次就缓存，写入时同步更新）。
+           形状 `[{ id, name, text, t }]` —— 见 `localPlayAll()` 的注释（读回来一律先判型，坏一份当场丢）。
+         · `lpDlg`     = 创建弹窗的草稿（`null` = 弹窗没开）；`{ name, text }` ——
+           与 `S.nadmDraft` / `S.connD` 同一条口径：**重绘必须从它取值**，不然打到一半的内容会被一次后台重绘吃掉。
+         · `lpDel`     = 正在等二次确认的那一条（`null` = 没在确认）；值是那条的 id。
+         · `lpView`    = 哪几条展开了全文（id -> true；只看、不落盘）。 */
+    localPlays: null,
+    lpDlg: null,
+    lpDel: null,
+    lpView: {},
     showKey: false,           // ★P11：审核密钥是否明文显示（默认遮蔽）；★§21 E18：开关改成输入框里的小眼睛
     // ★§21 E16：**没有 credsText / credsMsg 了** —— 凭证不再"导出/导入"，而是
     //   ① 一个只读凭证框（渲染时现算 = 永远是当前凭证，上传成功后自动带上新钥匙）
@@ -3462,6 +3476,9 @@ function sortCards(list) {
    ★默认值一个字没动：`S.sort='hot'`（热度）/ `S.only='all'`（全部）/ `settings.perPage=10`（10 条）——
      它们就是 `defaultSettings` 与 `S` 的初值；本函数只负责"用户改过就记住"这半句。 */
 const SORTS = ['hot', 'new'], ONLYS = ['all', 'sewn', 'unsewn'];
+/** ★★W151：收藏记录那三段的**合法档位**（唯一判据口 —— `restoreUiPrefs()` 与 `case 'fav-seg'` 都读它）。
+ *  老两档 'card' / 'play' 一个字节没动；新增第三档 'local'（本地小剧场收藏）。 */
+const FAV_SEGS = ['card', 'play', 'local'];
 function saveUiPrefs() {
     const s = getSettings();
     s.sort = SORTS.includes(S.sort) ? S.sort : 'hot';
@@ -3480,8 +3497,9 @@ function restoreUiPrefs() {
     /* ★★W6-A5：两个分区的开合记忆读回来（只有"用户明确设过"（布尔）才认；null = 自动档） */
     S.offiOpen = (typeof s.offiFold === 'boolean') ? s.offiFold : null;
     S.userOpen = (typeof s.userFold === 'boolean') ? s.userFold : null;
-    /* ★W22（W4）：收藏记录上次看的那一段（越界 / 脏数据一律落回 'card' —— 与上面那两行同口径：只认合法档位）。 */
-    S.favSeg = (String(s.favSeg || '') === 'play') ? 'play' : 'card';
+    /* ★W22（W4）：收藏记录上次看的那一段（越界 / 脏数据一律落回 'card' —— 与上面那两行同口径：只认合法档位）。
+       ★★W151：合法档从两个扩成三个（card / play / local）。 */
+    S.favSeg = FAV_SEGS.includes(String(s.favSeg || '')) ? String(s.favSeg) : 'card';
 }
 /** 通过筛选（搜索 + 我缝过）+ 排序之后的两个分区（官方 / 用户） */
 function visibleSections() {
@@ -6098,6 +6116,101 @@ function favToggle(id) {
     }
     if (S.view === 'fav') renderAll();          // 正在看收藏记录页 → 那张要立刻消失/出现
 }
+
+// ---------------------------------------------------------------- ★★W151 本地小剧场收藏（本机，不上传）
+/* 作者原话（2026-10-19 当面点名）："条目商店里 小剧场收藏 应该可以再加一个分页 **本地小剧场收藏**。
+   然后收藏记录里 有一个功能 **创建本地小剧场**，然后点击直接有个输入框出来让输入保存，然后就出现在
+   「本地小剧场收藏」里。这样用户可以用一些别人的条目（没有上传在条目商店里）的，然后自己玩。"
+   ----------------------------------------------------------------------------
+   数据形状：`[{ id, name, text, t }]`
+     · `id`   = 本机生成的唯一串（`lp<36进制时间><5位随机>`；只在本机用，不上传）
+     · `name` = 用户起的名字（标题）
+     · `text` = 正文全文（用户自己粘/写的，一个字都不改）
+     · `t`    = 存下来的时间戳（毫秒）
+   存储：**只存这台机器的 localStorage**（键 `yw_store_localplay`）—— 不上传、不改后端、与云端商店零关系。
+   ★读回来一律**先判型**（铁律 27）：不是数组 / 元素不是对象 / 字段不是字符串 ⇒ 当场丢掉那一份，
+     绝不把坏数据往渲染里塞（坏一份就让整页挂不上 = 那条铁律点过名的事故）。
+   ★条数上限 200（与列表缓存同一个纪律：别把 localStorage 撑爆）。 */
+const LOCALPLAY_KEY = 'yw_store_localplay';
+const LOCALPLAY_MAX = 200;
+function localPlayAll() {
+    try {
+        const raw = localStorage.getItem(LOCALPLAY_KEY);
+        if (!raw) return [];
+        const o = JSON.parse(raw);
+        if (!Array.isArray(o)) return [];
+        return o.filter(x => x && typeof x === 'object').map(x => ({
+            id: String(x.id || ''),
+            name: String(x.name || ''),
+            text: String(x.text || ''),
+            t: Number(x.t) || 0,
+        })).filter(x => x.id).slice(0, LOCALPLAY_MAX);
+    } catch (e) { warn('本地小剧场读不出来（可能坏了）—— 当空的，不影响别的', e); return []; }
+}
+/** 读一次就缓存（`S.localPlays`）；写入时同步更新缓存 ⇒ 界面永远看到的是刚写进去的那一份 */
+function localPlayList() {
+    if (!Array.isArray(S.localPlays)) S.localPlays = localPlayAll();
+    return S.localPlays;
+}
+/** 写盘 + 同步缓存。**返回值如实**（隐私模式 / 配额满 ⇒ false，调用方要给人话、不许假装存上了）。 */
+function localPlayWrite(list) {
+    const clean = (list || []).slice(0, LOCALPLAY_MAX);
+    try { localStorage.setItem(LOCALPLAY_KEY, JSON.stringify(clean)); }
+    catch (e) { warn('本地小剧场存不进去（隐私模式 / 配额满）', e); return false; }
+    S.localPlays = clean;
+    return true;
+}
+const localPlayNewId = () => 'lp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+/** 打开"创建本地小剧场"弹窗（草稿清空；已经开着就只把焦点拉过去） */
+function localPlayOpenDlg() {
+    if (!S.lpDlg) S.lpDlg = { name: '', text: '' };
+    renderAll();
+    setTimeout(() => { const el = document.querySelector('#yws-dlg-host [data-in="lp-name"]'); if (el && el.focus) { try { el.focus(); } catch (e) { } } }, 0);
+}
+/** 关掉弹窗（草稿一起丢掉 —— 与"取消"同一个后果） */
+function localPlayCloseDlg() { S.lpDlg = null; renderAll(); }
+/** 保存：校验 → 写本机 → 关弹窗 → 落到「本地小剧场收藏」那一段（把这一段设为当前段，用户一眼看到新卡） */
+function localPlaySave() {
+    const d = S.lpDlg || {};
+    const name = String(d.name || '').trim();
+    const text = String(d.text || '');
+    if (!name) { toast('warning', '给它起个名字吧（不然列表里认不出来）。'); return; }
+    if (!text.trim()) { toast('warning', '正文还是空的 —— 把要玩的那段文字粘进来。'); return; }
+    const list = localPlayList().slice();
+    list.unshift({ id: localPlayNewId(), name: name, text: text, t: Date.now() });
+    if (!localPlayWrite(list)) { toast('error', '存不进去（浏览器隐私模式 / 空间满了）—— 换个窗口或清点空间再试。'); return; }
+    S.lpDlg = null;
+    S.lpDel = null;
+    /* 存完直接落在「本地小剧场收藏」那一段（并写回本机设置，与 case 'fav-seg' 同一个口径） */
+    S.view = 'fav'; S.favSeg = 'local';
+    try { getSettings().favSeg = 'local'; saveSettings(); } catch (e) { warn('记不住收藏筛选（不影响这次跳转）', e); }
+    toast('success', '存好了 —— 就在「本地小剧场收藏」里（只存在你这台机器上）。');
+    renderAll();
+}
+/** 删一条本地小剧场（**真正动手**那一步；二次确认在 `case 'lp-del-yes'`） */
+function localPlayDel(id) {
+    const sid = String(id || '');
+    const list = localPlayList().filter(x => String(x.id) !== sid);
+    localPlayWrite(list);
+    if (String(S.lpDel || '') === sid) S.lpDel = null;
+    delete S.lpView[sid];
+    toast('info', '删掉了。');
+    renderAll();
+}
+/** 复制一段正文到剪贴板（拿不稳就退化成"让你自己选中"的人话，绝不静默失败） */
+function localPlayCopy(id) {
+    const it = localPlayList().find(x => String(x.id) === String(id));
+    if (!it) return;
+    const txt = String(it.text || '');
+    const ok = () => toast('success', '正文复制好了 —— 粘到你想放的地方就行。');
+    try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            navigator.clipboard.writeText(txt).then(ok, () => toast('warning', '浏览器不让自动复制 —— 点「看全文」自己选中复制。'));
+            return;
+        }
+    } catch (e) { warn('剪贴板用不了，退化成"自己选中复制"', e); }
+    toast('warning', '浏览器不让自动复制 —— 点「看全文」自己选中复制。');
+}
 /** ★★W110-D 的防抖窗口（毫秒）。口径（协调方 2026-10-07 补的一条）：**不做"会话内只读一次"**
  *  （那样别人新发的回复看不到）—— 每次展开都拉一次**最新的**；只有"几秒内刚拉过"才跳过（防连点/手抖）。
  *  为什么落在 8 秒：单看这条路的两次口径 —— ① 服务端 `GET /comment` 自带 **30 秒**短 TTL 内存快照
@@ -7932,16 +8045,60 @@ function favSegOf(rec, card) {
     const k = String((card && card.kind) || (rec && rec.kind) || '');
     return k === 'ywp-play' ? 'play' : 'card';
 }
-/** ★W22（W4）：收藏记录的两个筛选。**逐字复用**「我的」页 segBarHtml() 的那套类名与写法
+/** ★W22（W4）：收藏记录的分段筛选。**逐字复用**「我的」页 segBarHtml() 的那套类名与写法
  *  （yws-btn yws-mini yws-segbtn + yws-on）—— **零新增 CSS、零新类名**（§5.1）。
  *  ★每一段带上**自己的条数**（与「我的」页那两颗同口径：没有计数就分不出「收藏还在不在」）。
- *  ★动作名 fav-seg 是新的（老 my-seg 是「我的」页那两颗，两者互不干扰）。 */
-function favSegBarHtml(tab, nCard, nPlay) {
+ *  ★动作名 fav-seg 是新的（老 my-seg 是「我的」页那两颗，两者互不干扰）。
+ *  ★★W151：从**两段**扩成**三段**（条目收藏 / 小剧场收藏 / **本地小剧场收藏**）——
+ *     第三段沿用同一套按钮壳与 `.yws-mrow2`（它自带 flex-wrap ⇒ 手机档自然折行，零新增样式）。 */
+function favSegBarHtml(tab, nCard, nPlay, nLocal) {
     const b = (on, txt, seg) => '<button class="yws-btn yws-mini yws-segbtn' + (on ? ' yws-on' : '') + '" data-act="fav-seg" data-seg="' + seg + '"' +
         ' role="tab" aria-selected="' + (on ? 'true' : 'false') + '">' + esc(txt) + '</button>';
     return '<div class="yws-wrow yws-mrow2">' +
         b(tab === 'card', '条目收藏 · ' + numOf(nCard) + ' 条', 'card') +
-        b(tab === 'play', '小剧场收藏 · ' + numOf(nPlay) + ' 条', 'play') + '</div>';
+        b(tab === 'play', '小剧场收藏 · ' + numOf(nPlay) + ' 条', 'play') +
+        b(tab === 'local', '本地小剧场收藏 · ' + numOf(nLocal) + ' 条', 'local') + '</div>';
+}
+/** ★★W151：**本地小剧场收藏**那一段的行（自己攒的小剧场）—— 复用 `.yws-myrow` 的卡片骨架与按钮族，
+ *  **零新增类名**（只借 `.yws-lprow` 这一个"没有就退回默认观感"的抓手，CSS 那边给了它一条同族左边线）。
+ *  动作：看全文（就地展开）/ 复制正文 / 放进输入框（真"拿去玩"，复用 playGet 那套 fillSendBox）/ 删掉（二次确认）。 */
+function localPlayRowsHtml() {
+    const list = localPlayList().slice().sort((a, b) => (Number(b.t) || 0) - (Number(a.t) || 0));
+    if (!list.length) {
+        return '<div class="yws-empty"><span class="yws-empty-ic">🎭</span>' +
+            '还没有本地小剧场。点上面的「＋ 创建本地小剧场」，把一段文字存进来 —— 只存在你这台机器上。</div>';
+    }
+    return list.map(it => {
+        const open = !!S.lpView[String(it.id)];
+        const txt = String(it.text || '');
+        const cut = clip(txt, 160);
+        return '<div class="yws-myrow yws-lprow" data-id="' + esc(it.id) + '">' +
+            '<div class="yws-myh"><b>' + esc(mdPlain(it.name) || '(没名字)') + '</b></div>' +
+            '<div class="yws-dim">自己攒的 · 存于 ' + (it.t ? new Date(it.t).toLocaleString() : '') +
+                ' · ' + numOf([...txt].length) + ' 字</div>' +
+            /* 正文预览（收起态一行、展开态全文）—— 与"我的"那边预览同一个类族（.yws-myrow-pv / -pvtxt） */
+            (open
+                ? '<pre class="yws-pre yws-full">' + esc(txt) + '</pre>'
+                : '<div class="yws-dim yws-myrow-pv"><span class="yws-myrow-pvtxt">' + esc(cut) + '</span></div>') +
+            '<div class="yws-mrow2">' +
+                '<button class="yws-btn yws-mini" data-act="lp-view" data-id="' + esc(it.id) + '">' + (open ? '收起' : '看全文') + '</button>' +
+                '<button class="yws-btn yws-mini" data-act="lp-copy" data-id="' + esc(it.id) + '">复制正文</button>' +
+                '<button class="yws-btn yws-mini yws-sew" data-act="lp-fill" data-id="' + esc(it.id) + '"' +
+                    ' title="把这段文字放进酒馆下面那个输入框（不会改你的预设、不会替你发出去）">放进输入框</button>' +
+                '<button class="yws-btn yws-mini yws-danger" data-act="lp-del" data-id="' + esc(it.id) + '">删掉</button>' +
+            '</div>' +
+            /* ★二次确认：与「我的」那边同一套 `.yws-dropask` 页内确认条（红盒 = 真删；这里删的是本机那一份，
+               但用户攒的东西丢了也找不回来 ⇒ 照样问一句）。 */
+            (String(S.lpDel || '') === String(it.id)
+                ? '<div class="yws-dropask" role="alertdialog">' +
+                    '<div class="yws-dropask-tx">⚠ 把这条本地小剧场从你这台机器上删掉，且找不回来。</div>' +
+                    '<div class="yws-mrow2">' +
+                        '<button class="yws-btn yws-mini yws-danger" data-act="lp-del-yes" data-id="' + esc(it.id) + '">确认删掉</button>' +
+                        '<button class="yws-btn yws-mini" data-act="lp-del-cancel" data-id="' + esc(it.id) + '">算了</button>' +
+                    '</div></div>'
+                : '') +
+        '</div>';
+    }).join('');
 }
 function viewFav() {
     const s = getSettings();
@@ -7951,15 +8108,21 @@ function viewFav() {
         .map(r => Object.assign(r, { seg: favSegOf(r.rec, r.card) }))
         .sort((a, b) => (Number(b.rec.at) || 0) - (Number(a.rec.at) || 0));
     /* ★W22（W4）：**记忆** —— S.favSeg 由 restoreUiPrefs() 从本机设置读回（跨会话）
-       ⇒ 下次点开「⭐ 收藏记录」直接落在你上次看的那一段。越界值一律落回 'card'。 */
-    const tab = (String(S.favSeg || '') === 'play') ? 'play' : 'card';
+       ⇒ 下次点开「⭐ 收藏记录」直接落在你上次看的那一段。越界值一律落回 'card'。
+       ★★W151：多认一段 'local'（本地小剧场收藏，见 FAV_SEGS 那一个唯一判据口）。 */
+    const tab = FAV_SEGS.includes(String(S.favSeg || '')) ? String(S.favSeg) : 'card';
     const nCard = all.filter(r => r.seg === 'card').length, nPlay = all.filter(r => r.seg === 'play').length;
+    const nLocal = localPlayList().length;
     const rows = all.filter(r => r.seg === tab);
-    return '<div class="yws-wstep"><b>⭐ 收藏记录</b> <span class="yws-dim">（' + numOf(rows.length) + ' 条）</span>' +
-        favSegBarHtml(tab, nCard, nPlay) +
-        '<div class="yws-wrow"><button class="yws-btn yws-mini" data-act="to-main">← 回商店</button>' +
-            '<span class="yws-dim">收藏只存在你这台机器上（没有上传、别人看不到）。点卡片标题能回去看那张卡。</span></div>' +
-        (rows.length ? rows.map(r => '<div class="yws-myrow yws-favrow" data-id="' + esc(r.id) + '">' +
+    /* ★★W151：「本地小剧场收藏」这一段**不是**从云端收藏里筛出来的（数据源 = 本机 localStorage），
+       所以它走自己那一支（`localPlayRowsHtml()`）；条数取 `nLocal`。 */
+    const isLocal = (tab === 'local');
+    const body = isLocal
+        ? ('<div class="yws-wrow yws-mrow2">' +
+                '<button class="yws-btn yws-mini yws-primary" data-act="lp-new">＋ 创建本地小剧场</button>' +
+                '<span class="yws-dim">别人的条目、没上传到商店的那种也能攒进来 —— 只存在你这台机器上。</span></div>' +
+            localPlayRowsHtml())
+        : (rows.length ? rows.map(r => '<div class="yws-myrow yws-favrow" data-id="' + esc(r.id) + '">' +
             '<div class="yws-myh"><b>' + esc(r.card ? mdPlain(r.card.title) : (r.rec.title || '(已不在商店)')) + '</b>' +
                 (r.card ? '' : ' <span class="yws-st yws-st-miss">已下架</span>') + '</div>' +
             '<div class="yws-dim">BY ' + esc(String((r.card && r.card.author) || r.rec.author || '匿名')) + ' · 收藏于 ' +
@@ -7972,11 +8135,18 @@ function viewFav() {
                     ' title="把这段小剧场放进酒馆下面那个输入框（不会改你的预设、不会替你发出去）">获取剧场</button>' : '') +
                 '<button class="yws-btn yws-mini" data-act="fav" data-id="' + esc(r.id) + '">取消收藏</button>' +
             '</div></div>').join('')
-            /* ★W22（W4）：两段**各有一句人话**（play-ui.md §6 点名「不共用同一句」）——
+            /* ★W22（W4）：各段**各有一句人话**（play-ui.md §6 点名「不共用同一句」）——
                在「剧场那一段是空的」时说「还没有收藏」，会让用户以为**收藏丢了**（其实条目那一段里有）。 */
             : '<div class="yws-empty"><span class="yws-empty-ic">⭐</span>' + (tab === 'play'
                 ? '还没有收藏小剧场。到商店的「🎭 小剧场」那一区，点卡片标题右边那颗「☆」。'   // ★W79：按钮上「收藏」二字已去掉（作者要求），文案跟着改
-                : '还没有收藏。到商店里点卡片标题右边那颗「☆」。') + '</div>') +   // ★W79：同上
+                : '还没有收藏。到商店里点卡片标题右边那颗「☆」。') + '</div>');   // ★W79：同上
+    return '<div class="yws-wstep"><b>⭐ 收藏记录</b> <span class="yws-dim">（' + numOf(isLocal ? nLocal : rows.length) + ' 条）</span>' +
+        favSegBarHtml(tab, nCard, nPlay, nLocal) +
+        '<div class="yws-wrow"><button class="yws-btn yws-mini" data-act="to-main">← 回商店</button>' +
+            '<span class="yws-dim">' + (isLocal
+                ? '本地小剧场只存在你这台机器上（没有上传、别人看不到）。'
+                : '收藏只存在你这台机器上（没有上传、别人看不到）。点卡片标题能回去看那张卡。') + '</span></div>' +
+        body +
     '</div>';
 }
 
@@ -10163,19 +10333,49 @@ function viewUpload() {
         (S.editId || w.step === 3 ? '' : RIGHTS_HTML) +
         (w.step === 1 ? step1 : w.step === 2 ? step2 : step3) + '</div>';
 }
+/** ★★W151：**创建本地小剧场**的输入弹窗 —— **逐字复用**条目详情弹窗那一整套外壳
+ *  （`.yws-modal` / `.yws-dlgbox` / `.yws-dlg-h` / `.yws-dlg-b` / `.yws-dlg-f` + `#yws-dlg-host` 宿主）
+ *  与既有的输入控件族（`.yws-inp` / `.yws-ta` / `.yws-ta-full` / `.yws-lbl-wide`）——
+ *  **零新增 CSS、零新类名**（§5.1），深色/浅色、手机档、Esc 盾、自动取色**全部继承那一套**。
+ *  ★草稿值一律从 `S.lpDlg` 取（重绘必须渲染它 —— 不然打字打到一半会被一次后台重绘吃掉，与 `S.nadmDraft` 同一条口径）。 */
+function lpDialogHtml() {
+    const d = S.lpDlg || {};
+    return '<div class="yws-modal" data-act="dlg-mask">' +
+        '<div class="yws-dlgbox" role="dialog" aria-modal="true" data-act="dlg-box">' +
+            '<div class="yws-dlg-h">' +
+                '<b class="yws-dlg-t">创建本地小剧场</b>' +
+                '<button type="button" class="yws-btn yws-mini yws-ghost" data-act="dlg-close" title="关掉（不保存）">✕</button></div>' +
+            '<div class="yws-dlg-b">' +
+                '<div class="yws-wrow"><label class="yws-lbl yws-lbl-in">名称<input class="yws-inp" data-in="lp-name" maxlength="60"' +
+                    ' placeholder="给这段起个名（列表里认得出就行）" value="' + esc(String(d.name || '')) + '"></label></div>' +
+                '<div class="yws-wrow"><label class="yws-lbl yws-lbl-wide"><span class="yws-lbl-t">正文</span>' +
+                    '<textarea class="yws-inp yws-ta yws-ta-full" data-in="lp-text" maxlength="20000"' +
+                    ' placeholder="把要玩的那段文字粘进来（支持 Markdown：**粗体** *斜体* `代码` - 列表 [链接](http://…)）">' + esc(String(d.text || '')) + '</textarea></label></div>' +
+                '<div class="yws-dim">只存在你这台机器上 —— 不上传、别人看不到。</div>' +
+            '</div>' +
+            '<div class="yws-dlg-f">' +
+                '<button type="button" class="yws-btn yws-primary" data-act="lp-save">保存</button>' +
+                '<button type="button" class="yws-btn yws-ghost" data-act="lp-cancel">取消</button>' +
+                '<span class="yws-dim">存好之后就在「本地小剧场收藏」里。</span>' +
+            '</div>' +
+        '</div></div>';
+}
 /** ★§17 D12：条目详情弹窗的**宿主**。
  *  ★为什么挂到 document.body 而不是画在面板里（真踩过）：ST 的设置抽屉祖先带 `transform`
  *  → `position: fixed` 会退化成"相对那个祖先的绝对定位"，于是**抽屉一滚它就跟着跑**
  *  （手机档截图里那条弹窗被滚掉了半截，就是它）。挂到 body 才是真的"浮在视口上"。
- *  代价：面板的 `--yws-*` 令牌要在宿主上再声明一遍（CSS 里 `#yws-dlg-host` 跟 `.yws-host` 同一组）。 */
+ *  代价：面板的 `--yws-*` 令牌要在宿主上再声明一遍（CSS 里 `#yws-dlg-host` 跟 `.yws-host` 同一组）。
+ *  ★★W151：宿主**一址两用** —— 条目详情弹窗（`S.wiz.dlg`）与"创建本地小剧场"输入弹窗（`S.lpDlg`）
+ *    共用这一个宿主与这一套外壳。**lp 弹窗优先**（用户正在输内容时不许被别的浮层顶掉）。 */
 function mountWizDialog() {
     const old = document.getElementById('yws-dlg-host');
     const w = S.wiz;
-    if (!w || !w.dlg) { if (old) old.remove(); return; }
+    const html = S.lpDlg ? lpDialogHtml() : ((w && w.dlg) ? wizDialog(w) : '');
+    if (!html) { if (old) old.remove(); return; }
     const host = old || document.createElement('div');
     host.id = 'yws-dlg-host';
     host.className = 'yws-host';
-    host.innerHTML = wizDialog(w);
+    host.innerHTML = html;
     if (!old) {
         // 事件：弹窗在 panel 外面，挂载点上的 onClick 收不到 → 自己一套（★弹窗里的按钮一律走这里）
         // ★★§21 C8（作者报的真 BUG）：**必须点 ✕ 才关**。
@@ -10186,7 +10386,14 @@ function mountWizDialog() {
             if (!t) return;
             const act = t.getAttribute('data-act');
             if (act === 'dlg-box' || act === 'dlg-mask') return;  // ★点白框 / 点外面：都不关（作者要求）
-            if (act === 'dlg-close') { S.wiz.dlg = null; renderAll(); return; }
+            /* ★★W151：这一套按钮走**创建本地小剧场**那支（与 wiz 那支井水不犯河水） */
+            if (act === 'lp-save') { localPlaySave(); return; }
+            if (act === 'lp-cancel') { localPlayCloseDlg(); return; }
+            if (act === 'dlg-close') {
+                /* ✕ = 关掉**当前开着的那一个**（lp 优先 —— 与上面渲染的优先级同源） */
+                if (S.lpDlg) { S.lpDlg = null; renderAll(); } else { S.wiz.dlg = null; renderAll(); }
+                return;
+            }
             if (act === 'dlg-pick') {
                 const eid = t.getAttribute('data-id');
                 const set = new Set(S.wiz.picked);
@@ -10195,6 +10402,15 @@ function mountWizDialog() {
                 for (const mm of S.mounts) syncPickUi(mm);        // 列表那行 + 计数
                 syncDlgUi(host);                                   // 弹窗里那颗按钮/勾选框
             }
+        };
+        /* ★★W151：输入框（名称 / 正文）—— 与面板里那些 `data-in` 同一条口径：**只更新草稿、不重绘整页**
+           （不然每敲一个字都要重建弹窗、光标当场跳掉）。事件挂在宿主上（弹窗在 panel 外面）。 */
+        host.oninput = (ev) => {
+            const t = ev.target;
+            if (!t || !t.dataset || !S.lpDlg) return;
+            const key = String(t.dataset.in || '');
+            if (key === 'lp-name') S.lpDlg.name = String(t.value || '');
+            else if (key === 'lp-text') S.lpDlg.text = String(t.value || '');
         };
         /* ★★§21 C8 的另一半（真正让"整个页面消失"的那一击）：
            ST 的**全局 mousedown/touchstart**（`public/script.js:12154` `$('html').on('touchstart mousedown', …)`，
@@ -10224,8 +10440,10 @@ function mountWizDialog() {
  *  `document` 冒泡，那一层根本收不到。所以照抄更新器的做法（`preset-updater.js` 的 installEscShield），
  *  在 **document 捕获阶段**把 Esc 吞掉：ST 那条"按 Esc 收起设置抽屉"是 html 上的冒泡监听，收不到就没事。
  *  只拦 `Escape` 一个键、只在**我们的弹窗开着**时拦 —— 其它时候一个字都不拦（不改变 ST 的行为）。
- *  口径与更新器完全一致（§23.4 自己列的"下一轮统一"）：**弹窗只认 ✕**。 */
-const anyOverlayOpen = () => !!(S.wiz && S.wiz.dlg);
+ *  口径与更新器完全一致（§23.4 自己列的"下一轮统一"）：**弹窗只认 ✕**。
+ *  ★★W151：判据扩成"**任一浮层开着**"—— 条目详情弹窗（`S.wiz.dlg`）**或**创建本地小剧场弹窗（`S.lpDlg`）。
+ *    两个共用同一个宿主与同一套 Esc 盾，所以盾必须在两档都生效（漏了 lp 那一档 = 焦点在弹窗里按 Esc 会把抽屉收走）。 */
+const anyOverlayOpen = () => !!((S.wiz && S.wiz.dlg) || S.lpDlg);
 let _escShield = false;
 function installEscShield() {
     if (_escShield) return;
@@ -10262,7 +10480,7 @@ function placeWizDialog() {
 function bindDlgFollow() {
     if (bindDlgFollow._done) return;
     bindDlgFollow._done = true;
-    const follow = () => { if (S.wiz && S.wiz.dlg) placeWizDialog(); };
+    const follow = () => { if (anyOverlayOpen()) placeWizDialog(); };
     window.addEventListener('scroll', follow, true);
     window.addEventListener('resize', follow);
 }
@@ -13419,16 +13637,41 @@ function onClick(m, ev) {
         }
         case 'fav': favToggle(id); break;
         case 'fav-list': S.view = 'fav'; renderAll(); break;
-        /* ★★W22（W4）：收藏记录那两个筛选 —— 切一段 + **写回本机设置**（跨会话记忆，见 defaultSettings.favSeg）。
+        /* ★★W22（W4）：收藏记录那几个筛选 —— 切一段 + **写回本机设置**（跨会话记忆，见 defaultSettings.favSeg）。
            ★只重绘这一页（renderAll 走的是既有的 keepOuterScroll + 焦点还原那一套，不跳滚动）。
-           ★顶栏那颗「⭐ 收藏记录」的计数保持**总数**（两段之和）—— 它回答的是「我收藏了几条」，不是「这一段几条」。 */
+           ★顶栏那颗「⭐ 收藏记录」的计数保持**总数**—— 它回答的是「我收藏了几条」，不是「这一段几条」。
+           ★★W151：合法档位从两个扩成三个（card / play / **local**），判据走唯一那处 `FAV_SEGS`
+             （越界 / 脏值一律落回 'card' —— 与 restoreUiPrefs 同一条口径）。 */
         case 'fav-seg': {
-            const seg = String(target.getAttribute('data-seg') || '') === 'play' ? 'play' : 'card';
+            const raw = String(target.getAttribute('data-seg') || '');
+            const seg = FAV_SEGS.includes(raw) ? raw : 'card';
             if (S.favSeg !== seg) { S.favSeg = seg; getSettings().favSeg = seg; saveSettings(); }
             S.view = 'fav';
             renderAll();
             break;
         }
+        /* ★★W151：**本地小剧场收藏**那一支的四组动作（都只动本机数据，不碰云端）——
+           lp-new = 开创建弹窗；lp-view = 就地展开/收起全文；lp-copy = 复制正文；
+           lp-fill = 放进酒馆输入框（复用 playGet 那套 fillSendBox：草稿有内容时照样先问一句）；
+           lp-del = 开二次确认；lp-del-yes = 真删；lp-del-cancel = 收掉确认条。 */
+        case 'lp-new': localPlayOpenDlg(); break;
+        case 'lp-view': { const sid = String(id || ''); if (S.lpView[sid]) delete S.lpView[sid]; else S.lpView[sid] = true; renderAll(); break; }
+        case 'lp-copy': localPlayCopy(id); break;
+        case 'lp-fill': {
+            const it = localPlayList().find(x => String(x.id) === String(id));
+            if (!it) break;
+            const txt = String(it.text || '');
+            const put = () => { const r = fillSendBox(txt); toast(r.ok ? 'success' : 'error', r.ok ? '好了 —— 已经放进下面那个输入框了（想发就按回车）。' : r.why); };
+            const ta = document.querySelector('#send_textarea');
+            const had = ta ? String(ta.value || '').trim() : '';
+            if (!had) { put(); break; }
+            askYes('输入框里已经有你写的东西', '要把它<b>换成</b>这段小剧场吗？（换了就找不回来了）', '换成这段',
+                '输入框里有 ' + had.length + ' 个字 —— 换成这段小剧场吗？（换了就找不回来了）').then(ok => { if (ok) put(); });
+            break;
+        }
+        case 'lp-del': S.lpDel = String(id || ''); renderAll(); break;
+        case 'lp-del-yes': localPlayDel(id); break;
+        case 'lp-del-cancel': S.lpDel = null; renderAll(); break;
         case 'fav-see': S.view = 'main'; S.who = ''; S.only = 'all'; S.cm.openId = ''; renderAll(); toggleCard(id); break;
         // —— 上传向导
         /* ★A6a（文案二次评审 M-05 · 2026-09-23）：换「范围」**不再把勾掉的条目/正则清空**。

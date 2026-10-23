@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.42'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.43'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -399,7 +399,7 @@ const defaultSettings = {
     clineRouteAlert: false,          // 实际路由与指定不符时提醒（默认关）
     opencodeHeadersEnabled: false,   // Opencode 请求标头：自动注入 X-Opencode-Session（每聊天固定ID，GPU缓存命中）
     autoUpdate: true,                // 默认自动更新：每次检测到云端有新版直接更新到最新
-    floatPanelKeys: ['inject', 'reroll', 'beautify', 'word', 'psnap', 'tag', 'api', 'fix'], // 悬浮条面板区显示哪些卡
+    floatPanelKeys: ['inject', 'reroll', 'word', 'api', 'tag', 'psnap', 'fix'], // 悬浮条面板区显示哪些卡（★W150：顺序 = 主面板卡片顺序）
     floatPanelAllKey: 'all',
     clineModelOverride: false,       // 模型名前缀覆写：请求层把 model 改写为 指定提供商/基础模型名（⚠️脱离cline-pass前缀=按积分计费）
     clineProvider: 'modal',          // 当前选中的 Cline 提供商（默认 modal，据称质量最好）
@@ -472,8 +472,8 @@ const UI = {
         dsModeLabel: "Deepseek思维链开关：", dsNative: "原生思维链", dsDisabled: "正文思维链(thinking disabled)",
         dsEffortLabel: "Deepseek思考强度：", dsEffortOff: "off（不注入，用 DeepSeek 默认 high）", dsEffortLow: "low（flash: low / pro: high）", dsEffortHigh: "high（flash: high / pro: high）", dsEffortXhigh: "xhigh（flash: high / pro: max）", dsEffortMax: "max（flash: max / pro: max）",
         k3EffortLabel: "Kimi3 思考强度：", k3EffortOff: "off（不注入，用 K3 默认 max）", k3EffortLow: "low（思考快）", k3EffortHigh: "high", k3EffortMax: "max（思考最久）",
-        injectLabel: "注入破限：", injectStep1: "step 1：中破限·原生思维链夺舍（reasoning_content注入）", injectStep2: "step 2：强破限·正文输出思维链夺舍（大多数渠道已失效，别选我）",
-        injectTitle: "注入", modelTitle: "模型参数", rerollTitle: "自动重Roll/截断", autoStopTitle: "自动截断", beautifyTitle: "思维链", presetUpdTitle: "预设更新器", presetStoreTitle: "条目商店", playFavTitle: "小剧场收藏", playFavNow: "立即打开一次", playFavNotReady: "条目商店还没准备好（正在加载，或者这个包里没有它）—— 过一两秒再点一次。", playFavJumpFail: "商店打开了，但没能跳到「小剧场收藏」—— 在商店里点一下「⭐ 收藏记录」，再切到「小剧场收藏」那一段。",
+        injectLabel: "注入破限：", injectStep1: "step 1：中破限·原生思维链夺舍（gemini需要关闭我）", injectStep2: "step 2：强破限·正文输出思维链夺舍（大多数渠道已失效，别选我）",
+        injectTitle: "注入（模型相关）", modelTitle: "模型参数", rerollTitle: "自动重Roll/截断（妙妙方法）", autoStopTitle: "自动截断", beautifyTitle: "思维链", presetUpdTitle: "预设更新器（对比/缝入）", presetStoreTitle: "条目商店", playFavTitle: "小剧场收藏", playFavNow: "立即打开一次", playFavNotReady: "条目商店还没准备好（正在加载，或者这个包里没有它）—— 过一两秒再点一次。", playFavJumpFail: "商店打开了，但没能跳到「小剧场收藏」—— 在商店里点一下「⭐ 收藏记录」，再切到「小剧场收藏」那一段。",
         playLatestTitle: "最新小剧场", playLatestNow: "立即打开一次",
         playLatestNotReady: "条目商店还没准备好（正在加载，或者这个包里没有它）—— 过一两秒再点一次。",
         playLatestJumpFail: "商店打开了，但没找到「🎭 小剧场」那一区 —— 商店里现在可能还没有小剧场（等有人上传，或者你自己到「⬆ 发布」发一条）。", fixTitle: "不常用", wordTitle: "替换（清理标签、烦人字）",
@@ -500,7 +500,7 @@ const UI = {
         wordHint: "每行：查找→替换，模式可选简单/正则；勾选应用层（仅显示 / 仅后端提示词，可都勾）。规则勿碰 &lt;scene&gt;/&lt;content&gt; 等标签。",
         wrEnabled: "启用该规则", wrFind: "查找", wrReplace: "替换", wrSimple: "简单", wrRegex: "正则", wrDisplay: "仅显示", wrPrompt: "仅后端提示词", wrDelete: "删除",
         wrApplyHist: "修改所有铅笔内真实字", wrUndo: "回退修改", wrUndoTitle: "恢复该条规则「修改所有铅笔内真实字」修改前的所有历史消息原文",
-        tagTitle: "标签修复",
+        tagTitle: "标签修复（补标签）",
         tagHint: "📌 缩进 = 嵌套，不缩进的互为同级。\n🔍 自动修复 AI 输出缺失的标签闭合。",
         tagTreeLabel: "标签树（缩进 = 嵌套）",
         tagContainerTitle: "🔻 小剧场/HTML 容器",
@@ -525,7 +525,7 @@ const UI = {
         apiModel: "模型名", apiKey: "密钥", apiAge: "{d} 天 {h} 小时", apiFetchModels: "获取可用模型", apiFetchBtn: "获取", apiModelsLoading: "获取模型中…", apiModelEmpty: "未获取到模型（检查 URL/密钥）", apiModelErr: "获取模型失败",
         apiNoPool: "池为空：先添加接口", apiNotCustom: "当前不是 Custom(OpenAI兼容) 连接，API 池不生效",
         apiBannerMsg: "检测到额度用尽（limit）。", apiBannerSwitch: "⇄ 切换到 {name}（{n}/{total}）", apiSwitched: "已切换到 {name}（{n}/{total}）",
-        apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（感谢啊一串信息源）", clineSectionTitle: "Cline设置相关", clineModelOverride: "积分模型名前缀覆写", clineMethodLabel: "指定方式：订阅指定提供商（感谢啊一串信息源）", clineUpTitle: "上移（调整自动切换顺序）", clineDownTitle: "下移（调整自动切换顺序）", upBtn: "📊 各上游实时状况", upTitle: "kimi-k3 各上游实时状况", upLoading: "加载中…（数据源 OpenRouter，免key）", upRefreshing: "刷新中…", upFailed: "获取失败：国内网络可能无法直连 openrouter.ai，请挂梯子后点 ↻ 重试", upSwitch: "切", upProvider: "提供商", upIn: "输入$/M", upOut: "输出$/M", upCache: "缓存读$/M", upLat: "延迟", upTps: "吞吐", upUp5m: "可用(5m)", upUptime: "可用率(1d)", upHint: "✓=可在本插件切换 · ★=当前 · 排序：可切换优先、可用率降序。手动追加自定义提供商（上方输入框）后，对应行也会出现切按钮。数据来自 OpenRouter 公开接口，仅供选型参考。", clineDSTip: "用Cline吃DeepSeek，可指定 deepseek 作为上游（官方缓存生效）！", clineDSBtn: "⇄ 一键切换 deepseek 上游", clineDSSwitched: "已切换：提供商=deepseek（走官方上游带缓存）", clineOverrideWarn: "⚠️ 啊一串实测：消耗积分的模式！限定指定提供商，如果你不知道这是什么就不要勾选", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「不常用」里勾选 使用 Cline 提供商指定", clinePassWarn: "⚠️ 检测到模型名带 cline-pass/ 前缀：提供商指定不会生效（实测全部被忽略），请改用 moonshotai/kimi-k3 等厂商前缀", clineDeadWarn: "⚠️ 已失效：Cline 指定 K3 渠道现已无法指定！（但可指定 DS）", clineHint: "开启后每次请求自动注入指定提供商。请删掉附加参数里的任何内容！仅 cline 渠道需要，其它渠道请关闭。不同渠道K3风味不同，自行测试。", psnapTitle: "预设条目开关快照", psnapNamePh: "方案名…", psnapSaveBtn: "保存", psnapApply: "切", psnapDel: "✕", psnapEmpty: "还没有保存的方案", psnapRecovery: "恢复到最近一次未快照时的状态", psnapSaved: "已保存「{n}」", psnapNeedName: "请先填写方案名", psnapMenuEntry: "扩展菜单入口", psnapEntryLabel: "入口：", psnapFloatEntry: "悬浮按钮入口", psnapNoPreset: "未找到预设数据", psnapRecApply: "恢复", psnapRecTime: "可恢复快照", floatCardTitle: "悬浮条设置", floatCardTag: "一键修复标签（直接执行）", tagFixNow: "一键修复标签", baseTitle: "基础设置", inlineInsLabel: "在预设面板每行加「插入提示词」按钮", inlineInsDelLabel: "在预设面板每行加「删除」按钮", inlineInsSaveLabel: "保存条目的同时保存预设", inlineInsSaveHint: "", inlineInsBtnTitle: "插入提示词或复制这一条", inlineInsNewName: "新提示词", inlineInsNoId: "没能生成一个唯一的编号 ⇒ 这次没有插入", inlineInsNoDef: "酒馆没有把这条新提示词收下 ⇒ 这次没有插入（可以再试一次）", inlineInsNoOrder: "没找到预设的顺序表 ⇒ 一个字都没写（可以刷新页面再试）", inlineInsFail: "插入时出错了 ⇒ 没有写进预设", inlineInsFailNoBtn: "找不到酒馆的「更新预设」按钮 ⇒ 没有存盘（这次插入只在界面上）", inlineInsMsgPlaced: "已插到「{n}」后面", inlineInsAtTail: "原来那一行不在了 ⇒ 已放到预设最后", inlineInsMsgNoSave: "（只在界面上；要存进预设就点酒馆的「更新预设」）", inlineInsEntrySavedPreset: "条目已保存，并已替你更新预设「{p}」", inlineInsEntrySavedNoName: "条目已保存，但读不到你正在用的预设的名字 ⇒ 没有存进预设文件", inlineInsEntrySavedUnknown: "条目已保存，但没能确认写进预设文件 ⇒ 请按一下酒馆的「更新预设」（这次可能没存上）", inlineInsMsgSaved: "；条目已保存，并已替你更新预设「{p}」", inlineInsMsgSaveUnknown: "，但没能确认写进预设文件 ⇒ 请自己按一下酒馆的「更新预设」，或看控制台报错（这次可能没存上）", inlineInsMsgNoName: "，但读不到你正在用的预设的名字 ⇒ 没有存盘（这次插入只在界面上）", insAskTitle: "这一条怎么处理？", insAskWho: "这一条：{n}", insAskRemove: "移除", insAskRemoveHint: "酒馆原有的 Remove，仅隐藏，可插入提示词重链接回来", insAskDel: "删除", insAskDelHint: "确认不需要后彻底删除，无法找回", insAskIns: "插入新提示词", insAskInsHint: "在这一条后面插一条新的，填完内容点酒馆的「保存」", insAskCopy: "复制这一条", insAskCopyHint: "把这一条复制一份插到它后面，名字自动加「（副本）」", insAskCancel: "取消", insAskWi: "从世界书里选", insAskWiHint: "挑几条世界书条目，缝到这一条后面", wiTitle: "从世界书里选", wiSub: "挑好的条目会缝到「{n}」后面（按勾选先后）", wiNoBooks: "没有读到世界书（一本都没有）", wiBooksFail: "世界书列表读不出来 ⇒ 刷新页面再试", wiLoadFail: "这本世界书读不出来 ⇒ 换一本试试", wiNoEntries: "这本世界书里没有可用的条目", wiBack: "‹ 换一本", wiOk: "确定", wiLoading: "读取中…", wiCount: "已选 {n} 条", wiOff: "（世界书里是停用的）", wiUnnamed: "未命名条目", wiNone: "一条都没勾 ⇒ 什么都没做", wiDone: "已把 {n} 条世界书内容缝到「{x}」后面", wiDoneTail: "原来那一行不在了 ⇒ {n} 条已放到预设最后", wiNoBody: "（其中 {m} 条没有正文）", wiGone: "那一行已经不在了 ⇒ 没有缝", wiErr: "这一批没缝成 ⇒ 一个字都没写", wiExpand: "展开", wiCollapse: "收起", wiEmptyBody: "（这一条没有正文）",  insCopyDone: "已复制出「{n}」", insCopyTail: "原来那一行不在了 ⇒ 复制出来的「{n}」放到了预设最后", insCopyGone: "「{n}」已经不在了 ⇒ 没有复制", inlineInsCopySuffix: "（副本）", insDelDone: "已从预设里彻底删除「{n}」", insDelClean: "（顺手清掉了 {g} 张顺序表里的 {r} 行残留）", insDelNoSave: "（只在界面上；要存进预设就点酒馆的「更新预设」）", insDelGone: "「{n}」已经不在预设里了", insDelForbid: "「{n}」是系统提示词 ⇒ 不能删（酒馆也不让删）", insDelFail: "删除时出错了 ⇒ 没有删", autoUpdateLabel: "自动更新插件至最新", floatBarEnable: "开启悬浮窗", floatPanelClear: "清空", floatFuncLabel: "功能型（点图标直接执行）", floatPanelLabel: "面板型（点图标打开设置浮窗）", floatPanelAll: "全选面板", routeLabel: "本次Cline上游：", routeNone: "暂无数据", floatClineEntry: "Cline 提供商入口（点开选择）", floatRouteBadge: "悬浮条显示上游徽标", stopRerollName: "停止重roll", entryMenuGroup: "拓展菜单（左下角）", entryInlineGroup: "输入框旁（发送栏）", clineRouteAlertLabel: "实际路由与指定不符时提醒", opencodeLabel: "Opencode 请求标头（9/6 后红字需启用）", opencodeHint: "自动注入 X-Opencode-Session 请求头（CUSTOM 源生效）。同一聊天固定同一 ID（GPU 上下文缓存命中），不同聊天不同 ID。", opencodeSession: "本聊天 Session ID：",
+        apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（感谢啊一串信息源）", clineSectionTitle: "Cline设置相关", clineModelOverride: "积分模型名前缀覆写", clineMethodLabel: "指定方式：订阅指定提供商（感谢啊一串信息源）", clineUpTitle: "上移（调整自动切换顺序）", clineDownTitle: "下移（调整自动切换顺序）", upBtn: "📊 各上游实时状况", upTitle: "kimi-k3 各上游实时状况", upLoading: "加载中…（数据源 OpenRouter，免key）", upRefreshing: "刷新中…", upFailed: "获取失败：国内网络可能无法直连 openrouter.ai，请挂梯子后点 ↻ 重试", upSwitch: "切", upProvider: "提供商", upIn: "输入$/M", upOut: "输出$/M", upCache: "缓存读$/M", upLat: "延迟", upTps: "吞吐", upUp5m: "可用(5m)", upUptime: "可用率(1d)", upHint: "✓=可在本插件切换 · ★=当前 · 排序：可切换优先、可用率降序。手动追加自定义提供商（上方输入框）后，对应行也会出现切按钮。数据来自 OpenRouter 公开接口，仅供选型参考。", clineDSTip: "用Cline吃DeepSeek，可指定 deepseek 作为上游（官方缓存生效）！", clineDSBtn: "⇄ 一键切换 deepseek 上游", clineDSSwitched: "已切换：提供商=deepseek（走官方上游带缓存）", clineOverrideWarn: "⚠️ 啊一串实测：消耗积分的模式！限定指定提供商，如果你不知道这是什么就不要勾选", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「不常用」里勾选 使用 Cline 提供商指定", clinePassWarn: "⚠️ 检测到模型名带 cline-pass/ 前缀：提供商指定不会生效（实测全部被忽略），请改用 moonshotai/kimi-k3 等厂商前缀", clineDeadWarn: "⚠️ 已失效：Cline 指定 K3 渠道现已无法指定！（但可指定 DS）", clineHint: "开启后每次请求自动注入指定提供商。请删掉附加参数里的任何内容！仅 cline 渠道需要，其它渠道请关闭。不同渠道K3风味不同，自行测试。", psnapTitle: "预设条目开关快照（方案保存）", psnapNamePh: "方案名…", psnapSaveBtn: "新建", psnapApply: "切", psnapDel: "✕", psnapEmpty: "还没有保存的方案", psnapRecovery: "恢复到最近一次未快照时的状态", psnapSaved: "已保存「{n}」", psnapNeedName: "请先填写方案名", psnapMenuEntry: "扩展菜单入口", psnapEntryLabel: "入口：", psnapFloatEntry: "悬浮按钮入口", psnapNoPreset: "未找到预设数据", psnapRecApply: "恢复", psnapRecTime: "可恢复快照", floatCardTitle: "悬浮条设置", floatCardTag: "一键修复标签（直接执行）", tagFixNow: "一键修复标签", baseTitle: "基础设置（便捷功能、悬浮窗）", baseGroupShortcuts: "便捷小功能", baseGroupFloat: "悬浮窗相关功能", baseGroupLang: "语言设置", psnapBaseRow: "基础", psnapSlotName: "方案{n}", psnapSlotEmpty: "（空）", psnapRename: "重命名", psnapOverwrite: "覆盖", psnapOverwritten: "已用当前开关状态覆盖「{n}」", psnapRenamed: "已改名为「{n}」", psnapSlotEmptyTip: "这个槽位还是空的", psnapDupName: "「{n}」这个名字已经被别的方案用了，换一个", inlineInsLabel: "在预设面板每行加「插入提示词」按钮", inlineInsDelLabel: "在预设面板每行加「删除」按钮", inlineInsSaveLabel: "保存条目的同时保存预设", inlineInsSaveHint: "", inlineInsBtnTitle: "插入提示词或复制这一条", inlineInsNewName: "新提示词", inlineInsNoId: "没能生成一个唯一的编号 ⇒ 这次没有插入", inlineInsNoDef: "酒馆没有把这条新提示词收下 ⇒ 这次没有插入（可以再试一次）", inlineInsNoOrder: "没找到预设的顺序表 ⇒ 一个字都没写（可以刷新页面再试）", inlineInsFail: "插入时出错了 ⇒ 没有写进预设", inlineInsFailNoBtn: "找不到酒馆的「更新预设」按钮 ⇒ 没有存盘（这次插入只在界面上）", inlineInsMsgPlaced: "已插到「{n}」后面", inlineInsAtTail: "原来那一行不在了 ⇒ 已放到预设最后", inlineInsMsgNoSave: "（只在界面上；要存进预设就点酒馆的「更新预设」）", inlineInsEntrySavedPreset: "条目已保存，并已替你更新预设「{p}」", inlineInsEntrySavedNoName: "条目已保存，但读不到你正在用的预设的名字 ⇒ 没有存进预设文件", inlineInsEntrySavedUnknown: "条目已保存，但没能确认写进预设文件 ⇒ 请按一下酒馆的「更新预设」（这次可能没存上）", inlineInsMsgSaved: "；条目已保存，并已替你更新预设「{p}」", inlineInsMsgSaveUnknown: "，但没能确认写进预设文件 ⇒ 请自己按一下酒馆的「更新预设」，或看控制台报错（这次可能没存上）", inlineInsMsgNoName: "，但读不到你正在用的预设的名字 ⇒ 没有存盘（这次插入只在界面上）", insAskTitle: "这一条怎么处理？", insAskWho: "这一条：{n}", insAskRemove: "移除", insAskRemoveHint: "酒馆原有的 Remove，仅隐藏，可插入提示词重链接回来", insAskDel: "删除", insAskDelHint: "确认不需要后彻底删除，无法找回", insAskIns: "插入新提示词", insAskInsHint: "在这一条后面插一条新的，填完内容点酒馆的「保存」", insAskCopy: "复制这一条", insAskCopyHint: "把这一条复制一份插到它后面，名字自动加「（副本）」", insAskCancel: "取消", insAskWi: "从世界书里选", insAskWiHint: "挑几条世界书条目，缝到这一条后面", wiTitle: "从世界书里选", wiSub: "挑好的条目会缝到「{n}」后面（按勾选先后）", wiNoBooks: "没有读到世界书（一本都没有）", wiBooksFail: "世界书列表读不出来 ⇒ 刷新页面再试", wiLoadFail: "这本世界书读不出来 ⇒ 换一本试试", wiNoEntries: "这本世界书里没有可用的条目", wiBack: "‹ 换一本", wiOk: "确定", wiLoading: "读取中…", wiCount: "已选 {n} 条", wiOff: "（世界书里是停用的）", wiUnnamed: "未命名条目", wiNone: "一条都没勾 ⇒ 什么都没做", wiDone: "已把 {n} 条世界书内容缝到「{x}」后面", wiDoneTail: "原来那一行不在了 ⇒ {n} 条已放到预设最后", wiNoBody: "（其中 {m} 条没有正文）", wiGone: "那一行已经不在了 ⇒ 没有缝", wiErr: "这一批没缝成 ⇒ 一个字都没写", wiExpand: "展开", wiCollapse: "收起", wiEmptyBody: "（这一条没有正文）",  insCopyDone: "已复制出「{n}」", insCopyTail: "原来那一行不在了 ⇒ 复制出来的「{n}」放到了预设最后", insCopyGone: "「{n}」已经不在了 ⇒ 没有复制", inlineInsCopySuffix: "（副本）", insDelDone: "已从预设里彻底删除「{n}」", insDelClean: "（顺手清掉了 {g} 张顺序表里的 {r} 行残留）", insDelNoSave: "（只在界面上；要存进预设就点酒馆的「更新预设」）", insDelGone: "「{n}」已经不在预设里了", insDelForbid: "「{n}」是系统提示词 ⇒ 不能删（酒馆也不让删）", insDelFail: "删除时出错了 ⇒ 没有删", autoUpdateLabel: "自动更新插件至最新", floatBarEnable: "开启悬浮窗", floatPanelClear: "清空", floatFuncLabel: "功能型（点图标直接执行）", floatPanelLabel: "面板型（点图标打开设置浮窗）", floatPanelAll: "全选面板", routeLabel: "本次Cline上游：", routeNone: "暂无数据", floatClineEntry: "Cline 提供商入口（点开选择）", floatRouteBadge: "悬浮条显示上游徽标", stopRerollName: "停止重roll", entryMenuGroup: "拓展菜单（左下角）", entryInlineGroup: "输入框旁（发送栏）", clineRouteAlertLabel: "实际路由与指定不符时提醒", opencodeLabel: "Opencode 请求标头（9/6 后红字需启用）", opencodeHint: "自动注入 X-Opencode-Session 请求头（CUSTOM 源生效）。同一聊天固定同一 ID（GPU 上下文缓存命中），不同聊天不同 ID。", opencodeSession: "本聊天 Session ID：",
         apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效。切换会同步改写 URL、密钥、模型名 三项，预置/采样等其它参数一概不动；命中 limit/quota/rate 即触发。",
         dblSave: "保存",
         dblEditLabel: "双击正文直接改字",
@@ -537,8 +537,8 @@ const UI = {
         dsModeLabel: "DeepSeek Thinking Mode: ", dsNative: "Native thinking", dsDisabled: "Body CoT (thinking disabled)",
         dsEffortLabel: "DeepSeek Effort: ", dsEffortOff: "off (no inject, DeepSeek default high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 Effort: ", k3EffortOff: "off (no inject, K3 default max)", k3EffortLow: "low (fast thinking)", k3EffortHigh: "high", k3EffortMax: "max (longest thinking)",
-        injectLabel: "Injection Modes: ", injectStep1: "step 1: medium jailbreak - native CoT takeover (reasoning_content)", injectStep2: "step 2: strong jailbreak - body CoT takeover (defunct on most channels - don't pick me)",
-        injectTitle: "Injection", modelTitle: "Model Settings", rerollTitle: "Auto Reroll / Auto-Stop", autoStopTitle: "Auto-Stop", beautifyTitle: "Chain of Thought", presetUpdTitle: "Preset Updater", presetStoreTitle: "Entry Store", playFavTitle: "Play favorites", playFavNow: "Open once", playFavNotReady: "The entry store isn't ready yet (still loading, or not included in this build) — try again in a second.", playFavJumpFail: "The store opened but did not jump — click the ⭐ favorites button in the store, then switch to the Play favorites tab.",
+        injectLabel: "Injection Modes: ", injectStep1: "step 1: medium jailbreak - native CoT takeover (turn me off for gemini)", injectStep2: "step 2: strong jailbreak - body CoT takeover (defunct on most channels - don't pick me)",
+        injectTitle: "Injection (Model)", modelTitle: "Model Settings", rerollTitle: "Auto Reroll / Truncate (the neat trick)", autoStopTitle: "Auto-Stop", beautifyTitle: "Chain of Thought", presetUpdTitle: "Preset Updater (Compare / Stitch)", presetStoreTitle: "Entry Store", playFavTitle: "Play favorites", playFavNow: "Open once", playFavNotReady: "The entry store isn't ready yet (still loading, or not included in this build) — try again in a second.", playFavJumpFail: "The store opened but did not jump — click the ⭐ favorites button in the store, then switch to the Play favorites tab.",
         playLatestTitle: "Latest plays", playLatestNow: "Open once",
         playLatestNotReady: "The entry store isn't ready yet (still loading, or not included in this build) — try again in a second.",
         playLatestJumpFail: "The store opened, but there is no Play section — the store may have no plays yet (wait for someone to upload, or post one yourself via ⬆ 发布).", fixTitle: "Uncommon", wordTitle: "Replace (Cleanup Tags & Words)",
@@ -564,7 +564,7 @@ const UI = {
         wordHint: "Each row: find → replace; mode simple/regex; scope checkboxes (display-only / prompt-only, both allowed). Don't touch &lt;scene&gt;/&lt;content&gt; tags.",
         wrEnabled: "Enable this rule", wrFind: "Find", wrReplace: "Replace", wrSimple: "Simple", wrRegex: "Regex", wrDisplay: "Display only", wrPrompt: "Prompt only", wrDelete: "Delete",
         wrApplyHist: "Apply to all history (e.g. weird nicknames)", wrUndo: "Undo Changes", wrUndoTitle: "Restore all historical messages to their state before this rule's Apply-to-All",
-        tagTitle: "Tag Fix",
+        tagTitle: "Tag Fix (close tags)",
         tagHint: "📌 Indent = nesting, siblings at same level.\n🔍 Auto-fix missing tag closes in AI output.",
         tagTreeLabel: "Tag Tree (indent = nesting)",
         tagContainerTitle: "🔻 Theater/HTML Container",
@@ -589,7 +589,7 @@ const UI = {
         apiModel: "Model", apiKey: "Key", apiAge: "{d}d {h}h", apiFetchModels: "Fetch available models", apiFetchBtn: "Fetch", apiModelsLoading: "Fetching models…", apiModelEmpty: "No models returned (check URL/key)", apiModelErr: "Failed to fetch models",
         apiNoPool: "Pool is empty: add an endpoint first", apiNotCustom: "Not a Custom (OpenAI-compatible) connection - pool inactive",
         apiBannerMsg: "Quota limit hit.", apiBannerSwitch: "⇄ Switch to {name} ({n}/{total})", apiSwitched: "Switched to {name} ({n}/{total})",
-        apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (credit: the source)", clineSectionTitle: "Cline settings", clineModelOverride: "Credits model prefix override", clineMethodLabel: "Method: subscription provider routing (credit: the source)", clineUpTitle: "Move up (auto-switch order)", clineDownTitle: "Move down (auto-switch order)", upBtn: "📊 Live upstream status", upTitle: "kimi-k3 upstream live status", upLoading: "Loading... (OpenRouter, no key needed)", upRefreshing: "Refreshing...", upFailed: "Failed to fetch - openrouter.ai may be unreachable from your network; retry with ↻", upSwitch: "Use", upProvider: "Provider", upIn: "In $/M", upOut: "Out $/M", upCache: "Cache $/M", upLat: "Latency", upTps: "Throughput", upUp5m: "Up(5m)", upUptime: "Uptime(1d)", upHint: "✓ = switchable here · ★ = current · latency/throughput = last 30 min (blank when no traffic) · sorted: switchable first, uptime desc. Data from OpenRouter public API.", snapNamePh: "Profile name…", snapSaveBtn: "💾 Save current", snapApply: "Apply", snapDel: "Delete profile", snapEmpty: "No saved profiles yet: enter a name and hit Save", snapRecovery: "↩ Auto-recovery snapshot (saved before last switch)", snapSaved: "Saved profile \"{n}\"", snapNeedName: "Enter a profile name first", clineDSTip: "Use Cline for DeepSeek with deepseek as the upstream (official caching works)!", clineDSBtn: "⇄ One-click deepseek upstream", clineDSSwitched: "Switched: provider=deepseek (official upstream with caching)", clineOverrideWarn: "WARNING (tested): credits only - locks provider and overrides model to a vendor prefix like moonshotai/kimi-k3.", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Uncommon first", clinePassWarn: "Model has cline-pass/ prefix: provider routing will NOT work (tested). Use a vendor prefix like moonshotai/kimi-k3", clineDeadWarn: "⚠️ Deprecated: Cline can no longer route to the K3 provider! (DS still works)", clineHint: "Injects the selected provider into every request. Delete anything in Extra Parameters! Only needed for the cline channel; turn off elsewhere. Different providers give K3 different flavors - test them yourself.", psnapTitle: "Preset Toggle Snapshots", psnapNamePh: "Profile name…", psnapSaveBtn: "Save", psnapApply: "Use", psnapDel: "✕", psnapEmpty: "No saved profiles", psnapRecovery: "Restore to last unsaved state", psnapSaved: "Saved \"{n}\"", psnapNeedName: "Enter a profile name first", psnapMenuEntry: "Extensions menu entry", psnapEntryLabel: "Entries:", psnapFloatEntry: "Floating button entry", psnapNoPreset: "Preset data not found", psnapRecApply: "Restore", psnapRecTime: "Recovery snapshot", floatCardTitle: "Floating Bar", floatCardTag: "One-click tag fix (direct run)", tagFixNow: "Fix tags now", baseTitle: "Basics", inlineInsLabel: "Add an \"Insert prompt\" button to each row of the preset panel", inlineInsDelLabel: "Add a \"Delete\" button to each row of the preset panel", inlineInsSaveLabel: "Also save the preset when saving an entry", inlineInsSaveHint: "", inlineInsBtnTitle: "Insert a prompt or duplicate this entry", inlineInsNewName: "New Prompt", inlineInsNoId: "Could not generate a unique id - nothing was inserted", inlineInsNoDef: "The tavern did not accept this new prompt - nothing was inserted (you can try again)", inlineInsNoOrder: "Preset order list not found - nothing was written (try reloading the page)", inlineInsFail: "Something went wrong while inserting - nothing was written to the preset", inlineInsFailNoBtn: "Could not find the tavern's \"Update preset\" button - not saved (this insertion stays on screen only)", inlineInsMsgPlaced: "Inserted after \"{n}\"", inlineInsAtTail: "That row is gone - inserted at the end of the preset", inlineInsMsgNoSave: " (on screen only; press the tavern's \"Update preset\" to save it)", inlineInsEntrySavedPreset: "Entry saved, and we updated the preset \"{p}\" for you", inlineInsEntrySavedNoName: "Entry saved, but the name of your current preset is unreadable - not written to the preset file", inlineInsEntrySavedUnknown: "Entry saved, but we could not confirm it reached the preset file - please press the tavern's \"Update preset\" (it may not have been saved)", inlineInsMsgSaved: "; entry saved, and we updated the preset \"{p}\" for you", inlineInsMsgSaveUnknown: ", but we could not confirm it reached the preset file - please press the tavern's \"Update preset\" yourself, or check the console (it may not have been saved)", inlineInsMsgNoName: ", but the name of your current preset is unreadable - not saved (this insertion stays on screen only)", insAskTitle: "What should happen to this entry?", insAskWho: "Entry: {n}", insAskRemove: "Remove", insAskRemoveHint: "The tavern's own Remove - only hides it; link it back later by inserting a prompt", insAskDel: "Delete", insAskDelHint: "Deletes it for good once you are sure; it cannot be recovered", insAskIns: "Insert a new prompt", insAskInsHint: "Inserts a new one after this entry; fill in the content and press the tavern's Save", insAskCopy: "Duplicate this entry", insAskCopyHint: "Copies this entry and inserts the copy right after it; the name gets a (copy) suffix", insAskCancel: "Cancel", insAskWi: "Pick from a World Info book", insAskWiHint: "Pick several World Info entries and stitch them after this one", wiTitle: "Pick from a World Info book", wiSub: "The entries you pick go right after \"{n}\" (in the order you tick them)", wiNoBooks: "No World Info books found (none at all)", wiBooksFail: "Could not read the World Info list - reload the page and try again", wiLoadFail: "Could not read this book - try another one", wiNoEntries: "This book has no usable entries", wiBack: "< another book", wiOk: "OK", wiLoading: "Loading...", wiCount: "{n} selected", wiOff: "(disabled in the book)", wiUnnamed: "Unnamed entry", wiNone: "Nothing selected - nothing was done", wiDone: "Stitched {n} World Info entries after \"{x}\"", wiDoneTail: "That row was gone - the {n} entries were placed at the end", wiNoBody: " ({m} of them had no text)", wiGone: "That row is no longer there - nothing was stitched", wiErr: "This batch failed - nothing was written", wiExpand: "Expand", wiCollapse: "Collapse", wiEmptyBody: "(no text in this entry)",  insCopyDone: "Made a copy: {n}", insCopyTail: "The row was gone - the copy {n} was placed at the end of the preset", insCopyGone: "{n} is no longer there - nothing was duplicated", inlineInsCopySuffix: " (copy)", insDelDone: "Permanently deleted \"{n}\" from the preset", insDelClean: " (also cleaned {r} leftover row(s) in {g} order list(s))", insDelNoSave: " (on screen only; press the tavern's \"Update preset\" to save it)", insDelGone: "\"{n}\" is no longer in the preset", insDelForbid: "\"{n}\" is a system prompt - the tavern does not allow deleting it", insDelFail: "Something went wrong while deleting - nothing was deleted", autoUpdateLabel: "Auto-update plugin to latest", floatBarEnable: "Enable floating bar", floatPanelClear: "Clear", floatFuncLabel: "Actions (run directly)", floatPanelLabel: "Panels (open settings popup)", floatPanelAll: "Select all panels", routeLabel: "Upstream this time: ", routeNone: "No data yet", floatClineEntry: "Cline provider entry (click to pick)", floatRouteBadge: "Show upstream badge on bar", stopRerollName: "Stop reroll", entryMenuGroup: "Extensions menu (bottom-left)", entryInlineGroup: "Beside input (send bar)", clineRouteAlertLabel: "Alert when route mismatches", opencodeLabel: "Opencode request header (enable after 9/6)", opencodeHint: "Auto-inject X-Opencode-Session (works on Custom source). Same chat keeps one fixed ID (GPU context cache), different chats differ.", opencodeSession: "Session ID for this chat: ",
+        apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (credit: the source)", clineSectionTitle: "Cline settings", clineModelOverride: "Credits model prefix override", clineMethodLabel: "Method: subscription provider routing (credit: the source)", clineUpTitle: "Move up (auto-switch order)", clineDownTitle: "Move down (auto-switch order)", upBtn: "📊 Live upstream status", upTitle: "kimi-k3 upstream live status", upLoading: "Loading... (OpenRouter, no key needed)", upRefreshing: "Refreshing...", upFailed: "Failed to fetch - openrouter.ai may be unreachable from your network; retry with ↻", upSwitch: "Use", upProvider: "Provider", upIn: "In $/M", upOut: "Out $/M", upCache: "Cache $/M", upLat: "Latency", upTps: "Throughput", upUp5m: "Up(5m)", upUptime: "Uptime(1d)", upHint: "✓ = switchable here · ★ = current · latency/throughput = last 30 min (blank when no traffic) · sorted: switchable first, uptime desc. Data from OpenRouter public API.", snapNamePh: "Profile name…", snapSaveBtn: "💾 Save current", snapApply: "Apply", snapDel: "Delete profile", snapEmpty: "No saved profiles yet: enter a name and hit Save", snapRecovery: "↩ Auto-recovery snapshot (saved before last switch)", snapSaved: "Saved profile \"{n}\"", snapNeedName: "Enter a profile name first", clineDSTip: "Use Cline for DeepSeek with deepseek as the upstream (official caching works)!", clineDSBtn: "⇄ One-click deepseek upstream", clineDSSwitched: "Switched: provider=deepseek (official upstream with caching)", clineOverrideWarn: "WARNING (tested): credits only - locks provider and overrides model to a vendor prefix like moonshotai/kimi-k3.", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Uncommon first", clinePassWarn: "Model has cline-pass/ prefix: provider routing will NOT work (tested). Use a vendor prefix like moonshotai/kimi-k3", clineDeadWarn: "⚠️ Deprecated: Cline can no longer route to the K3 provider! (DS still works)", clineHint: "Injects the selected provider into every request. Delete anything in Extra Parameters! Only needed for the cline channel; turn off elsewhere. Different providers give K3 different flavors - test them yourself.", psnapTitle: "Preset Toggle Snapshots (Save Schemes)", psnapNamePh: "Profile name…", psnapSaveBtn: "New", psnapApply: "Use", psnapDel: "✕", psnapEmpty: "No saved profiles", psnapRecovery: "Restore to last unsaved state", psnapSaved: "Saved \"{n}\"", psnapNeedName: "Enter a profile name first", psnapMenuEntry: "Extensions menu entry", psnapEntryLabel: "Entries:", psnapFloatEntry: "Floating button entry", psnapNoPreset: "Preset data not found", psnapRecApply: "Restore", psnapRecTime: "Recovery snapshot", floatCardTitle: "Floating Bar", floatCardTag: "One-click tag fix (direct run)", tagFixNow: "Fix tags now", baseTitle: "Basics (Shortcuts & Floating Bar)", baseGroupShortcuts: "Shortcuts", baseGroupFloat: "Floating bar", baseGroupLang: "Language", psnapBaseRow: "Baseline", psnapSlotName: "Scheme {n}", psnapSlotEmpty: "(empty)", psnapRename: "Rename", psnapOverwrite: "Overwrite", psnapOverwritten: "Overwrote \"{n}\" with the current toggles", psnapRenamed: "Renamed to \"{n}\"", psnapSlotEmptyTip: "This slot is still empty", psnapDupName: "\"{n}\" is already used by another scheme - pick another name", inlineInsLabel: "Add an \"Insert prompt\" button to each row of the preset panel", inlineInsDelLabel: "Add a \"Delete\" button to each row of the preset panel", inlineInsSaveLabel: "Also save the preset when saving an entry", inlineInsSaveHint: "", inlineInsBtnTitle: "Insert a prompt or duplicate this entry", inlineInsNewName: "New Prompt", inlineInsNoId: "Could not generate a unique id - nothing was inserted", inlineInsNoDef: "The tavern did not accept this new prompt - nothing was inserted (you can try again)", inlineInsNoOrder: "Preset order list not found - nothing was written (try reloading the page)", inlineInsFail: "Something went wrong while inserting - nothing was written to the preset", inlineInsFailNoBtn: "Could not find the tavern's \"Update preset\" button - not saved (this insertion stays on screen only)", inlineInsMsgPlaced: "Inserted after \"{n}\"", inlineInsAtTail: "That row is gone - inserted at the end of the preset", inlineInsMsgNoSave: " (on screen only; press the tavern's \"Update preset\" to save it)", inlineInsEntrySavedPreset: "Entry saved, and we updated the preset \"{p}\" for you", inlineInsEntrySavedNoName: "Entry saved, but the name of your current preset is unreadable - not written to the preset file", inlineInsEntrySavedUnknown: "Entry saved, but we could not confirm it reached the preset file - please press the tavern's \"Update preset\" (it may not have been saved)", inlineInsMsgSaved: "; entry saved, and we updated the preset \"{p}\" for you", inlineInsMsgSaveUnknown: ", but we could not confirm it reached the preset file - please press the tavern's \"Update preset\" yourself, or check the console (it may not have been saved)", inlineInsMsgNoName: ", but the name of your current preset is unreadable - not saved (this insertion stays on screen only)", insAskTitle: "What should happen to this entry?", insAskWho: "Entry: {n}", insAskRemove: "Remove", insAskRemoveHint: "The tavern's own Remove - only hides it; link it back later by inserting a prompt", insAskDel: "Delete", insAskDelHint: "Deletes it for good once you are sure; it cannot be recovered", insAskIns: "Insert a new prompt", insAskInsHint: "Inserts a new one after this entry; fill in the content and press the tavern's Save", insAskCopy: "Duplicate this entry", insAskCopyHint: "Copies this entry and inserts the copy right after it; the name gets a (copy) suffix", insAskCancel: "Cancel", insAskWi: "Pick from a World Info book", insAskWiHint: "Pick several World Info entries and stitch them after this one", wiTitle: "Pick from a World Info book", wiSub: "The entries you pick go right after \"{n}\" (in the order you tick them)", wiNoBooks: "No World Info books found (none at all)", wiBooksFail: "Could not read the World Info list - reload the page and try again", wiLoadFail: "Could not read this book - try another one", wiNoEntries: "This book has no usable entries", wiBack: "< another book", wiOk: "OK", wiLoading: "Loading...", wiCount: "{n} selected", wiOff: "(disabled in the book)", wiUnnamed: "Unnamed entry", wiNone: "Nothing selected - nothing was done", wiDone: "Stitched {n} World Info entries after \"{x}\"", wiDoneTail: "That row was gone - the {n} entries were placed at the end", wiNoBody: " ({m} of them had no text)", wiGone: "That row is no longer there - nothing was stitched", wiErr: "This batch failed - nothing was written", wiExpand: "Expand", wiCollapse: "Collapse", wiEmptyBody: "(no text in this entry)",  insCopyDone: "Made a copy: {n}", insCopyTail: "The row was gone - the copy {n} was placed at the end of the preset", insCopyGone: "{n} is no longer there - nothing was duplicated", inlineInsCopySuffix: " (copy)", insDelDone: "Permanently deleted \"{n}\" from the preset", insDelClean: " (also cleaned {r} leftover row(s) in {g} order list(s))", insDelNoSave: " (on screen only; press the tavern's \"Update preset\" to save it)", insDelGone: "\"{n}\" is no longer in the preset", insDelForbid: "\"{n}\" is a system prompt - the tavern does not allow deleting it", insDelFail: "Something went wrong while deleting - nothing was deleted", autoUpdateLabel: "Auto-update plugin to latest", floatBarEnable: "Enable floating bar", floatPanelClear: "Clear", floatFuncLabel: "Actions (run directly)", floatPanelLabel: "Panels (open settings popup)", floatPanelAll: "Select all panels", routeLabel: "Upstream this time: ", routeNone: "No data yet", floatClineEntry: "Cline provider entry (click to pick)", floatRouteBadge: "Show upstream badge on bar", stopRerollName: "Stop reroll", entryMenuGroup: "Extensions menu (bottom-left)", entryInlineGroup: "Beside input (send bar)", clineRouteAlertLabel: "Alert when route mismatches", opencodeLabel: "Opencode request header (enable after 9/6)", opencodeHint: "Auto-inject X-Opencode-Session (works on Custom source). Same chat keeps one fixed ID (GPU context cache), different chats differ.", opencodeSession: "Session ID for this chat: ",
         apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections. Switching syncs three fields: URL, key and model name - presets/sampling untouched. Triggers on limit/quota/rate.",
         dblSave: "Save",
         dblEditLabel: "Double-click message text to edit it in place",
@@ -601,8 +601,8 @@ const UI = {
         dsModeLabel: "DeepSeek 사고 모드: ", dsNative: "네이티브 사고", dsDisabled: "본문 CoT (thinking disabled)",
         dsEffortLabel: "DeepSeek 강도: ", dsEffortOff: "off (주입 안 함, DeepSeek 기본 high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 강도: ", k3EffortOff: "off (주입 안 함, K3 기본 max)", k3EffortLow: "low (빠른 사고)", k3EffortHigh: "high", k3EffortMax: "max (가장 긴 사고)",
-        injectLabel: "주입 모드: ", injectStep1: "step 1: 중간 탈옥·네이티브 CoT 탈취 (reasoning_content)", injectStep2: "step 2: 강한 탈옥·본문 CoT 탈취 (대부분 채널에서 무효 — 고르지 마세요)",
-        injectTitle: "주입", modelTitle: "모델 설정", rerollTitle: "자동 reroll/자동 중단", autoStopTitle: "자동 중단", beautifyTitle: "사고 과정", presetUpdTitle: "프리셋 업데이터", presetStoreTitle: "항목 상점", playFavTitle: "소극장 즐겨찾기", playFavNow: "한 번 열기", playFavNotReady: "항목 상점이 아직 준비되지 않았습니다(불러오는 중이거나 이 빌드에 없음) — 잠시 후 다시 눌러 주세요.", playFavJumpFail: "상점은 열렸지만 이동하지 못했습니다 — 상점에서 ⭐ 즐겨찾기 버튼을 누른 뒤 소극장 즐겨찾기 탭으로 바꿔 주세요.",
+        injectLabel: "주입 모드: ", injectStep1: "step 1: 중간 탈옥·네이티브 CoT 탈취 (gemini는 끄세요)", injectStep2: "step 2: 강한 탈옥·본문 CoT 탈취 (대부분 채널에서 무효 — 고르지 마세요)",
+        injectTitle: "주입 (모델 관련)", modelTitle: "모델 설정", rerollTitle: "자동 reroll/중단 (꿀팁 방법)", autoStopTitle: "자동 중단", beautifyTitle: "사고 과정", presetUpdTitle: "프리셋 업데이터 (비교/이어붙이기)", presetStoreTitle: "항목 상점", playFavTitle: "소극장 즐겨찾기", playFavNow: "한 번 열기", playFavNotReady: "항목 상점이 아직 준비되지 않았습니다(불러오는 중이거나 이 빌드에 없음) — 잠시 후 다시 눌러 주세요.", playFavJumpFail: "상점은 열렸지만 이동하지 못했습니다 — 상점에서 ⭐ 즐겨찾기 버튼을 누른 뒤 소극장 즐겨찾기 탭으로 바꿔 주세요.",
         playLatestTitle: "최신 소극장", playLatestNow: "한 번 열기",
         playLatestNotReady: "항목 상점이 아직 준비되지 않았습니다(불러오는 중이거나 이 빌드에 없음) — 잠시 후 다시 눌러 주세요.",
         playLatestJumpFail: "상점은 열렸지만 「🎭 소극장」 구역을 찾지 못했습니다 — 상점에 아직 소극장이 없을 수 있습니다(누가 올리기를 기다리거나, ⬆ 发布에서 직접 올려 주세요).", fixTitle: "비상용", wordTitle: "치환 (태그·거슬리는 단어 정리)",
@@ -628,7 +628,7 @@ const UI = {
         wordHint: "각 행: 찾기→바꾸기; 모드 simple/정규식; 적용 범위 체크 (표시 전용 / 프롬프트 전용, 둘 다 가능). &lt;scene&gt;/&lt;content&gt; 등 태그는 건드리지 마세요.",
         wrEnabled: "이 규칙 활성화", wrFind: "찾기", wrReplace: "바꾸기", wrSimple: "단순", wrRegex: "정규식", wrDisplay: "표시 전용", wrPrompt: "프롬프트 전용", wrDelete: "삭제",
         wrApplyHist: "이전 전체에 적용 (예: 이상한 별명)", wrUndo: "변경 되돌리기", wrUndoTitle: "이 규칙의 전체 적용 전 모든 과거 메시지 원문 복원",
-        tagTitle: "태그 수정",
+        tagTitle: "태그 수정 (태그 보완)",
         tagHint: "📌 들여쓰기 = 중첩, 들여쓰지 않으면 동급.\n🔍 AI 출력에서 누락된 태그 닫기를 자동 수정.",
         tagTreeLabel: "태그 트리 (들여쓰기 = 중첩)",
         tagContainerTitle: "🔻 연극/HTML 컨테이너",
@@ -653,7 +653,7 @@ const UI = {
         apiModel: "모델명", apiKey: "키", apiAge: "{d}일 {h}시간", apiFetchModels: "사용 가능한 모델 가져오기", apiFetchBtn: "가져오기", apiModelsLoading: "모델 가져오는 중…", apiModelEmpty: "모델이 없습니다 (URL/키 확인)", apiModelErr: "모델 가져오기 실패",
         apiNoPool: "풀이 비어 있음: 먼저 엔드포인트 추가", apiNotCustom: "Custom(OpenAI 호환) 연결이 아님 - 풀 동작 안 함",
         apiBannerMsg: "할당량 초과 감지.", apiBannerSwitch: "⇄ {name}(으)로 전환 ({n}/{total})", apiSwitched: "{name}(으)로 전환됨 ({n}/{total})",
-        apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (정보원 감사)", clineSectionTitle: "Cline 설정", clineModelOverride: "크레딧 모델 접두사 덮어쓰기", clineMethodLabel: "방식: 구독 공급자 지정", clineUpTitle: "위로(자동 전환 순서)", clineDownTitle: "아래로(자동 전환 순서)", upBtn: "📊 업스트림 실시간 현황", upTitle: "kimi-k3 업스트림 현황", upLoading: "로딩 중... (OpenRouter)", upRefreshing: "새로고침 중...", upFailed: "가져오기 실패 - 네트워크에서 openrouter.ai 접근 불가 가능, ↻로 재시도", upSwitch: "전환", upProvider: "공급자", upIn: "입력$/M", upOut: "출력$/M", upCache: "캐시$/M", upLat: "지연", upTps: "처리량", upUp5m: "가동(5m)", upUptime: "가동률(1d)", upHint: "✓=여기서 전환 가능 · ★=현재 · 지연/처리량=최근 30분 · 정렬: 전환 가능 우선. OpenRouter 공개 API 기준.", snapNamePh: "프로필 이름…", snapSaveBtn: "💾 현재 상태 저장", snapApply: "적용", snapDel: "이 프로필 삭제", snapEmpty: "저장된 프로필 없음: 이름 입력 후 저장", snapRecovery: "↩ 복구 스냅샷(전환 전 자동 저장)", snapSaved: "\"{n}\" 프로필 저장됨", snapNeedName: "먼저 프로필 이름을 입력하세요", clineDSTip: "Cline으로 DeepSeek 사용 - deepseek 업스트림 지정(공식 캐시 적용)!", clineDSBtn: "⇄ 원클릭 deepseek 업스트림", clineDSSwitched: "전환됨: 공급자=deepseek(공식 업스트림, 캐시)", clineOverrideWarn: "주의(실측): 크레딧 소모 - 공급자 지정 및 moonshotai/kimi-k3 등 벤더 접두사로 모델 덮어쓰기.", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 비상용에서 Cline 공급자 지정을 체크하세요", clinePassWarn: "모델명에 cline-pass/ 접두사 감지: 공급자 지정 무효(실측). moonshotai/kimi-k3 같은 벤더 접두사 사용", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineDeadWarn: "⚠️ 만료: Cline에서 K3 공급자 지정이 더 이상 불가! (DS는 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입합니다. 추가 매개변수의 모든 내용을 삭제하세요! cline 채널에서만 필요, 다른 곳에서는 끄세요. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.", psnapTitle: "프리셋 토글 스냅샷", psnapNamePh: "프로필 이름…", psnapSaveBtn: "저장", psnapApply: "전환", psnapDel: "✕", psnapEmpty: "저장된 프로필 없음", psnapRecovery: "마지막 미스냅샷 상태로 복원", psnapSaved: "\"{n}\" 저장됨", psnapNeedName: "먼저 프로필 이름을 입력하세요", psnapMenuEntry: "확장 메뉴 항목", psnapEntryLabel: "입구:", psnapFloatEntry: "플로팅 버튼 항목", psnapNoPreset: "프리셋 데이터 없음", psnapRecApply: "복원", psnapRecTime: "복구 스냅샷", floatCardTitle: "플로팅 바", floatCardTag: "태그 원클릭 수리 (즉시 실행)", tagFixNow: "태그 지금 수리", baseTitle: "기본 설정", inlineInsLabel: "프리셋 패널의 각 행에 「프롬프트 삽입」 버튼 추가", inlineInsDelLabel: "프리셋 패널의 각 행에 「삭제」 버튼 추가", inlineInsSaveLabel: "항목을 저장할 때 프리셋도 함께 저장", inlineInsSaveHint: "", inlineInsBtnTitle: "프롬프트 삽입 또는 이 항목 복사", inlineInsNewName: "새 프롬프트", inlineInsNoId: "고유 번호를 만들지 못했습니다 ⇒ 이번에는 삽입하지 않았습니다", inlineInsNoDef: "술집이 이 새 프롬프트를 받지 않았습니다 ⇒ 이번에는 삽입하지 않았습니다 (다시 시도해 보세요)", inlineInsNoOrder: "프리셋 순서 목록을 찾지 못했습니다 ⇒ 아무것도 쓰지 않았습니다 (페이지를 새로고침해 보세요)", inlineInsFail: "삽입 중 오류 ⇒ 프리셋에 쓰지 않았습니다", inlineInsFailNoBtn: "술집의 「프리셋 업데이트」 버튼을 찾지 못했습니다 ⇒ 저장되지 않았습니다 (화면에만 반영)", inlineInsMsgPlaced: "「{n}」 뒤에 삽입했습니다", inlineInsAtTail: "그 행이 사라졌습니다 ⇒ 프리셋 맨 끝에 넣었습니다", inlineInsMsgNoSave: " (화면에만; 저장하려면 술집의 「프리셋 업데이트」를 누르세요)", inlineInsEntrySavedPreset: "항목이 저장되었고, 프리셋 「{p}」도 대신 업데이트했습니다", inlineInsEntrySavedNoName: "항목은 저장되었지만, 사용 중인 프리셋 이름을 읽을 수 없습니다 ⇒ 프리셋 파일에 저장하지 않았습니다", inlineInsEntrySavedUnknown: "항목은 저장되었지만, 프리셋 파일에 쓰였는지 확인하지 못했습니다 ⇒ 술집의 「프리셋 업데이트」를 눌러 보세요 (이번엔 저장되지 않았을 수 있습니다)", inlineInsMsgSaved: "; 항목이 저장되었고, 프리셋 「{p}」도 대신 업데이트했습니다", inlineInsMsgSaveUnknown: ", 프리셋 파일에 쓰였는지 확인하지 못했습니다 ⇒ 술집의 「프리셋 업데이트」를 직접 눌러 보세요 (이번엔 저장되지 않았을 수 있습니다)", inlineInsMsgNoName: ", 하지만 사용 중인 프리셋 이름을 읽을 수 없습니다 ⇒ 저장하지 않았습니다 (화면에만 반영)", insAskTitle: "이 항목을 어떻게 할까요?", insAskWho: "이 항목: {n}", insAskRemove: "제거", insAskRemoveHint: "술집의 원래 Remove - 목록에서만 숨기고, 나중에 프롬프트를 다시 끼워 연결할 수 있습니다", insAskDel: "삭제", insAskDelHint: "필요 없다고 확인되면 완전히 삭제하며 되찾을 수 없습니다", insAskIns: "새 프롬프트 삽입", insAskInsHint: "이 항목 뒤에 새로 하나 삽입합니다. 내용을 채우고 술집의 저장을 누르세요", insAskCopy: "이 항목 복사", insAskCopyHint: "이 항목을 복사해 바로 뒤에 넣습니다. 이름에 (복사)가 붙습니다", insAskCancel: "취소", insAskWi: "세계서(월드 인포)에서 고르기", insAskWiHint: "세계서 항목 몇 개를 골라 이 항목 뒤에 이어 붙입니다", wiTitle: "세계서에서 고르기", wiSub: "고른 항목은 「{n}」 뒤에 붙습니다 (체크한 순서대로)", wiNoBooks: "세계서를 읽지 못했습니다 (한 권도 없음)", wiBooksFail: "세계서 목록을 읽지 못했습니다 ⇒ 페이지를 새로고침 후 다시 시도", wiLoadFail: "이 책을 읽지 못했습니다 ⇒ 다른 책을 골라 보세요", wiNoEntries: "이 세계서에는 쓸 수 있는 항목이 없습니다", wiBack: "‹ 다른 책", wiOk: "확인", wiLoading: "불러오는 중...", wiCount: "{n}개 선택", wiOff: "(세계서에서 중지됨)", wiUnnamed: "이름 없는 항목", wiNone: "아무것도 고르지 않음 ⇒ 아무 일도 하지 않았습니다", wiDone: "세계서 {n}개를 「{x}」 뒤에 이어 붙였습니다", wiDoneTail: "그 줄이 사라졌습니다 ⇒ {n}개를 프리셋 맨 끝에 넣었습니다", wiNoBody: " (그중 {m}개는 본문이 없습니다)", wiGone: "그 줄이 이미 없습니다 ⇒ 이어 붙이지 않았습니다", wiErr: "이번 묶음은 실패했습니다 ⇒ 아무것도 쓰지 않았습니다", wiExpand: "펼치기", wiCollapse: "접기", wiEmptyBody: "(이 항목에는 본문이 없습니다)",  insCopyDone: "복사했습니다: {n}", insCopyTail: "원래 줄이 사라졌습니다 ⇒ 복사본 {n}을(를) 프리셋 맨 끝에 넣었습니다", insCopyGone: "{n}이(가) 이미 없습니다 ⇒ 복사하지 않았습니다", inlineInsCopySuffix: " (복사)", insDelDone: "프리셋에서 「{n}」을(를) 완전히 삭제했습니다", insDelClean: " (순서 목록 {g}개에서 남은 줄 {r}개도 정리했습니다)", insDelNoSave: " (화면에만; 저장하려면 술집의 「프리셋 업데이트」를 누르세요)", insDelGone: "「{n}」은(는) 이미 프리셋에 없습니다", insDelForbid: "「{n}」은(는) 시스템 프롬프트라 삭제할 수 없습니다", insDelFail: "삭제 중 오류 ⇒ 아무것도 삭제하지 않았습니다", autoUpdateLabel: "플러그인을 최신 버전으로 자동 업데이트", floatBarEnable: "플로팅 바 켜기", floatPanelClear: "비우기", floatFuncLabel: "기능형 (아이콘 즉시 실행)", floatPanelLabel: "패널형 (아이콘 클릭 시 설정 팝업)", floatPanelAll: "모든 패널 선택", routeLabel: "이번 Cline 업스트림: ", routeNone: "데이터 없음", floatClineEntry: "Cline 공급자 입구 (클릭하여 선택)", floatRouteBadge: "플로팅 바에 업스트림 배지 표시", stopRerollName: "리롤 중지", entryMenuGroup: "확장 메뉴 (좌하단)", entryInlineGroup: "입력창 옆 (보내기 바)", clineRouteAlertLabel: "라우팅 불일치 시 알림", opencodeLabel: "Opencode 요청 헤더 (9/6 이후 활성화 필요)", opencodeHint: "X-Opencode-Session 요청 헤더 자동 주입 (CUSTOM 소스). 같은 대화는 동일 ID (GPU 컨텍스트 캐시), 다른 대화는 다른 ID.", opencodeSession: "이 대화의 Session ID: ",
+        apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (정보원 감사)", clineSectionTitle: "Cline 설정", clineModelOverride: "크레딧 모델 접두사 덮어쓰기", clineMethodLabel: "방식: 구독 공급자 지정", clineUpTitle: "위로(자동 전환 순서)", clineDownTitle: "아래로(자동 전환 순서)", upBtn: "📊 업스트림 실시간 현황", upTitle: "kimi-k3 업스트림 현황", upLoading: "로딩 중... (OpenRouter)", upRefreshing: "새로고침 중...", upFailed: "가져오기 실패 - 네트워크에서 openrouter.ai 접근 불가 가능, ↻로 재시도", upSwitch: "전환", upProvider: "공급자", upIn: "입력$/M", upOut: "출력$/M", upCache: "캐시$/M", upLat: "지연", upTps: "처리량", upUp5m: "가동(5m)", upUptime: "가동률(1d)", upHint: "✓=여기서 전환 가능 · ★=현재 · 지연/처리량=최근 30분 · 정렬: 전환 가능 우선. OpenRouter 공개 API 기준.", snapNamePh: "프로필 이름…", snapSaveBtn: "💾 현재 상태 저장", snapApply: "적용", snapDel: "이 프로필 삭제", snapEmpty: "저장된 프로필 없음: 이름 입력 후 저장", snapRecovery: "↩ 복구 스냅샷(전환 전 자동 저장)", snapSaved: "\"{n}\" 프로필 저장됨", snapNeedName: "먼저 프로필 이름을 입력하세요", clineDSTip: "Cline으로 DeepSeek 사용 - deepseek 업스트림 지정(공식 캐시 적용)!", clineDSBtn: "⇄ 원클릭 deepseek 업스트림", clineDSSwitched: "전환됨: 공급자=deepseek(공식 업스트림, 캐시)", clineOverrideWarn: "주의(실측): 크레딧 소모 - 공급자 지정 및 moonshotai/kimi-k3 등 벤더 접두사로 모델 덮어쓰기.", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 비상용에서 Cline 공급자 지정을 체크하세요", clinePassWarn: "모델명에 cline-pass/ 접두사 감지: 공급자 지정 무효(실측). moonshotai/kimi-k3 같은 벤더 접두사 사용", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineDeadWarn: "⚠️ 만료: Cline에서 K3 공급자 지정이 더 이상 불가! (DS는 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입합니다. 추가 매개변수의 모든 내용을 삭제하세요! cline 채널에서만 필요, 다른 곳에서는 끄세요. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.", psnapTitle: "프리셋 토글 스냅샷 (스킴 저장)", psnapNamePh: "프로필 이름…", psnapSaveBtn: "새로 만들기", psnapApply: "전환", psnapDel: "✕", psnapEmpty: "저장된 프로필 없음", psnapRecovery: "마지막 미스냅샷 상태로 복원", psnapSaved: "\"{n}\" 저장됨", psnapNeedName: "먼저 프로필 이름을 입력하세요", psnapMenuEntry: "확장 메뉴 항목", psnapEntryLabel: "입구:", psnapFloatEntry: "플로팅 버튼 항목", psnapNoPreset: "프리셋 데이터 없음", psnapRecApply: "복원", psnapRecTime: "복구 스냅샷", floatCardTitle: "플로팅 바", floatCardTag: "태그 원클릭 수리 (즉시 실행)", tagFixNow: "태그 지금 수리", baseTitle: "기본 설정 (편의 기능, 플로팅 바)", baseGroupShortcuts: "편의 기능", baseGroupFloat: "플로팅 바 관련 기능", baseGroupLang: "언어 설정", psnapBaseRow: "기본", psnapSlotName: "스킴 {n}", psnapSlotEmpty: "(비어 있음)", psnapRename: "이름 변경", psnapOverwrite: "덮어쓰기", psnapOverwritten: "현재 토글 상태로 「{n}」을(를) 덮어썼습니다", psnapRenamed: "「{n}」(으)로 이름을 바꿨습니다", psnapSlotEmptyTip: "이 슬롯은 아직 비어 있습니다", psnapDupName: "「{n}」은(는) 이미 다른 스킴이 쓰고 있습니다 - 다른 이름을 쓰세요", inlineInsLabel: "프리셋 패널의 각 행에 「프롬프트 삽입」 버튼 추가", inlineInsDelLabel: "프리셋 패널의 각 행에 「삭제」 버튼 추가", inlineInsSaveLabel: "항목을 저장할 때 프리셋도 함께 저장", inlineInsSaveHint: "", inlineInsBtnTitle: "프롬프트 삽입 또는 이 항목 복사", inlineInsNewName: "새 프롬프트", inlineInsNoId: "고유 번호를 만들지 못했습니다 ⇒ 이번에는 삽입하지 않았습니다", inlineInsNoDef: "술집이 이 새 프롬프트를 받지 않았습니다 ⇒ 이번에는 삽입하지 않았습니다 (다시 시도해 보세요)", inlineInsNoOrder: "프리셋 순서 목록을 찾지 못했습니다 ⇒ 아무것도 쓰지 않았습니다 (페이지를 새로고침해 보세요)", inlineInsFail: "삽입 중 오류 ⇒ 프리셋에 쓰지 않았습니다", inlineInsFailNoBtn: "술집의 「프리셋 업데이트」 버튼을 찾지 못했습니다 ⇒ 저장되지 않았습니다 (화면에만 반영)", inlineInsMsgPlaced: "「{n}」 뒤에 삽입했습니다", inlineInsAtTail: "그 행이 사라졌습니다 ⇒ 프리셋 맨 끝에 넣었습니다", inlineInsMsgNoSave: " (화면에만; 저장하려면 술집의 「프리셋 업데이트」를 누르세요)", inlineInsEntrySavedPreset: "항목이 저장되었고, 프리셋 「{p}」도 대신 업데이트했습니다", inlineInsEntrySavedNoName: "항목은 저장되었지만, 사용 중인 프리셋 이름을 읽을 수 없습니다 ⇒ 프리셋 파일에 저장하지 않았습니다", inlineInsEntrySavedUnknown: "항목은 저장되었지만, 프리셋 파일에 쓰였는지 확인하지 못했습니다 ⇒ 술집의 「프리셋 업데이트」를 눌러 보세요 (이번엔 저장되지 않았을 수 있습니다)", inlineInsMsgSaved: "; 항목이 저장되었고, 프리셋 「{p}」도 대신 업데이트했습니다", inlineInsMsgSaveUnknown: ", 프리셋 파일에 쓰였는지 확인하지 못했습니다 ⇒ 술집의 「프리셋 업데이트」를 직접 눌러 보세요 (이번엔 저장되지 않았을 수 있습니다)", inlineInsMsgNoName: ", 하지만 사용 중인 프리셋 이름을 읽을 수 없습니다 ⇒ 저장하지 않았습니다 (화면에만 반영)", insAskTitle: "이 항목을 어떻게 할까요?", insAskWho: "이 항목: {n}", insAskRemove: "제거", insAskRemoveHint: "술집의 원래 Remove - 목록에서만 숨기고, 나중에 프롬프트를 다시 끼워 연결할 수 있습니다", insAskDel: "삭제", insAskDelHint: "필요 없다고 확인되면 완전히 삭제하며 되찾을 수 없습니다", insAskIns: "새 프롬프트 삽입", insAskInsHint: "이 항목 뒤에 새로 하나 삽입합니다. 내용을 채우고 술집의 저장을 누르세요", insAskCopy: "이 항목 복사", insAskCopyHint: "이 항목을 복사해 바로 뒤에 넣습니다. 이름에 (복사)가 붙습니다", insAskCancel: "취소", insAskWi: "세계서(월드 인포)에서 고르기", insAskWiHint: "세계서 항목 몇 개를 골라 이 항목 뒤에 이어 붙입니다", wiTitle: "세계서에서 고르기", wiSub: "고른 항목은 「{n}」 뒤에 붙습니다 (체크한 순서대로)", wiNoBooks: "세계서를 읽지 못했습니다 (한 권도 없음)", wiBooksFail: "세계서 목록을 읽지 못했습니다 ⇒ 페이지를 새로고침 후 다시 시도", wiLoadFail: "이 책을 읽지 못했습니다 ⇒ 다른 책을 골라 보세요", wiNoEntries: "이 세계서에는 쓸 수 있는 항목이 없습니다", wiBack: "‹ 다른 책", wiOk: "확인", wiLoading: "불러오는 중...", wiCount: "{n}개 선택", wiOff: "(세계서에서 중지됨)", wiUnnamed: "이름 없는 항목", wiNone: "아무것도 고르지 않음 ⇒ 아무 일도 하지 않았습니다", wiDone: "세계서 {n}개를 「{x}」 뒤에 이어 붙였습니다", wiDoneTail: "그 줄이 사라졌습니다 ⇒ {n}개를 프리셋 맨 끝에 넣었습니다", wiNoBody: " (그중 {m}개는 본문이 없습니다)", wiGone: "그 줄이 이미 없습니다 ⇒ 이어 붙이지 않았습니다", wiErr: "이번 묶음은 실패했습니다 ⇒ 아무것도 쓰지 않았습니다", wiExpand: "펼치기", wiCollapse: "접기", wiEmptyBody: "(이 항목에는 본문이 없습니다)",  insCopyDone: "복사했습니다: {n}", insCopyTail: "원래 줄이 사라졌습니다 ⇒ 복사본 {n}을(를) 프리셋 맨 끝에 넣었습니다", insCopyGone: "{n}이(가) 이미 없습니다 ⇒ 복사하지 않았습니다", inlineInsCopySuffix: " (복사)", insDelDone: "프리셋에서 「{n}」을(를) 완전히 삭제했습니다", insDelClean: " (순서 목록 {g}개에서 남은 줄 {r}개도 정리했습니다)", insDelNoSave: " (화면에만; 저장하려면 술집의 「프리셋 업데이트」를 누르세요)", insDelGone: "「{n}」은(는) 이미 프리셋에 없습니다", insDelForbid: "「{n}」은(는) 시스템 프롬프트라 삭제할 수 없습니다", insDelFail: "삭제 중 오류 ⇒ 아무것도 삭제하지 않았습니다", autoUpdateLabel: "플러그인을 최신 버전으로 자동 업데이트", floatBarEnable: "플로팅 바 켜기", floatPanelClear: "비우기", floatFuncLabel: "기능형 (아이콘 즉시 실행)", floatPanelLabel: "패널형 (아이콘 클릭 시 설정 팝업)", floatPanelAll: "모든 패널 선택", routeLabel: "이번 Cline 업스트림: ", routeNone: "데이터 없음", floatClineEntry: "Cline 공급자 입구 (클릭하여 선택)", floatRouteBadge: "플로팅 바에 업스트림 배지 표시", stopRerollName: "리롤 중지", entryMenuGroup: "확장 메뉴 (좌하단)", entryInlineGroup: "입력창 옆 (보내기 바)", clineRouteAlertLabel: "라우팅 불일치 시 알림", opencodeLabel: "Opencode 요청 헤더 (9/6 이후 활성화 필요)", opencodeHint: "X-Opencode-Session 요청 헤더 자동 주입 (CUSTOM 소스). 같은 대화는 동일 ID (GPU 컨텍스트 캐시), 다른 대화는 다른 ID.", opencodeSession: "이 대화의 Session ID: ",
         apiHint: "키는 로컬 settings.json에 평문 저장됨 - 파일 공유 금지. Custom(OpenAI 호환) 연결에서만 동작. 전환 시 URL·키·모델명 세 항목을 함께 변경, 프리셋/샘플링은 불변. limit/quota/rate 에서 트리거.",
         dblSave: "저장",
         dblEditLabel: "메시지 본문을 두 번 클릭하면 그 자리에서 바로 수정",
@@ -750,7 +750,7 @@ if (settings.floatRouteBadge === undefined) settings.floatRouteBadge = true;
 if (settings.clineRouteAlert === undefined) settings.clineRouteAlert = false;
 if (settings.opencodeHeadersEnabled === undefined) settings.opencodeHeadersEnabled = false;
 if (settings.autoUpdate === undefined) settings.autoUpdate = true;
-if (!Array.isArray(settings.floatPanelKeys)) settings.floatPanelKeys = ['inject', 'reroll', 'beautify', 'word', 'psnap', 'tag', 'api', 'fix'];
+if (!Array.isArray(settings.floatPanelKeys)) settings.floatPanelKeys = ['inject', 'reroll', 'word', 'api', 'tag', 'psnap', 'fix'];   // ★W150：与新装默认同一份（顺序 = 主面板卡片顺序）
 if (settings.floatPanelAllKey === undefined) settings.floatPanelAllKey = defaultSettings.floatPanelAllKey;   // ★W114（铁律 32）：新装默认 'all'；缺键时补上，和老用户/新装口径一致
 if (settings.clineModelOverride === undefined) settings.clineModelOverride = false;
 delete settings.clineRouteFormat;
@@ -4841,7 +4841,7 @@ function ensurePsnapPanel() {
     </div>
     <div style="flex:none;display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:6px">
         <input id="${extensionName}_psnap_name" type="text" class="text_pole" placeholder="${t('psnapNamePh')}" style="flex:1;min-width:80px"/>
-        <button id="${extensionName}_psnap_save" type="button" class="kimi-btn" style="flex:none;padding:2px 8px">💾 ${t('psnapSaveBtn')}</button>
+        <button id="${extensionName}_psnap_save" type="button" class="kimi-btn" style="flex:none;padding:2px 8px">${t('psnapSaveBtn')}</button>
     </div>
     <div id="${extensionName}_psnap_body" style="flex:1;min-height:0;overflow-y:auto;margin-top:5px"></div>`;
     document.body.appendChild(win);
@@ -4940,12 +4940,15 @@ function updatePsnapEntries() {
 
 // ===== 通用「设置卡」悬浮窗：把主页原版卡移入浮窗（绑定保留），改完移回 =====
 // 卡注册表：悬浮入口条目的顺序/图标/标题（标题键三语，与主页卡 summary 匹配）
+/* ★W150（作者 2026-10-19）：顺序与主面板卡片顺序**逐一对应**（作者第 1/6 条）——
+   「API 池」挪到「标签修复」紧邻之上；「思维链」卡整张撤掉（内容并入基础设置）⇒ 这里同步去掉 beautify。
+   ★这一份同时决定**悬浮条面板区实际顺序**（panelDefs 遍历本表）与**勾选清单顺序**（floatPanelListHtml 遍历本表）
+   ⇒ 只要本表与主面板一致，两处就不可能不一致（作者第 6 条）。 */
 const KIMI_CARD_DEFS = [
     { key: 'inject', ico: 'fa-bolt', titleKey: 'injectTitle' },
-    { key: 'api', ico: 'fa-plug', titleKey: 'apiTitle' },
     { key: 'reroll', ico: 'fa-arrows-rotate', titleKey: 'rerollTitle' },
-    { key: 'beautify', ico: 'fa-palette', titleKey: 'beautifyTitle' },
     { key: 'word', ico: 'fa-broom', titleKey: 'wordTitle' },
+    { key: 'api', ico: 'fa-plug', titleKey: 'apiTitle' },
     { key: 'tag', ico: 'fa-tag', titleKey: 'tagTitle' },
     { key: 'psnap', ico: 'fa-list-check', titleKey: 'psnapTitle' },
     { key: 'fix', ico: 'fa-wrench', titleKey: 'fixTitle' },
@@ -5797,43 +5800,98 @@ window.__kimiRefreshCombo = updateComboFloat;
 
 
 // ===== 预设条目开关快照 UI =====
+/* ★W150（作者 2026-10-19 第 5 条）：快照卡改版 —— 只改**外壳/交互**，底层保存-切换-恢复**一个字不改**。
+   · savePromptSnapshot / applyPromptSnapshot / deletePromptSnapshot / restorePromptRecovery 原样不动；
+   · 列表固定四个方案槽（方案1~4）：第 N 槽 ↔ settings.promptSnapshots[N-1]（按位置对应，空槽显示「（空）」）；
+   · 每行右侧四个操作：重命名 / 覆盖 / 切换 / ✕（空槽时四个都禁用）；
+   · 「基础」行 = 未快照的当前基线，只有一行标签、不留任何数据（作者：不要塞假数据）；
+   · 「可恢复快照」那条照旧保留（排在列表最下面）。 */
 function renderPsnapUI() {
     const box = document.getElementById(extensionName + '_psnap_list') || document.getElementById(extensionName + '_psnap_body');
     const boxFloat = document.getElementById(extensionName + '_psnap_body');
     if (!box) return;
     const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const snaps = Array.isArray(settings.promptSnapshots) ? settings.promptSnapshots : [];
+    const fmt = (tm) => { const dt = new Date(Number(tm)); return isNaN(dt) ? '' : (dt.getMonth() + 1) + '/' + dt.getDate() + ' ' + String(dt.getHours()).padStart(2, '0') + ':' + String(dt.getMinutes()).padStart(2, '0'); };
+    const rowCss = 'display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:3px;padding:3px 8px;border:1px solid var(--SmartThemeBorderColor);border-radius:6px';
+    const btnCss = 'flex:none;min-height:32px';   // ★W150b：跟面板既有触摸口径（min-height:32px）对齐 —— 原来 inline 覆盖成 18px 高，手机档不好点
     let html = '';
+    // 「基础」行（当前未快照基线）：只有标签，右侧无操作、无数据
+    html += '<div class="kimi-psnap-row kimi-psnap-base" style="' + rowCss + '"><span style="font-size:.85em;color:var(--kimi-ink-2)">' + t('psnapBaseRow') + '</span></div>';
+    // 固定四个方案槽（★W150b 修正：四个是"最低显示数"，不是"最多能存几条"——
+    //   若本机已有超过 4 条快照（老用户可能存过），多出来的照旧显示成「方案5 / 方案6…」；
+    //   否则第 5 条之后在界面上会看不见，用户会以为"新建没生效 / 方案丢了"）
+    const nSlots = Math.max(4, snaps.length);
+    for (let i = 0; i < nSlots; i++) {
+        const snap = snaps[i];
+        const slotLabel = String(t('psnapSlotName')).replace('{n}', String(i + 1));
+        const dis = snap ? '' : ' disabled';
+        const mid = snap
+            ? '<span class="kimi-psnap-row-name" style="flex:1 1 auto;min-width:0;font-size:.85em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b style="color:var(--kimi-ink-name)">' + esc(snap.name) + '</b> <span style="color:var(--kimi-ink-3);font-size:.85em">(' + fmt(snap.time) + ')</span></span>'
+            : '<span class="kimi-psnap-row-name" style="flex:1 1 auto;min-width:0;font-size:.85em;color:var(--kimi-ink-3)">' + t('psnapSlotEmpty') + '</span>';
+        html += '<div class="kimi-psnap-row" data-slot="' + (i + 1) + '" style="' + rowCss + '">'
+            + '<span style="font-size:.82em;color:var(--kimi-ink-3);flex:none">' + slotLabel + '</span>'
+            + mid
+            + '<button class="kimi-btn kimi-psnap-rename kimi-psnap-btn" data-slot="' + (i + 1) + '" style="' + btnCss + '"' + dis + '>' + t('psnapRename') + '</button>'
+            + '<button class="kimi-btn kimi-psnap-overwrite kimi-psnap-btn" data-slot="' + (i + 1) + '" style="' + btnCss + '"' + dis + '>' + t('psnapOverwrite') + '</button>'
+            + '<button class="kimi-btn kimi-psnap-apply kimi-psnap-btn" data-slot="' + (i + 1) + '" style="' + btnCss + '"' + dis + '>' + t('psnapApply') + '</button>'
+            + '<button class="kimi-psnap-del kimi-psnap-btn" data-slot="' + (i + 1) + '" title="' + t('psnapDel') + '" style="cursor:pointer;opacity:.6;background:none;border:none;color:inherit;font-size:.85em;padding:2px 6px;flex:none;min-width:32px;min-height:32px"' + dis + '>✕</button>'
+            + '</div>';
+    }
+    // 「可恢复快照」那条（照旧保留，排在列表最下面）
     if (settings.promptRecovery) {
-        const dt = new Date(Number(settings.promptRecovery.time));
-        const ts = isNaN(dt) ? '' : (dt.getMonth()+1)+'/'+dt.getDate()+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
-        html += `<div style="display:flex;gap:6px;align-items:center;margin-top:3px;padding:3px 8px;border:1px dashed var(--golden-color,#e0a800);border-radius:6px;background:rgba(224,168,0,.05)">
-        <span style="flex:1;font-size:.85em">↩ ${t('psnapRecovery')} <span style="color:var(--kimi-ink-3)">(${ts})</span></span>
-        <button class="kimi-btn kimi-psnap-rec" style="padding:2px 8px;font-size:.82em">${t('psnapRecApply')}</button>
-        </div>`;
+        const ts = fmt(settings.promptRecovery.time);
+        html += '<div style="display:flex;gap:6px;align-items:center;margin-top:3px;padding:3px 8px;border:1px dashed var(--golden-color,#e0a800);border-radius:6px;background:rgba(224,168,0,.05)">'
+            + '<span style="flex:1;font-size:.85em">↩ ' + t('psnapRecovery') + ' <span style="color:var(--kimi-ink-3)">(' + ts + ')</span></span>'
+            + '<button class="kimi-btn kimi-psnap-rec" style="padding:2px 8px;font-size:.82em">' + t('psnapRecApply') + '</button>'
+            + '</div>';
     }
-    for (const snap of settings.promptSnapshots) {
-        const dt = new Date(Number(snap.time));
-        const ts = isNaN(dt) ? '' : (dt.getMonth()+1)+'/'+dt.getDate()+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
-        html += `<div style="display:flex;gap:6px;align-items:center;margin-top:3px;padding:3px 8px;border:1px solid var(--SmartThemeBorderColor);border-radius:6px">
-        <span style="flex:1;font-size:.85em"><b style="color:var(--kimi-ink-name)">${esc(snap.name)}</b> <span style="color:var(--kimi-ink-3);font-size:.85em">(${ts})</span></span>
-        <button class="kimi-btn kimi-psnap-apply kimi-psnap-btn" data-n="${esc(snap.name)}" style="padding:2px 8px;font-size:.82em">${t('psnapApply')}</button>
-        <button class="kimi-psnap-del kimi-psnap-btn" data-n="${esc(snap.name)}" title="${t('psnapDel')}" style="cursor:pointer;opacity:.5;background:none;border:none;color:inherit;font-size:.85em">✕</button>
-        </div>`;
-    }
-    if (!settings.promptSnapshots.length && !settings.promptRecovery) {
-        html = '<span style="color:var(--kimi-ink-3);font-size:.85em">' + t('psnapEmpty') + '</span>';
-    }
-    [box, boxFloat].forEach(t => {
-        if (!t || t === box) { /* 卡为主渲染 */ }
-    });
     if (box) box.innerHTML = html;
     if (boxFloat && boxFloat !== box) boxFloat.innerHTML = html;
-    const wire = (t) => { if (!t) return;
-        t.querySelectorAll('.kimi-psnap-apply').forEach(btn => btn.addEventListener('click', () => applyPromptSnapshot(btn.getAttribute('data-n'))));
-        t.querySelectorAll('.kimi-psnap-rec').forEach(btn => btn.addEventListener('click', () => { restorePromptRecovery(); renderPsnapUI(); }));
-        t.querySelectorAll('.kimi-psnap-del').forEach(btn => btn.addEventListener('click', () => { settings.promptSnapshots = settings.promptSnapshots.filter(x => x.name !== btn.getAttribute('data-n')); saveSettingsDebounced(); renderPsnapUI(); }));
+    // ★注意：下面这个容器参数**不能**叫 t —— 会把全局的 t()（取文案）遮蔽掉（handler 里要调 t()）
+    const slotOf = (el) => Number(el.getAttribute('data-slot')) - 1;
+    const wire = (host) => { if (!host) return;
+        host.querySelectorAll('.kimi-psnap-apply').forEach(btn => btn.addEventListener('click', () => { const s = snaps[slotOf(btn)]; if (s) applyPromptSnapshot(s.name); }));
+        host.querySelectorAll('.kimi-psnap-overwrite').forEach(btn => btn.addEventListener('click', () => {
+            const s = snaps[slotOf(btn)];
+            if (!s) { notice(t('psnapSlotEmptyTip'), 'psnapTitle'); return; }
+            const toggles = readPromptToggles();
+            if (!toggles) { notice(t('psnapNoPreset'), 'psnapTitle'); return; }
+            s.toggles = toggles; s.time = Date.now();
+            saveSettingsDebounced();
+            try { toastr.success(String(t('psnapOverwritten')).replace('{n}', s.name), '余温工具箱', { timeOut: 2500 }); } catch (e) { }
+            renderPsnapUI();
+        }));
+        host.querySelectorAll('.kimi-psnap-rename').forEach(btn => btn.addEventListener('click', () => {
+            const idx = slotOf(btn);
+            const s = snaps[idx];
+            if (!s) { notice(t('psnapSlotEmptyTip'), 'psnapTitle'); return; }
+            const row = btn.closest('.kimi-psnap-row');
+            const nameEl = row && row.querySelector('.kimi-psnap-row-name');
+            if (!nameEl) return;
+            const inp = document.createElement('input');
+            inp.type = 'text'; inp.className = 'text_pole'; inp.value = s.name;
+            inp.style.cssText = 'flex:1 1 auto;min-width:60px;font-size:.85em;padding:1px 5px';
+            nameEl.replaceWith(inp);
+            try { inp.focus(); inp.select(); } catch (e) { }
+            let done = false;
+            const commit = (save) => {
+                if (done) return; done = true;
+                const v = String(inp.value || '').trim();
+                if (save && v && v !== s.name) {
+                    const dup = snaps.some((x, j) => j !== idx && x && x.name === v);
+                    if (dup) { try { toastr.warning(String(t('psnapDupName')).replace('{n}', v), '余温工具箱', { timeOut: 3000 }); } catch (e) { } }
+                    else { s.name = v; saveSettingsDebounced(); try { toastr.success(String(t('psnapRenamed')).replace('{n}', v), '余温工具箱', { timeOut: 2500 }); } catch (e) { } }
+                }
+                renderPsnapUI();
+            };
+            inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(true); } else if (e.key === 'Escape') { e.preventDefault(); commit(false); } });
+            inp.addEventListener('blur', () => commit(true));
+        }));
+        host.querySelectorAll('.kimi-psnap-del').forEach(btn => btn.addEventListener('click', () => { const s = snaps[slotOf(btn)]; if (s) { deletePromptSnapshot(s.name); renderPsnapUI(); } }));
+        host.querySelectorAll('.kimi-psnap-rec').forEach(btn => btn.addEventListener('click', () => { restorePromptRecovery(); renderPsnapUI(); }));
     };
-    wire(box); wire(boxFloat);
+    wire(box); if (boxFloat && boxFloat !== box) wire(boxFloat);   // ★同一个元素别 wire 两遍（否则每颗按钮挂两个 handler）
 }
 
 // 显示层词汇替换钩子（tag-fixer.js 关闭幻影预览还原渲染时调用，保证「仅显示」替换不丢）
@@ -6271,6 +6329,12 @@ const KIMI_SETTINGS_CSS = `
     border-top: 1px solid var(--SmartThemeBorderColor);
     margin: 10px 0;
     opacity: 0.6;
+}
+/* ★W150：快照槽位上"空槽"的四个操作按钮（重命名/覆盖/切换/✕）都是 disabled ⇒ 统一给个可辨的弱化档
+   （选择器不带作用域前缀：这条同时覆盖主面板卡、卡浮窗、以及挂在 body 下的 psnap 悬浮窗三处） */
+.kimi-psnap-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 /* 通用卡浮窗作用域（卡被移入悬浮窗后，样式选择器不再命中 #settings 前缀 → 镜像同款配色，防白底/无边框） */
 #kimi_reasoning_injector_card_float .kimi-card {
@@ -7422,6 +7486,8 @@ function initSettingsPanel() {
 <input id="${extensionName}_auto_update" type="checkbox" ${settings.autoUpdate ? 'checked' : ''}/>
 ${t('autoUpdateLabel')}
 </label>
+<!-- ★W150（作者第 3 条）：这四个小功能收进「便捷小功能」小标题之下；它与下面「悬浮窗」「语言」两块用小标题 + 横线分开（同一张卡的三个区块）-->
+<div class="kimi-section-label">${t('baseGroupShortcuts')}</div>
 <!-- ★W80：行内「插入提示词」两颗开关（A 总开关 / B 保存条目的同时保存预设）-->
 <label class="checkbox_label">
 <input id="${extensionName}_inline_ins" type="checkbox" ${settings.inlineInsertPlusBtn !== false ? 'checked' : ''}/>
@@ -7442,18 +7508,10 @@ ${t('inlineInsSaveLabel')}
 <input id="${extensionName}_dbl_edit" type="checkbox" ${settings.dblEditInPlace !== false ? 'checked' : ''}/>
 ${t('dblEditLabel')}
 </label>
-<div style="margin-top:6px">
-<label class="kimi-label" for="${extensionName}_language">${t('langLabel')}</label>
-<select id="${extensionName}_language" class="text_pole" style="width:100%">
-<option value="zh" ${settings.language !== 'en' && settings.language !== 'ko' ? 'selected' : ''}>${t('langZh')}</option>
-<option value="en" ${settings.language === 'en' ? 'selected' : ''}>${t('langEn')}</option>
-<option value="ko" ${settings.language === 'ko' ? 'selected' : ''}>${t('langKo')}</option>
-</select>
-</div>
-
 <div class="kimi-sep"></div>
 
 <!-- ═══ 快捷入口（v1.37.40 统一样式：行高/字号/图标列一致，面板型双列）═══ -->
+<div class="kimi-section-label">${t('baseGroupFloat')}</div>
 <div class="kimi-entry-panel">
     <label class="kimi-entry-master">
         <input type="checkbox" id="${extensionName}_float_bar" ${settings.floatBarEnabled ? 'checked' : ''}/>
@@ -7551,6 +7609,45 @@ ${t('dblEditLabel')}
         <span class="kimi-entry-txt" style="color:#ef6f6f">${t('stopRerollName')}</span>
     </label>
 </div>
+
+<!-- ★W150（作者第 3 条）：语言设置 = 基础设置卡里的第三个区块（与「便捷小功能」「悬浮窗」以小标题 + 横线分开）-->
+<div class="kimi-sep"></div>
+<div class="kimi-section-label">${t('baseGroupLang')}</div>
+<div style="margin-top:2px">
+<label class="kimi-label" for="${extensionName}_language">${t('langLabel')}</label>
+<select id="${extensionName}_language" class="text_pole" style="width:100%">
+<option value="zh" ${settings.language !== 'en' && settings.language !== 'ko' ? 'selected' : ''}>${t('langZh')}</option>
+<option value="en" ${settings.language === 'en' ? 'selected' : ''}>${t('langEn')}</option>
+<option value="ko" ${settings.language === 'ko' ? 'selected' : ''}>${t('langKo')}</option>
+</select>
+</div>
+
+<!-- ★W150（作者第 2 条）：原「思维链」卡整张撤掉，内容搬到这里（自成一块，不跟别的分组混在一起）-->
+<div class="kimi-sep"></div>
+<div class="kimi-section-label">${t('beautifyTitle')}</div>
+<div style="margin-top:2px">
+<label class="checkbox_label" style="display:inline-flex;align-items:center;gap:6px">
+<input id="${extensionName}_reasoning_height" type="checkbox" ${settings.reasoningHeightCss ? 'checked' : ''}/>
+${t('foldHeightLabel')}
+<input id="${extensionName}_reasoning_height_value" type="number" min="50" max="2000" step="10" class="text_pole kimi-num" value="${settings.reasoningHeightCssValue || 250}"/>
+<span class="kimi-hint" style="display:inline">px</span>
+</label>
+<p class="kimi-hint">${t('foldHeightHint')}</p>
+</div>
+<div style="margin-top:6px">
+<label class="checkbox_label">
+<input id="${extensionName}_reasoning_timer" type="checkbox" ${settings.reasoningTimer ? 'checked' : ''}/>
+${t('reasoningTimerLabel')}
+</label>
+<p class="kimi-hint">${t('reasoningTimerHint')}</p>
+</div>
+<div style="margin-top:6px">
+<label class="checkbox_label">
+<input id="${extensionName}_show_tps" type="checkbox" ${settings.showTps ? 'checked' : ''}/>
+${t('showTpsLabel')}
+</label>
+<p class="kimi-hint">${t('showTpsHint')}</p>
+</div>
 </div>
 </details>
 
@@ -7643,9 +7740,6 @@ ${t('usage3')}
 </div>
 </details>
 
-
-<!-- ═══ API 池（额度轮换）═══ -->
-<div id="${extensionName}_api_slot"></div>
 
 <!-- ═══ 自动重roll ═══ -->
 <details class="kimi-card">
@@ -7763,37 +7857,7 @@ ${t('mutterSound')}
 </div>
 </details>
 
-<!-- ═══ 思维链（"美化折叠"那一半 2026-09-22 已下线，留档见 thinking-fold.removed.js）═══ -->
-<details class="kimi-card">
-<summary><i class="fa-solid fa-palette kimi-card-ico" aria-hidden="true"></i>${t('beautifyTitle')}</summary>
-<div class="kimi-card-body">
-<div class="kimi-sep"></div>
-<div style="margin-top:6px">
-<label class="checkbox_label" style="display:inline-flex;align-items:center;gap:6px">
-<input id="${extensionName}_reasoning_height" type="checkbox" ${settings.reasoningHeightCss ? 'checked' : ''}/>
-${t('foldHeightLabel')}
-<input id="${extensionName}_reasoning_height_value" type="number" min="50" max="2000" step="10" class="text_pole kimi-num" value="${settings.reasoningHeightCssValue || 250}"/>
-<span class="kimi-hint" style="display:inline">px</span>
-</label>
-<p class="kimi-hint">${t('foldHeightHint')}</p>
-</div>
-<div style="margin-top:6px">
-<label class="checkbox_label">
-<input id="${extensionName}_reasoning_timer" type="checkbox" ${settings.reasoningTimer ? 'checked' : ''}/>
-${t('reasoningTimerLabel')}
-</label>
-<p class="kimi-hint">${t('reasoningTimerHint')}</p>
-</div>
-<div class="kimi-sep"></div>
-<div style="margin-top:6px">
-<label class="checkbox_label">
-<input id="${extensionName}_show_tps" type="checkbox" ${settings.showTps ? 'checked' : ''}/>
-${t('showTpsLabel')}
-</label>
-<p class="kimi-hint">${t('showTpsHint')}</p>
-</div>
-</div>
-</details>
+<!-- ★W150（作者第 2 条）：「思维链」卡整张从主面板撤掉（内容已搬进基础设置卡）；"美化折叠"那一半 2026-09-22 已下线，留档见 thinking-fold.removed.js -->
 
 <!-- ═══ 替换 ═══ -->
 <details class="kimi-card">
@@ -7815,6 +7879,9 @@ ${renderWordReplaceRows()}
 </details>
 
 
+<!-- ═══ API 池（额度轮换）★W150（作者第 1 条）：挪到「标签修复」紧邻之上 ═══ -->
+<div id="${extensionName}_api_slot"></div>
+
 <!-- ═══ 标签修复(原st-tag) ═══ -->
 <div id="${extensionName}_tag_slot"></div>
 
@@ -7824,7 +7891,7 @@ ${renderWordReplaceRows()}
 <div class="kimi-card-body">
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <input id="${extensionName}_psnap_name" type="text" class="text_pole" placeholder="${t('psnapNamePh')}" style="flex:1;min-width:90px"/>
-        <button id="${extensionName}_psnap_save" type="button" class="kimi-btn" style="flex:none">💾 ${t('psnapSaveBtn')}</button>
+        <button id="${extensionName}_psnap_save" type="button" class="kimi-btn" style="flex:none">${t('psnapSaveBtn')}</button>
     </div>
     <div id="${extensionName}_psnap_list" style="margin-top:6px"></div>
 </div>
@@ -8149,7 +8216,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
    ② 整份预设卡底部那一排（下载本预设/评论/点赞/缝入）**统一外形 + 收紧**（改前手机 360 档整排右溢出 28px）。
    ★同时升工具箱 PLUGIN_VERSION（1.46.27 → 1.46.28）：用户的自更新是拿**远端 manifest 的版本号**比本机 ——
      只升商店号、不升工具箱号，用户端就**不会**自动更新（作者今天当场踩到过）。 */
-const storeBuild = 'v2.2.65';
+const storeBuild = 'v2.2.66';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();
