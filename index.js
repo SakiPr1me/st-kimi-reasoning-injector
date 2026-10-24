@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.50'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.51'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -387,8 +387,15 @@ const defaultSettings = {
     mutterTrigger: 'marker',        // 提醒时机：marker=检测到截断标记才提醒（K3/余温预设）| done=输出完成即提醒（不用截断标记的模型）
     clineProviderEnabled: false,     // Cline 提供商指定：请求注入 providerOptions.gateway.only
     clinePriority: [],               // 提供商优先序列
-    promptSnapshots: [],             // 预设条目开关快照：[{name,time,toggles:{id:enabled,...}}]
-    promptRecovery: null,            // 固定恢复槽：切换前自动保存的条目开关状态（单槽覆盖制）
+    promptSnapshots: [],             // 预设条目开关快照：[{name,time,toggles:{id:enabled,...}}]（★W163 起只作旧数据迁移的来源，产品逻辑不再读写）
+    promptRecovery: null,            // 固定恢复槽：切换前自动保存的条目开关状态（单槽覆盖制；★W163 起新方案系统不再写它，键保留给老数据）
+    /* ★W163（一键切换方案）：方案 = 预设 + API 连接配置 + 条目开关 三件套的整存整取。
+       schemes 条目形状：{ id, name, icon(emoji 字符或空), iconData(data URL 图或 null), showInBar,
+                            profileName(酒馆 Connection Profile 名或 null), presetName(预设名或 null),
+                            toggles({identifier:enabled} 或 null) }
+       activeSchemeId = 最近一次「切换」成功的方案 id（没切过 = null；只作标记，不参与判定）。 */
+    schemes: [],                     // 方案列表（新装首次启动补 3 个默认方案，见下方一次性初始化那段）
+    activeSchemeId: null,            // 当前生效的方案 ID
     psnapShowFloat: true,            // 整合悬浮条入口（悬浮条设置卡控制内部显隐）
     floatBarEnabled: true,           // 悬浮窗总开关：关闭则悬浮条整体隐藏
     floatShowTagFix: true,           // 悬浮条功能区：一键修复标签（直接执行）
@@ -525,7 +532,7 @@ const UI = {
         apiModel: "模型名", apiKey: "密钥", apiAge: "{d} 天 {h} 小时", apiFetchModels: "获取可用模型", apiFetchBtn: "获取", apiModelsLoading: "获取模型中…", apiModelEmpty: "未获取到模型（检查 URL/密钥）", apiModelErr: "获取模型失败",
         apiNoPool: "池为空：先添加接口", apiNotCustom: "当前不是 Custom(OpenAI兼容) 连接，API 池不生效",
         apiBannerMsg: "检测到额度用尽（limit）。", apiBannerSwitch: "⇄ 切换到 {name}（{n}/{total}）", apiSwitched: "已切换到 {name}（{n}/{total}）",
-        apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（感谢啊一串信息源）", clineSectionTitle: "Cline设置相关", clineModelOverride: "积分模型名前缀覆写", clineMethodLabel: "指定方式：订阅指定提供商（感谢啊一串信息源）", clineUpTitle: "上移（调整自动切换顺序）", clineDownTitle: "下移（调整自动切换顺序）", upBtn: "📊 各上游实时状况", upTitle: "kimi-k3 各上游实时状况", upLoading: "加载中…（数据源 OpenRouter，免key）", upRefreshing: "刷新中…", upFailed: "获取失败：国内网络可能无法直连 openrouter.ai，请挂梯子后点 ↻ 重试", upSwitch: "切", upProvider: "提供商", upIn: "输入$/M", upOut: "输出$/M", upCache: "缓存读$/M", upLat: "延迟", upTps: "吞吐", upUp5m: "可用(5m)", upUptime: "可用率(1d)", upHint: "✓=可在本插件切换 · ★=当前 · 排序：可切换优先、可用率降序。手动追加自定义提供商（上方输入框）后，对应行也会出现切按钮。数据来自 OpenRouter 公开接口，仅供选型参考。", clineDSTip: "用Cline吃DeepSeek，可指定 deepseek 作为上游（官方缓存生效）！", clineDSBtn: "⇄ 一键切换 deepseek 上游", clineDSSwitched: "已切换：提供商=deepseek（走官方上游带缓存）", clineOverrideWarn: "⚠️ 啊一串实测：消耗积分的模式！限定指定提供商，如果你不知道这是什么就不要勾选", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「不常用」里勾选 使用 Cline 提供商指定", clinePassWarn: "⚠️ 检测到模型名带 cline-pass/ 前缀：提供商指定不会生效（实测全部被忽略），请改用 moonshotai/kimi-k3 等厂商前缀", clineDeadWarn: "⚠️ 已失效：Cline 指定 K3 渠道现已无法指定！（但可指定 DS）", clineHint: "开启后每次请求自动注入指定提供商。请删掉附加参数里的任何内容！仅 cline 渠道需要，其它渠道请关闭。不同渠道K3风味不同，自行测试。", psnapTitle: "预设条目开关快照（方案保存）", psnapNamePh: "方案名…", psnapSaveBtn: "新建", psnapApply: "切", psnapDel: "✕", psnapEmpty: "还没有保存的方案", psnapRecovery: "恢复到最近一次未快照时的状态", psnapSaved: "已保存「{n}」", psnapNeedName: "请先填写方案名", psnapMenuEntry: "扩展菜单入口", psnapEntryLabel: "入口：", psnapFloatEntry: "悬浮按钮入口", psnapNoPreset: "未找到预设数据", psnapRecApply: "恢复", psnapRecTime: "可恢复快照", floatCardTitle: "悬浮条设置", floatCardTag: "一键修复标签（直接执行）", tagFixNow: "一键修复标签", baseTitle: "基础设置（小功能整合/悬浮窗）", baseGroupShortcuts: "便捷小功能", baseGroupFloat: "悬浮窗相关功能", baseGroupLang: "语言设置", ballIconGroup: "自定义悬浮球图标", ballIconPick: "选择图片…", ballIconReset: "恢复默认", ballIconPrev: "当前图标预览", ballIconBad: "这个文件不是图片 ⇒ 没有换", ballIconBig: "这张图太大了，浏览器存不下 ⇒ 换一张小一点的", ballIconSaved: "已换成你选的图标", ballIconResetDone: "已恢复默认火球", psnapBaseRow: "基础", psnapSlotName: "方案{n}", psnapSlotEmpty: "（空）", psnapRename: "重命名", psnapOverwrite: "覆盖", psnapOverwritten: "已用当前开关状态覆盖「{n}」", psnapRenamed: "已改名为「{n}」", psnapSlotEmptyTip: "这个槽位还是空的", psnapDupName: "「{n}」这个名字已经被别的方案用了，换一个", inlineInsLabel: "在预设面板每行加「插入提示词」按钮", inlineInsDelLabel: "在预设面板每行加「删除」按钮", inlineInsSaveLabel: "保存条目的同时保存预设", inlineInsSaveHint: "", inlineInsBtnTitle: "插入提示词或复制这一条", inlineInsNewName: "新提示词", inlineInsNoId: "没能生成一个唯一的编号 ⇒ 这次没有插入", inlineInsNoDef: "酒馆没有把这条新提示词收下 ⇒ 这次没有插入（可以再试一次）", inlineInsNoOrder: "没找到预设的顺序表 ⇒ 一个字都没写（可以刷新页面再试）", inlineInsFail: "插入时出错了 ⇒ 没有写进预设", inlineInsFailNoBtn: "找不到酒馆的「更新预设」按钮 ⇒ 没有存盘（这次插入只在界面上）", inlineInsMsgPlaced: "已插到「{n}」后面", inlineInsAtTail: "原来那一行不在了 ⇒ 已放到预设最后", inlineInsMsgNoSave: "（只在界面上；要存进预设就点酒馆的「更新预设」）", inlineInsEntrySavedPreset: "条目已保存，并已替你更新预设「{p}」", inlineInsEntrySavedNoName: "条目已保存，但读不到你正在用的预设的名字 ⇒ 没有存进预设文件", inlineInsEntrySavedUnknown: "条目已保存，但没能确认写进预设文件 ⇒ 请按一下酒馆的「更新预设」（这次可能没存上）", inlineInsMsgSaved: "；条目已保存，并已替你更新预设「{p}」", inlineInsMsgSaveUnknown: "，但没能确认写进预设文件 ⇒ 请自己按一下酒馆的「更新预设」，或看控制台报错（这次可能没存上）", inlineInsMsgNoName: "，但读不到你正在用的预设的名字 ⇒ 没有存盘（这次插入只在界面上）", insAskTitle: "这一条怎么处理？", insAskWho: "这一条：{n}", insAskRemove: "移除", insAskRemoveHint: "酒馆原有的 Remove，仅隐藏，可插入提示词重链接回来", insAskDel: "删除", insAskDelHint: "确认不需要后彻底删除，无法找回", insAskIns: "插入新提示词", insAskInsHint: "在这一条后面插一条新的，填完内容点酒馆的「保存」", insAskCopy: "复制这一条", insAskCopyHint: "把这一条复制一份插到它后面，名字自动加「（副本）」", insAskCancel: "取消", insAskWi: "从世界书里选", insAskWiHint: "挑几条世界书条目，缝到这一条后面", wiTitle: "从世界书里选", wiSub: "挑好的条目会缝到「{n}」后面（按勾选先后）", wiNoBooks: "没有读到世界书（一本都没有）", wiBooksFail: "世界书列表读不出来 ⇒ 刷新页面再试", wiLoadFail: "这本世界书读不出来 ⇒ 换一本试试", wiNoEntries: "这本世界书里没有可用的条目", wiBack: "‹ 换一本", wiOk: "确定", wiLoading: "读取中…", wiCount: "已选 {n} 条", wiOff: "（世界书里是停用的）", wiUnnamed: "未命名条目", wiNone: "一条都没勾 ⇒ 什么都没做", wiDone: "已把 {n} 条世界书内容缝到「{x}」后面", wiDoneTail: "原来那一行不在了 ⇒ {n} 条已放到预设最后", wiNoBody: "（其中 {m} 条没有正文）", wiGone: "那一行已经不在了 ⇒ 没有缝", wiErr: "这一批没缝成 ⇒ 一个字都没写", wiExpand: "展开", wiCollapse: "收起", wiEmptyBody: "（这一条没有正文）",  insCopyDone: "已复制出「{n}」", insCopyTail: "原来那一行不在了 ⇒ 复制出来的「{n}」放到了预设最后", insCopyGone: "「{n}」已经不在了 ⇒ 没有复制", inlineInsCopySuffix: "（副本）", insDelDone: "已从预设里彻底删除「{n}」", insDelClean: "（顺手清掉了 {g} 张顺序表里的 {r} 行残留）", insDelNoSave: "（只在界面上；要存进预设就点酒馆的「更新预设」）", insDelGone: "「{n}」已经不在预设里了", insDelForbid: "「{n}」是系统提示词 ⇒ 不能删（酒馆也不让删）", insDelFail: "删除时出错了 ⇒ 没有删", autoUpdateLabel: "自动更新插件至最新", floatBarEnable: "开启悬浮窗", floatPanelClear: "清空", floatFuncLabel: "功能型（点图标直接执行）", floatPanelLabel: "面板型（点图标打开设置浮窗）", floatPanelAll: "全选面板", routeLabel: "本次Cline上游：", routeNone: "暂无数据", floatClineEntry: "Cline 提供商入口（点开选择）", floatRouteBadge: "悬浮条显示上游徽标", stopRerollName: "停止重roll", entryMenuGroup: "拓展菜单（左下角）", entryInlineGroup: "输入框旁（发送栏）", clineRouteAlertLabel: "实际路由与指定不符时提醒", opencodeLabel: "Opencode 请求标头（9/6 后红字需启用）", opencodeHint: "自动注入 X-Opencode-Session 请求头（CUSTOM 源生效）。同一聊天固定同一 ID（GPU 上下文缓存命中），不同聊天不同 ID。", opencodeSession: "本聊天 Session ID：",
+        apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（感谢啊一串信息源）", clineSectionTitle: "Cline设置相关", clineModelOverride: "积分模型名前缀覆写", clineMethodLabel: "指定方式：订阅指定提供商（感谢啊一串信息源）", clineUpTitle: "上移（调整自动切换顺序）", clineDownTitle: "下移（调整自动切换顺序）", upBtn: "📊 各上游实时状况", upTitle: "kimi-k3 各上游实时状况", upLoading: "加载中…（数据源 OpenRouter，免key）", upRefreshing: "刷新中…", upFailed: "获取失败：国内网络可能无法直连 openrouter.ai，请挂梯子后点 ↻ 重试", upSwitch: "切", upProvider: "提供商", upIn: "输入$/M", upOut: "输出$/M", upCache: "缓存读$/M", upLat: "延迟", upTps: "吞吐", upUp5m: "可用(5m)", upUptime: "可用率(1d)", upHint: "✓=可在本插件切换 · ★=当前 · 排序：可切换优先、可用率降序。手动追加自定义提供商（上方输入框）后，对应行也会出现切按钮。数据来自 OpenRouter 公开接口，仅供选型参考。", clineDSTip: "用Cline吃DeepSeek，可指定 deepseek 作为上游（官方缓存生效）！", clineDSBtn: "⇄ 一键切换 deepseek 上游", clineDSSwitched: "已切换：提供商=deepseek（走官方上游带缓存）", clineOverrideWarn: "⚠️ 啊一串实测：消耗积分的模式！限定指定提供商，如果你不知道这是什么就不要勾选", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「不常用」里勾选 使用 Cline 提供商指定", clinePassWarn: "⚠️ 检测到模型名带 cline-pass/ 前缀：提供商指定不会生效（实测全部被忽略），请改用 moonshotai/kimi-k3 等厂商前缀", clineDeadWarn: "⚠️ 已失效：Cline 指定 K3 渠道现已无法指定！（但可指定 DS）", clineHint: "开启后每次请求自动注入指定提供商。请删掉附加参数里的任何内容！仅 cline 渠道需要，其它渠道请关闭。不同渠道K3风味不同，自行测试。", psnapNoPreset: "未找到预设数据", schemeTitle: "方案切换（预设/API/开关）", schemeNew: "＋ 新建方案", schemeNewName: "新方案", schemeEdit: "编辑", schemeOverwrite: "覆盖", schemeSwitch: "切换", schemeDeleteConfirm: "确定删掉这个方案吗？", schemeNotConfigured: "（未配置）", schemeEditTitle: "编辑方案", schemeIconLabel: "图标", schemeIconUpload: "上传图片", schemeNameLabel: "方案名", schemeProfileLabel: "连接配置", schemeNoProfile: "不切换连接", schemePresetLabel: "预设", schemeNoPreset: "不切换预设", schemeTogglesLabel: "条目开关", schemeTogglesCaptured: "已捕获 {n} 条开关状态", schemeTogglesNone: "（未捕获）", schemeTogglesCount: "{n} 条", schemeCaptureBtn: "📋 捕获当前开关", schemeShowInBar: "出现在悬浮窗", schemeGenerating: "正在生成中，稍后再切", schemeProfileMissing: "连接配置「{n}」已不存在，请重新编辑方案", schemePresetMissing: "预设「{n}」已不存在", schemeNeedConnExt: "请先在酒馆里启用「Connection Profiles」扩展", schemeNoProfiles: "（请先在酒馆 API 面板保存一个连接配置）", schemeSwitchedTo: "已切换到「{n}」", schemeOverwritten: "已用当前状态覆盖「{n}」", schemeDeleted: "已删除「{n}」", schemeCreated: "已新建方案，点「编辑」绑定预设/连接/开关", schemeBindPreset: "预设", schemeBindProfile: "连接", schemeBindToggles: "开关", schemeIconBad: "这个文件不是图片 ⇒ 没有换", schemeIconBig: "这张图太大了（超过 300KB） ⇒ 换一张小一点的", floatCardTitle: "悬浮条设置", floatCardTag: "一键修复标签（直接执行）", tagFixNow: "一键修复标签", baseTitle: "基础设置（小功能整合/悬浮窗）", baseGroupShortcuts: "便捷小功能", baseGroupFloat: "悬浮窗相关功能", baseGroupLang: "语言设置", ballIconGroup: "自定义悬浮球图标", ballIconPick: "选择图片…", ballIconReset: "恢复默认", ballIconPrev: "当前图标预览", ballIconBad: "这个文件不是图片 ⇒ 没有换", ballIconBig: "这张图太大了，浏览器存不下 ⇒ 换一张小一点的", ballIconSaved: "已换成你选的图标", ballIconResetDone: "已恢复默认火球", inlineInsLabel: "在预设面板每行加「插入提示词」按钮", inlineInsDelLabel: "在预设面板每行加「删除」按钮", inlineInsSaveLabel: "保存条目的同时保存预设", inlineInsSaveHint: "", inlineInsBtnTitle: "插入提示词或复制这一条", inlineInsNewName: "新提示词", inlineInsNoId: "没能生成一个唯一的编号 ⇒ 这次没有插入", inlineInsNoDef: "酒馆没有把这条新提示词收下 ⇒ 这次没有插入（可以再试一次）", inlineInsNoOrder: "没找到预设的顺序表 ⇒ 一个字都没写（可以刷新页面再试）", inlineInsFail: "插入时出错了 ⇒ 没有写进预设", inlineInsFailNoBtn: "找不到酒馆的「更新预设」按钮 ⇒ 没有存盘（这次插入只在界面上）", inlineInsMsgPlaced: "已插到「{n}」后面", inlineInsAtTail: "原来那一行不在了 ⇒ 已放到预设最后", inlineInsMsgNoSave: "（只在界面上；要存进预设就点酒馆的「更新预设」）", inlineInsEntrySavedPreset: "条目已保存，并已替你更新预设「{p}」", inlineInsEntrySavedNoName: "条目已保存，但读不到你正在用的预设的名字 ⇒ 没有存进预设文件", inlineInsEntrySavedUnknown: "条目已保存，但没能确认写进预设文件 ⇒ 请按一下酒馆的「更新预设」（这次可能没存上）", inlineInsMsgSaved: "；条目已保存，并已替你更新预设「{p}」", inlineInsMsgSaveUnknown: "，但没能确认写进预设文件 ⇒ 请自己按一下酒馆的「更新预设」，或看控制台报错（这次可能没存上）", inlineInsMsgNoName: "，但读不到你正在用的预设的名字 ⇒ 没有存盘（这次插入只在界面上）", insAskTitle: "这一条怎么处理？", insAskWho: "这一条：{n}", insAskRemove: "移除", insAskRemoveHint: "酒馆原有的 Remove，仅隐藏，可插入提示词重链接回来", insAskDel: "删除", insAskDelHint: "确认不需要后彻底删除，无法找回", insAskIns: "插入新提示词", insAskInsHint: "在这一条后面插一条新的，填完内容点酒馆的「保存」", insAskCopy: "复制这一条", insAskCopyHint: "把这一条复制一份插到它后面，名字自动加「（副本）」", insAskCancel: "取消", insAskWi: "从世界书里选", insAskWiHint: "挑几条世界书条目，缝到这一条后面", wiTitle: "从世界书里选", wiSub: "挑好的条目会缝到「{n}」后面（按勾选先后）", wiNoBooks: "没有读到世界书（一本都没有）", wiBooksFail: "世界书列表读不出来 ⇒ 刷新页面再试", wiLoadFail: "这本世界书读不出来 ⇒ 换一本试试", wiNoEntries: "这本世界书里没有可用的条目", wiBack: "‹ 换一本", wiOk: "确定", wiLoading: "读取中…", wiCount: "已选 {n} 条", wiOff: "（世界书里是停用的）", wiUnnamed: "未命名条目", wiNone: "一条都没勾 ⇒ 什么都没做", wiDone: "已把 {n} 条世界书内容缝到「{x}」后面", wiDoneTail: "原来那一行不在了 ⇒ {n} 条已放到预设最后", wiNoBody: "（其中 {m} 条没有正文）", wiGone: "那一行已经不在了 ⇒ 没有缝", wiErr: "这一批没缝成 ⇒ 一个字都没写", wiExpand: "展开", wiCollapse: "收起", wiEmptyBody: "（这一条没有正文）",  insCopyDone: "已复制出「{n}」", insCopyTail: "原来那一行不在了 ⇒ 复制出来的「{n}」放到了预设最后", insCopyGone: "「{n}」已经不在了 ⇒ 没有复制", inlineInsCopySuffix: "（副本）", insDelDone: "已从预设里彻底删除「{n}」", insDelClean: "（顺手清掉了 {g} 张顺序表里的 {r} 行残留）", insDelNoSave: "（只在界面上；要存进预设就点酒馆的「更新预设」）", insDelGone: "「{n}」已经不在预设里了", insDelForbid: "「{n}」是系统提示词 ⇒ 不能删（酒馆也不让删）", insDelFail: "删除时出错了 ⇒ 没有删", autoUpdateLabel: "自动更新插件至最新", floatBarEnable: "开启悬浮窗", floatPanelClear: "清空", floatFuncLabel: "功能型（点图标直接执行）", floatPanelLabel: "面板型（点图标打开设置浮窗）", floatPanelAll: "全选面板", routeLabel: "本次Cline上游：", routeNone: "暂无数据", floatClineEntry: "Cline 提供商入口（点开选择）", floatRouteBadge: "悬浮条显示上游徽标", stopRerollName: "停止重roll", entryMenuGroup: "拓展菜单（左下角）", entryInlineGroup: "输入框旁（发送栏）", clineRouteAlertLabel: "实际路由与指定不符时提醒", opencodeLabel: "Opencode 请求标头（9/6 后红字需启用）", opencodeHint: "自动注入 X-Opencode-Session 请求头（CUSTOM 源生效）。同一聊天固定同一 ID（GPU 上下文缓存命中），不同聊天不同 ID。", opencodeSession: "本聊天 Session ID：",
         apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效。切换会同步改写 URL、密钥、模型名 三项，预置/采样等其它参数一概不动；命中 limit/quota/rate 即触发。",
         dblSave: "保存",
         dblEditLabel: "双击正文直接改字",
@@ -589,7 +596,7 @@ const UI = {
         apiModel: "Model", apiKey: "Key", apiAge: "{d}d {h}h", apiFetchModels: "Fetch available models", apiFetchBtn: "Fetch", apiModelsLoading: "Fetching models…", apiModelEmpty: "No models returned (check URL/key)", apiModelErr: "Failed to fetch models",
         apiNoPool: "Pool is empty: add an endpoint first", apiNotCustom: "Not a Custom (OpenAI-compatible) connection - pool inactive",
         apiBannerMsg: "Quota limit hit.", apiBannerSwitch: "⇄ Switch to {name} ({n}/{total})", apiSwitched: "Switched to {name} ({n}/{total})",
-        apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (credit: the source)", clineSectionTitle: "Cline settings", clineModelOverride: "Credits model prefix override", clineMethodLabel: "Method: subscription provider routing (credit: the source)", clineUpTitle: "Move up (auto-switch order)", clineDownTitle: "Move down (auto-switch order)", upBtn: "📊 Live upstream status", upTitle: "kimi-k3 upstream live status", upLoading: "Loading... (OpenRouter, no key needed)", upRefreshing: "Refreshing...", upFailed: "Failed to fetch - openrouter.ai may be unreachable from your network; retry with ↻", upSwitch: "Use", upProvider: "Provider", upIn: "In $/M", upOut: "Out $/M", upCache: "Cache $/M", upLat: "Latency", upTps: "Throughput", upUp5m: "Up(5m)", upUptime: "Uptime(1d)", upHint: "✓ = switchable here · ★ = current · latency/throughput = last 30 min (blank when no traffic) · sorted: switchable first, uptime desc. Data from OpenRouter public API.", snapNamePh: "Profile name…", snapSaveBtn: "💾 Save current", snapApply: "Apply", snapDel: "Delete profile", snapEmpty: "No saved profiles yet: enter a name and hit Save", snapRecovery: "↩ Auto-recovery snapshot (saved before last switch)", snapSaved: "Saved profile \"{n}\"", snapNeedName: "Enter a profile name first", clineDSTip: "Use Cline for DeepSeek with deepseek as the upstream (official caching works)!", clineDSBtn: "⇄ One-click deepseek upstream", clineDSSwitched: "Switched: provider=deepseek (official upstream with caching)", clineOverrideWarn: "WARNING (tested): credits only - locks provider and overrides model to a vendor prefix like moonshotai/kimi-k3.", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Uncommon first", clinePassWarn: "Model has cline-pass/ prefix: provider routing will NOT work (tested). Use a vendor prefix like moonshotai/kimi-k3", clineDeadWarn: "⚠️ Deprecated: Cline can no longer route to the K3 provider! (DS still works)", clineHint: "Injects the selected provider into every request. Delete anything in Extra Parameters! Only needed for the cline channel; turn off elsewhere. Different providers give K3 different flavors - test them yourself.", psnapTitle: "Preset Toggle Snapshots (Save Schemes)", psnapNamePh: "Profile name…", psnapSaveBtn: "New", psnapApply: "Use", psnapDel: "✕", psnapEmpty: "No saved profiles", psnapRecovery: "Restore to last unsaved state", psnapSaved: "Saved \"{n}\"", psnapNeedName: "Enter a profile name first", psnapMenuEntry: "Extensions menu entry", psnapEntryLabel: "Entries:", psnapFloatEntry: "Floating button entry", psnapNoPreset: "Preset data not found", psnapRecApply: "Restore", psnapRecTime: "Recovery snapshot", floatCardTitle: "Floating Bar", floatCardTag: "One-click tag fix (direct run)", tagFixNow: "Fix tags now", baseTitle: "Basics (Small Features / Floating Bar)", baseGroupShortcuts: "Shortcuts", baseGroupFloat: "Floating bar", baseGroupLang: "Language", ballIconGroup: "Custom floating-ball icon", ballIconPick: "Choose image…", ballIconReset: "Reset", ballIconPrev: "Current icon preview", ballIconBad: "That file is not an image - nothing changed", ballIconBig: "This image is too large for the browser to store - pick a smaller one", ballIconSaved: "Switched to your icon", ballIconResetDone: "Back to the default fireball", psnapBaseRow: "Baseline", psnapSlotName: "Scheme {n}", psnapSlotEmpty: "(empty)", psnapRename: "Rename", psnapOverwrite: "Overwrite", psnapOverwritten: "Overwrote \"{n}\" with the current toggles", psnapRenamed: "Renamed to \"{n}\"", psnapSlotEmptyTip: "This slot is still empty", psnapDupName: "\"{n}\" is already used by another scheme - pick another name", inlineInsLabel: "Add an \"Insert prompt\" button to each row of the preset panel", inlineInsDelLabel: "Add a \"Delete\" button to each row of the preset panel", inlineInsSaveLabel: "Also save the preset when saving an entry", inlineInsSaveHint: "", inlineInsBtnTitle: "Insert a prompt or duplicate this entry", inlineInsNewName: "New Prompt", inlineInsNoId: "Could not generate a unique id - nothing was inserted", inlineInsNoDef: "The tavern did not accept this new prompt - nothing was inserted (you can try again)", inlineInsNoOrder: "Preset order list not found - nothing was written (try reloading the page)", inlineInsFail: "Something went wrong while inserting - nothing was written to the preset", inlineInsFailNoBtn: "Could not find the tavern's \"Update preset\" button - not saved (this insertion stays on screen only)", inlineInsMsgPlaced: "Inserted after \"{n}\"", inlineInsAtTail: "That row is gone - inserted at the end of the preset", inlineInsMsgNoSave: " (on screen only; press the tavern's \"Update preset\" to save it)", inlineInsEntrySavedPreset: "Entry saved, and we updated the preset \"{p}\" for you", inlineInsEntrySavedNoName: "Entry saved, but the name of your current preset is unreadable - not written to the preset file", inlineInsEntrySavedUnknown: "Entry saved, but we could not confirm it reached the preset file - please press the tavern's \"Update preset\" (it may not have been saved)", inlineInsMsgSaved: "; entry saved, and we updated the preset \"{p}\" for you", inlineInsMsgSaveUnknown: ", but we could not confirm it reached the preset file - please press the tavern's \"Update preset\" yourself, or check the console (it may not have been saved)", inlineInsMsgNoName: ", but the name of your current preset is unreadable - not saved (this insertion stays on screen only)", insAskTitle: "What should happen to this entry?", insAskWho: "Entry: {n}", insAskRemove: "Remove", insAskRemoveHint: "The tavern's own Remove - only hides it; link it back later by inserting a prompt", insAskDel: "Delete", insAskDelHint: "Deletes it for good once you are sure; it cannot be recovered", insAskIns: "Insert a new prompt", insAskInsHint: "Inserts a new one after this entry; fill in the content and press the tavern's Save", insAskCopy: "Duplicate this entry", insAskCopyHint: "Copies this entry and inserts the copy right after it; the name gets a (copy) suffix", insAskCancel: "Cancel", insAskWi: "Pick from a World Info book", insAskWiHint: "Pick several World Info entries and stitch them after this one", wiTitle: "Pick from a World Info book", wiSub: "The entries you pick go right after \"{n}\" (in the order you tick them)", wiNoBooks: "No World Info books found (none at all)", wiBooksFail: "Could not read the World Info list - reload the page and try again", wiLoadFail: "Could not read this book - try another one", wiNoEntries: "This book has no usable entries", wiBack: "< another book", wiOk: "OK", wiLoading: "Loading...", wiCount: "{n} selected", wiOff: "(disabled in the book)", wiUnnamed: "Unnamed entry", wiNone: "Nothing selected - nothing was done", wiDone: "Stitched {n} World Info entries after \"{x}\"", wiDoneTail: "That row was gone - the {n} entries were placed at the end", wiNoBody: " ({m} of them had no text)", wiGone: "That row is no longer there - nothing was stitched", wiErr: "This batch failed - nothing was written", wiExpand: "Expand", wiCollapse: "Collapse", wiEmptyBody: "(no text in this entry)",  insCopyDone: "Made a copy: {n}", insCopyTail: "The row was gone - the copy {n} was placed at the end of the preset", insCopyGone: "{n} is no longer there - nothing was duplicated", inlineInsCopySuffix: " (copy)", insDelDone: "Permanently deleted \"{n}\" from the preset", insDelClean: " (also cleaned {r} leftover row(s) in {g} order list(s))", insDelNoSave: " (on screen only; press the tavern's \"Update preset\" to save it)", insDelGone: "\"{n}\" is no longer in the preset", insDelForbid: "\"{n}\" is a system prompt - the tavern does not allow deleting it", insDelFail: "Something went wrong while deleting - nothing was deleted", autoUpdateLabel: "Auto-update plugin to latest", floatBarEnable: "Enable floating bar", floatPanelClear: "Clear", floatFuncLabel: "Actions (run directly)", floatPanelLabel: "Panels (open settings popup)", floatPanelAll: "Select all panels", routeLabel: "Upstream this time: ", routeNone: "No data yet", floatClineEntry: "Cline provider entry (click to pick)", floatRouteBadge: "Show upstream badge on bar", stopRerollName: "Stop reroll", entryMenuGroup: "Extensions menu (bottom-left)", entryInlineGroup: "Beside input (send bar)", clineRouteAlertLabel: "Alert when route mismatches", opencodeLabel: "Opencode request header (enable after 9/6)", opencodeHint: "Auto-inject X-Opencode-Session (works on Custom source). Same chat keeps one fixed ID (GPU context cache), different chats differ.", opencodeSession: "Session ID for this chat: ",
+        apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (credit: the source)", clineSectionTitle: "Cline settings", clineModelOverride: "Credits model prefix override", clineMethodLabel: "Method: subscription provider routing (credit: the source)", clineUpTitle: "Move up (auto-switch order)", clineDownTitle: "Move down (auto-switch order)", upBtn: "📊 Live upstream status", upTitle: "kimi-k3 upstream live status", upLoading: "Loading... (OpenRouter, no key needed)", upRefreshing: "Refreshing...", upFailed: "Failed to fetch - openrouter.ai may be unreachable from your network; retry with ↻", upSwitch: "Use", upProvider: "Provider", upIn: "In $/M", upOut: "Out $/M", upCache: "Cache $/M", upLat: "Latency", upTps: "Throughput", upUp5m: "Up(5m)", upUptime: "Uptime(1d)", upHint: "✓ = switchable here · ★ = current · latency/throughput = last 30 min (blank when no traffic) · sorted: switchable first, uptime desc. Data from OpenRouter public API.", snapNamePh: "Profile name…", snapSaveBtn: "💾 Save current", snapApply: "Apply", snapDel: "Delete profile", snapEmpty: "No saved profiles yet: enter a name and hit Save", snapRecovery: "↩ Auto-recovery snapshot (saved before last switch)", snapSaved: "Saved profile \"{n}\"", snapNeedName: "Enter a profile name first", clineDSTip: "Use Cline for DeepSeek with deepseek as the upstream (official caching works)!", clineDSBtn: "⇄ One-click deepseek upstream", clineDSSwitched: "Switched: provider=deepseek (official upstream with caching)", clineOverrideWarn: "WARNING (tested): credits only - locks provider and overrides model to a vendor prefix like moonshotai/kimi-k3.", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Uncommon first", clinePassWarn: "Model has cline-pass/ prefix: provider routing will NOT work (tested). Use a vendor prefix like moonshotai/kimi-k3", clineDeadWarn: "⚠️ Deprecated: Cline can no longer route to the K3 provider! (DS still works)", clineHint: "Injects the selected provider into every request. Delete anything in Extra Parameters! Only needed for the cline channel; turn off elsewhere. Different providers give K3 different flavors - test them yourself.", psnapNoPreset: "Preset data not found", schemeTitle: "Scheme Switch (Preset/API/Toggles)", schemeNew: "+ New scheme", schemeNewName: "New scheme", schemeEdit: "Edit", schemeOverwrite: "Overwrite", schemeSwitch: "Switch", schemeDeleteConfirm: "Delete this scheme?", schemeNotConfigured: "(not configured)", schemeEditTitle: "Edit scheme", schemeIconLabel: "Icon", schemeIconUpload: "Upload image", schemeNameLabel: "Scheme name", schemeProfileLabel: "Connection profile", schemeNoProfile: "Don't switch connection", schemePresetLabel: "Preset", schemeNoPreset: "Don't switch preset", schemeTogglesLabel: "Entry toggles", schemeTogglesCaptured: "Captured {n} toggle states", schemeTogglesNone: "(not captured)", schemeTogglesCount: "{n}", schemeCaptureBtn: "📋 Capture current toggles", schemeShowInBar: "Show in floating bar", schemeGenerating: "Generation in progress - switch later", schemeProfileMissing: "Connection profile \"{n}\" no longer exists - edit this scheme again", schemePresetMissing: "Preset \"{n}\" no longer exists", schemeNeedConnExt: "Enable the \"Connection Profiles\" extension in the tavern first", schemeNoProfiles: "(save a connection profile in the tavern's API panel first)", schemeSwitchedTo: "Switched to \"{n}\"", schemeOverwritten: "Overwrote \"{n}\" with the current state", schemeDeleted: "Deleted \"{n}\"", schemeCreated: "Scheme created - press Edit to bind preset/API/toggles", schemeBindPreset: "Preset", schemeBindProfile: "Connection", schemeBindToggles: "Toggles", schemeIconBad: "That file is not an image - nothing changed", schemeIconBig: "This image is too large (over 300KB) - pick a smaller one", floatCardTitle: "Floating Bar", floatCardTag: "One-click tag fix (direct run)", tagFixNow: "Fix tags now", baseTitle: "Basics (Small Features / Floating Bar)", baseGroupShortcuts: "Shortcuts", baseGroupFloat: "Floating bar", baseGroupLang: "Language", ballIconGroup: "Custom floating-ball icon", ballIconPick: "Choose image…", ballIconReset: "Reset", ballIconPrev: "Current icon preview", ballIconBad: "That file is not an image - nothing changed", ballIconBig: "This image is too large for the browser to store - pick a smaller one", ballIconSaved: "Switched to your icon", ballIconResetDone: "Back to the default fireball", inlineInsLabel: "Add an \"Insert prompt\" button to each row of the preset panel", inlineInsDelLabel: "Add a \"Delete\" button to each row of the preset panel", inlineInsSaveLabel: "Also save the preset when saving an entry", inlineInsSaveHint: "", inlineInsBtnTitle: "Insert a prompt or duplicate this entry", inlineInsNewName: "New Prompt", inlineInsNoId: "Could not generate a unique id - nothing was inserted", inlineInsNoDef: "The tavern did not accept this new prompt - nothing was inserted (you can try again)", inlineInsNoOrder: "Preset order list not found - nothing was written (try reloading the page)", inlineInsFail: "Something went wrong while inserting - nothing was written to the preset", inlineInsFailNoBtn: "Could not find the tavern's \"Update preset\" button - not saved (this insertion stays on screen only)", inlineInsMsgPlaced: "Inserted after \"{n}\"", inlineInsAtTail: "That row is gone - inserted at the end of the preset", inlineInsMsgNoSave: " (on screen only; press the tavern's \"Update preset\" to save it)", inlineInsEntrySavedPreset: "Entry saved, and we updated the preset \"{p}\" for you", inlineInsEntrySavedNoName: "Entry saved, but the name of your current preset is unreadable - not written to the preset file", inlineInsEntrySavedUnknown: "Entry saved, but we could not confirm it reached the preset file - please press the tavern's \"Update preset\" (it may not have been saved)", inlineInsMsgSaved: "; entry saved, and we updated the preset \"{p}\" for you", inlineInsMsgSaveUnknown: ", but we could not confirm it reached the preset file - please press the tavern's \"Update preset\" yourself, or check the console (it may not have been saved)", inlineInsMsgNoName: ", but the name of your current preset is unreadable - not saved (this insertion stays on screen only)", insAskTitle: "What should happen to this entry?", insAskWho: "Entry: {n}", insAskRemove: "Remove", insAskRemoveHint: "The tavern's own Remove - only hides it; link it back later by inserting a prompt", insAskDel: "Delete", insAskDelHint: "Deletes it for good once you are sure; it cannot be recovered", insAskIns: "Insert a new prompt", insAskInsHint: "Inserts a new one after this entry; fill in the content and press the tavern's Save", insAskCopy: "Duplicate this entry", insAskCopyHint: "Copies this entry and inserts the copy right after it; the name gets a (copy) suffix", insAskCancel: "Cancel", insAskWi: "Pick from a World Info book", insAskWiHint: "Pick several World Info entries and stitch them after this one", wiTitle: "Pick from a World Info book", wiSub: "The entries you pick go right after \"{n}\" (in the order you tick them)", wiNoBooks: "No World Info books found (none at all)", wiBooksFail: "Could not read the World Info list - reload the page and try again", wiLoadFail: "Could not read this book - try another one", wiNoEntries: "This book has no usable entries", wiBack: "< another book", wiOk: "OK", wiLoading: "Loading...", wiCount: "{n} selected", wiOff: "(disabled in the book)", wiUnnamed: "Unnamed entry", wiNone: "Nothing selected - nothing was done", wiDone: "Stitched {n} World Info entries after \"{x}\"", wiDoneTail: "That row was gone - the {n} entries were placed at the end", wiNoBody: " ({m} of them had no text)", wiGone: "That row is no longer there - nothing was stitched", wiErr: "This batch failed - nothing was written", wiExpand: "Expand", wiCollapse: "Collapse", wiEmptyBody: "(no text in this entry)",  insCopyDone: "Made a copy: {n}", insCopyTail: "The row was gone - the copy {n} was placed at the end of the preset", insCopyGone: "{n} is no longer there - nothing was duplicated", inlineInsCopySuffix: " (copy)", insDelDone: "Permanently deleted \"{n}\" from the preset", insDelClean: " (also cleaned {r} leftover row(s) in {g} order list(s))", insDelNoSave: " (on screen only; press the tavern's \"Update preset\" to save it)", insDelGone: "\"{n}\" is no longer in the preset", insDelForbid: "\"{n}\" is a system prompt - the tavern does not allow deleting it", insDelFail: "Something went wrong while deleting - nothing was deleted", autoUpdateLabel: "Auto-update plugin to latest", floatBarEnable: "Enable floating bar", floatPanelClear: "Clear", floatFuncLabel: "Actions (run directly)", floatPanelLabel: "Panels (open settings popup)", floatPanelAll: "Select all panels", routeLabel: "Upstream this time: ", routeNone: "No data yet", floatClineEntry: "Cline provider entry (click to pick)", floatRouteBadge: "Show upstream badge on bar", stopRerollName: "Stop reroll", entryMenuGroup: "Extensions menu (bottom-left)", entryInlineGroup: "Beside input (send bar)", clineRouteAlertLabel: "Alert when route mismatches", opencodeLabel: "Opencode request header (enable after 9/6)", opencodeHint: "Auto-inject X-Opencode-Session (works on Custom source). Same chat keeps one fixed ID (GPU context cache), different chats differ.", opencodeSession: "Session ID for this chat: ",
         apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections. Switching syncs three fields: URL, key and model name - presets/sampling untouched. Triggers on limit/quota/rate.",
         dblSave: "Save",
         dblEditLabel: "Double-click message text to edit it in place",
@@ -653,7 +660,7 @@ const UI = {
         apiModel: "모델명", apiKey: "키", apiAge: "{d}일 {h}시간", apiFetchModels: "사용 가능한 모델 가져오기", apiFetchBtn: "가져오기", apiModelsLoading: "모델 가져오는 중…", apiModelEmpty: "모델이 없습니다 (URL/키 확인)", apiModelErr: "모델 가져오기 실패",
         apiNoPool: "풀이 비어 있음: 먼저 엔드포인트 추가", apiNotCustom: "Custom(OpenAI 호환) 연결이 아님 - 풀 동작 안 함",
         apiBannerMsg: "할당량 초과 감지.", apiBannerSwitch: "⇄ {name}(으)로 전환 ({n}/{total})", apiSwitched: "{name}(으)로 전환됨 ({n}/{total})",
-        apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (정보원 감사)", clineSectionTitle: "Cline 설정", clineModelOverride: "크레딧 모델 접두사 덮어쓰기", clineMethodLabel: "방식: 구독 공급자 지정", clineUpTitle: "위로(자동 전환 순서)", clineDownTitle: "아래로(자동 전환 순서)", upBtn: "📊 업스트림 실시간 현황", upTitle: "kimi-k3 업스트림 현황", upLoading: "로딩 중... (OpenRouter)", upRefreshing: "새로고침 중...", upFailed: "가져오기 실패 - 네트워크에서 openrouter.ai 접근 불가 가능, ↻로 재시도", upSwitch: "전환", upProvider: "공급자", upIn: "입력$/M", upOut: "출력$/M", upCache: "캐시$/M", upLat: "지연", upTps: "처리량", upUp5m: "가동(5m)", upUptime: "가동률(1d)", upHint: "✓=여기서 전환 가능 · ★=현재 · 지연/처리량=최근 30분 · 정렬: 전환 가능 우선. OpenRouter 공개 API 기준.", snapNamePh: "프로필 이름…", snapSaveBtn: "💾 현재 상태 저장", snapApply: "적용", snapDel: "이 프로필 삭제", snapEmpty: "저장된 프로필 없음: 이름 입력 후 저장", snapRecovery: "↩ 복구 스냅샷(전환 전 자동 저장)", snapSaved: "\"{n}\" 프로필 저장됨", snapNeedName: "먼저 프로필 이름을 입력하세요", clineDSTip: "Cline으로 DeepSeek 사용 - deepseek 업스트림 지정(공식 캐시 적용)!", clineDSBtn: "⇄ 원클릭 deepseek 업스트림", clineDSSwitched: "전환됨: 공급자=deepseek(공식 업스트림, 캐시)", clineOverrideWarn: "주의(실측): 크레딧 소모 - 공급자 지정 및 moonshotai/kimi-k3 등 벤더 접두사로 모델 덮어쓰기.", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 비상용에서 Cline 공급자 지정을 체크하세요", clinePassWarn: "모델명에 cline-pass/ 접두사 감지: 공급자 지정 무효(실측). moonshotai/kimi-k3 같은 벤더 접두사 사용", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineDeadWarn: "⚠️ 만료: Cline에서 K3 공급자 지정이 더 이상 불가! (DS는 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입합니다. 추가 매개변수의 모든 내용을 삭제하세요! cline 채널에서만 필요, 다른 곳에서는 끄세요. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.", psnapTitle: "프리셋 토글 스냅샷 (스킴 저장)", psnapNamePh: "프로필 이름…", psnapSaveBtn: "새로 만들기", psnapApply: "전환", psnapDel: "✕", psnapEmpty: "저장된 프로필 없음", psnapRecovery: "마지막 미스냅샷 상태로 복원", psnapSaved: "\"{n}\" 저장됨", psnapNeedName: "먼저 프로필 이름을 입력하세요", psnapMenuEntry: "확장 메뉴 항목", psnapEntryLabel: "입구:", psnapFloatEntry: "플로팅 버튼 항목", psnapNoPreset: "프리셋 데이터 없음", psnapRecApply: "복원", psnapRecTime: "복구 스냅샷", floatCardTitle: "플로팅 바", floatCardTag: "태그 원클릭 수리 (즉시 실행)", tagFixNow: "태그 지금 수리", baseTitle: "기본 설정 (소기능 통합/플로팅 바)", baseGroupShortcuts: "편의 기능", baseGroupFloat: "플로팅 바 관련 기능", baseGroupLang: "언어 설정", ballIconGroup: "플로팅 볼 아이콘 사용자 지정", ballIconPick: "이미지 선택…", ballIconReset: "기본값 복원", ballIconPrev: "현재 아이콘 미리보기", ballIconBad: "이미지 파일이 아닙니다 - 변경하지 않았습니다", ballIconBig: "이미지가 너무 커서 브라우저에 저장할 수 없습니다 - 더 작은 것을 고르세요", ballIconSaved: "선택한 아이콘으로 바꿨습니다", ballIconResetDone: "기본 불꽃으로 복원했습니다", psnapBaseRow: "기본", psnapSlotName: "스킴 {n}", psnapSlotEmpty: "(비어 있음)", psnapRename: "이름 변경", psnapOverwrite: "덮어쓰기", psnapOverwritten: "현재 토글 상태로 「{n}」을(를) 덮어썼습니다", psnapRenamed: "「{n}」(으)로 이름을 바꿨습니다", psnapSlotEmptyTip: "이 슬롯은 아직 비어 있습니다", psnapDupName: "「{n}」은(는) 이미 다른 스킴이 쓰고 있습니다 - 다른 이름을 쓰세요", inlineInsLabel: "프리셋 패널의 각 행에 「프롬프트 삽입」 버튼 추가", inlineInsDelLabel: "프리셋 패널의 각 행에 「삭제」 버튼 추가", inlineInsSaveLabel: "항목을 저장할 때 프리셋도 함께 저장", inlineInsSaveHint: "", inlineInsBtnTitle: "프롬프트 삽입 또는 이 항목 복사", inlineInsNewName: "새 프롬프트", inlineInsNoId: "고유 번호를 만들지 못했습니다 ⇒ 이번에는 삽입하지 않았습니다", inlineInsNoDef: "술집이 이 새 프롬프트를 받지 않았습니다 ⇒ 이번에는 삽입하지 않았습니다 (다시 시도해 보세요)", inlineInsNoOrder: "프리셋 순서 목록을 찾지 못했습니다 ⇒ 아무것도 쓰지 않았습니다 (페이지를 새로고침해 보세요)", inlineInsFail: "삽입 중 오류 ⇒ 프리셋에 쓰지 않았습니다", inlineInsFailNoBtn: "술집의 「프리셋 업데이트」 버튼을 찾지 못했습니다 ⇒ 저장되지 않았습니다 (화면에만 반영)", inlineInsMsgPlaced: "「{n}」 뒤에 삽입했습니다", inlineInsAtTail: "그 행이 사라졌습니다 ⇒ 프리셋 맨 끝에 넣었습니다", inlineInsMsgNoSave: " (화면에만; 저장하려면 술집의 「프리셋 업데이트」를 누르세요)", inlineInsEntrySavedPreset: "항목이 저장되었고, 프리셋 「{p}」도 대신 업데이트했습니다", inlineInsEntrySavedNoName: "항목은 저장되었지만, 사용 중인 프리셋 이름을 읽을 수 없습니다 ⇒ 프리셋 파일에 저장하지 않았습니다", inlineInsEntrySavedUnknown: "항목은 저장되었지만, 프리셋 파일에 쓰였는지 확인하지 못했습니다 ⇒ 술집의 「프리셋 업데이트」를 눌러 보세요 (이번엔 저장되지 않았을 수 있습니다)", inlineInsMsgSaved: "; 항목이 저장되었고, 프리셋 「{p}」도 대신 업데이트했습니다", inlineInsMsgSaveUnknown: ", 프리셋 파일에 쓰였는지 확인하지 못했습니다 ⇒ 술집의 「프리셋 업데이트」를 직접 눌러 보세요 (이번엔 저장되지 않았을 수 있습니다)", inlineInsMsgNoName: ", 하지만 사용 중인 프리셋 이름을 읽을 수 없습니다 ⇒ 저장하지 않았습니다 (화면에만 반영)", insAskTitle: "이 항목을 어떻게 할까요?", insAskWho: "이 항목: {n}", insAskRemove: "제거", insAskRemoveHint: "술집의 원래 Remove - 목록에서만 숨기고, 나중에 프롬프트를 다시 끼워 연결할 수 있습니다", insAskDel: "삭제", insAskDelHint: "필요 없다고 확인되면 완전히 삭제하며 되찾을 수 없습니다", insAskIns: "새 프롬프트 삽입", insAskInsHint: "이 항목 뒤에 새로 하나 삽입합니다. 내용을 채우고 술집의 저장을 누르세요", insAskCopy: "이 항목 복사", insAskCopyHint: "이 항목을 복사해 바로 뒤에 넣습니다. 이름에 (복사)가 붙습니다", insAskCancel: "취소", insAskWi: "세계서(월드 인포)에서 고르기", insAskWiHint: "세계서 항목 몇 개를 골라 이 항목 뒤에 이어 붙입니다", wiTitle: "세계서에서 고르기", wiSub: "고른 항목은 「{n}」 뒤에 붙습니다 (체크한 순서대로)", wiNoBooks: "세계서를 읽지 못했습니다 (한 권도 없음)", wiBooksFail: "세계서 목록을 읽지 못했습니다 ⇒ 페이지를 새로고침 후 다시 시도", wiLoadFail: "이 책을 읽지 못했습니다 ⇒ 다른 책을 골라 보세요", wiNoEntries: "이 세계서에는 쓸 수 있는 항목이 없습니다", wiBack: "‹ 다른 책", wiOk: "확인", wiLoading: "불러오는 중...", wiCount: "{n}개 선택", wiOff: "(세계서에서 중지됨)", wiUnnamed: "이름 없는 항목", wiNone: "아무것도 고르지 않음 ⇒ 아무 일도 하지 않았습니다", wiDone: "세계서 {n}개를 「{x}」 뒤에 이어 붙였습니다", wiDoneTail: "그 줄이 사라졌습니다 ⇒ {n}개를 프리셋 맨 끝에 넣었습니다", wiNoBody: " (그중 {m}개는 본문이 없습니다)", wiGone: "그 줄이 이미 없습니다 ⇒ 이어 붙이지 않았습니다", wiErr: "이번 묶음은 실패했습니다 ⇒ 아무것도 쓰지 않았습니다", wiExpand: "펼치기", wiCollapse: "접기", wiEmptyBody: "(이 항목에는 본문이 없습니다)",  insCopyDone: "복사했습니다: {n}", insCopyTail: "원래 줄이 사라졌습니다 ⇒ 복사본 {n}을(를) 프리셋 맨 끝에 넣었습니다", insCopyGone: "{n}이(가) 이미 없습니다 ⇒ 복사하지 않았습니다", inlineInsCopySuffix: " (복사)", insDelDone: "프리셋에서 「{n}」을(를) 완전히 삭제했습니다", insDelClean: " (순서 목록 {g}개에서 남은 줄 {r}개도 정리했습니다)", insDelNoSave: " (화면에만; 저장하려면 술집의 「프리셋 업데이트」를 누르세요)", insDelGone: "「{n}」은(는) 이미 프리셋에 없습니다", insDelForbid: "「{n}」은(는) 시스템 프롬프트라 삭제할 수 없습니다", insDelFail: "삭제 중 오류 ⇒ 아무것도 삭제하지 않았습니다", autoUpdateLabel: "플러그인을 최신 버전으로 자동 업데이트", floatBarEnable: "플로팅 바 켜기", floatPanelClear: "비우기", floatFuncLabel: "기능형 (아이콘 즉시 실행)", floatPanelLabel: "패널형 (아이콘 클릭 시 설정 팝업)", floatPanelAll: "모든 패널 선택", routeLabel: "이번 Cline 업스트림: ", routeNone: "데이터 없음", floatClineEntry: "Cline 공급자 입구 (클릭하여 선택)", floatRouteBadge: "플로팅 바에 업스트림 배지 표시", stopRerollName: "리롤 중지", entryMenuGroup: "확장 메뉴 (좌하단)", entryInlineGroup: "입력창 옆 (보내기 바)", clineRouteAlertLabel: "라우팅 불일치 시 알림", opencodeLabel: "Opencode 요청 헤더 (9/6 이후 활성화 필요)", opencodeHint: "X-Opencode-Session 요청 헤더 자동 주입 (CUSTOM 소스). 같은 대화는 동일 ID (GPU 컨텍스트 캐시), 다른 대화는 다른 ID.", opencodeSession: "이 대화의 Session ID: ",
+        apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (정보원 감사)", clineSectionTitle: "Cline 설정", clineModelOverride: "크레딧 모델 접두사 덮어쓰기", clineMethodLabel: "방식: 구독 공급자 지정", clineUpTitle: "위로(자동 전환 순서)", clineDownTitle: "아래로(자동 전환 순서)", upBtn: "📊 업스트림 실시간 현황", upTitle: "kimi-k3 업스트림 현황", upLoading: "로딩 중... (OpenRouter)", upRefreshing: "새로고침 중...", upFailed: "가져오기 실패 - 네트워크에서 openrouter.ai 접근 불가 가능, ↻로 재시도", upSwitch: "전환", upProvider: "공급자", upIn: "입력$/M", upOut: "출력$/M", upCache: "캐시$/M", upLat: "지연", upTps: "처리량", upUp5m: "가동(5m)", upUptime: "가동률(1d)", upHint: "✓=여기서 전환 가능 · ★=현재 · 지연/처리량=최근 30분 · 정렬: 전환 가능 우선. OpenRouter 공개 API 기준.", snapNamePh: "프로필 이름…", snapSaveBtn: "💾 현재 상태 저장", snapApply: "적용", snapDel: "이 프로필 삭제", snapEmpty: "저장된 프로필 없음: 이름 입력 후 저장", snapRecovery: "↩ 복구 스냅샷(전환 전 자동 저장)", snapSaved: "\"{n}\" 프로필 저장됨", snapNeedName: "먼저 프로필 이름을 입력하세요", clineDSTip: "Cline으로 DeepSeek 사용 - deepseek 업스트림 지정(공식 캐시 적용)!", clineDSBtn: "⇄ 원클릭 deepseek 업스트림", clineDSSwitched: "전환됨: 공급자=deepseek(공식 업스트림, 캐시)", clineOverrideWarn: "주의(실측): 크레딧 소모 - 공급자 지정 및 moonshotai/kimi-k3 등 벤더 접두사로 모델 덮어쓰기.", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 비상용에서 Cline 공급자 지정을 체크하세요", clinePassWarn: "모델명에 cline-pass/ 접두사 감지: 공급자 지정 무효(실측). moonshotai/kimi-k3 같은 벤더 접두사 사용", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineDeadWarn: "⚠️ 만료: Cline에서 K3 공급자 지정이 더 이상 불가! (DS는 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입합니다. 추가 매개변수의 모든 내용을 삭제하세요! cline 채널에서만 필요, 다른 곳에서는 끄세요. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.", psnapNoPreset: "프리셋 데이터 없음", schemeTitle: "프로필 전환 (프리셋/API/토글)", schemeNew: "＋ 새 스킴", schemeNewName: "새 스킴", schemeEdit: "편집", schemeOverwrite: "덮어쓰기", schemeSwitch: "전환", schemeDeleteConfirm: "이 스킴을 삭제할까요?", schemeNotConfigured: "(미설정)", schemeEditTitle: "스킴 편집", schemeIconLabel: "아이콘", schemeIconUpload: "이미지 업로드", schemeNameLabel: "스킴 이름", schemeProfileLabel: "연결 프로필", schemeNoProfile: "연결 전환 안 함", schemePresetLabel: "프리셋", schemeNoPreset: "프리셋 전환 안 함", schemeTogglesLabel: "항목 토글", schemeTogglesCaptured: "토글 상태 {n}개 캡처됨", schemeTogglesNone: "(캡처 없음)", schemeTogglesCount: "{n}개", schemeCaptureBtn: "📋 현재 토글 캡처", schemeShowInBar: "플로팅 바에 표시", schemeGenerating: "생성 중입니다 - 잠시 후 전환하세요", schemeProfileMissing: "연결 프로필 「{n}」이(가) 없습니다 - 스킴을 다시 편집하세요", schemePresetMissing: "프리셋 「{n}」이(가) 없습니다", schemeNeedConnExt: "먼저 술집에서 「Connection Profiles」 확장을 켜세요", schemeNoProfiles: "(먼저 술집 API 패널에서 연결 프로필을 저장하세요)", schemeSwitchedTo: "「{n}」(으)로 전환했습니다", schemeOverwritten: "현재 상태로 「{n}」을(를) 덮어썼습니다", schemeDeleted: "「{n}」을(를) 삭제했습니다", schemeCreated: "스킴을 만들었습니다 - 「편집」을 눌러 프리셋/연결/토글을 묶으세요", schemeBindPreset: "프리셋", schemeBindProfile: "연결", schemeBindToggles: "토글", schemeIconBad: "이미지 파일이 아닙니다 - 변경하지 않았습니다", schemeIconBig: "이미지가 너무 큽니다 (300KB 초과) - 더 작은 것을 고르세요", floatCardTitle: "플로팅 바", floatCardTag: "태그 원클릭 수리 (즉시 실행)", tagFixNow: "태그 지금 수리", baseTitle: "기본 설정 (소기능 통합/플로팅 바)", baseGroupShortcuts: "편의 기능", baseGroupFloat: "플로팅 바 관련 기능", baseGroupLang: "언어 설정", ballIconGroup: "플로팅 볼 아이콘 사용자 지정", ballIconPick: "이미지 선택…", ballIconReset: "기본값 복원", ballIconPrev: "현재 아이콘 미리보기", ballIconBad: "이미지 파일이 아닙니다 - 변경하지 않았습니다", ballIconBig: "이미지가 너무 커서 브라우저에 저장할 수 없습니다 - 더 작은 것을 고르세요", ballIconSaved: "선택한 아이콘으로 바꿨습니다", ballIconResetDone: "기본 불꽃으로 복원했습니다", inlineInsLabel: "프리셋 패널의 각 행에 「프롬프트 삽입」 버튼 추가", inlineInsDelLabel: "프리셋 패널의 각 행에 「삭제」 버튼 추가", inlineInsSaveLabel: "항목을 저장할 때 프리셋도 함께 저장", inlineInsSaveHint: "", inlineInsBtnTitle: "프롬프트 삽입 또는 이 항목 복사", inlineInsNewName: "새 프롬프트", inlineInsNoId: "고유 번호를 만들지 못했습니다 ⇒ 이번에는 삽입하지 않았습니다", inlineInsNoDef: "술집이 이 새 프롬프트를 받지 않았습니다 ⇒ 이번에는 삽입하지 않았습니다 (다시 시도해 보세요)", inlineInsNoOrder: "프리셋 순서 목록을 찾지 못했습니다 ⇒ 아무것도 쓰지 않았습니다 (페이지를 새로고침해 보세요)", inlineInsFail: "삽입 중 오류 ⇒ 프리셋에 쓰지 않았습니다", inlineInsFailNoBtn: "술집의 「프리셋 업데이트」 버튼을 찾지 못했습니다 ⇒ 저장되지 않았습니다 (화면에만 반영)", inlineInsMsgPlaced: "「{n}」 뒤에 삽입했습니다", inlineInsAtTail: "그 행이 사라졌습니다 ⇒ 프리셋 맨 끝에 넣었습니다", inlineInsMsgNoSave: " (화면에만; 저장하려면 술집의 「프리셋 업데이트」를 누르세요)", inlineInsEntrySavedPreset: "항목이 저장되었고, 프리셋 「{p}」도 대신 업데이트했습니다", inlineInsEntrySavedNoName: "항목은 저장되었지만, 사용 중인 프리셋 이름을 읽을 수 없습니다 ⇒ 프리셋 파일에 저장하지 않았습니다", inlineInsEntrySavedUnknown: "항목은 저장되었지만, 프리셋 파일에 쓰였는지 확인하지 못했습니다 ⇒ 술집의 「프리셋 업데이트」를 눌러 보세요 (이번엔 저장되지 않았을 수 있습니다)", inlineInsMsgSaved: "; 항목이 저장되었고, 프리셋 「{p}」도 대신 업데이트했습니다", inlineInsMsgSaveUnknown: ", 프리셋 파일에 쓰였는지 확인하지 못했습니다 ⇒ 술집의 「프리셋 업데이트」를 직접 눌러 보세요 (이번엔 저장되지 않았을 수 있습니다)", inlineInsMsgNoName: ", 하지만 사용 중인 프리셋 이름을 읽을 수 없습니다 ⇒ 저장하지 않았습니다 (화면에만 반영)", insAskTitle: "이 항목을 어떻게 할까요?", insAskWho: "이 항목: {n}", insAskRemove: "제거", insAskRemoveHint: "술집의 원래 Remove - 목록에서만 숨기고, 나중에 프롬프트를 다시 끼워 연결할 수 있습니다", insAskDel: "삭제", insAskDelHint: "필요 없다고 확인되면 완전히 삭제하며 되찾을 수 없습니다", insAskIns: "새 프롬프트 삽입", insAskInsHint: "이 항목 뒤에 새로 하나 삽입합니다. 내용을 채우고 술집의 저장을 누르세요", insAskCopy: "이 항목 복사", insAskCopyHint: "이 항목을 복사해 바로 뒤에 넣습니다. 이름에 (복사)가 붙습니다", insAskCancel: "취소", insAskWi: "세계서(월드 인포)에서 고르기", insAskWiHint: "세계서 항목 몇 개를 골라 이 항목 뒤에 이어 붙입니다", wiTitle: "세계서에서 고르기", wiSub: "고른 항목은 「{n}」 뒤에 붙습니다 (체크한 순서대로)", wiNoBooks: "세계서를 읽지 못했습니다 (한 권도 없음)", wiBooksFail: "세계서 목록을 읽지 못했습니다 ⇒ 페이지를 새로고침 후 다시 시도", wiLoadFail: "이 책을 읽지 못했습니다 ⇒ 다른 책을 골라 보세요", wiNoEntries: "이 세계서에는 쓸 수 있는 항목이 없습니다", wiBack: "‹ 다른 책", wiOk: "확인", wiLoading: "불러오는 중...", wiCount: "{n}개 선택", wiOff: "(세계서에서 중지됨)", wiUnnamed: "이름 없는 항목", wiNone: "아무것도 고르지 않음 ⇒ 아무 일도 하지 않았습니다", wiDone: "세계서 {n}개를 「{x}」 뒤에 이어 붙였습니다", wiDoneTail: "그 줄이 사라졌습니다 ⇒ {n}개를 프리셋 맨 끝에 넣었습니다", wiNoBody: " (그중 {m}개는 본문이 없습니다)", wiGone: "그 줄이 이미 없습니다 ⇒ 이어 붙이지 않았습니다", wiErr: "이번 묶음은 실패했습니다 ⇒ 아무것도 쓰지 않았습니다", wiExpand: "펼치기", wiCollapse: "접기", wiEmptyBody: "(이 항목에는 본문이 없습니다)",  insCopyDone: "복사했습니다: {n}", insCopyTail: "원래 줄이 사라졌습니다 ⇒ 복사본 {n}을(를) 프리셋 맨 끝에 넣었습니다", insCopyGone: "{n}이(가) 이미 없습니다 ⇒ 복사하지 않았습니다", inlineInsCopySuffix: " (복사)", insDelDone: "프리셋에서 「{n}」을(를) 완전히 삭제했습니다", insDelClean: " (순서 목록 {g}개에서 남은 줄 {r}개도 정리했습니다)", insDelNoSave: " (화면에만; 저장하려면 술집의 「프리셋 업데이트」를 누르세요)", insDelGone: "「{n}」은(는) 이미 프리셋에 없습니다", insDelForbid: "「{n}」은(는) 시스템 프롬프트라 삭제할 수 없습니다", insDelFail: "삭제 중 오류 ⇒ 아무것도 삭제하지 않았습니다", autoUpdateLabel: "플러그인을 최신 버전으로 자동 업데이트", floatBarEnable: "플로팅 바 켜기", floatPanelClear: "비우기", floatFuncLabel: "기능형 (아이콘 즉시 실행)", floatPanelLabel: "패널형 (아이콘 클릭 시 설정 팝업)", floatPanelAll: "모든 패널 선택", routeLabel: "이번 Cline 업스트림: ", routeNone: "데이터 없음", floatClineEntry: "Cline 공급자 입구 (클릭하여 선택)", floatRouteBadge: "플로팅 바에 업스트림 배지 표시", stopRerollName: "리롤 중지", entryMenuGroup: "확장 메뉴 (좌하단)", entryInlineGroup: "입력창 옆 (보내기 바)", clineRouteAlertLabel: "라우팅 불일치 시 알림", opencodeLabel: "Opencode 요청 헤더 (9/6 이후 활성화 필요)", opencodeHint: "X-Opencode-Session 요청 헤더 자동 주입 (CUSTOM 소스). 같은 대화는 동일 ID (GPU 컨텍스트 캐시), 다른 대화는 다른 ID.", opencodeSession: "이 대화의 Session ID: ",
         apiHint: "키는 로컬 settings.json에 평문 저장됨 - 파일 공유 금지. Custom(OpenAI 호환) 연결에서만 동작. 전환 시 URL·키·모델명 세 항목을 함께 변경, 프리셋/샘플링은 불변. limit/quota/rate 에서 트리거.",
         dblSave: "저장",
         dblEditLabel: "메시지 본문을 두 번 클릭하면 그 자리에서 바로 수정",
@@ -710,6 +717,52 @@ if (settings.mutterTrigger !== 'marker' && settings.mutterTrigger !== 'done') se
 if (settings.clineProviderEnabled === undefined) settings.clineProviderEnabled = false;
 if (!Array.isArray(settings.promptSnapshots)) settings.promptSnapshots = [];
 if (settings.promptRecovery === undefined) settings.promptRecovery = null;
+/* ★★W163（一键切换方案）· 数据模型初始化 + 旧数据迁移（一次性，幂等旗防重跑）：
+   ① schemes / activeSchemeId 缺键补默认（铁律 32：同一个来源 = defaultSettings）；
+   ② 老用户迁移：promptSnapshots 里有真数据（非空数组且不全是 null）⇒ 每条快照搬成一个方案
+      （id=migrated_<N>、icon=⚡、showInBar=false —— 别替老用户往悬浮窗里塞东西），
+      搬完 promptSnapshots 清空（迁移只跑这一次；schemes 已有数据时**不迁移** = 用户已在用新系统）；
+   ③ 没有可迁的（新装 / 旧数据是空的）⇒ 补 3 个默认方案（Kimi🔥 / Gemini✨ / Deepseek🦈，showInBar=true）。
+   ★顺序是"先迁移、后补默认"：老用户的旧快照优先（否则默认 3 条一填，迁移永远轮不上）。
+   ★幂等旗 schemesInitV1（W113/W115 那套先例）：跑过一次就立旗 —— 用户后来把方案删光了，
+      重启**不会**被硬塞回 3 条默认（"删了又回来"比"没有默认"更吓人）。 */
+if (settings.schemes === undefined) settings.schemes = defaultSettings.schemes;      // ★W163（铁律 32）：同一个来源（defaultSettings）
+if (!Array.isArray(settings.schemes)) settings.schemes = [];                          // 脏数据兜底（与 promptSnapshots 同款口径）
+if (settings.activeSchemeId === undefined) settings.activeSchemeId = defaultSettings.activeSchemeId;
+if (settings.schemesInitV1 !== true) {
+    settings.schemesInitV1 = true;
+    let touched = false;
+    // ② 旧快照 → 方案（只认"有实际数据"的：非全是 null/空对象）
+    const oldSnaps = settings.promptSnapshots.filter(x => x && typeof x === 'object');
+    const hasReal = oldSnaps.length > 0 && settings.schemes.length === 0;
+    if (hasReal) {
+        let n = 0;
+        for (const snap of oldSnaps) {
+            n++;
+            settings.schemes.push({
+                id: 'migrated_' + n, icon: '⚡', iconData: null, showInBar: false,
+                name: String(snap.name || ('migrated_' + n)),
+                profileName: null, presetName: null,
+                toggles: (snap.toggles && typeof snap.toggles === 'object') ? snap.toggles : null,
+            });
+        }
+        settings.promptSnapshots = [];
+        touched = true;
+    }
+    // ③ 补 3 个默认方案（★W163b 修正：**不管有没有迁移都补**——迁移的老用户也需要默认方案出现在悬浮窗里；
+    //    已有同 id 的跳过，不重复添加）
+    for (const def of [
+        { id: 'kimi',     name: 'Kimi',     icon: '🔥', iconData: null, showInBar: true,  profileName: null, presetName: null, toggles: null },
+        { id: 'gemini',   name: 'Gemini',   icon: '✨', iconData: null, showInBar: true,  profileName: null, presetName: null, toggles: null },
+        { id: 'deepseek', name: 'Deepseek', icon: '🦈', iconData: null, showInBar: true,  profileName: null, presetName: null, toggles: null },
+    ]) {
+        if (!settings.schemes.some(s => s && s.id === def.id)) {
+            settings.schemes.push(def);
+            touched = true;
+        }
+    }
+    if (touched) { try { saveSettingsDebounced(); } catch (e) { } }   // 与 W138 同款：首启落盘，防下次加载又变回去
+}
 if (settings.psnapShowFloat === undefined) settings.psnapShowFloat = true;
 if (settings.floatBarEnabled === undefined) settings.floatBarEnabled = true;
 if (settings.floatShowTagFix === undefined) settings.floatShowTagFix = true;
@@ -3505,42 +3558,162 @@ function promptEntryName(identifier) {
         return def?.name || identifier.slice(0, 10);
     } catch (e) { return identifier?.slice(0, 10) || '?'; }
 }
-function savePromptSnapshot(name) {
-    name = String(name || '').trim();
-    if (!name) return { ok: false, msg: t('psnapNeedName') };
-    const toggles = readPromptToggles();
-    if (!toggles) return { ok: false, msg: t('psnapNoPreset') };
-    const exist = settings.promptSnapshots.find(x => x && x.name === name);   // ★W154：null 占位槽要跳过（x.name 会炸）
-    if (exist) { exist.time = Date.now(); exist.toggles = toggles; }
-    else settings.promptSnapshots.push({ name, time: Date.now(), toggles });
-    saveSettingsDebounced();
-    return { ok: true, msg: String(t('psnapSaved')).replace('{n}', name) };
+/* ==================================================================================
+ * ★★W163（2026-10-25）一键切换方案 —— 数据层（预设 + API 连接配置 + 条目开关 整存整取）
+ * ----------------------------------------------------------------------------------
+ * 旧「快照」四件（savePromptSnapshot / applyPromptSnapshot / deletePromptSnapshot /
+ * restorePromptRecovery）随旧四槽 UI 一并退役：老数据由启动那段一次性迁移搬进 settings.schemes，
+ * 之后产品逻辑只读写 schemes。readPromptToggles / writePromptToggles 原样保留（开关的读写内核）。
+ * ================================================================================== */
+
+// —— 酒馆侧读取助手（全部只读；读不到一律给空/null，绝不抛）——
+
+/** Connection Profiles 扩展的配置名列表（没有装/没启用 = 空数组） */
+function getConnectionProfiles() {
+    try {
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        const arr = ctx?.extensionSettings?.connectionManager?.profiles;
+        return Array.isArray(arr) ? arr.map(p => (p && typeof p.name === 'string') ? p.name : '').filter(Boolean) : [];
+    } catch (e) { return []; }
 }
-function applyPromptSnapshot(name) {
-    const snap = settings.promptSnapshots.find(x => x && x.name === name);   // ★W154：null 占位槽要跳过
-    if (!snap) return;
-    // 切换前：如果当前状态与所有已存快照都不同 → 写入固定恢复槽（防丢失）
-    const cur = readPromptToggles();
-    if (cur) {
-        const curStr = JSON.stringify(cur);
-        const matchesSaved = settings.promptSnapshots.some(x => x && JSON.stringify(x.toggles) === curStr);   // ★W154：null 占位槽要跳过
-        const matchesRecovery = settings.promptRecovery && JSON.stringify(settings.promptRecovery.toggles) === curStr;
-        if (!matchesSaved && !matchesRecovery) {
-            settings.promptRecovery = { time: Date.now(), toggles: cur };
-            saveSettingsDebounced();
+/** 当前选中的 Connection Profile 名（selectedProfile 存的是 id ⇒ 按 id 查回名字；没有= null） */
+function getCurrentProfileName() {
+    try {
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        const cm = ctx?.extensionSettings?.connectionManager;
+        if (!cm) return null;
+        const p = (Array.isArray(cm.profiles) ? cm.profiles : []).find(x => x && x.id === cm.selectedProfile);
+        return (p && typeof p.name === 'string' && p.name) ? p.name : null;
+    } catch (e) { return null; }
+}
+/** 对话补全预设名列表（DOM 直读 #settings_preset_openai 的 option.text；兜底 presetManager.getAllPresets） */
+function getPresetNames() {
+    try {
+        const sel = document.getElementById('settings_preset_openai');
+        if (sel) {
+            const names = [...sel.querySelectorAll('option')].map(o => String(o.text || '').trim()).filter(Boolean);
+            if (names.length) return names;
         }
-    }
-    writePromptToggles(snap.toggles);
-    renderPsnapUI();
+    } catch (e) { /* 落到兜底 */ }
+    try {
+        const pm = window.SillyTavern?.getContext?.()?.getPresetManager?.('openai');
+        const arr = pm ? pm.getAllPresets() : null;
+        if (Array.isArray(arr)) return arr.map(String);
+    } catch (e) { /* 就是没有 */ }
+    return [];
 }
-function deletePromptSnapshot(name) {
-    settings.promptSnapshots = settings.promptSnapshots.filter(x => x && x.name !== name);   // ★W154：null 占位槽要跳过
+/** 当前选中的预设名（DOM 直读选中项 text；兜底 oai_settings.preset_settings_openai；都没有 = null） */
+function getCurrentPresetName() {
+    try {
+        const sel = document.getElementById('settings_preset_openai');
+        if (sel && sel.selectedIndex >= 0 && sel.options[sel.selectedIndex]) {
+            const txt = String(sel.options[sel.selectedIndex].text || '').trim();
+            if (txt) return txt;
+        }
+    } catch (e) { /* 落到兜底 */ }
+    try { return String((oai_settings && oai_settings.preset_settings_openai) || '').trim() || null; } catch (e) { return null; }
+}
+/** 方案列表的安全出口（脏数据时当场拉回空数组，绝不抛 —— 铁律 27） */
+function getSchemes() {
+    if (!Array.isArray(settings.schemes)) settings.schemes = [];
+    return settings.schemes;
+}
+function schemeById(id) { return getSchemes().find(s => s && s.id === id) || null; }
+
+/** 「覆盖」/编辑弹窗「捕获」共用的捕获内核：把**当前**的 连接 + 预设 + 条目开关 三件全读回来 */
+function captureCurrentState() {
+    return {
+        profileName: getCurrentProfileName(),
+        presetName: getCurrentPresetName(),
+        toggles: readPromptToggles(),
+    };
+}
+
+/** 新建一个空方案（id 保证唯一：时间戳 + 随机尾巴，防同一毫秒连点撞名） */
+function newScheme() {
+    const s = {
+        id: 'scheme_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        name: t('schemeNewName'), icon: '⚡', iconData: null, showInBar: false,
+        profileName: null, presetName: null, toggles: null,
+    };
+    getSchemes().push(s);
+    saveSettingsDebounced();
+    return s;
+}
+/** 删除方案（调用方负责二次确认）；删的是当前生效方案 ⇒ activeSchemeId 一并清空（不指向幽灵） */
+function deleteScheme(scheme) {
+    if (!scheme) return;
+    settings.schemes = getSchemes().filter(s => s && s.id !== scheme.id);
+    if (settings.activeSchemeId === scheme.id) settings.activeSchemeId = null;
     saveSettingsDebounced();
 }
-function restorePromptRecovery() {
-    if (!settings.promptRecovery) return;
-    writePromptToggles(settings.promptRecovery.toggles);
+/** 「覆盖」：一键捕获当前全部状态写进这个方案（捕获不到的项保持 null = 未绑定，不猜） */
+function overwriteScheme(scheme) {
+    if (!scheme) return null;
+    const cap = captureCurrentState();
+    scheme.profileName = cap.profileName;
+    scheme.presetName = cap.presetName;
+    scheme.toggles = cap.toggles;
+    saveSettingsDebounced();
+    return scheme;
 }
+
+/** ★一键切换：连接配置 → 预设 → 条目开关，按序执行；哪步成了/败了都在结果行里点名。
+ *  · 生成中（ST 的 is_send_press）一律不切 —— 切连接/预设会打断正在飞的请求（与自动重roll 同一条纪律）；
+ *  · 方案里没绑的项（null）跳过；连接配置绑了但已不存在 ⇒ 说人话并整次不切；
+ *    预设绑了但已不存在 ⇒ 说人话、该步记失败，其余步照做（照协调方给的伪代码口径）；
+ *  · 全部走酒馆自己的路：/profile 斜杠命令（Connection Profiles 扩展）+ presetManager.selectPreset +
+ *    writePromptToggles —— 我们不自己改任何连接/预设内部状态。 */
+async function switchScheme(scheme) {
+    if (!scheme) return false;
+    if (is_send_press) { notice(t('schemeGenerating'), 'schemeTitle'); return false; }
+    let stepResults = [];
+    // ① 切连接配置（Connection Profiles 扩展的 /profile 命令；await=true 等它真连上）
+    if (scheme.profileName) {
+        try {
+            const { SlashCommandParser } = await import('../../../slash-commands/SlashCommandParser.js');
+            const cmd = SlashCommandParser.commands && SlashCommandParser.commands['profile'];
+            if (!cmd) { notice(t('schemeNeedConnExt'), 'schemeTitle'); return false; }
+            if (!getConnectionProfiles().some(n => n === scheme.profileName)) {
+                notice(String(t('schemeProfileMissing')).replace('{n}', scheme.profileName), 'schemeTitle');
+                return false;
+            }
+            await cmd.callback({ await: 'true', timeout: '5000' }, scheme.profileName);
+            stepResults.push(t('schemeBindProfile') + ' ✓');
+        } catch (e) { stepResults.push(t('schemeBindProfile') + ' ✗'); }
+    }
+    // ② 切预设（presetManager：findPreset 拿到下标 ⇒ selectPreset 等它整份应用完）
+    if (scheme.presetName) {
+        try {
+            let pm = null;
+            try { const m = await import('../../../preset-manager.js'); pm = m.getPresetManager('openai'); } catch (e) { /* 落到 ctx 兜底 */ }
+            if (!pm) pm = window.SillyTavern?.getContext?.()?.getPresetManager?.('openai') || null;
+            const id = pm ? pm.findPreset(scheme.presetName) : undefined;
+            if (!pm || id === undefined || id === null || String(id) === '') {
+                notice(String(t('schemePresetMissing')).replace('{n}', scheme.presetName), 'schemeTitle');
+            } else {
+                await pm.selectPreset(id);
+                stepResults.push(t('schemeBindPreset') + ' ✓');
+            }
+        } catch (e) { stepResults.push(t('schemeBindPreset') + ' ✗'); }
+    }
+    // ③ 切条目开关（writePromptToggles 自己会 saveSettingsDebounced + 就地刷左面板 DOM）
+    if (scheme.toggles && Object.keys(scheme.toggles).length > 0) {
+        try { writePromptToggles(scheme.toggles); stepResults.push(t('schemeBindToggles') + ' ✓'); } catch (e) { stepResults.push(t('schemeBindToggles') + ' ✗'); }
+    }
+    // ④ 标记 + 刷新 + 报告（哪步 ✓/✗ 逐个点名；整次没绑任何东西 = 只标激活，不吹"切换成功"）
+    settings.activeSchemeId = scheme.id;
+    saveSettingsDebounced();
+    try { window.__kimiRefreshCombo(); } catch (e) { }   // 悬浮条方案图标（W164）跟着刷
+    renderSchemeUI();
+    try {
+        toastr.success(String(t('schemeSwitchedTo')).replace('{n}', scheme.name)
+            + (stepResults.length ? ' ' + stepResults.join(' · ') : ''), '余温工具箱', { timeOut: 3000 });
+    } catch (e) { }
+    return true;
+}
+// 探针/悬浮条（W164）出口：传方案对象或方案 id 都行
+window.__ywSwitchScheme = (s) => switchScheme(typeof s === 'string' ? schemeById(s) : s);
 /* ==================================================================================
  * ★W80（2026-09-30 夜）：**原生预设面板 · 行内「插入提示词」**（作者点名要的那颗按钮）
  * ----------------------------------------------------------------------------------
@@ -4836,12 +5009,8 @@ function ensurePsnapPanel() {
         'color:var(--SmartThemeBodyColor);box-shadow:0 8px 30px rgba(0,0,0,.55);padding:10px 12px;user-select:none';
     win.innerHTML = `
     <div class="kimi-psnap-head" style="flex:none;display:flex;align-items:center;gap:6px;cursor:grab;user-select:none">
-        <span style="opacity:.6;cursor:grab">⠿</span><b style="font-size:.95em">📇 ${t('psnapTitle')}</b>
+        <span style="opacity:.6;cursor:grab">⠿</span><b style="font-size:.95em">🎛 ${t('schemeTitle')}</b>
         <button id="${extensionName}_psnap_close" class="kimi-btn" style="margin-left:auto;padding:0 8px;font-size:.85em">✕</button>
-    </div>
-    <div style="flex:none;display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:6px">
-        <input id="${extensionName}_psnap_name" type="text" class="text_pole" placeholder="${t('psnapNamePh')}" style="flex:1;min-width:80px"/>
-        <button id="${extensionName}_psnap_save" type="button" class="kimi-btn" style="flex:none;padding:2px 8px">${t('psnapSaveBtn')}</button>
     </div>
     <div id="${extensionName}_psnap_body" style="flex:1;min-height:0;overflow-y:auto;margin-top:5px"></div>`;
     document.body.appendChild(win);
@@ -4872,14 +5041,7 @@ function ensurePsnapPanel() {
         dx = undefined;
     });
     document.getElementById(extensionName + '_psnap_close').addEventListener('click', () => { win.style.display = 'none'; });
-    document.getElementById(extensionName + '_psnap_save').addEventListener('click', () => {
-        const ni = document.getElementById(extensionName + '_psnap_name');
-        const r = savePromptSnapshot(ni ? ni.value : '');
-        try { toastr[r.ok ? 'success' : 'warning'](r.msg, '余温工具箱', { timeOut: 2500 }); } catch (e) { }
-        if (r.ok && ni) ni.value = '';
-        renderPsnapUI();
-    });
-    renderPsnapUI();
+    renderSchemeUI();   // ★W163：浮窗本体直接画方案列表（与主面板同一个渲染出口）
 }
 function togglePsnapPanel() {
     ensurePsnapPanel();
@@ -4887,7 +5049,7 @@ function togglePsnapPanel() {
     if (!win) return;
     const show = win.style.display === 'none' || !win.style.display;
     win.style.display = show ? 'flex' : 'none';
-    if (show) { renderPsnapUI(); setTimeout(() => clampToViewport(win), 30); }
+    if (show) { renderSchemeUI(); setTimeout(() => clampToViewport(win), 30); }
 }
 
 // 停止重roll入口：左下角扩展菜单 + 输入框旁小图标（仿标签修复入口，v1.37.17）
@@ -4928,8 +5090,8 @@ function updatePsnapEntries() {
     if (settings.psnapShowMenuBtn) {
         const $menu = $('#extensionsMenu');
         if ($menu.length) {
-            $menu.append(`<a id="kimi_psnap_menu_item" class="list-group-item" href="#" title="${t('psnapTitle')}">
-                <i class="fa-solid fa-list-check"></i> ${t('psnapTitle')}
+            $menu.append(`<a id="kimi_psnap_menu_item" class="list-group-item" href="#" title="${t('schemeTitle')}">
+                <i class="fa-solid fa-list-check"></i> ${t('schemeTitle')}
             </a>`);
             $('#kimi_psnap_menu_item').on('click', (e) => { e.preventDefault(); e.stopPropagation(); $('#extensionsMenu').fadeOut(200); togglePsnapPanel(); });
         }
@@ -4954,7 +5116,7 @@ const KIMI_CARD_DEFS = [
     { key: 'word', ico: 'fa-broom', titleKey: 'wordTitle' },
     { key: 'tag', ico: 'fa-tag', titleKey: 'tagTitle' },
     { key: 'api', ico: 'fa-plug', titleKey: 'apiTitle' },
-    { key: 'psnap', ico: 'fa-list-check', titleKey: 'psnapTitle' },
+    { key: 'psnap', ico: 'fa-list-check', titleKey: 'schemeTitle' },   // ★W163：方案切换（预设/API/开关）—— 原「预设条目开关快照」卡改版
     { key: 'fix', ico: 'fa-wrench', titleKey: 'fixTitle' },
 ];
 let _kimiCardFloating = null;   // 浮窗 DOM
@@ -5536,6 +5698,8 @@ function updateComboFloat() {
         /* ★W25B：两个"小剧场"入口也是功能型入口 —— 清空面板型列表、只留它们的时候，球必须还在
            （改前这条判据不认 floatShowPlayFav/floatShowPlayLatest ⇒ 那两种勾法下整颗球消失）。 */
         || !!settings.floatShowPlayFav || !!settings.floatShowPlayLatest
+        /* ★W163：方案切换也是功能型入口 —— 只勾了方案、其它全关时球必须还在 */
+        || (Array.isArray(settings.schemes) && settings.schemes.some(s => s && s.showInBar))
         || (Array.isArray(settings.floatPanelKeys) && settings.floatPanelKeys.length > 0);
     if (!_anyEntryShow) return;
 
@@ -5676,6 +5840,21 @@ function updateComboFloat() {
         { key: 'playfav', ico: 'fa-masks-theater', label: t('playFavTitle'), color: 'var(--kimi-play-fav)', on: !!settings.floatShowPlayFav },
         // ★W25B：最新小剧场（功能型 = 点图标直接执行：打开商店并露出「🎭 小剧场」那一区）。★W46 换专属色（--kimi-play-latest）。
         { key: 'playlatest', ico: 'fa-clapperboard', label: t('playLatestTitle'), color: 'var(--kimi-play-latest)', on: !!settings.floatShowPlayLatest },
+        /* ★W163：方案切换（功能型 = 点图标直接执行 switchScheme）。每条 = settings.schemes 里 showInBar=true 的方案。
+           key 用 `scheme:<id>`（id 是方案自己的唯一标识）；label 显示方案名 + 绑了什么；
+           图标优先 emoji 字符（fontSize:18px），有上传图（data URL）铺 img，都没有用 ⚡ 兜底。 */
+        ...(Array.isArray(settings.schemes) ? settings.schemes.filter(s => s && s.showInBar).map(s => {
+            const bind = [];
+            if (s.presetName) bind.push('预设:' + s.presetName);
+            if (s.profileName) bind.push('连接:' + s.profileName);
+            if (s.toggles && Object.keys(s.toggles).length) bind.push('开关:' + Object.keys(s.toggles).length + '条');
+            return {
+                key: 'scheme:' + s.id,
+                label: s.name + (bind.length ? '（' + bind.join(' · ') + '）' : ''),
+                schemeObj: s,
+                on: true,
+            };
+        }) : []),
     ].filter(a => a.on);
     /* ★★W157（作者 2026-10-23 第 1 条 · 真 BUG 的修）：**这里原来是一条静默排除** ——
        改前 = KIMI_CARD_DEFS.filter(d => settings.floatPanelKeys.includes(d.key) && !(settings.floatShowTagFix && d.key === 'tag'))：
@@ -5692,11 +5871,29 @@ function updateComboFloat() {
     const $items = $(`<div class="kcf-body" style="overflow:hidden;height:0;background:transparent"></div>`).appendTo($box);
 
     // 功能区（直接执行，选中色不同）
+    /* ★W163：方案条目（key 以 scheme: 开头）用 emoji 字符或上传图渲染（不是 Font Awesome SVG）；
+       当前生效方案加金色发光边框。 */
     ACTION_DEFS.forEach(def => {
+        const isScheme = String(def.key).startsWith('scheme:');
+        const s = isScheme ? def.schemeObj : null;
+        let inner;
+        if (isScheme && s) {
+            /* ★W163b 修正：上传图存在 iconData（不是 icon）；icon 只是 emoji 字符 */
+            const img = (typeof s.iconData === 'string' && s.iconData.startsWith('data:image')) ? s.iconData : null;
+            if (img) {
+                inner = `<img src="${img}" alt="" style="width:22px;height:22px;border-radius:50%;object-fit:cover;pointer-events:none"/>`;
+            } else {
+                inner = `<span style="font-size:18px;line-height:1">${s.icon || '⚡'}</span>`;
+            }
+        } else {
+            inner = `<span style="display:inline-flex;align-items:center;justify-content:center">${__kimiSvgIcon(def.ico, def.color)}</span>`;
+        }
+        const glow = (isScheme && s && settings.activeSchemeId === s.id)
+            ? 'box-shadow:inset 0 0 0 2px rgba(255,200,60,.75), 0 0 6px rgba(255,200,60,.35);' : '';
         $items.append(`<div class="kcf-item kcf-action" data-act="${def.key}" style="
             height:${ITEM}px;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;
-            cursor:pointer;border-bottom:1px solid rgba(128,128,128,.28);position:relative
-        " title="${def.label}"><span style="display:inline-flex;align-items:center;justify-content:center">${__kimiSvgIcon(def.ico, def.color)}</span></div>`);
+            cursor:pointer;border-bottom:1px solid rgba(128,128,128,.28);position:relative;${glow}
+        " title="${def.label}">${inner}</div>`);
     });
     // 功能区与面板区分隔线
     if (ACTION_DEFS.length) {
@@ -5864,6 +6061,15 @@ function updateComboFloat() {
                 openStorePlayLatest();
                 return;
             }
+            /* ★W163：方案切换 —— 点方案图标直接调 switchScheme（含生成中禁止/连接/预设/开关四步） */
+            if (act.startsWith('scheme:')) {
+                const sid = act.slice(7);
+                const sc = (Array.isArray(settings.schemes) ? settings.schemes : []).find(x => x && x.id === sid);
+                if (sc && typeof window.__ywSwitchScheme === 'function') {
+                    window.__ywSwitchScheme(sc);
+                }
+                return;
+            }
 try { window.__stTagFixLast && window.__stTagFixLast(); } catch (e) { }
             return;
         }
@@ -5949,134 +6155,236 @@ try { window.__stTagFixLast && window.__stTagFixLast(); } catch (e) { }
 window.__kimiRefreshCombo = updateComboFloat;
 
 
-// ===== 预设条目开关快照 UI =====
-/* ★W150（作者 2026-10-19 第 5 条）：快照卡改版 —— 只改**外壳/交互**，底层保存-切换-恢复**一个字不改**。
-   · savePromptSnapshot / applyPromptSnapshot / deletePromptSnapshot / restorePromptRecovery 行为原样不动
-     （★W154 只加了 null 占位槽的防御：`x &&` —— 见那四个函数里的注释）；
-   · 列表固定四个方案槽（方案1~4）：第 N 槽 ↔ settings.promptSnapshots[N-1]（按位置对应，空槽显示「（空）」）；
-   · 每行右侧四个操作：重命名 / 覆盖 / 切换 / ✕；
-   · ★W154（作者 2026-10-23 第 4 条）：**空槽也能「重命名」「覆盖」**（只有「切换」「✕」保持禁用 —— 没东西可切/可删）。
-     作者原话："那些初始为空的方案2 3 4 居然没办法重命名和覆盖 如果不能覆盖 那么怎么使用？？任何情况都能覆盖才对"。
-     · 「覆盖」按空槽 ⇒ 用当前开关状态在该槽建一条（名字默认「方案N」）；
-     · 「重命名」按空槽 ⇒ 弹输入框（沿用下面那套就地输入），确认后用用户填的名字 + 当前开关状态在该槽建一条。
-   · 「基础」行 = 未快照的当前基线，只有一行标签、不留任何数据（作者：不要塞假数据）；
-   · 「可恢复快照」那条照旧保留（排在列表最下面）。 */
-
-/* ★W154：在**指定槽位**写一条快照（空槽新建 / 已有则原地更新）。
-   数组对齐规则（作者口径）：写第 N 槽时若长度不够，用 **null 占位补齐**，**绝不把后面的槽往前挪**；
-   null 一律当"空槽"处理（渲染层 snap 为 null ⇒ 走"（空）"分支；四个既有函数已加 `x &&` 防御）。 */
-function writeSnapshotAtSlot(idx, name, toggles) {
-    if (!Array.isArray(settings.promptSnapshots)) settings.promptSnapshots = [];
-    const arr = settings.promptSnapshots;
-    while (arr.length <= idx) arr.push(null);          // ★用 null 占位补齐（不挪动已有槽位）
-    const exist = arr[idx];
-    if (exist) { exist.name = name; exist.toggles = toggles; exist.time = Date.now(); }
-    else arr[idx] = { name, time: Date.now(), toggles };
-    saveSettingsDebounced();
-    return arr[idx];
+// ===== ★W163 方案切换 UI（整体替换 W150/W154 的「四槽快照卡」）=====
+/* 每行一个方案：[图标圆 32px] [方案名 + 小字(绑了什么)] [编辑] [覆盖] [切换] [✕]；底部「＋ 新建方案」。
+   · 旧四槽（方案1~4 ↔ promptSnapshots[N-1]）退役：老数据由启动那段一次性迁移搬进 settings.schemes；
+   · 「编辑」开弹窗（图标 emoji/上传图 + 方案名 + 连接配置 + 预设 + 捕获开关 + 出现在悬浮窗）；
+   · 「覆盖」= captureCurrentState() 一键捕获当前全部状态；「切换」= switchScheme()；
+   · 「✕」删除带二次确认（window.confirm；e2e 的 CDP 会自动接受系统对话框）；
+   · 同一份 HTML 同时画进 主面板 `_psnap_list` 与 快捷浮窗 `_psnap_body`（沿用旧卡的双容器口径）。 */
+/** 方案图标圆（32px）的内部内容：上传图 > emoji 字符 > ⚡ 兜底 */
+function schemeIconHtml(s, px) {
+    const size = Number(px) || 32;
+    const style = 'flex:none;width:' + size + 'px;height:' + size + 'px;border-radius:50%;border:1px solid var(--SmartThemeBorderColor);'
+        + 'display:flex;align-items:center;justify-content:center;font-size:' + Math.round(size * .55) + 'px;line-height:1;'
+        + 'background:rgba(128,128,128,.12);background-size:cover;background-position:center;overflow:hidden;user-select:none';
+    const data = (s && typeof s.iconData === 'string' && /^data:image\//.test(s.iconData)) ? s.iconData : '';
+    const inner = data
+        ? '<img src="' + data.replace(/"/g, '&quot;') + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block"/>'
+        : schemeEsc((s && s.icon) ? String(s.icon) : '⚡');
+    return '<span class="kimi-scheme-ico" style="' + style + (data ? ';background-image:none' : '') + '">' + inner + '</span>';
 }
-function renderPsnapUI() {
+/** 行内小字：这个方案绑了什么（预设/连接/开关数；一个没绑 = （未配置）） */
+function schemeBindSummary(s) {
+    const parts = [];
+    if (s.presetName) parts.push(t('schemeBindPreset') + ': ' + s.presetName);
+    if (s.profileName) parts.push(t('schemeBindProfile') + ': ' + s.profileName);
+    if (s.toggles && Object.keys(s.toggles).length > 0) {
+        parts.push(t('schemeBindToggles') + ': ' + String(t('schemeTogglesCount')).replace('{n}', String(Object.keys(s.toggles).length)));
+    }
+    return parts.length ? parts.join(' · ') : t('schemeNotConfigured');
+}
+/* 转义（方案名/预设名/配置名都是用户数据，进 DOM 一律过这道；iconData 是 data:URL 只进 img src 并单独引号转义） */
+function schemeEsc(v) { return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+/** 方案卡本体（主面板 + 快捷浮窗共用的单一出口） */
+function renderSchemeUI() {
     const box = document.getElementById(extensionName + '_psnap_list') || document.getElementById(extensionName + '_psnap_body');
     const boxFloat = document.getElementById(extensionName + '_psnap_body');
     if (!box) return;
-    const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    const snaps = Array.isArray(settings.promptSnapshots) ? settings.promptSnapshots : [];
-    const fmt = (tm) => { const dt = new Date(Number(tm)); return isNaN(dt) ? '' : (dt.getMonth() + 1) + '/' + dt.getDate() + ' ' + String(dt.getHours()).padStart(2, '0') + ':' + String(dt.getMinutes()).padStart(2, '0'); };
-    const rowCss = 'display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:3px;padding:3px 8px;border:1px solid var(--SmartThemeBorderColor);border-radius:6px';
-    const btnCss = 'flex:none;min-height:32px';   // ★W150b：跟面板既有触摸口径（min-height:32px）对齐 —— 原来 inline 覆盖成 18px 高，手机档不好点
+    const schemes = getSchemes();
+    const rowCss = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px;padding:3px 8px;border:1px solid var(--SmartThemeBorderColor);border-radius:6px';
+    const btnCss = 'flex:none;min-height:32px';   // 触摸口径（与 W150b 之后的面板一致）
     let html = '';
-    // 「基础」行（当前未快照基线）：只有标签，右侧无操作、无数据
-    html += '<div class="kimi-psnap-row kimi-psnap-base" style="' + rowCss + '"><span style="font-size:.85em;color:var(--kimi-ink-2)">' + t('psnapBaseRow') + '</span></div>';
-    // 固定四个方案槽（★W150b 修正：四个是"最低显示数"，不是"最多能存几条"——
-    //   若本机已有超过 4 条快照（老用户可能存过），多出来的照旧显示成「方案5 / 方案6…」；
-    //   否则第 5 条之后在界面上会看不见，用户会以为"新建没生效 / 方案丢了"）
-    const nSlots = Math.max(4, snaps.length);
-    for (let i = 0; i < nSlots; i++) {
-        const snap = snaps[i];
-        const slotLabel = String(t('psnapSlotName')).replace('{n}', String(i + 1));
-        // ★W154：空槽（含 null 占位）时 —— 「切换」「✕」禁用（没东西可切/可删），但「重命名」「覆盖」**可用**
-        const dis = snap ? '' : ' disabled';
-        const mid = snap
-            ? '<span class="kimi-psnap-row-name" style="flex:1 1 auto;min-width:0;font-size:.85em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b style="color:var(--kimi-ink-name)">' + esc(snap.name) + '</b> <span style="color:var(--kimi-ink-3);font-size:.85em">(' + fmt(snap.time) + ')</span></span>'
-            : '<span class="kimi-psnap-row-name" style="flex:1 1 auto;min-width:0;font-size:.85em;color:var(--kimi-ink-3)">' + t('psnapSlotEmpty') + '</span>';
-        html += '<div class="kimi-psnap-row" data-slot="' + (i + 1) + '" style="' + rowCss + '">'
-            + '<span style="font-size:.82em;color:var(--kimi-ink-3);flex:none">' + slotLabel + '</span>'
-            + mid
-            // ★W154：重命名 / 覆盖 —— 任何槽位（含空槽）都可点，不带 dis
-            + '<button class="kimi-btn kimi-psnap-rename kimi-psnap-btn" data-slot="' + (i + 1) + '" style="' + btnCss + '">' + t('psnapRename') + '</button>'
-            + '<button class="kimi-btn kimi-psnap-overwrite kimi-psnap-btn" data-slot="' + (i + 1) + '" style="' + btnCss + '">' + t('psnapOverwrite') + '</button>'
-            + '<button class="kimi-btn kimi-psnap-apply kimi-psnap-btn" data-slot="' + (i + 1) + '" style="' + btnCss + '"' + dis + '>' + t('psnapApply') + '</button>'
-            + '<button class="kimi-psnap-del kimi-psnap-btn" data-slot="' + (i + 1) + '" title="' + t('psnapDel') + '" style="cursor:pointer;opacity:.6;background:none;border:none;color:inherit;font-size:.85em;padding:2px 6px;flex:none;min-width:32px;min-height:32px"' + dis + '>✕</button>'
+    schemes.forEach(s => {
+        if (!s) return;                                   // 脏条目跳过（铁律 27：不整块挂掉）
+        const active = settings.activeSchemeId === s.id;
+        html += '<div class="kimi-scheme-row" data-id="' + schemeEsc(s.id) + '" style="' + rowCss + (active ? ';border-color:var(--golden-color,#e0a800)' : '') + '">'
+            + schemeIconHtml(s, 32)
+            + '<span class="kimi-scheme-mid" style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px;overflow:hidden">'
+            + '<b class="kimi-scheme-name" style="color:var(--kimi-ink-name);font-size:.88em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + schemeEsc(s.name || '') + '</b>'
+            + '<span class="kimi-scheme-bind" style="font-size:.75em;color:var(--kimi-ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + schemeEsc(schemeBindSummary(s)) + '</span>'
+            + '</span>'
+            + '<button class="kimi-btn kimi-scheme-edit kimi-scheme-btn" style="' + btnCss + '">' + t('schemeEdit') + '</button>'
+            + '<button class="kimi-btn kimi-scheme-overwrite kimi-scheme-btn" style="' + btnCss + '">' + t('schemeOverwrite') + '</button>'
+            + '<button class="kimi-btn kimi-scheme-switch kimi-scheme-btn" style="' + btnCss + '">' + t('schemeSwitch') + '</button>'
+            + '<button class="kimi-scheme-del kimi-scheme-btn" title="✕" style="cursor:pointer;opacity:.6;background:none;border:none;color:inherit;font-size:.85em;padding:2px 6px;flex:none;min-width:32px;min-height:32px">✕</button>'
             + '</div>';
-    }
-    // 「可恢复快照」那条（照旧保留，排在列表最下面）
-    if (settings.promptRecovery) {
-        const ts = fmt(settings.promptRecovery.time);
-        html += '<div style="display:flex;gap:6px;align-items:center;margin-top:3px;padding:3px 8px;border:1px dashed var(--golden-color,#e0a800);border-radius:6px;background:rgba(224,168,0,.05)">'
-            + '<span style="flex:1;font-size:.85em">↩ ' + t('psnapRecovery') + ' <span style="color:var(--kimi-ink-3)">(' + ts + ')</span></span>'
-            + '<button class="kimi-btn kimi-psnap-rec" style="padding:2px 8px;font-size:.82em">' + t('psnapRecApply') + '</button>'
-            + '</div>';
-    }
+    });
+    html += '<div style="margin-top:6px"><button class="kimi-btn kimi-scheme-new" style="' + btnCss + ';width:100%">' + t('schemeNew') + '</button></div>';
     if (box) box.innerHTML = html;
     if (boxFloat && boxFloat !== box) boxFloat.innerHTML = html;
-    // ★注意：下面这个容器参数**不能**叫 t —— 会把全局的 t()（取文案）遮蔽掉（handler 里要调 t()）
-    const slotOf = (el) => Number(el.getAttribute('data-slot')) - 1;
+    const rowOf = (el) => schemeById(el.closest('.kimi-scheme-row') ? el.closest('.kimi-scheme-row').getAttribute('data-id') : '');
     const wire = (host) => { if (!host) return;
-        host.querySelectorAll('.kimi-psnap-apply').forEach(btn => btn.addEventListener('click', () => { const s = snaps[slotOf(btn)]; if (s) applyPromptSnapshot(s.name); }));
-        host.querySelectorAll('.kimi-psnap-overwrite').forEach(btn => btn.addEventListener('click', () => {
-            const idx = slotOf(btn);
-            const s = snaps[idx];
-            const toggles = readPromptToggles();
-            if (!toggles) { notice(t('psnapNoPreset'), 'psnapTitle'); return; }
-            if (s) {
-                s.toggles = toggles; s.time = Date.now();
-                saveSettingsDebounced();
-                try { toastr.success(String(t('psnapOverwritten')).replace('{n}', s.name), '余温工具箱', { timeOut: 2500 }); } catch (e) { }
-            } else {
-                // ★W154：空槽覆盖 ⇒ 在该槽位建一条（名字默认「方案N」）
-                const name = String(t('psnapSlotName')).replace('{n}', String(idx + 1));
-                writeSnapshotAtSlot(idx, name, toggles);
-                try { toastr.success(String(t('psnapSaved')).replace('{n}', name), '余温工具箱', { timeOut: 2500 }); } catch (e) { }
-            }
-            renderPsnapUI();
+        host.querySelectorAll('.kimi-scheme-new').forEach(btn => btn.addEventListener('click', () => {
+            newScheme();
+            try { toastr.info(t('schemeCreated'), '余温工具箱', { timeOut: 3000 }); } catch (e) { }
+            renderSchemeUI();
+            try { window.__kimiRefreshCombo(); } catch (e) { }   // 悬浮条方案图标（W164）跟着刷
         }));
-        host.querySelectorAll('.kimi-psnap-rename').forEach(btn => btn.addEventListener('click', () => {
-            const idx = slotOf(btn);
-            const s = snaps[idx];
-            // ★W154：空槽也进这条就地输入（原来是直接 notice 挡住）—— 输入框预填该槽默认名「方案N」，用户可改
-            const row = btn.closest('.kimi-psnap-row');
-            const nameEl = row && row.querySelector('.kimi-psnap-row-name');
-            if (!nameEl) return;
-            const inp = document.createElement('input');
-            inp.type = 'text'; inp.className = 'text_pole';
-            inp.value = s ? s.name : String(t('psnapSlotName')).replace('{n}', String(idx + 1));
-            inp.style.cssText = 'flex:1 1 auto;min-width:60px;font-size:.85em;padding:1px 5px';
-            nameEl.replaceWith(inp);
-            try { inp.focus(); inp.select(); } catch (e) { }
-            let done = false;
-            const commit = (save) => {
-                if (done) return; done = true;
-                const v = String(inp.value || '').trim();
-                if (save && v && (!s || v !== s.name)) {
-                    const dup = snaps.some((x, j) => j !== idx && x && x.name === v);
-                    if (dup) { try { toastr.warning(String(t('psnapDupName')).replace('{n}', v), '余温工具箱', { timeOut: 3000 }); } catch (e) { } }
-                    else if (s) { s.name = v; saveSettingsDebounced(); try { toastr.success(String(t('psnapRenamed')).replace('{n}', v), '余温工具箱', { timeOut: 2500 }); } catch (e) { } }
-                    else {
-                        // ★W154：空槽重命名 ⇒ 用"用户填的名字 + 当前开关状态"在该槽建一条
-                        const toggles = readPromptToggles();
-                        if (!toggles) { notice(t('psnapNoPreset'), 'psnapTitle'); }
-                        else { writeSnapshotAtSlot(idx, v, toggles); try { toastr.success(String(t('psnapSaved')).replace('{n}', v), '余温工具箱', { timeOut: 2500 }); } catch (e) { } }
-                    }
-                }
-                renderPsnapUI();
-            };
-            inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(true); } else if (e.key === 'Escape') { e.preventDefault(); commit(false); } });
-            inp.addEventListener('blur', () => commit(true));
+        host.querySelectorAll('.kimi-scheme-edit').forEach(btn => btn.addEventListener('click', () => { const s = rowOf(btn); if (s) openSchemeEditor(s); }));
+        host.querySelectorAll('.kimi-scheme-overwrite').forEach(btn => btn.addEventListener('click', () => {
+            const s = rowOf(btn); if (!s) return;
+            overwriteScheme(s);
+            try { toastr.success(String(t('schemeOverwritten')).replace('{n}', s.name), '余温工具箱', { timeOut: 2500 }); } catch (e) { }
+            renderSchemeUI();
         }));
-        host.querySelectorAll('.kimi-psnap-del').forEach(btn => btn.addEventListener('click', () => { const s = snaps[slotOf(btn)]; if (s) { deletePromptSnapshot(s.name); renderPsnapUI(); } }));
-        host.querySelectorAll('.kimi-psnap-rec').forEach(btn => btn.addEventListener('click', () => { restorePromptRecovery(); renderPsnapUI(); }));
+        host.querySelectorAll('.kimi-scheme-switch').forEach(btn => btn.addEventListener('click', () => { const s = rowOf(btn); if (s) switchScheme(s); }));
+        host.querySelectorAll('.kimi-scheme-del').forEach(btn => btn.addEventListener('click', () => {
+            const s = rowOf(btn); if (!s) return;
+            if (!window.confirm(t('schemeDeleteConfirm'))) return;   // 二次确认（e2e 的 CDP 自动接受系统对话框）
+            deleteScheme(s);
+            try { toastr.info(String(t('schemeDeleted')).replace('{n}', s.name), '余温工具箱', { timeOut: 2000 }); } catch (e) { }
+            renderSchemeUI();
+            try { window.__kimiRefreshCombo(); } catch (e) { }
+        }));
     };
     wire(box); if (boxFloat && boxFloat !== box) wire(boxFloat);   // ★同一个元素别 wire 两遍（否则每颗按钮挂两个 handler）
+}
+
+// ===== 编辑弹窗（风格走既有 kimi- 一族：overlay + 卡片，同 Cline 弹窗那套视觉）=====
+let __schemeStyleDone = false;
+function ensureSchemeStyle() {
+    if (__schemeStyleDone) return;
+    __schemeStyleDone = true;
+    const css = ''
+        + '.kimi-scheme-overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px}'
+        + '.kimi-scheme-card{background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;padding:16px;width:min(430px,92vw);flex-shrink:0;box-shadow:0 4px 24px rgba(0,0,0,.45);color:var(--SmartThemeBodyColor);user-select:none}'
+        + '#kimi_scheme_editor .kimi-btn{padding:3px 10px;border-radius:8px;border:1px solid var(--SmartThemeBorderColor);background:rgba(255,255,255,.05);color:var(--SmartThemeBodyColor,inherit);cursor:pointer;font-size:.85em;min-height:32px;transition:filter .15s ease}'
+        + '#kimi_scheme_editor .kimi-btn:hover{filter:brightness(1.15)}'
+        + '#kimi_scheme_editor .kimi-label{display:block;margin:10px 0 3px;font-size:.85em;color:var(--kimi-ink-2,#bbb)}'
+        + '#kimi_scheme_editor input[type="text"],#kimi_scheme_editor select{width:100%;box-sizing:border-box;font-size:.9em;padding:4px 8px;min-height:32px}'
+        + '#kimi_scheme_editor input[type="checkbox"]{accent-color:var(--golden-color,#e0a800);width:16px;height:16px;vertical-align:-3px;cursor:pointer}'
+        + '.kimi-scheme-emoji{width:34px;height:34px;min-width:34px;border-radius:8px;border:1px solid var(--SmartThemeBorderColor);background:rgba(128,128,128,.1);color:var(--SmartThemeBodyColor);cursor:pointer;font-size:16px;line-height:1;padding:0;transition:filter .15s ease,border-color .15s ease}'
+        + '.kimi-scheme-emoji:hover{filter:brightness(1.3)}'
+        + '.kimi-scheme-emoji.cur{border:1.5px solid var(--golden-color,#e0a800)!important;background:rgba(224,168,0,.14)}';
+    $('<style id="kimi-scheme-style">' + css + '</style>').appendTo('head');
+}
+const SCHEME_EMOJIS = ['🔥', '✨', '🦈', '⚡', '🌙', '☀️', '🍀', '🎯', '💎', '🚀', '🎵', '🎮'];
+/* ★W163b：品牌图标库（LobeHub MIT 许可，内嵌 data URL 离线可用）——编辑弹窗里可选用 */
+const SCHEME_PRESET_ICONS = [
+    { key: "kimi-color", label: "Kimi", data: "data:image/svg+xml;base64,PHN2ZyBoZWlnaHQ9IjFlbSIgc3R5bGU9ImZsZXg6bm9uZTtsaW5lLWhlaWdodDoxIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIxZW0iIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHRpdGxlPktpbWk8L3RpdGxlPjxwYXRoIGQ9Ik0yMS44NDYgMGExLjkyMyAxLjkyMyAwIDExMCAzLjg0NkgyMC4xNWEuMjI2LjIyNiAwIDAxLS4yMjctLjIyNlYxLjkyM0MxOS45MjMuODYxIDIwLjc4NCAwIDIxLjg0NiAweiIgZmlsbD0iIzE3ODNGRiI+PC9wYXRoPjxwYXRoIGQ9Ik0xMS4wNjUgMTEuMTk5bDcuMjU3LTcuMmMuMTM3LS4xMzYuMDYtLjQxLS4xMTYtLjQxSDE0LjNhLjE2NC4xNjQgMCAwMC0uMTE3LjA1MWwtNy44MiA3Ljc1NmMtLjEyMi4xMi0uMzAyLjAxMy0uMzAyLS4xNzlWMy44MmMwLS4xMjctLjA4My0uMjMtLjE4NS0uMjNIMy4xODZjLS4xMDMgMC0uMTg2LjEwMy0uMTg2LjIzVjE5Ljc3YzAgLjEyOC4wODMuMjMuMTg2LjIzaDIuNjljLjEwMyAwIC4xODYtLjEwMi4xODYtLjIzdi0zLjI1YzAtLjA2OS4wMjUtLjEzNS4wNjktLjE3OGwyLjQyNC0yLjQwNmEuMTU4LjE1OCAwIDAxLjIwNS0uMDIzbDYuNDg0IDQuNzcyYTcuNjc3IDcuNjc3IDAgMDAzLjQ1MyAxLjI4M2MuMTA4LjAxMi4yLS4wOTUuMi0uMjN2LTMuMDZjMC0uMTE3LS4wNy0uMjEyLS4xNjQtLjIyN2E1LjAyOCA1LjAyOCAwIDAxLTIuMDI3LS44MDdsLTUuNjEzLTQuMDY0Yy0uMTE3LS4wNzgtLjEzMi0uMjc5LS4wMjgtLjM4MXoiIGZpbGw9ImN1cnJlbnRDb2xvciI+PC9wYXRoPjwvc3ZnPg==" },
+    { key: "gemini-color", label: "Gemini", data: "data:image/svg+xml;base64,PHN2ZyBoZWlnaHQ9IjFlbSIgc3R5bGU9ImZsZXg6bm9uZTtsaW5lLWhlaWdodDoxIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIxZW0iIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHRpdGxlPkdlbWluaTwvdGl0bGU+PHBhdGggZD0iTTIwLjYxNiAxMC44MzVhMTQuMTQ3IDE0LjE0NyAwIDAxLTQuNDUtMy4wMDEgMTQuMTExIDE0LjExMSAwIDAxLTMuNjc4LTYuNDUyLjUwMy41MDMgMCAwMC0uOTc1IDAgMTQuMTM0IDE0LjEzNCAwIDAxLTMuNjc5IDYuNDUyIDE0LjE1NSAxNC4xNTUgMCAwMS00LjQ1IDMuMDAxYy0uNjUuMjgtMS4zMTguNTA1LTIuMDAyLjY3OGEuNTAyLjUwMiAwIDAwMCAuOTc1Yy42ODQuMTcyIDEuMzUuMzk3IDIuMDAyLjY3N2ExNC4xNDcgMTQuMTQ3IDAgMDE0LjQ1IDMuMDAxIDE0LjExMiAxNC4xMTIgMCAwMTMuNjc5IDYuNDUzLjUwMi41MDIgMCAwMC45NzUgMGMuMTcyLS42ODUuMzk3LTEuMzUxLjY3Ny0yLjAwM2ExNC4xNDUgMTQuMTQ1IDAgMDEzLjAwMS00LjQ1IDE0LjExMyAxNC4xMTMgMCAwMTYuNDUzLTMuNjc4LjUwMy41MDMgMCAwMDAtLjk3NSAxMy4yNDUgMTMuMjQ1IDAgMDEtMi4wMDMtLjY3OHoiIGZpbGw9IiMzMTg2RkYiPjwvcGF0aD48cGF0aCBkPSJNMjAuNjE2IDEwLjgzNWExNC4xNDcgMTQuMTQ3IDAgMDEtNC40NS0zLjAwMSAxNC4xMTEgMTQuMTExIDAgMDEtMy42NzgtNi40NTIuNTAzLjUwMyAwIDAwLS45NzUgMCAxNC4xMzQgMTQuMTM0IDAgMDEtMy42NzkgNi40NTIgMTQuMTU1IDE0LjE1NSAwIDAxLTQuNDUgMy4wMDFjLS42NS4yOC0xLjMxOC41MDUtMi4wMDIuNjc4YS41MDIuNTAyIDAgMDAwIC45NzVjLjY4NC4xNzIgMS4zNS4zOTcgMi4wMDIuNjc3YTE0LjE0NyAxNC4xNDcgMCAwMTQuNDUgMy4wMDEgMTQuMTEyIDE0LjExMiAwIDAxMy42NzkgNi40NTMuNTAyLjUwMiAwIDAwLjk3NSAwYy4xNzItLjY4NS4zOTctMS4zNTEuNjc3LTIuMDAzYTE0LjE0NSAxNC4xNDUgMCAwMTMuMDAxLTQuNDUgMTQuMTEzIDE0LjExMyAwIDAxNi40NTMtMy42NzguNTAzLjUwMyAwIDAwMC0uOTc1IDEzLjI0NSAxMy4yNDUgMCAwMS0yLjAwMy0uNjc4eiIgZmlsbD0idXJsKCNsb2JlLWljb25zLWdlbWluaS0wLV9SXzBfKSI+PC9wYXRoPjxwYXRoIGQ9Ik0yMC42MTYgMTAuODM1YTE0LjE0NyAxNC4xNDcgMCAwMS00LjQ1LTMuMDAxIDE0LjExMSAxNC4xMTEgMCAwMS0zLjY3OC02LjQ1Mi41MDMuNTAzIDAgMDAtLjk3NSAwIDE0LjEzNCAxNC4xMzQgMCAwMS0zLjY3OSA2LjQ1MiAxNC4xNTUgMTQuMTU1IDAgMDEtNC40NSAzLjAwMWMtLjY1LjI4LTEuMzE4LjUwNS0yLjAwMi42NzhhLjUwMi41MDIgMCAwMDAgLjk3NWMuNjg0LjE3MiAxLjM1LjM5NyAyLjAwMi42NzdhMTQuMTQ3IDE0LjE0NyAwIDAxNC40NSAzLjAwMSAxNC4xMTIgMTQuMTEyIDAgMDEzLjY3OSA2LjQ1My41MDIuNTAyIDAgMDAuOTc1IDBjLjE3Mi0uNjg1LjM5Ny0xLjM1MS42NzctMi4wMDNhMTQuMTQ1IDE0LjE0NSAwIDAxMy4wMDEtNC40NSAxNC4xMTMgMTQuMTEzIDAgMDE2LjQ1My0zLjY3OC41MDMuNTAzIDAgMDAwLS45NzUgMTMuMjQ1IDEzLjI0NSAwIDAxLTIuMDAzLS42Nzh6IiBmaWxsPSJ1cmwoI2xvYmUtaWNvbnMtZ2VtaW5pLTEtX1JfMF8pIj48L3BhdGg+PHBhdGggZD0iTTIwLjYxNiAxMC44MzVhMTQuMTQ3IDE0LjE0NyAwIDAxLTQuNDUtMy4wMDEgMTQuMTExIDE0LjExMSAwIDAxLTMuNjc4LTYuNDUyLjUwMy41MDMgMCAwMC0uOTc1IDAgMTQuMTM0IDE0LjEzNCAwIDAxLTMuNjc5IDYuNDUyIDE0LjE1NSAxNC4xNTUgMCAwMS00LjQ1IDMuMDAxYy0uNjUuMjgtMS4zMTguNTA1LTIuMDAyLjY3OGEuNTAyLjUwMiAwIDAwMCAuOTc1Yy42ODQuMTcyIDEuMzUuMzk3IDIuMDAyLjY3N2ExNC4xNDcgMTQuMTQ3IDAgMDE0LjQ1IDMuMDAxIDE0LjExMiAxNC4xMTIgMCAwMTMuNjc5IDYuNDUzLjUwMi41MDIgMCAwMC45NzUgMGMuMTcyLS42ODUuMzk3LTEuMzUxLjY3Ny0yLjAwM2ExNC4xNDUgMTQuMTQ1IDAgMDEzLjAwMS00LjQ1IDE0LjExMyAxNC4xMTMgMCAwMTYuNDUzLTMuNjc4LjUwMy41MDMgMCAwMDAtLjk3NSAxMy4yNDUgMTMuMjQ1IDAgMDEtMi4wMDMtLjY3OHoiIGZpbGw9InVybCgjbG9iZS1pY29ucy1nZW1pbmktMi1fUl8wXykiPjwvcGF0aD48ZGVmcz48bGluZWFyR3JhZGllbnQgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiIGlkPSJsb2JlLWljb25zLWdlbWluaS0wLV9SXzBfIiB4MT0iNyIgeDI9IjExIiB5MT0iMTUuNSIgeTI9IjEyIj48c3RvcCBzdG9wLWNvbG9yPSIjMDhCOTYyIj48L3N0b3A+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMDhCOTYyIiBzdG9wLW9wYWNpdHk9IjAiPjwvc3RvcD48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgaWQ9ImxvYmUtaWNvbnMtZ2VtaW5pLTEtX1JfMF8iIHgxPSI4IiB4Mj0iMTEuNSIgeTE9IjUuNSIgeTI9IjExIj48c3RvcCBzdG9wLWNvbG9yPSIjRjk0NTQzIj48L3N0b3A+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjRjk0NTQzIiBzdG9wLW9wYWNpdHk9IjAiPjwvc3RvcD48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgaWQ9ImxvYmUtaWNvbnMtZ2VtaW5pLTItX1JfMF8iIHgxPSIzLjUiIHgyPSIxNy41IiB5MT0iMTMuNSIgeTI9IjEyIj48c3RvcCBzdG9wLWNvbG9yPSIjRkFCQzEyIj48L3N0b3A+PHN0b3Agb2Zmc2V0PSIuNDYiIHN0b3AtY29sb3I9IiNGQUJDMTIiIHN0b3Atb3BhY2l0eT0iMCI+PC9zdG9wPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjwvc3ZnPg==" },
+    { key: "deepseek-color", label: "Deepseek", data: "data:image/svg+xml;base64,PHN2ZyBoZWlnaHQ9IjFlbSIgc3R5bGU9ImZsZXg6bm9uZTtsaW5lLWhlaWdodDoxIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIxZW0iIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHRpdGxlPkRlZXBTZWVrPC90aXRsZT48cGF0aCBkPSJNMjMuNzQ4IDQuNDgyYy0uMjU0LS4xMjQtLjM2NC4xMTMtLjUxMi4yMzQtLjA1MS4wMzktLjA5NC4wOS0uMTM3LjEzNi0uMzcyLjM5Ny0uODA2LjY1Ny0xLjM3My42MjYtLjgyOS0uMDQ2LTEuNTM3LjIxNC0yLjE2My44NDgtLjEzMy0uNzgyLS41NzUtMS4yNDgtMS4yNDctMS41NDgtLjM1Mi0uMTU2LS43MDgtLjMxMS0uOTU1LS42NS0uMTcyLS4yNDEtLjIxOS0uNTEtLjMwNS0uNzc0LS4wNTUtLjE2LS4xMS0uMzIzLS4yOTMtLjM1LS4yLS4wMzEtLjI3OC4xMzYtLjM1Ni4yNzYtLjMxMy41NzItLjQzNCAxLjIwMi0uNDIyIDEuODQuMDI3IDEuNDM2LjYzMyAyLjU4IDEuODM4IDMuMzkzLjEzNy4wOTMuMTcyLjE4Ny4xMjkuMzIzLS4wODIuMjgtLjE4LjU1Mi0uMjY2LjgzMy0uMDU1LjE3OS0uMTM3LjIxNy0uMzI5LjE0YTUuNTI2IDUuNTI2IDAgMDEtMS43MzYtMS4xOGMtLjg1Ny0uODI4LTEuNjMxLTEuNzQyLTIuNTk3LTIuNDU4YTExLjM2NSAxMS4zNjUgMCAwMC0uNjg5LS40NzFjLS45ODUtLjk1Ny4xMy0xLjc0My4zODgtMS44MzYuMjctLjA5OC4wOTMtLjQzMi0uNzc5LS40MjgtLjg3Mi4wMDQtMS42Ny4yOTUtMi42ODcuNjg0YTMuMDU1IDMuMDU1IDAgMDEtLjQ2NS4xMzcgOS41OTcgOS41OTcgMCAwMC0yLjg4My0uMTAyYy0xLjg4NS4yMS0zLjM5IDEuMTAyLTQuNDk3IDIuNjIzQy4wODIgOC42MDYtLjIzMSAxMC42ODQuMTUyIDEyLjg1Yy40MDMgMi4yODQgMS41NjkgNC4xNzUgMy4zNiA1LjY1MyAxLjg1OCAxLjUzMyAzLjk5NyAyLjI4NCA2LjQzOCAyLjE0IDEuNDgyLS4wODUgMy4xMzMtLjI4NCA0Ljk5NC0xLjg2LjQ3LjIzNC45NjIuMzI3IDEuNzguMzk3LjYzLjA1OSAxLjIzNi0uMDMgMS43MDUtLjEyOC43MzUtLjE1Ni42ODQtLjgzNy40MTktLjk2MS0yLjE1NS0xLjAwNC0xLjY4Mi0uNTk1LTIuMTEzLS45MjYgMS4wOTYtMS4yOTYgMi43NDYtMi42NDIgMy4zOTItNy4wMDMuMDUtLjM0Ny4wMDctLjU2NSAwLS44NDUtLjAwNC0uMTcuMDM1LS4yMzcuMjMtLjI1NmE0LjE3MyA0LjE3MyAwIDAwMS41NDUtLjQ3NWMxLjM5Ni0uNzYzIDEuOTYtMi4wMTUgMi4wOTMtMy41MTcuMDItLjIzLS4wMDQtLjQ2Ny0uMjQ3LS41ODh6TTExLjU4MSAxOGMtMi4wODktMS42NDItMy4xMDItMi4xODMtMy41Mi0yLjE2LS4zOTIuMDI0LS4zMjEuNDcxLS4yMzUuNzYzLjA5LjI4OC4yMDcuNDg2LjM3MS43MzkuMTE0LjE2Ny4xOTIuNDE2LS4xMTMuNjAzLS42NzMuNDE2LTEuODQyLS4xNC0xLjg5Ny0uMTY3LTEuMzYxLS44MDItMi41LTEuODYtMy4zMDEtMy4zMDctLjc3NC0xLjM5My0xLjIyNC0yLjg4Ny0xLjI5OC00LjQ4Mi0uMDItLjM4Ni4wOTMtLjUyMi40NzctLjU5MmE0LjY5NiA0LjY5NiAwIDAxMS41MjktLjAzOWMyLjEzMi4zMTIgMy45NDYgMS4yNjUgNS40NjggMi43NzQuODY4Ljg2IDEuNTI1IDEuODg3IDIuMjAyIDIuODkxLjcyIDEuMDY2IDEuNDk0IDIuMDgyIDIuNDggMi45MTQuMzQ4LjI5Mi42MjUuNTE0Ljg5MS42NzctLjgwMi4wOS0yLjE0LjExLTMuMDU0LS42MTR6bTEtNi40NGEuMzA2LjMwNiAwIDAxLjQxNS0uMjg3LjMwMi4zMDIgMCAwMS4yLjI4OC4zMDYuMzA2IDAgMDEtLjMxLjMwNy4zMDMuMzAzIDAgMDEtLjMwNC0uMzA4em0zLjExIDEuNTk2Yy0uMi4wODEtLjM5OS4xNTEtLjU5LjE2YTEuMjQ1IDEuMjQ1IDAgMDEtLjc5OC0uMjU0Yy0uMjc0LS4yMy0uNDctLjM1OC0uNTUyLS43NThhMS43MyAxLjczIDAgMDEuMDE2LS41ODhjLjA3LS4zMjctLjAwOC0uNTM3LS4yMzktLjcyNy0uMTg3LS4xNTYtLjQyNi0uMTk5LS42ODgtLjE5OWEuNTU5LjU1OSAwIDAxLS4yNTQtLjA3OGMtLjExLS4wNTQtLjItLjE5LS4xMTQtLjM1OC4wMjgtLjA1NC4xNi0uMTg2LjE5Mi0uMjEuMzU2LS4yMDIuNzY3LS4xMzYgMS4xNDYuMDE2LjM1Mi4xNDQuNjE4LjQwOCAxLjAwMS43ODIuMzkxLjQ1MS40NjIuNTc2LjY4NS45MTQuMTc2LjI2NS4zMzYuNTM3LjQ0NS44NDguMDY3LjE5NS0uMDE5LjM1NC0uMjUuNDUyeiIgZmlsbD0iIzRENkJGRSI+PC9wYXRoPjwvc3ZnPg==" },
+];
+/** 编辑弹窗：草稿制（取消/点外面/Esc 都不写回；只有「保存」才落到 scheme 上） */
+function openSchemeEditor(scheme) {
+    if (!scheme) return;
+    ensureSchemeStyle();
+    $('#kimi_scheme_editor').remove();
+    const draft = {
+        name: String(scheme.name || ''),
+        icon: scheme.icon || '', iconData: (typeof scheme.iconData === 'string' && /^data:image\//.test(scheme.iconData)) ? scheme.iconData : null,
+        profileName: scheme.profileName || null, presetName: scheme.presetName || null,
+        toggles: scheme.toggles || null, showInBar: !!scheme.showInBar,
+    };
+    const profiles = getConnectionProfiles();
+    const presets = getPresetNames();
+    const opt = (list, cur, noneLabel) => {
+        // 第一项固定「不切换…」；当前值已不在列表里（目标被删/改名）也照列出来，让用户看得见、好改
+        let h = '<option value="">' + noneLabel + '</option>';
+        const all = (cur && !list.includes(cur)) ? [cur].concat(list) : list;
+        for (const n of all) h += '<option value="' + schemeEsc(n) + '"' + (n === cur ? ' selected' : '') + '>' + schemeEsc(n) + '</option>';
+        return h;
+    };
+    const ov = document.createElement('div');
+    ov.id = 'kimi_scheme_editor';
+    ov.className = 'kimi-scheme-overlay';
+    ov.innerHTML = '<div class="kimi-scheme-card">'
+        + '<div style="display:flex;align-items:center;gap:8px">'
+        + '<b style="font-size:.95em">' + t('schemeEditTitle') + '</b>'
+        + '<button type="button" class="kimi-btn" id="kimi_scheme_close" style="margin-left:auto;padding:0 9px">✕</button></div>'
+        + '<label class="kimi-label">' + t('schemeIconLabel') + '</label>'
+        + '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">'
+        + '<span id="kimi_scheme_ico_prev"></span>'
+        + SCHEME_EMOJIS.map(e => '<button type="button" class="kimi-scheme-emoji" data-e="' + e + '" style="font-family:inherit">' + e + '</button>').join('')
+        /* ★W163b：品牌图标（LobeHub）—— 与 emoji 同一排，用 <img> 渲染 */
+        + (typeof SCHEME_PRESET_ICONS !== 'undefined' && Array.isArray(SCHEME_PRESET_ICONS)
+            ? SCHEME_PRESET_ICONS.map(p => '<button type="button" class="kimi-scheme-emoji kimi-scheme-brand" data-p="' + p.key + '" title="' + p.label + '" style="padding:0;overflow:hidden"><img src="' + p.data + '" alt="' + p.label + '" style="width:18px;height:18px;object-fit:contain;display:block"/></button>').join('')
+            : '')
+        + '<button type="button" class="kimi-btn" id="kimi_scheme_ico_upload" style="flex:none">' + t('schemeIconUpload') + '</button>'
+        + '<input type="file" id="kimi_scheme_ico_file" accept="image/*" style="display:none"/>'
+        + '</div>'
+        + '<label class="kimi-label">' + t('schemeNameLabel') + '</label>'
+        + '<input type="text" id="kimi_scheme_name" class="text_pole" value="' + schemeEsc(draft.name) + '" maxlength="60"/>'
+        + '<label class="kimi-label">' + t('schemeProfileLabel') + '</label>'
+        + (profiles.length
+            ? '<select id="kimi_scheme_profile" class="text_pole">' + opt(profiles, draft.profileName, t('schemeNoProfile')) + '</select>'
+            : '<select id="kimi_scheme_profile" class="text_pole"><option value="" selected>' + t('schemeNoProfile') + '</option><option disabled>' + t('schemeNoProfiles') + '</option></select>')
+        + '<label class="kimi-label">' + t('schemePresetLabel') + '</label>'
+        + '<select id="kimi_scheme_preset" class="text_pole">' + opt(presets, draft.presetName, t('schemeNoPreset')) + '</select>'
+        + '<label class="kimi-label">' + t('schemeTogglesLabel') + '</label>'
+        + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+        + '<span id="kimi_scheme_tog_state" style="flex:1 1 auto;min-width:0;font-size:.85em;color:var(--kimi-ink-3,#bbb);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>'
+        + '<button type="button" class="kimi-btn" id="kimi_scheme_capture" style="flex:none">' + t('schemeCaptureBtn') + '</button>'
+        + '</div>'
+        + '<label style="display:flex;align-items:center;gap:6px;margin-top:12px;cursor:pointer;font-size:.88em">'
+        + '<input type="checkbox" id="kimi_scheme_bar"' + (draft.showInBar ? ' checked' : '') + '/>'
+        + '<span>' + t('schemeShowInBar') + '</span></label>'
+        + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">'
+        + '<button type="button" class="kimi-btn" id="kimi_scheme_cancel">' + t('insAskCancel') + '</button>'
+        + '<button type="button" class="kimi-btn" id="kimi_scheme_save" style="border-color:var(--SmartThemeQuoteColor)">' + t('dblSave') + '</button>'
+        + '</div></div>';
+    document.body.appendChild(ov);
+    const $ov = $(ov);
+    const paintIcon = () => {
+        const fake = { icon: draft.icon, iconData: draft.iconData };
+        $('#kimi_scheme_ico_prev').html(schemeIconHtml(fake, 34));
+        $ov.find('.kimi-scheme-emoji').each(function () { this.classList.toggle('cur', !draft.iconData && draft.icon === this.getAttribute('data-e')); });
+    };
+    const paintTog = () => {
+        const n = (draft.toggles && Object.keys(draft.toggles).length) || 0;
+        $('#kimi_scheme_tog_state').text(n > 0 ? String(t('schemeTogglesCaptured')).replace('{n}', String(n)) : t('schemeTogglesNone'));
+    };
+    paintIcon(); paintTog();
+    const close = () => { $(document).off('.kimi_scheme'); $ov.remove(); };
+    $ov.find('.kimi-scheme-emoji').on('click', function () { draft.icon = this.getAttribute('data-e') || ''; draft.iconData = null; paintIcon(); });
+    /* ★W163b：品牌图标（LobeHub）—— 点击后把 data URL 写入 iconData */
+    $ov.find('.kimi-scheme-brand').on('click', function () {
+        const key = this.getAttribute('data-p');
+        const p = (typeof SCHEME_PRESET_ICONS !== 'undefined' ? SCHEME_PRESET_ICONS : []).find(x => x.key === key);
+        if (p) { draft.iconData = p.data; draft.icon = ''; paintIcon(); }
+    });
+    $('#kimi_scheme_ico_upload').on('click', () => $('#kimi_scheme_ico_file').trigger('click'));
+    $('#kimi_scheme_ico_file').on('change', function () {
+        const f = this.files && this.files[0];
+        this.value = '';                       // 同一文件再选一次也要能触发
+        if (!f) return;
+        if (!/^image\//.test(String(f.type || ''))) { notice(t('schemeIconBad'), 'schemeEditTitle'); return; }
+        if (f.size > 300 * 1024) { notice(t('schemeIconBig'), 'schemeEditTitle'); return; }   // 方案图标存 settings.json ⇒ 限 300KB（与悬浮球本机图不同口径）
+        const fr = new FileReader();
+        fr.onload = () => {
+            const url = String(fr.result || '');
+            if (!/^data:image\//.test(url)) { notice(t('schemeIconBad'), 'schemeEditTitle'); return; }
+            draft.iconData = url; draft.icon = '';
+            paintIcon();
+        };
+        fr.onerror = () => notice(t('schemeIconBad'), 'schemeEditTitle');
+        fr.readAsDataURL(f);
+    });
+    $('#kimi_scheme_name').on('input', function () { draft.name = this.value; });
+    $('#kimi_scheme_profile').on('change', function () { draft.profileName = this.value || null; });
+    $('#kimi_scheme_preset').on('change', function () { draft.presetName = this.value || null; });
+    $('#kimi_scheme_capture').on('click', () => {
+        draft.toggles = readPromptToggles();
+        if (!draft.toggles) notice(t('psnapNoPreset'), 'schemeEditTitle');
+        paintTog();
+    });
+    $('#kimi_scheme_bar').on('change', function () { draft.showInBar = this.checked; });
+    $('#kimi_scheme_save').on('click', () => {
+        scheme.name = String(draft.name || '').trim() || t('schemeNewName');
+        scheme.icon = draft.icon; scheme.iconData = draft.iconData;
+        scheme.profileName = draft.profileName; scheme.presetName = draft.presetName;
+        scheme.toggles = draft.toggles; scheme.showInBar = draft.showInBar;
+        saveSettingsDebounced();
+        close();
+        renderSchemeUI();
+        try { window.__kimiRefreshCombo(); } catch (e) { }   // 悬浮条方案图标（W164）跟着刷
+    });
+    $('#kimi_scheme_cancel').on('click', close);
+    $('#kimi_scheme_close').on('click', close);
+    $ov.on('mousedown', (e) => { if (e.target === ov) close(); });   // 点遮罩空白处 = 取消
+    $(document).on('keydown.kimi_scheme', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
 }
 
 // 显示层词汇替换钩子（tag-fixer.js 关闭幻影预览还原渲染时调用，保证「仅显示」替换不丢）
@@ -6085,7 +6393,11 @@ window.__ywApplyDisplayReplace = (text) => applyReplacements(text, 'display');
 
 // 调试出口（CDP/控制台/自检脚本用：纯函数直测，不发真实请求）
 window.__ywDebug = {
-    savePromptSnapshot, applyPromptSnapshot, readPromptToggles, restorePromptRecovery, renderPsnapUI,
+    /* ★W163 方案切换（探针/悬浮条 W164 用）：读写内核 + 方案 CRUD + 一键切换 + 酒馆侧读取助手 */
+    readPromptToggles, writePromptToggles, renderSchemeUI, openSchemeEditor, switchScheme, captureCurrentState,
+    getConnectionProfiles, getCurrentProfileName, getPresetNames, getCurrentPresetName,
+    getSchemes, schemeById, newScheme, deleteScheme, overwriteScheme,
+    schemes: () => settings.schemes, activeSchemeId: () => settings.activeSchemeId,
     togglePsnapPanel, updatePsnapEntries, ensurePsnapPanel,
 
 
@@ -7839,7 +8151,7 @@ ${t('showTpsLabel')}
     <label class="kimi-entry-row">
         <input type="checkbox" class="kimi-entry" data-entry="psnap_menu" ${settings.psnapShowMenuBtn ? 'checked' : ''}/>
         <span class="kimi-entry-ico" style="color:var(--SmartThemeQuoteColor)">${__kimiSvgIcon('fa-list-check', 'var(--SmartThemeQuoteColor)')}</span>
-        <span class="kimi-entry-txt">${t('psnapTitle')}</span>
+        <span class="kimi-entry-txt">${t('schemeTitle')}</span>
     </label>
     <label class="kimi-entry-row">
         <input type="checkbox" class="kimi-entry" data-entry="stop_menu" ${settings.stopRerollMenuBtn ? 'checked' : ''}/>
@@ -8110,14 +8422,10 @@ ${renderWordReplaceRows()}
 <!-- ═══ API 池（额度轮换）★W155：与「标签修复」互换（原 W150 把它放在标签修复之上）═══ -->
 <div id="${extensionName}_api_slot"></div>
 
-<!-- ═══ 预设条目开关（和其他功能平级）═══ -->
+<!-- ═══ ★W163 方案切换（预设/API/开关 整体切换；原「预设条目开关快照」卡改版）═══ -->
 <details class="kimi-card">
-<summary><i class="fa-solid fa-list-check kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('psnapTitle')}</summary>
+<summary><i class="fa-solid fa-list-check kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('schemeTitle')}</summary>
 <div class="kimi-card-body">
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input id="${extensionName}_psnap_name" type="text" class="text_pole" placeholder="${t('psnapNamePh')}" style="flex:1;min-width:90px"/>
-        <button id="${extensionName}_psnap_save" type="button" class="kimi-btn" style="flex:none">${t('psnapSaveBtn')}</button>
-    </div>
     <div id="${extensionName}_psnap_list" style="margin-top:6px"></div>
 </div>
 </details>
@@ -8669,16 +8977,8 @@ const storeBuild = 'v2.2.70';
             }
         } catch (e) { console.warn('[余温工具箱] tps 刷新失败:', e); }
     });
-    // ===== 预设条目开关卡 =====
-    renderPsnapUI();
-    $("#" + extensionName + "_psnap_save").on("click", function () {
-        const nameInput = document.getElementById(extensionName + "_psnap_name");
-        const r = savePromptSnapshot(nameInput ? nameInput.value : '');
-        try { toastr[r.ok ? 'success' : 'warning'](r.msg, '余温工具箱', { timeOut: 2500 }); } catch (e) { }
-        if (r.ok && nameInput) nameInput.value = '';
-        renderPsnapUI();
-    });
-    $("#" + extensionName + "_psnap_name").on("keydown", function (e) { if (e.key === 'Enter') { e.preventDefault(); $("#" + extensionName + "_psnap_save").trigger('click'); } });
+    // ===== ★W163 方案切换卡（行内按钮/新建按钮的绑定都在 renderSchemeUI 里，这里只负责首画）=====
+    renderSchemeUI();
     // 悬浮窗总开关：关闭则整个悬浮条隐藏
     $("#" + extensionName + "_float_bar").on("change", function () {
         settings.floatBarEnabled = $(this).is(":checked");
