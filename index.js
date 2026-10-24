@@ -3753,8 +3753,13 @@ async function switchScheme(scheme) {
     //   观感上像"没变"）。修法 = 合并成一次：noRebuild=true 只写本机存储不重建，由下一行统一重建（先写后建，
     //   重建时读到的一定是刚写进去的那张图）。
     //   ★W163c：勾了「切换时同步悬浮球图标」（ballSync !== false，默认开）才动球；没勾 = 不碰悬浮球。
-    if (scheme.ballSync !== false) {
-        try { __kimiSetBallIcon((typeof scheme.iconData === 'string' && /^data:image\//.test(scheme.iconData)) ? scheme.iconData : '', true); } catch (e) { }
+    //   ★W163d（作者："能不能做成这个图标放在这个原本的玻璃球里面"）：**不再替换球体**（改前把 40×40 的
+    //     方案图标 img 直接当球用，太大、logo 细节被裁）⇒ 改后火球动画照跑、方案图标画在球的右下角当小徽标
+    //     （updateComboFloat 里读 activeSchemeId 找到方案 + 取 iconData/icon 渲染 16×16 圆形徽标）。
+    //     旧的自定义球图（W153 的 kimi_ball_icon）仍然优先——用户如果单独上传过球图标，那个优先级更高。
+    if (scheme.ballSync !== false && !__kimiBallIcon()) {
+        /* 只需标记 activeSchemeId + 重建 —— 徽标由 updateComboFloat 内部根据 activeSchemeId 渲染，
+           不再走 __kimiSetBallIcon（那个是把图标写到 localStorage 替换球体，不是叠加徽标） */
     }
     try { window.__kimiRefreshCombo(); } catch (e) { }   // 悬浮条方案图标（W164）跟着刷（唯一一次重建）
     renderSchemeUI();
@@ -5850,13 +5855,27 @@ function updateComboFloat() {
     </div>`);
     // 火焰粒子启动；canvas 可用则隐藏 fallback emoji
     const $flameCv = $box.find('.kcf-flame')[0];
-    // ★W153：有自定义图标 ⇒ 不启动火球（省 CPU），改铺用户那张图；flameCtl=null 会走既有的"canvas 不可用"分支
-    const __customBall = __kimiBallIcon();
-    const flameCtl = __customBall ? null : startFlameBall($flameCv);
-    if (__customBall) {
-        $box.find('.kcf-flame, .kcf-flame-fallback').hide();
-        $box.find('.kcf-head').prepend('<img class="kcf-custom" src="' + __customBall + '" alt="" style="position:absolute;left:0;top:0;width:40px;height:40px;border-radius:50%;object-fit:cover;pointer-events:none"/>');
-    } else if (flameCtl) { $box.find('.kcf-flame-fallback').hide(); }
+    // ★W163d（作者 2026-10-25）：悬浮球联动改成「**玻璃球保留**、方案图标画在球**内部**当叠加层」——
+    //   改前 = 把整个球体替换成方案图标（40×40 的方形 img 当球，太大、Kimi 红点被裁）。
+    //   改后 = 火球动画照跑，只是在球的右下角叠一颗**小方案徽标**（16×16 圆形 img 或 emoji 字符），
+    //   用户一眼能看到当前方案，但球还是原来的玻璃球。
+    const __activeScheme = (Array.isArray(settings.schemes) && settings.activeSchemeId)
+        ? settings.schemes.find(s => s && s.id === settings.activeSchemeId) : null;
+    const __schemeBadge = __activeScheme
+        ? ((typeof __activeScheme.iconData === 'string' && __activeScheme.iconData.startsWith('data:image')) ? __activeScheme.iconData : '')
+        : '';
+    const __schemeBadgeEmoji = (!__schemeBadge && __activeScheme && __activeScheme.icon) ? __activeScheme.icon : '';
+    const flameCtl = startFlameBall($flameCv);
+    /* ★W163d（作者："玻璃球装着图标的样子"）—— 火球照跑，方案图标画在球**正中央**当叠加层。
+       用 <div> 而非 <span>（setEmojiShift 会把 .kcf-head > span 全部平移 ±11px，<div> 不被它抓到 ⇒ 吸附/拉出位置不跳）。 */
+    if (__schemeBadge) {
+        /* ★W163d：logo 放在 canvas **下面**（z-index:0，DOM 在 canvas 之前 ⇒ canvas 的火球粒子画在 logo 上面）
+           ⇒ 透过玻璃球的火球看到 logo，"装在玻璃球里面"的感觉；22px 大小不变（作者说不是大小的问题） */
+        $box.find('.kcf-head').prepend(`<div class="kcf-scheme-badge" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:22px;height:22px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:0"><img src="${__schemeBadge}" alt="" style="width:22px;height:22px;object-fit:contain;display:block;pointer-events:none"/></div>`);
+    } else if (__schemeBadgeEmoji) {
+        $box.find('.kcf-head').prepend(`<div class="kcf-scheme-badge" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:22px;height:22px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:0;font-size:16px;line-height:1">${__schemeBadgeEmoji}</div>`);
+    }
+    if (flameCtl) { $box.find('.kcf-flame-fallback').hide(); }
     // ★v1.37.63（作者点名 / 台账 §AB-1；P2b 实测火球占我们空闲开销 ≈85%，而总开关关掉只做 display:none）：
     //   判据 = **露没露出来**（作者 2026-09-22 口径："拖出来 / 点开、从边缘出来了才开始动；不动它就继续烧；
     //   隐藏到一半、缩进边缘了就停"）。
@@ -6255,12 +6274,15 @@ function schemeIconHtml(s, px) {
 /** 行内小字：这个方案绑了什么（预设/连接/开关数；一个没绑 = （未配置）） */
 function schemeBindSummary(s) {
     const parts = [];
-    if (s.presetName) parts.push(t('schemeBindPreset') + ': ' + s.presetName);
-    if (s.profileName) parts.push(t('schemeBindProfile') + ': ' + s.profileName);
-    if (s.toggles && Object.keys(s.toggles).length > 0) {
-        parts.push(t('schemeBindToggles') + ': ' + String(t('schemeTogglesCount')).replace('{n}', String(Object.keys(s.toggles).length)));
+    if (s.presetName) parts.push(s.presetName);
+    if (s.profileName) parts.push(s.profileName);
+    if (s.toggles && typeof s.toggles === 'object') {
+        const keys = Object.keys(s.toggles);
+        const on = keys.filter(k => s.toggles[k] === true).length;
+        const off = keys.length - on;
+        if (keys.length > 0) parts.push(on + '条目开 · ' + off + '条目关');
     }
-    return parts.length ? parts.join(' · ') : t('schemeNotConfigured');
+    return parts.length ? parts.join(' · ') : '\u200b';
 }
 /* 转义（方案名/预设名/配置名都是用户数据，进 DOM 一律过这道；iconData 是 data:URL 只进 img src 并单独引号转义） */
 function schemeEsc(v) { return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -6277,16 +6299,20 @@ function renderSchemeUI() {
     schemes.forEach(s => {
         if (!s) return;                                   // 脏条目跳过（铁律 27：不整块挂掉）
         const active = settings.activeSchemeId === s.id;
-        html += '<div class="kimi-scheme-row" data-id="' + schemeEsc(s.id) + '" style="' + rowCss + (active ? ';border-color:var(--golden-color,#e0a800)' : '') + '">'
-            + schemeIconHtml(s, 32)
-            + '<span class="kimi-scheme-mid" style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px;overflow:hidden">'
+        /* ★W163e（作者 2026-10-25）：行 UI 重设计 ——
+           · **点击整行 = 切换**（切按钮删掉，行本身就是最大的点击目标）
+           · 编辑/覆盖/✕ 收成三颗小图标钉在行尾（不再把 ✕ 挤到第二行）
+           · 中间文字直接显示 预设名·连接名·X开X关（人话一行，不重复"预设:"前缀） */
+        const bindHtml = schemeBindSummary(s);
+        html += '<div class="kimi-scheme-row" data-id="' + schemeEsc(s.id) + '" style="display:flex;gap:6px;align-items:center;margin-top:3px;padding:4px 8px;border:1px solid var(--SmartThemeBorderColor);border-radius:6px;cursor:pointer;user-select:none' + (active ? ';border-color:var(--golden-color,#e0a800);background:rgba(224,168,0,.06)' : '') + '" title="' + schemeEsc(t('schemeSwitch')) + '">'
+            + schemeIconHtml(s, 28)
+            + '<span class="kimi-scheme-mid" style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px;overflow:hidden;pointer-events:none">'
             + '<b class="kimi-scheme-name" style="color:var(--kimi-ink-name);font-size:.88em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + schemeEsc(s.name || '') + '</b>'
-            + '<span class="kimi-scheme-bind" style="font-size:.75em;color:var(--kimi-ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + schemeEsc(schemeBindSummary(s)) + '</span>'
+            + '<span class="kimi-scheme-bind" style="font-size:.75em;color:var(--kimi-ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none">' + schemeEsc(bindHtml) + '</span>'
             + '</span>'
-            + '<button class="kimi-btn kimi-scheme-edit kimi-scheme-btn" style="' + btnCss + '">' + t('schemeEdit') + '</button>'
-            + '<button class="kimi-btn kimi-scheme-overwrite kimi-scheme-btn" style="' + btnCss + '">' + t('schemeOverwrite') + '</button>'
-            + '<button class="kimi-btn kimi-scheme-switch kimi-scheme-btn" style="' + btnCss + '">' + t('schemeSwitch') + '</button>'
-            + '<button class="kimi-scheme-del kimi-scheme-btn" title="✕" style="cursor:pointer;opacity:.6;background:none;border:none;color:inherit;font-size:.85em;padding:2px 6px;flex:none;min-width:32px;min-height:32px">✕</button>'
+            + '<button class="kimi-btn kimi-scheme-edit kimi-scheme-btn" title="' + schemeEsc(t('schemeEdit')) + '" style="flex:none;min-width:28px;min-height:28px;display:flex;align-items:center;justify-content:center;font-size:.8em;padding:2px 6px" onclick="event.stopPropagation()">' + t('schemeEdit') + '</button>'
+            + '<button class="kimi-btn kimi-scheme-overwrite kimi-scheme-btn" title="' + schemeEsc(t('schemeOverwrite')) + '" style="flex:none;min-width:28px;min-height:28px;display:flex;align-items:center;justify-content:center;font-size:.8em;padding:2px 6px" onclick="event.stopPropagation()">' + t('schemeOverwrite') + '</button>'
+            + '<button class="kimi-scheme-del kimi-scheme-btn" title="✕" style="cursor:pointer;opacity:.5;background:none;border:none;color:inherit;font-size:.8em;padding:2px 4px;flex:none;min-width:24px;min-height:28px;display:flex;align-items:center;justify-content:center" onclick="event.stopPropagation()">✕</button>'
             + '</div>';
     });
     html += '<div style="margin-top:6px"><button class="kimi-btn kimi-scheme-new" style="' + btnCss + ';width:100%">' + t('schemeNew') + '</button></div>';
@@ -6300,15 +6326,18 @@ function renderSchemeUI() {
             renderSchemeUI();
             try { window.__kimiRefreshCombo(); } catch (e) { }   // 悬浮条方案图标（W164）跟着刷
         }));
-        host.querySelectorAll('.kimi-scheme-edit').forEach(btn => btn.addEventListener('click', () => { const s = rowOf(btn); if (s) openSchemeEditor(s); }));
-        host.querySelectorAll('.kimi-scheme-overwrite').forEach(btn => btn.addEventListener('click', () => {
+        /* ★W163e：点击整行 = 切换（行内编辑/覆盖/✕ 各自 stopPropagation 不触发行点击） */
+        host.querySelectorAll('.kimi-scheme-row').forEach(row => row.addEventListener('click', () => { const s = rowOf(row); if (s) switchScheme(s); }));
+        host.querySelectorAll('.kimi-scheme-edit').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); const s = rowOf(btn); if (s) openSchemeEditor(s); }));
+        host.querySelectorAll('.kimi-scheme-overwrite').forEach(btn => btn.addEventListener('click', (e) => {
+            e.stopPropagation();
             const s = rowOf(btn); if (!s) return;
             overwriteScheme(s);
             try { toastr.success(String(t('schemeOverwritten')).replace('{n}', s.name), '余温工具箱', { timeOut: 2500 }); } catch (e) { }
             renderSchemeUI();
         }));
-        host.querySelectorAll('.kimi-scheme-switch').forEach(btn => btn.addEventListener('click', () => { const s = rowOf(btn); if (s) switchScheme(s); }));
-        host.querySelectorAll('.kimi-scheme-del').forEach(btn => btn.addEventListener('click', () => {
+        host.querySelectorAll('.kimi-scheme-del').forEach(btn => btn.addEventListener('click', (e) => {
+            e.stopPropagation();
             const s = rowOf(btn); if (!s) return;
             if (!window.confirm(t('schemeDeleteConfirm'))) return;   // 二次确认（e2e 的 CDP 自动接受系统对话框）
             deleteScheme(s);
@@ -6375,7 +6404,7 @@ function openSchemeEditor(scheme) {
         /* ★W163b（作者 2026-10-25 第⑤⑥条）：品牌图标排到 emoji **前面**（品牌是"对号入座"的首选），
            <img> 18px → 22px（34px 按钮里 18px 显得太小）；emoji 12 个跟上，上传按钮收尾 */
         + (typeof SCHEME_PRESET_ICONS !== 'undefined' && Array.isArray(SCHEME_PRESET_ICONS)
-            ? SCHEME_PRESET_ICONS.map(p => '<button type="button" class="kimi-scheme-emoji kimi-scheme-brand" data-p="' + p.key + '" title="' + p.label + '" style="padding:0;overflow:hidden"><img src="' + p.data + '" alt="' + p.label + '" style="width:18px;height:18px;object-fit:contain;display:block"/></button>').join('')
+            ? SCHEME_PRESET_ICONS.map(p => '<button type="button" class="kimi-scheme-emoji kimi-scheme-brand" data-p="' + p.key + '" title="' + p.label + '" style="padding:0;overflow:hidden;display:flex;align-items:center;justify-content:center"><img src="' + p.data + '" alt="' + p.label + '" style="width:18px;height:18px;object-fit:contain;pointer-events:none"/></button>').join('')
             : '')
         + SCHEME_EMOJIS.map(e => '<button type="button" class="kimi-scheme-emoji" data-e="' + e + '" style="font-family:inherit">' + e + '</button>').join('')
         + '<button type="button" class="kimi-btn" id="kimi_scheme_ico_upload" style="flex:none">' + t('schemeIconUpload') + '</button>'
