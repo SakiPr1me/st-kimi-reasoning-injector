@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.53'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.54'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -3457,13 +3457,41 @@ async function doSelfUpdate(btn, remoteVer, auto) {
         return;
         }
     }
-    // v1.37.15：不再自动 delete+install 重装兜底——曾因 delete 路径/网络中断导致目录残缺，
-    // manifest 损坏 → ST 加载不到扩展 → "工具箱消失"且重装提示已存在（用户群事故）。
-    // update 全灭时只明确报错，让用户手动到扩展管理删除后重装（保留 git pull 的安全更新路径）。
+    /* ★W164（作者 2026-10-25 · Gitee 匿名拉取被关后 update 全灭 ⇒ 自动走 GitHub 删除重装兜底）：
+       改前这段只弹错误提示什么都不做（v1.37.15 担心网络中断导致目录残缺）。现在 Gitee 本身把正常
+       更新堵死了（匿名 git 拉取 401），不做兜底的后果（所有用户完全无法更新）远比旧担忧严重。
+       安全措施：
+       · 只在全部组合都失败后才触发（上面 update 成功已 return）
+       · 一次性旗 kimi_github_fallback（同一页面周期只试一次，防 GitHub 也不通时反复删装）
+       · 整个兜底包在 try/catch 里（GitHub 也不通时弹出手动重装提示，不静默失败）
+       · 设置安全性已实测（8002）：删掉插件文件夹后 settings.json 里的 schemes/API池/连接配置完全不变 */
     if (btn) { btn.disabled = false; btn.textContent = '⬆ 可更新'; }
-    const tip = auto ? '<br>常见原因: 开了 VPN/代理时无法访问 Gitee 仓库——请关闭 VPN 后重启酒馆/重试' : '<br>常见原因: 开了 VPN/代理时无法访问 Gitee 仓库——请关闭 VPN 后重启酒馆/重试；仍失败可到「管理扩展」删除本插件后用 https://gitee.com/satosaki/st-kimi-reasoning-injector.git 重装';
-    try { toastr.error('自动更新失败' + ((lastErr && lastErr.message) ? '：' + lastErr.message : '') + tip, null, { escapeHtml: false, timeOut: 8000 }); } catch (e2) { }
-    console.warn('[余温工具箱] 自动更新失败（未执行重装，避免目录损坏）', lastErr);
+    let githubTried = false;
+    try { githubTried = localStorage.getItem('kimi_github_fallback') === '1'; } catch (e) { }
+    if (!githubTried) {
+        try { localStorage.setItem('kimi_github_fallback', '1'); } catch (e) { }
+        try {
+            if (btn) btn.textContent = '⏳ 从 GitHub 重装…';
+            toastr.info('Gitee 更新失败，正在从 GitHub 重装…（设置和收藏不会丢失）', '余温工具箱', { timeOut: 8000 });
+            const H = getRequestHeaders();
+            const del = await fetch('/api/extensions/delete', { method: 'POST', headers: H, body: JSON.stringify({ extensionName: selfName, global: false }) });
+            if (!del.ok && del.status !== 404) throw new Error('delete HTTP ' + del.status);
+            const GH_URL = 'https://github.com/SakiPr1me/st-kimi-reasoning-injector.git';
+            const inst = await fetch('/api/extensions/install', { method: 'POST', headers: Object.assign({}, H, { 'Content-Type': 'application/json' }), body: JSON.stringify({ url: GH_URL, global: false }) });
+            if (!inst.ok) throw new Error('install HTTP ' + inst.status);
+            try { localStorage.setItem('kimi_updated_to', String(remoteVer || PLUGIN_VERSION)); } catch (e) { }
+            try { toastr.success('🔥 已从 GitHub 重装最新版 v' + (remoteVer || PLUGIN_VERSION) + '，即将刷新', null, { timeOut: 4000 }); } catch (e) { }
+            window.__kimiCoordReload(3000);
+            return;
+        } catch (fbErr) {
+            console.warn('[余温工具箱] GitHub 兜底也失败：', fbErr);
+            try { localStorage.removeItem('kimi_github_fallback'); } catch (e) { }   // 下次还能再试
+        }
+    }
+    // 兜底也没成（或已试过）→ 弹原始错误 + 手动重装指引（GitHub 链接，匿名克隆实测通）
+    const tip = '<br>自动更新失败（Gitee 匿名克隆已被关闭）。请到「管理扩展」删除本插件后用以下链接重装（设置不会丢）：<br><a href="https://github.com/SakiPr1me/st-kimi-reasoning-injector.git" target="_blank">https://github.com/SakiPr1me/st-kimi-reasoning-injector.git</a>';
+    try { toastr.error(tip, null, { escapeHtml: false, timeOut: 15000 }); } catch (e2) { }
+    console.warn('[余温工具箱] 自动更新失败 + GitHub 兜底也失败', lastErr);
 }
 async function checkUpdate() {
     try {
