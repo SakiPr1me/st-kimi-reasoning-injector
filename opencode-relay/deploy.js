@@ -338,6 +338,8 @@ function printResult(ctx) {
     out('OpenCode Go 中转 · 部署到你自己 Cloudflare 账号');
     out('（只跟 api.cloudflare.com 说话；令牌和中转流量都不经过作者）');
     line();
+    out('它会：在你的 Cloudflare 里建一个只做转发的小站点 → 上传中转代码 → 打印一行配置串给你。');
+    line();
 
     if (ctx.checkWorker) {
         const w = await loadWorkerSource(ctx);
@@ -352,9 +354,12 @@ function printResult(ctx) {
     }
 
     if (!ctx.token) {
-        out('需要两样东西，第一次大概 2 分钟：');
-        out('  1) Cloudflare 账号（没有就注册）：' + REGISTER_URL);
-        out('  2) 一个令牌（权限已经预填好，点开直接点击右下角然后点「创建令牌」→ 复制）：');
+        out('需要两样东西，第一次大概 2 分钟。');
+        line();
+        out('  1) Cloudflare 账号（注册就行，谷歌一键登录不用验证，邮箱注册需要去邮箱点一下验证）：');
+        out('     ' + REGISTER_URL);
+        line();
+        out('  2) 令牌（打开链接，内容权限已经预填好，直接点击右下角，然后「创建令牌」→ 复制）：');
         out('     ' + TOKEN_DEEP_LINK);
         line();
         ctx.token = await ask('粘贴令牌到此处：  ');
