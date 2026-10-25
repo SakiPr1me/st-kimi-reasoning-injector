@@ -102,34 +102,6 @@ function ask(q) {
     });
 }
 
-function askHidden(q) {
-    if (!process.stdin.isTTY) return ask(q);
-    return new Promise((resolve) => {
-        process.stdout.write(q);
-        const stdin = process.stdin;
-        stdin.resume();
-        if (stdin.setRawMode) stdin.setRawMode(true);
-        let buf = '';
-        const onData = (chunk) => {
-            const s = chunk.toString('utf8');
-            for (const ch of s) {
-                if (ch === '\r' || ch === '\n') {
-                    if (stdin.setRawMode) stdin.setRawMode(false);
-                    stdin.pause();
-                    stdin.removeListener('data', onData);
-                    process.stdout.write('\n');
-                    resolve(buf.trim());
-                    return;
-                }
-                if (ch === '\u0003') { process.exit(1); }
-                if (ch === '\u007f') { buf = buf.slice(0, -1); continue; }
-                buf += ch;
-            }
-        };
-        stdin.on('data', onData);
-    });
-}
-
 // ---------------------------------------------------------------- Cloudflare API
 async function cfCall(token, method, apiPath, opt) {
     const o = opt || {};
@@ -352,14 +324,10 @@ function printResult(ctx) {
     if (!ctx.token) {
         out('需要两样东西，第一次大概 2 分钟：');
         out('  1) Cloudflare 账号（没有就注册）：' + REGISTER_URL);
-        out('  2) 一个令牌（权限已经预填好，点开直接「创建令牌」→ 复制）：');
+        out('  2) 一个令牌（权限已经预填好，点开直接点击右下角然后点「创建令牌」→ 复制）：');
         out('     ' + TOKEN_DEEP_LINK);
         line();
-        const ans = await ask('准备好了就按回车（或先粘注册/令牌的网页地址也行）…  ');
-        if (ans && /^https?:\/\//.test(ans)) {
-            out('请先在上面那个页面建好令牌，然后把令牌粘进来。');
-        }
-        ctx.token = await askHidden('把令牌粘到这里（不会显示，粘完回车）：  ');
+        ctx.token = await ask('粘贴令牌到此处：  ');
         if (!ctx.token) die('没拿到令牌。', '重跑一次，把令牌粘进来。');
     }
 
