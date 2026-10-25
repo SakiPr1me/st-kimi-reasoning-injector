@@ -132,13 +132,11 @@ export default {
         const stream = new ReadableStream({
             async start(controller) {
                 const reader = upstream.body.getReader();
-                let buf = '', tail = '', seenStart = false;
-                const cut = () => {
-                    try {
-                        controller.enqueue(enc.encode('data: ' + JSON.stringify({
-                            candidates: [{ finishReason: 'STOP', content: { role: 'model', parts: [{ text: '' }] } }],
-                        }) + NL + NL));
-                    } catch (e) { }
+                let pending = '', tail = '', seenStart = false;
+                const cutDone = () => {
+                    try { controller.enqueue(enc.encode('data: ' + JSON.stringify({
+                        candidates: [{ finishReason: 'STOP', content: { role: 'model', parts: [{ text: '' }] } }],
+                    }) + NL + NL)); } catch (e) { }
                     try { controller.close(); } catch (e) { }
                     try { abort.abort(); } catch (e) { }
                     try { reader.cancel(); } catch (e) { }
@@ -147,32 +145,66 @@ export default {
                     for (;;) {
                         const r = await reader.read();
                         if (r.done) break;
-                        try { controller.enqueue(r.value); } catch (e) { break; }
-                        buf += dec.decode(r.value, { stream: true });
+                        pending += dec.decode(r.value, { stream: true });
                         let i;
-                        while ((i = buf.indexOf(NL)) >= 0) {
-                            const line = buf.slice(0, i); buf = buf.slice(i + 1);
-                            if (line.indexOf('data:') !== 0) continue;
+                        while ((i = pending.indexOf(NL)) >= 0) {
+                            const line = pending.slice(0, i); pending = pending.slice(i + 1);
+                            if (line.indexOf('data:') !== 0) {
+                                try { controller.enqueue(enc.encode(line + NL)); } catch (e) { break; }
+                                continue;
+                            }
                             const payload = line.slice(5).trim();
-                            if (!payload) continue;
-                            try {
-                                const j = JSON.parse(payload);
-                                for (const c of (j.candidates || [])) {
+                            if (!payload) {
+                                try { controller.enqueue(enc.encode(line + NL)); } catch (e) { break; }
+                                continue;
+                            }
+                            let obj = null;
+                            try { obj = JSON.parse(payload); } catch (e) { }
+                            if (!obj) {
+                                try { controller.enqueue(enc.encode(line + NL)); } catch (e) { break; }
+                                continue;
+                            }
+                            // 逐段收集本行的正文（跳过 thought）
+                            let hit = false;
+                            const prevLen = tail.length;
+                            let chunkText = '';
+                            for (const c of (obj.candidates || [])) {
+                                for (const p of ((c.content || {}).parts || [])) {
+                                    if (p.thought || typeof p.text !== 'string' || !p.text) continue;
+                                    chunkText += p.text;
+                                }
+                            }
+                            if (chunkText) {
+                                tail = (tail + chunkText).slice(-400);
+                                if (!seenStart) {
+                                    let si = -1;
+                                    for (const x of START_MARKERS) { const k = tail.lastIndexOf(x); if (k > si) si = k; }
+                                    if (si >= 0) { seenStart = true; tail = tail.slice(si); }
+                                }
+                                if (seenStart && tail.indexOf(END_MARKER) >= 0) hit = true;
+                            }
+                            if (hit) {
+                                // 只把 <mutter> 之前的部分留下（本行内能定位就精确截，跨行就整行丢掉正文）
+                                const posInChunk = chunkText.indexOf(END_MARKER);
+                                let keep = posInChunk >= 0 ? posInChunk : (tail.indexOf(END_MARKER) >= prevLen ? tail.indexOf(END_MARKER) - prevLen : -1);
+                                if (keep < 0) keep = 0;
+                                let used = 0;
+                                for (const c of (obj.candidates || [])) {
                                     for (const p of ((c.content || {}).parts || [])) {
-                                        if (p.thought || typeof p.text !== 'string' || !p.text) continue;
-                                        tail = (tail + p.text).slice(-400);
-                                        if (!seenStart) {
-                                            let si = -1;
-                                            for (const x of START_MARKERS) { const k = tail.lastIndexOf(x); if (k > si) si = k; }
-                                            // 起始标记之前出现的 <mutter> 不算（把 tail 从起始标记处截起）
-                                            if (si >= 0) { seenStart = true; tail = tail.slice(si); }
-                                        }
-                                        if (seenStart && tail.indexOf(END_MARKER) >= 0) { cut(); return; }
+                                        if (p.thought || typeof p.text !== 'string') continue;
+                                        const room = Math.max(0, keep - used);
+                                        p.text = p.text.slice(0, room);
+                                        used += p.text.length;
                                     }
                                 }
-                            } catch (e) { }
+                                try { controller.enqueue(enc.encode('data: ' + JSON.stringify(obj) + NL + NL)); } catch (e) { }
+                                cutDone();
+                                return;
+                            }
+                            try { controller.enqueue(enc.encode(line + NL)); } catch (e) { break; }
                         }
                     }
+                    if (pending) { try { controller.enqueue(enc.encode(pending)); } catch (e) { } }
                     try { controller.close(); } catch (e) { }
                 } catch (e) {
                     try { controller.close(); } catch (_) { }
