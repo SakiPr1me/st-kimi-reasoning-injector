@@ -187,18 +187,14 @@ async function stepEnsureProject(ctx) {
 
 async function loadWorkerSource(ctx) {
     const okWorker = (src) => typeof src === 'string' && src.indexOf(SERVICE_TAG) >= 0 && src.indexOf('export default') >= 0;
-    const candidates = [];
-    if (ctx.worker) candidates.push(ctx.worker);
-    candidates.push(path.join(__dirname, '_worker.js'));
-    for (const p of candidates) {
-        try {
-            const src = fs.readFileSync(p, 'utf8');
-            if (okWorker(src)) return { src, file: p };
-            // ★旁边那个同名文件可能是「另存为」下来的网页（Gitee 的 302 说明页）——跳过，继续去下载
-            warn('旁边这个 _worker.js 不是本项目的转发代码，已忽略：' + p);
-        } catch (e) { /* 没有就继续 */ }
+    // ★W166n（作者报「重新部署但后端没变」）：默认**总是下载仓库里最新的 _worker.js**，
+    //   不要用本地那份 —— 本地文件可能是很早以前下的旧版本，会让"重新部署"看起来没生效。
+    //   （--worker= 显式指定时才用本地文件；下载失败才退回本地。）
+    if (ctx.worker) {
+        const src = fs.readFileSync(ctx.worker, 'utf8');
+        if (okWorker(src)) return { src, file: ctx.worker };
+        warn('--worker 指定的文件不是本项目的转发代码，改走下载：' + ctx.worker);
     }
-    // 本地没有/不对 ⇒ 自己补（一行式入口只下 deploy.js）
     try {
         const r = await fetch(WORKER_URL, { signal: AbortSignal.timeout(30000) });
         if (r.ok) {
@@ -214,7 +210,11 @@ async function loadWorkerSource(ctx) {
     } catch (e) {
         warn('下载 _worker.js 出错：' + String((e && e.message) || e));
     }
-    die('拿不到正确的 _worker.js。', '重跑一次；还是不行就把上面这段原话发给作者。');;
+    try {
+        const src = fs.readFileSync(path.join(__dirname, '_worker.js'), 'utf8');
+        if (okWorker(src)) { warn('下载不通，改用本地 _worker.js（可能是旧版）'); return { src, file: path.join(__dirname, '_worker.js') }; }
+    } catch (e) { /* 没有就算了 */ }
+    die('拿不到正确的 _worker.js。', '检查网络后重跑；还是不行就把上面这段原话发给作者。');;
 }
 
 function buildForm(worker, mode) {
