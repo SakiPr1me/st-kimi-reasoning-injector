@@ -108,7 +108,7 @@ export default {
         const headers = new Headers(CORS);
         const ct = upstream.headers.get('content-type');
         if (ct) headers.set('content-type', ct);
-        headers.set('cache-control', 'no-store');
+        headers.set('cache-control', 'no-store, no-transform');   // 别让边缘节点压缩/改流（长 SSE 更稳）
         return new Response(upstream.body, { status: upstream.status, headers });
     },
 };
