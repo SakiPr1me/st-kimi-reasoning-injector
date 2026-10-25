@@ -93,6 +93,7 @@ export default {
 
         const target = UPSTREAM + '/v1beta/models/' + m[1] + ':' + m[2] + (qs.toString() ? '?' + qs.toString() : '');
 
+        const abort = new AbortController();
         let upstream;
         try {
             upstream = await fetch(target, {
@@ -104,6 +105,7 @@ export default {
                     'user-agent': 'yw-opencode-relay/1.0',
                 },
                 body: bodyText,
+                signal: abort.signal,
             });
         } catch (e) {
             return json({ error: { code: 502, message: 'upstream fetch failed: ' + String((e && e.message) || e) } }, 502);
@@ -113,6 +115,71 @@ export default {
         const ct = upstream.headers.get('content-type');
         if (ct) headers.set('content-type', ct);
         headers.set('cache-control', 'no-store, no-transform');   // 别让边缘节点压缩/改流（长 SSE 更稳）
-        return new Response(upstream.body, { status: upstream.status, headers });
+
+        // ★W166p（作者 2026-10-25）：**中转侧自动截断** ——
+        //   先见到起始标记（</content> 或 <talk>），之后见到 <mutter> ⇒ 立刻中止上游 + 给客户端补一个 STOP 收尾。
+        //   为什么放在中转：客户端偶尔会成批到字，等它看到标记再停，上游可能已经又写了一长段；在这里命中就当场 abort。
+        //   注意：只能省掉标记之后**还没生成**的部分，已经在路上的省不了。
+        const START_MARKERS = ['</content>', '<talk>'];
+        const END_MARKER = '<mutter>';
+        if (!upstream.ok || !upstream.body || (ct && ct.indexOf('text/event-stream') < 0)) {
+            return new Response(upstream.body, { status: upstream.status, headers });   // 错误/非流：原样透传，保留状态码
+        }
+
+        const dec = new TextDecoder();
+        const enc = new TextEncoder();
+        const NL = String.fromCharCode(10);
+        const stream = new ReadableStream({
+            async start(controller) {
+                const reader = upstream.body.getReader();
+                let buf = '', tail = '', seenStart = false;
+                const cut = () => {
+                    try {
+                        controller.enqueue(enc.encode('data: ' + JSON.stringify({
+                            candidates: [{ finishReason: 'STOP', content: { role: 'model', parts: [{ text: '' }] } }],
+                        }) + NL + NL));
+                    } catch (e) { }
+                    try { controller.close(); } catch (e) { }
+                    try { abort.abort(); } catch (e) { }
+                    try { reader.cancel(); } catch (e) { }
+                };
+                try {
+                    for (;;) {
+                        const r = await reader.read();
+                        if (r.done) break;
+                        try { controller.enqueue(r.value); } catch (e) { break; }
+                        buf += dec.decode(r.value, { stream: true });
+                        let i;
+                        while ((i = buf.indexOf(NL)) >= 0) {
+                            const line = buf.slice(0, i); buf = buf.slice(i + 1);
+                            if (line.indexOf('data:') !== 0) continue;
+                            const payload = line.slice(5).trim();
+                            if (!payload) continue;
+                            try {
+                                const j = JSON.parse(payload);
+                                for (const c of (j.candidates || [])) {
+                                    for (const p of ((c.content || {}).parts || [])) {
+                                        if (p.thought || typeof p.text !== 'string' || !p.text) continue;
+                                        tail = (tail + p.text).slice(-400);
+                                        if (!seenStart) {
+                                            let si = -1;
+                                            for (const x of START_MARKERS) { const k = tail.lastIndexOf(x); if (k > si) si = k; }
+                                            // 起始标记之前出现的 <mutter> 不算（把 tail 从起始标记处截起）
+                                            if (si >= 0) { seenStart = true; tail = tail.slice(si); }
+                                        }
+                                        if (seenStart && tail.indexOf(END_MARKER) >= 0) { cut(); return; }
+                                    }
+                                }
+                            } catch (e) { }
+                        }
+                    }
+                    try { controller.close(); } catch (e) { }
+                } catch (e) {
+                    try { controller.close(); } catch (_) { }
+                }
+            },
+            cancel() { try { abort.abort(); } catch (e) { } },
+        });
+        return new Response(stream, { status: 200, headers });
     },
 };
