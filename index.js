@@ -338,11 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-<<<<<<< HEAD
-const PLUGIN_VERSION = '1.46.54'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
-=======
-const PLUGIN_VERSION = '1.46.55'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
->>>>>>> 10e9511 (fix(W163f·作者)：粒子特效默认无论何时都跑 + 基础设置加「收起悬浮球时暂停粒子特效」勾选（默认关）—— 1.46.54 → 1.46.55)
+const PLUGIN_VERSION = '1.46.56'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -3464,14 +3460,19 @@ async function doSelfUpdate(btn, remoteVer, auto) {
         }
     }
     /* ★W164（作者 2026-10-25 · Gitee 匿名拉取被关后 update 全灭 ⇒ 自动走 GitHub 删除重装兜底）：
-       改前这段只弹错误提示什么都不做（v1.37.15 担心网络中断导致目录残缺）。现在 Gitee 本身把正常
-       更新堵死了（匿名 git 拉取 401），不做兜底的后果（所有用户完全无法更新）远比旧担忧严重。
-       安全措施：
-       · 只在全部组合都失败后才触发（上面 update 成功已 return）
-       · 一次性旗 kimi_github_fallback（同一页面周期只试一次，防 GitHub 也不通时反复删装）
-       · 整个兜底包在 try/catch 里（GitHub 也不通时弹出手动重装提示，不静默失败）
-       · 设置安全性已实测（8002）：删掉插件文件夹后 settings.json 里的 schemes/API池/连接配置完全不变 */
+       ★★W164b（作者报"手机端工具箱消失"）：**TT/手机上禁用此兜底** —— TT 的 delete/install 接口
+       会把 third-party/ 前缀剥掉（sanitize-filename 把 `/` 删了）⇒ 删错路径/装错路径 ⇒ 插件从
+       third-party/ 目录消失。桌面 ST 的全局安装（public/scripts/extensions/third-party/）路径正确，
+       兜底安全。⇒ 检测到 TT（__TAURITAVERN__ 存在）或 Android UA 时跳过兜底，只弹手动重装指引。 */
     if (btn) { btn.disabled = false; btn.textContent = '⬆ 可更新'; }
+    const isTT = !!(window.__TAURITAVERN__ || window.__TAURITAVERN_MAIN_READY__);
+    const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+    if (isTT || isMobile) {
+        const tip = '<br>Gitee 匿名克隆已被关闭，自动更新暂不支持 TT/手机。请用电脑浏览器打开酒馆 →「管理扩展」删除本插件后用以下链接重装（设置不会丢）：<br><a href="https://github.com/SakiPr1me/st-kimi-reasoning-injector.git" target="_blank">https://github.com/SakiPr1me/st-kimi-reasoning-injector.git</a><br>（TT/手机上操作会因路径错位导致插件消失——请务必在电脑浏览器操作）';
+        try { toastr.error(tip, null, { escapeHtml: false, timeOut: 20000 }); } catch (e2) { }
+        console.warn('[余温工具箱] TT/移动端跳过 GitHub 兜底（防止路径错位导致插件消失）');
+        return;
+    }
     let githubTried = false;
     try { githubTried = localStorage.getItem('kimi_github_fallback') === '1'; } catch (e) { }
     if (!githubTried) {

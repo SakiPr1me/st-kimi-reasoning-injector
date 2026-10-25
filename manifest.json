@@ -2,11 +2,7 @@
     "name": "Kimi Reasoning Content Injector",
     "display_name": "🔥 余温工具箱",
     "description": "余温工具箱：思维链注入夺舍 + 折叠美化 + 自动重roll + 自动截断 + 词汇替换 + 换行修正 + DeepSeek适配 + 标签修复",
-<<<<<<< HEAD
-    "version": "1.46.54",
-=======
-    "version": "1.46.55",
->>>>>>> 10e9511 (fix(W163f·作者)：粒子特效默认无论何时都跑 + 基础设置加「收起悬浮球时暂停粒子特效」勾选（默认关）—— 1.46.54 → 1.46.55)
+    "version": "1.46.56",
     "author": "Local",
     "js": [
         "index.js"
