@@ -63,6 +63,25 @@ export default {
             return json({ ok: true, service: SERVICE_TAG, hint: '这个地址填进酒馆「反向代理」，钥匙填「代理密码」，模型填 gemini-4-argon' });
         }
 
+        // ★W166q 调试：GET /demo —— 每 100ms 发一行，用来判断 CF 边缘有没有把 SSE 攒成块
+        if (request.method === 'GET' && url.pathname === '/demo') {
+            const enc2 = new TextEncoder();
+            const demo = new ReadableStream({
+                async start(c) {
+                    const t0 = Date.now();
+                    for (let i = 0; i < 50; i++) {
+                        try { c.enqueue(enc2.encode('data: ' + JSON.stringify({ i: i, t: Date.now() - t0 }) + String.fromCharCode(10, 10))); } catch (e) { break; }
+                        await new Promise(function (r) { setTimeout(r, 100); });
+                    }
+                    try { c.close(); } catch (e) { }
+                },
+            });
+            const h2 = new Headers(CORS);
+            h2.set('content-type', 'text/event-stream');
+            h2.set('cache-control', 'no-store, no-transform');
+            return new Response(demo, { status: 200, headers: h2 });
+        }
+
         const m = url.pathname.match(/^\/v1beta\/models\/([^/]+):(streamGenerateContent|generateContent)$/);
         if (request.method !== 'POST' || !m) {
             return json({ error: { code: 404, message: 'not found: ' + url.pathname } }, 404);
