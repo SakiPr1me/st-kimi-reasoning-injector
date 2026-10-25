@@ -1596,3 +1596,6 @@ body.ywpu-nosel { user-select: none; -webkit-user-select: none; }
        ★PC 档一个字节不动（1470px 放得下整句）；★判据锚点：手机档 .ywpu-footstat 可见盒高 = 0。 */
     .ywpu-footstat { display: none; }
 }
+/* ★W166h：TT 攻略折叠去掉默认三角（和下面「ST 连接」标签左对齐） */
+.kimi-oc-tt > summary { list-style: none; }
+.kimi-oc-tt > summary::-webkit-details-marker { display: none; }
