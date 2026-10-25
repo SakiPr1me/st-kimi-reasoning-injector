@@ -309,17 +309,11 @@ function printResult(ctx) {
     line();
     out('部署完成。');
     line();
-    out('把下面这一整行粘进「余温工具箱 → 连接 OpenCode Go」：');
+    out('把下面这一整行粘进「余温工具箱 → 连接 OpenCode Go」的「配置串」里：');
     out('');
     out('    ' + CONFIG_PREFIX + ctx.url);
     line();
-    out('（也可以只填地址）');
-    out('    反向代理：' + ctx.url);
-    out('    代理密码：你的 oc_sk_... 钥匙');
-    out('    API 密钥：留空');
-    out('    模型：gemini-4-argon');
-    line();
-    out('这个地址只认你自己的 Cloudflare 账号，钥匙只在你自己的中转里过一下，作者看不到。');
+    out('（地址只认你自己的 Cloudflare 账号；钥匙还是填在插件里，作者看不到。）');
 }
 
 (async () => {
