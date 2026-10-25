@@ -58,10 +58,11 @@ function die(human, hint) { throw new DeployError(human, hint); }
 
 // ---------------------------------------------------------------- 参数 / 状态
 function parseArgs(argv) {
-    const o = { token: process.env.CF_API_TOKEN || '', accountId: '', projectName: '', dryRun: false, probe: true, worker: '' };
+    const o = { token: process.env.CF_API_TOKEN || '', accountId: '', projectName: '', dryRun: false, probe: true, worker: '', checkWorker: false };
     for (const a of argv.slice(2)) {
         if (a === '--dry-run') o.dryRun = true;
         else if (a === '--no-probe') o.probe = false;
+        else if (a === '--check-worker') o.checkWorker = true;
         else if (a.startsWith('--token=')) o.token = a.slice(8).trim();
         else if (a.startsWith('--account-id=')) o.accountId = a.slice(13).trim();
         else if (a.startsWith('--project-name=')) o.projectName = a.slice(15).trim();
@@ -149,6 +150,21 @@ async function stepFindAccount(ctx) {
 
 async function stepEnsureProject(ctx) {
     title('3/5 建站点');
+    // 没指定名字 ⇒ 先找账号里已有的 yw-oc-relay-* 项目复用（上次跑到一半失败也能接上，不会越堆越多）
+    if (!ctx.projectName) {
+        try {
+            const list = await cfCall(ctx.token, 'GET', '/accounts/' + ctx.accountId + '/pages/projects');
+            const cand = (Array.isArray(list) ? list : [])
+                .filter((p) => p && /^yw-oc-relay-/.test(String(p.name)))
+                .sort((a, b) => String(b.created_on || '').localeCompare(String(a.created_on || '')))[0];
+            if (cand) {
+                ctx.projectName = cand.name;
+                good('找到上次建的站点，复用：' + ctx.projectName);
+            }
+        } catch (e) { /* 列不出来就新建 */ }
+    }
+    if (!ctx.projectName) ctx.projectName = 'yw-oc-relay-' + crypto.randomBytes(3).toString('hex');
+
     let proj = null;
     try {
         proj = await cfCall(ctx.token, 'GET', '/accounts/' + ctx.accountId + '/pages/projects/' + ctx.projectName);
@@ -165,33 +181,40 @@ async function stepEnsureProject(ctx) {
     }
     ctx.url = 'https://' + ctx.projectName + '.pages.dev';
     sub('地址：' + ctx.url);
+    // ★建完就落盘：后面哪一步失败，重跑也能接上同一个站点
+    saveState({ projectName: ctx.projectName, accountId: ctx.accountId, url: ctx.url });
 }
 
 async function loadWorkerSource(ctx) {
+    const okWorker = (src) => typeof src === 'string' && src.indexOf(SERVICE_TAG) >= 0 && src.indexOf('export default') >= 0;
     const candidates = [];
     if (ctx.worker) candidates.push(ctx.worker);
     candidates.push(path.join(__dirname, '_worker.js'));
     for (const p of candidates) {
         try {
             const src = fs.readFileSync(p, 'utf8');
-            if (src.indexOf(SERVICE_TAG) < 0 || src.indexOf('export default') < 0) {
-                die('这个 _worker.js 不是本项目的转发代码（找不到 ' + SERVICE_TAG + '）。', '把仓库里的 _worker.js 放到 deploy.js 旁边再跑。');
-            }
-            return { src, file: p };
-        } catch (e) { if (e instanceof DeployError) throw e; /* 试下一个 */ }
+            if (okWorker(src)) return { src, file: p };
+            // ★旁边那个同名文件可能是「另存为」下来的网页（Gitee 的 302 说明页）——跳过，继续去下载
+            warn('旁边这个 _worker.js 不是本项目的转发代码，已忽略：' + p);
+        } catch (e) { /* 没有就继续 */ }
     }
-    // 本地没有 ⇒ 自己补（一行式入口只下 deploy.js）
+    // 本地没有/不对 ⇒ 自己补（一行式入口只下 deploy.js）
     try {
         const r = await fetch(WORKER_URL, { signal: AbortSignal.timeout(30000) });
         if (r.ok) {
             const src = await r.text();
-            if (src.indexOf(SERVICE_TAG) >= 0 && src.indexOf('export default') >= 0) {
+            if (okWorker(src)) {
                 try { fs.writeFileSync(path.join(__dirname, '_worker.js'), src); } catch (e) { /* 只读目录也没关系 */ }
                 return { src, file: WORKER_URL };
             }
+            warn('下载回来的内容不对（可能被网络换成了跳转页），开头是：' + JSON.stringify(String(src).slice(0, 60)));
+        } else {
+            warn('下载 _worker.js 失败：HTTP ' + r.status);
         }
-    } catch (e) { /* 下面统一报人话 */ }
-    die('找不到 _worker.js，也下载不下来。', '把 _worker.js 和 deploy.js 放在同一个文件夹里再跑（两个文件都要）。');
+    } catch (e) {
+        warn('下载 _worker.js 出错：' + String((e && e.message) || e));
+    }
+    die('拿不到正确的 _worker.js。', '重跑一次；还是不行就把上面这段原话发给作者。');;
 }
 
 function buildForm(worker, mode) {
@@ -305,9 +328,10 @@ function printResult(ctx) {
     const ctx = {
         token: opt.token,
         accountId: opt.accountId || state.accountId || '',
-        projectName: opt.projectName || state.projectName || ('yw-oc-relay-' + crypto.randomBytes(3).toString('hex')),
+        projectName: opt.projectName || state.projectName || '',
         probe: opt.probe,
         dryRun: opt.dryRun,
+        checkWorker: opt.checkWorker,
     };
 
     line();
@@ -315,9 +339,15 @@ function printResult(ctx) {
     out('（只跟 api.cloudflare.com 说话；令牌和中转流量都不经过作者）');
     line();
 
+    if (ctx.checkWorker) {
+        const w = await loadWorkerSource(ctx);
+        out('✅ 用的是：' + w.file + '（' + w.src.length + ' 字节，含 ' + SERVICE_TAG + '）');
+        return;
+    }
+
     if (ctx.dryRun) {
-        out('【干跑】不联网。将要创建/复用的站点名：' + ctx.projectName);
-        out('【干跑】部署完成后会给的地址：https://' + ctx.projectName + '.pages.dev');
+        out('【干跑】不联网。站点名：' + (ctx.projectName || '（自动：优先复用你账号里已有的 yw-oc-relay-*）'));
+        out('【干跑】部署完成后会给的地址：https://' + (ctx.projectName || 'yw-oc-relay-xxxxxx') + '.pages.dev');
         return;
     }
 
