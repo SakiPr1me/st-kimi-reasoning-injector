@@ -74,13 +74,17 @@ export default {
         }
 
         const bodyText = await request.text();
-        let session = '';
-        try {
-            const payload = JSON.parse(bodyText);
-            const t = firstUserText(payload);
-            if (t) session = 'st-' + (await sha1Hex(t.slice(0, 500))).slice(0, 20);
-        } catch (e) { /* 体不是 JSON 也照样转发，交给上游报错 */ }
-        if (!session) session = 'st-' + (await sha1Hex(key)).slice(0, 20);
+        // 会话 id：上游强制要求（缺了回 400 MissingSessionID，实测），所以不能去掉。
+        // 客户端/插件如果自己带了 x-opencode-session，就尊重它（避免两边各算一个）；没带才自己算。
+        let session = String(request.headers.get('x-opencode-session') || '').trim();
+        if (!session) {
+            try {
+                const payload = JSON.parse(bodyText);
+                const t = firstUserText(payload);
+                if (t) session = 'st-' + (await sha1Hex(t.slice(0, 500))).slice(0, 20);
+            } catch (e) { /* 体不是 JSON 也照样转发，交给上游报错 */ }
+            if (!session) session = 'st-' + (await sha1Hex(key)).slice(0, 20);
+        }
 
         const qs = new URLSearchParams();
         const alt = url.searchParams.get('alt');
