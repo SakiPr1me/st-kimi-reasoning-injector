@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.59'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.60'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -720,7 +720,7 @@ const OC_RELAY_I18N = {
         stGuideCloud: '云端中转（不用挂窗口，但没本地丝滑）',
         stGuideNote: '没有本地窗口条件时用云端；有可用公益站，也可以自行上传 OC 的 Key 在 ST 里用。',
         wrap4aTitle: '4A 破限包裹（默认关）',
-        wrap4aHint: '建议至少 1 万 token；4A 注意力很高，长一点不用担心。只发给 AI，界面不变。',
+        wrap4aHint: '建议至少 1 万 token；4A 注意力很高，长一点不用担心。<br>最好自己找小说，大家都发同样的，我不确定会不会被标记。',
         wrap4aPrefixLabel: '前置小说（上面一段）',
         wrap4aPrefixPh: '把小说的前一半粘到这里…',
         wrap4aSuffixLabel: '后置小说（下面一段）',
@@ -762,7 +762,7 @@ const OC_RELAY_I18N = {
         stGuideCloud: 'Cloud relay (no window, slightly less smooth)',
         stGuideNote: 'Use the cloud option when you cannot keep a local window; a public relay also works if you upload your own OC key.',
         wrap4aTitle: '4A wrap (off by default)',
-        wrap4aHint: 'Aim for at least ~10k tokens; 4A attention is strong, longer is fine. Sent to the AI only — the chat stays unchanged.',
+        wrap4aHint: 'Aim for at least ~10k tokens; 4A attention is strong, longer is fine.<br>Better to use your own novel — everyone sending the same text might get flagged (unknown).',
         wrap4aPrefixLabel: 'Prefix novel (top part)',
         wrap4aPrefixPh: 'Paste the first half of the novel here…',
         wrap4aSuffixLabel: 'Suffix novel (bottom part)',
@@ -804,7 +804,7 @@ const OC_RELAY_I18N = {
         stGuideCloud: '클라우드 중계 (창 없이, 약간 덜 부드러움)',
         stGuideNote: '로컬 창을 띄울 수 없을 때 클라우드를 쓰세요. 공용 중계가 있으면 OC 키를 올려 ST에서도 쓸 수 있습니다.',
         wrap4aTitle: '4A 랩 (기본 꺼짐)',
-        wrap4aHint: '최소 1만 토큰 이상 권장. 4A는 집중력이 높아 길어도 괜찮습니다. AI에게만 전송되고 화면은 그대로입니다.',
+        wrap4aHint: '최소 1만 토큰 이상 권장. 4A는 집중력이 높아 길어도 괜찮습니다.<br>가능하면 직접 소설을 구하세요. 모두 같은 글을 보내면 표시될 수 있습니다(미확인).',
         wrap4aPrefixLabel: '앞 소설 (위쪽)',
         wrap4aPrefixPh: '소설의 앞부분을 붙여넣으세요…',
         wrap4aSuffixLabel: '뒤 소설 (아래쪽)',
@@ -8813,29 +8813,6 @@ ${t('injectStep1')}
 ${t('injectStep2')}
 </label>
 
-<div class="kimi-sep"></div>
-<div class="kimi-inner-card">
-<label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
-<input type="checkbox" id="${extensionName}_wrap4a" ${settings.wrap4aEnabled ? 'checked' : ''}/>
-<span style="font-size:.9em;font-weight:600">${ocr('wrap4aTitle')}</span>
-</label>
-<div id="${extensionName}_wrap4a_box" style="display:${settings.wrap4aEnabled ? '' : 'none'}">
-<p class="kimi-hint" style="margin:2px 0 5px;line-height:1.4">${ocr('wrap4aHint')}</p>
-<label class="kimi-label" for="${extensionName}_wrap4a_prefix">${ocr('wrap4aPrefixLabel')}</label>
-<textarea id="${extensionName}_wrap4a_prefix" class="text_pole" style="width:100%;min-height:88px;font:12px/1.45 ui-monospace,Consolas,monospace" placeholder="${ocr('wrap4aPrefixPh')}"></textarea>
-<div id="${extensionName}_wrap4a_prefix_tok" style="text-align:right;font-size:.76em;opacity:.75;margin:1px 0 4px"></div>
-<div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:.8em;opacity:.85;margin:2px 0 6px;white-space:nowrap;overflow:hidden">
-<span>${ocr('wrap4aMidUp')} ↑</span><span style="opacity:.45">｜</span><span style="font-weight:600">${ocr('wrap4aMidCore')}</span><span style="opacity:.45">｜</span><span>↓ ${ocr('wrap4aMidDown')}</span>
-</div>
-<label class="kimi-label" for="${extensionName}_wrap4a_suffix">${ocr('wrap4aSuffixLabel')}</label>
-<textarea id="${extensionName}_wrap4a_suffix" class="text_pole" style="width:100%;min-height:88px;font:12px/1.45 ui-monospace,Consolas,monospace" placeholder="${ocr('wrap4aSuffixPh')}"></textarea>
-<div id="${extensionName}_wrap4a_suffix_tok" style="text-align:right;font-size:.76em;opacity:.75;margin:1px 0 4px"></div>
-<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px">
-<button type="button" id="${extensionName}_wrap4a_demo" class="menu_button" style="flex:none;white-space:nowrap">${ocr('wrap4aDemo')}</button>
-<span class="kimi-hint" style="margin:0;flex:1 1 auto;min-width:0;line-height:1.3">${ocr('wrap4aDemoNote')}</span>
-</div>
-</div>
-</div>
 <div style="margin-top:8px">
 <label class="kimi-label" for="${extensionName}_reasoning_value">${t('rcLabel')}</label>
 <textarea id="${extensionName}_reasoning_value" class="text_pole" ${(typeof settings.injectTarget === 'string' && settings.injectTarget.startsWith('custom:')) ? '' : 'readonly'} style="width: 100%; box-sizing: border-box; height: 120px;">${settings.reasoningContent}</textarea>
@@ -8894,6 +8871,28 @@ ${t('usage3')}
 <div style="display:flex;align-items:center;gap:8px;margin-top:7px">
 <button type="button" id="${extensionName}_oc_relay_apply" class="menu_button" style="flex:none;white-space:nowrap">${ocr('apply')}</button>
 <span id="${extensionName}_oc_relay_status" class="kimi-hint" style="margin:0"></span>
+</div>
+</div>
+<div class="kimi-sep"></div>
+<div class="kimi-inner-card">
+<label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
+<input type="checkbox" id="${extensionName}_wrap4a" ${settings.wrap4aEnabled ? 'checked' : ''}/>
+<span style="font-size:1.24em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('wrap4aTitle')}</span>
+</label>
+<div id="${extensionName}_wrap4a_box" style="display:${settings.wrap4aEnabled ? '' : 'none'}">
+<p class="kimi-hint" style="margin:2px 0 6px;line-height:1.5">${ocr('wrap4aHint')}</p>
+<div style="margin:0 0 6px">
+<button type="button" id="${extensionName}_wrap4a_demo" class="menu_button" style="flex:none;white-space:nowrap">${ocr('wrap4aDemo')}</button>
+</div>
+<label class="kimi-label" for="${extensionName}_wrap4a_prefix">${ocr('wrap4aPrefixLabel')}</label>
+<textarea id="${extensionName}_wrap4a_prefix" class="text_pole" style="width:100%;min-height:88px;font:12px/1.45 ui-monospace,Consolas,monospace" placeholder="${ocr('wrap4aPrefixPh')}"></textarea>
+<div id="${extensionName}_wrap4a_prefix_tok" style="text-align:right;font-size:.76em;opacity:.75;margin:1px 0 4px"></div>
+<div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:.8em;opacity:.85;margin:2px 0 6px;white-space:nowrap;overflow:hidden">
+<span>${ocr('wrap4aMidUp')} ↑</span><span style="opacity:.45">｜</span><span style="font-weight:600">${ocr('wrap4aMidCore')}</span><span style="opacity:.45">｜</span><span>↓ ${ocr('wrap4aMidDown')}</span>
+</div>
+<label class="kimi-label" for="${extensionName}_wrap4a_suffix">${ocr('wrap4aSuffixLabel')}</label>
+<textarea id="${extensionName}_wrap4a_suffix" class="text_pole" style="width:100%;min-height:88px;font:12px/1.45 ui-monospace,Consolas,monospace" placeholder="${ocr('wrap4aSuffixPh')}"></textarea>
+<div id="${extensionName}_wrap4a_suffix_tok" style="text-align:right;font-size:.76em;opacity:.75;margin:1px 0 4px"></div>
 </div>
 </div>
 <label class="kimi-label" for="${extensionName}_ds_thinking_mode">${t('dsModeLabel')}</label>
