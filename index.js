@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.64'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.65'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -10538,17 +10538,13 @@ eventSource.on(event_types.GENERATION_ENDED, function () {
                 const ch = ctx && Array.isArray(ctx.chat) ? ctx.chat : [];
                 const last = ch.length ? ch[ch.length - 1] : null;
                 if (!last || !last.is_user) { __apiFailRetry = 0; return; }   // 有 AI 消息 ⇒ 交给现有空回逻辑
-                if (__apiFailRetry >= 3) {
-                    notifyReroll('⏸ 连续 3 次没生成出内容（多半是 429 限流）→ 已停手，稍后再试', 'error');
-                    return;
-                }
+                // ★W167d（作者 2026-10-26）：**取消 3 次上限、也不再等几秒** —— 失败就立刻再试，一直试。
                 __apiFailRetry++;
-                const wait = 4000 * __apiFailRetry;
-                notifyReroll('🔄 这次没生成出内容，' + Math.round(wait / 1000) + ' 秒后自动重试（' + __apiFailRetry + '/3）');
-                console.log('[余温工具箱] 本次生成没有产生 AI 消息（疑似接口失败/429）→ ' + wait + 'ms 后自动重试 ' + __apiFailRetry + '/3');
+                notifyReroll('🔄 这次没生成出内容，立刻重试（第 ' + __apiFailRetry + ' 次）');
+                console.log('[余温工具箱] 本次生成没有产生 AI 消息（疑似接口失败/429）→ 立刻重试，第 ' + __apiFailRetry + ' 次');
                 setTimeout(function () {
                     try { if (!is_send_press && !manualStopClicked) Generate('regenerate'); } catch (e) { }
-                }, wait);
+                }, 0);
             } catch (e) { }
         }, 800);
     } catch (e) { }
