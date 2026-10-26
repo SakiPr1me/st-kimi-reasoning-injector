@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.61'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.62'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -1638,6 +1638,7 @@ function wrapLastUserMessage(msgs) {
             const NLC = String.fromCharCode(10);
             const mid = '————' + NLC + '本轮真实输入：' + NLC + body + NLC + '————';
             m.content = (pre ? pre + NLC + NLC : '') + mid + (suf ? NLC + NLC + suf : '');
+            try { console.log('[余温工具箱] 4A 破限包裹已生效：前缀 ' + pre.length + ' 字 · 正文 ' + body.length + ' 字 · 后缀 ' + suf.length + ' 字'); } catch (e) { }
             return true;
         }
     } catch (e) { }
