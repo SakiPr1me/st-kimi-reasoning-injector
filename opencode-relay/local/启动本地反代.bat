@@ -12,8 +12,13 @@ if errorlevel 1 (
 )
 echo http://127.0.0.1:8787| clip
 echo.
-echo  已把这个地址复制到剪贴板：http://127.0.0.1:8787
-echo  ^(酒馆里「反向代理」填它；代理密码填你的 oc_sk_...；模型 gemini-4-argon^)
+echo  已把地址复制到剪贴板：http://127.0.0.1:8787
+echo.
+echo  在「余温工具箱」里：
+echo    1^) 打开 基础设置 -^> 「Gemini 4 Argon」那块
+echo    2^) 配置串填：http://127.0.0.1:8787
+echo    3^) Key 填你的 oc_sk_...
+echo    4^) 点「确定」
 echo.
 node yw-oc-local.js
 echo.

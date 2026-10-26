@@ -184,14 +184,23 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
+    const line = '  ' + '-'.repeat(52);
     console.log('');
-    console.log('  OpenCode Go 本地反代已启动');
-    console.log('  酒馆里这样填：');
+    console.log('  OpenCode Go 本地反代已启动：' + 'http://127.0.0.1:' + PORT);
+    console.log(line);
+    console.log('  接下来在「余温工具箱」里（推荐）：');
+    console.log('    1) 打开 基础设置 → 「Gemini 4 Argon」那块');
+    console.log('    2) 配置串填：http://127.0.0.1:' + PORT);
+    console.log('    3) Key 填你的 oc_sk_...');
+    console.log('    4) 点「确定」');
+    console.log(line);
+    console.log('  也可以直接用酒馆自带的 API 设置：');
     console.log('    聊天补全来源   Google AI Studio');
     console.log('    反向代理       http://127.0.0.1:' + PORT);
     console.log('    代理密码       你的 oc_sk_...');
     console.log('    API 密钥       留空');
     console.log('    模型           gemini-4-argon');
+    console.log(line);
+    console.log('  关掉这个窗口 / 按 Ctrl+C = 停止反代。');
     console.log('');
-    console.log('  关掉这个窗口 = 停止反代。');
 });
