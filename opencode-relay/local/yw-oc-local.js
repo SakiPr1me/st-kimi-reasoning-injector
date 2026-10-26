@@ -194,7 +194,6 @@ server.listen(PORT, '127.0.0.1', () => {
     console.log('    3) Key 填你的 oc_sk_...');
     console.log('    4) 点「确定」');
     console.log(line);
-    console.log(line);
     console.log('  关掉这个窗口 / 按 Ctrl+C = 停止反代。');
     console.log('');
 });
