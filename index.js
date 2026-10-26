@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.65'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.66'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -10527,6 +10527,19 @@ eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, onSettingsReady);
 //   现成的空回重roll 全部挂在「消息」上 ⇒ 抓不到。这里补一个看门狗：
 //   生成结束后若最后一条仍是 user（= 一个字都没生成出来），按 4/8/12 秒递进重试，最多 3 次，然后停手出声。
 let __apiFailRetry = 0;
+let __genSnap = null;   // 本次生成开始时：最后一条消息的 条数/swipe_id/分支数（判断 429 时 swipe 是否真的没生效）
+eventSource.on(event_types.GENERATION_STARTED, function () {
+    try {
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        const ch = ctx && Array.isArray(ctx.chat) ? ctx.chat : [];
+        const last = ch.length ? ch[ch.length - 1] : null;
+        __genSnap = {
+            n: ch.length,
+            sid: (last && typeof last.swipe_id === 'number') ? last.swipe_id : -1,
+            len: (last && Array.isArray(last.swipes)) ? last.swipes.length : -1,
+        };
+    } catch (e) { __genSnap = null; }
+});
 eventSource.on(event_types.GENERATION_ENDED, function () {
     try {
         if (!settings.enabled || !settings.rerollOnEmpty || settings.rerollPaused) { __apiFailRetry = 0; return; }
@@ -10537,13 +10550,30 @@ eventSource.on(event_types.GENERATION_ENDED, function () {
                 const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
                 const ch = ctx && Array.isArray(ctx.chat) ? ctx.chat : [];
                 const last = ch.length ? ch[ch.length - 1] : null;
-                if (!last || !last.is_user) { __apiFailRetry = 0; return; }   // 有 AI 消息 ⇒ 交给现有空回逻辑
+                if (streamGotToken) { __apiFailRetry = 0; return; }   // 这次收到过内容 ⇒ 不算失败
+                if (!last) return;
+                if (!last.is_user) {
+                    // 点“新分支/重roll”撞 429 时：ST 往往什么都没变（没有新分支槽、内容还是旧的）
+                    // ⇒ 用生成开始时的快照比对，没变就再开一次；真的产生了新分支就交给现有空回逻辑
+                    const sid = (typeof last.swipe_id === 'number') ? last.swipe_id : -1;
+                    const len = Array.isArray(last.swipes) ? last.swipes.length : -1;
+                    const changed = !!(__genSnap && (__genSnap.n !== ch.length || __genSnap.sid !== sid || __genSnap.len !== len));
+                    if (changed) { __apiFailRetry = 0; return; }
+                }
                 // ★W167d（作者 2026-10-26）：**取消 3 次上限、也不再等几秒** —— 失败就立刻再试，一直试。
                 __apiFailRetry++;
                 notifyReroll('🔄 这次没生成出内容，立刻重试（第 ' + __apiFailRetry + ' 次）');
                 console.log('[余温工具箱] 本次生成没有产生 AI 消息（疑似接口失败/429）→ 立刻重试，第 ' + __apiFailRetry + ' 次');
                 setTimeout(function () {
-                    try { if (!is_send_press && !manualStopClicked) Generate('regenerate'); } catch (e) { }
+                    try {
+                        if (is_send_press || manualStopClicked) return;
+                        const c2 = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+                        const ch2 = c2 && Array.isArray(c2.chat) ? c2.chat : [];
+                        const l2 = ch2.length ? ch2[ch2.length - 1] : null;
+                        if (!l2) return;
+                        if (l2.is_user) Generate('regenerate');
+                        else doSwipe(ch2.length - 1);
+                    } catch (e) { }
                 }, 0);
             } catch (e) { }
         }, 800);
