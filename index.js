@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.63'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.64'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -10521,6 +10521,46 @@ const storeBuild = 'v2.2.70';
 
 // 全局事件只绑定一次（语言切换重渲染 initSettingsPanel 时不会重复监听）
 eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, onSettingsReady);
+
+// ★W167c（作者报：429 限流时「空回自动重roll」不动作）：
+//   429 这类接口失败时，ST 连一条空占位消息都不会生成（聊天最后一条还是 user），
+//   现成的空回重roll 全部挂在「消息」上 ⇒ 抓不到。这里补一个看门狗：
+//   生成结束后若最后一条仍是 user（= 一个字都没生成出来），按 4/8/12 秒递进重试，最多 3 次，然后停手出声。
+let __apiFailRetry = 0;
+eventSource.on(event_types.GENERATION_ENDED, function () {
+    try {
+        if (!settings.enabled || !settings.rerollOnEmpty || settings.rerollPaused) { __apiFailRetry = 0; return; }
+        if (manualStopClicked) { __apiFailRetry = 0; return; }   // 用户手动停的，不重试
+        setTimeout(function () {
+            try {
+                if (is_send_press || manualStopClicked) return;
+                const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+                const ch = ctx && Array.isArray(ctx.chat) ? ctx.chat : [];
+                const last = ch.length ? ch[ch.length - 1] : null;
+                if (!last || !last.is_user) { __apiFailRetry = 0; return; }   // 有 AI 消息 ⇒ 交给现有空回逻辑
+                if (__apiFailRetry >= 3) {
+                    notifyReroll('⏸ 连续 3 次没生成出内容（多半是 429 限流）→ 已停手，稍后再试', 'error');
+                    return;
+                }
+                __apiFailRetry++;
+                const wait = 4000 * __apiFailRetry;
+                notifyReroll('🔄 这次没生成出内容，' + Math.round(wait / 1000) + ' 秒后自动重试（' + __apiFailRetry + '/3）');
+                console.log('[余温工具箱] 本次生成没有产生 AI 消息（疑似接口失败/429）→ ' + wait + 'ms 后自动重试 ' + __apiFailRetry + '/3');
+                setTimeout(function () {
+                    try { if (!is_send_press && !manualStopClicked) Generate('regenerate'); } catch (e) { }
+                }, wait);
+            } catch (e) { }
+        }, 800);
+    } catch (e) { }
+});
+// 真正生成出内容 ⇒ 把失败计数清零
+eventSource.on(event_types.MESSAGE_RECEIVED, function (mesId) {
+    try {
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        const m = ctx && Array.isArray(ctx.chat) ? ctx.chat[mesId] : null;
+        if (m && !m.is_user && String(m.mes || '').trim()) __apiFailRetry = 0;
+    } catch (e) { }
+});
 // ★W167b（作者：提示词查看器是一次 dry-run，应该能看到包裹）：
 //   GENERATE_AFTER_DATA 在 Generate() 里**先于**查看器快照发生（script.js:5318 vs 5340），
 //   所以在这里也包一次 —— 查看器/预览就能看到包裹后的内容；后面那次是幂等空转。
