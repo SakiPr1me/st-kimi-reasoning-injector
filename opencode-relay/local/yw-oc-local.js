@@ -194,12 +194,6 @@ server.listen(PORT, '127.0.0.1', () => {
     console.log('    3) Key 填你的 oc_sk_...');
     console.log('    4) 点「确定」');
     console.log(line);
-    console.log('  也可以直接用酒馆自带的 API 设置：');
-    console.log('    聊天补全来源   Google AI Studio');
-    console.log('    反向代理       http://127.0.0.1:' + PORT);
-    console.log('    代理密码       你的 oc_sk_...');
-    console.log('    API 密钥       留空');
-    console.log('    模型           gemini-4-argon');
     console.log(line);
     console.log('  关掉这个窗口 / 按 Ctrl+C = 停止反代。');
     console.log('');
