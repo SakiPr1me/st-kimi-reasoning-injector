@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.57'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.58'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -679,6 +679,11 @@ export function t(key) {
 //   文案独立成一张小表（三语大字典那几行长到几千字，往里插 key 容易碰坏别的东西）。
 const OC_RELAY_CMD = 'curl.exe -fL -O https://gitee.com/satosaki/st-kimi-reasoning-injector/raw/main/opencode-relay/deploy.js && node deploy.js';
 const OC_RELAY_CMD_SH = 'curl -fL -O https://gitee.com/satosaki/st-kimi-reasoning-injector/raw/main/opencode-relay/deploy.js && node deploy.js';
+const OC_LOCAL_JS = 'https://gitee.com/satosaki/st-kimi-reasoning-injector/raw/main/opencode-relay/local/yw-oc-local.js';
+const OC_LOCAL_BAT = 'https://gitee.com/satosaki/st-kimi-reasoning-injector/raw/main/opencode-relay/local/start-local.bat';
+const OC_RELAY_LOCAL_WIN = 'cd /d "%USERPROFILE%\Desktop" && curl.exe -fL -O ' + OC_LOCAL_JS + ' -O ' + OC_LOCAL_BAT + ' && echo. && echo 已下载完成，请回到桌面，双击 start-local.bat';
+const OC_RELAY_LOCAL_SH = 'cd ~ && curl -fL -O ' + OC_LOCAL_JS + ' && node yw-oc-local.js';
+const OC_CMD_STYLE = 'font:11px/1.45 ui-monospace,Consolas,monospace;background:color-mix(in srgb,var(--kimi-ink-3) 12%,transparent);border:1px solid color-mix(in srgb,var(--kimi-ink-3) 28%,transparent);border-radius:5px;padding:4px 6px;margin:2px 0 3px;word-break:break-all;cursor:pointer;user-select:all';
 const OC_RELAY_I18N = {
     zh: {
         title: 'Gemini 4 Argon：',
@@ -702,6 +707,10 @@ const OC_RELAY_I18N = {
         needKey: '还要填 OpenCode 钥匙（oc_sk_…）',
         applied: '已帮你填好，建议你去「API连接配置」里将此配置新建配置，并在工具箱的「预设方案切换」里，将配置绑定预设和条目开关，可一键切换模型。',
         geminiAutoNote: '当前是 Gemini 模型：本次自动跳过 step 1（勾选保留，换回其它模型自动恢复）',
+        stGuideSummary: '点此看攻略',
+        stGuideLocal: '本地挂窗口中转（推荐，最顺）',
+        stGuideCloud: '云端中转（不用挂窗口，但没本地丝滑）',
+        stGuideNote: '没有本地窗口条件时用云端；有可用公益站，也可以自行上传 OC 的 Key 在 ST 里用。',
         schemeTtProxyTitle: 'TT酒馆点开我（反代 / Key）',
         schemeTtProxyUrl: '反向代理 URL',
         schemeTtProxyKey: 'Key',
@@ -728,6 +737,10 @@ const OC_RELAY_I18N = {
         needKey: 'OpenCode key is required (oc_sk_…)',
         applied: 'Filled in for you. Next: create a profile from this setup in Connection Profiles, then bind it (with a preset and entry toggles) to a scheme under Preset Scheme Switch for one-click model switching.',
         geminiAutoNote: 'Gemini model detected: step 1 is skipped for this request (checkbox kept; other models restore it)',
+        stGuideSummary: 'View guide',
+        stGuideLocal: 'Local relay window (recommended, smoothest)',
+        stGuideCloud: 'Cloud relay (no window, slightly less smooth)',
+        stGuideNote: 'Use the cloud option when you cannot keep a local window; a public relay also works if you upload your own OC key.',
         schemeTtProxyTitle: 'TauriTavern only (proxy / key)',
         schemeTtProxyUrl: 'Reverse proxy URL',
         schemeTtProxyKey: 'Key',
@@ -754,6 +767,10 @@ const OC_RELAY_I18N = {
         needKey: 'OpenCode 키(oc_sk_…)를 입력해야 합니다',
         applied: '입력해 두었습니다. API 연결 구성에서 이 설정으로 새 구성을 만들고, 프리셋 스킴 전환에서 프리셋·항목 토글과 함께 스킴에 연결하면 모델을 한 번에 전환할 수 있습니다.',
         geminiAutoNote: 'Gemini 모델 감지: 이번 요청에서는 step 1을 자동으로 건너뜁니다(체크는 유지, 다른 모델로 바꾸면 복구)',
+        stGuideSummary: '가이드 보기',
+        stGuideLocal: '로컬 중계 창 (권장, 가장 부드러움)',
+        stGuideCloud: '클라우드 중계 (창 없이, 약간 덜 부드러움)',
+        stGuideNote: '로컬 창을 띄울 수 없을 때 클라우드를 쓰세요. 공용 중계가 있으면 OC 키를 올려 ST에서도 쓸 수 있습니다.',
         schemeTtProxyTitle: 'TauriTavern 전용 (프록시 / Key)',
         schemeTtProxyUrl: '역방향 프록시 URL',
         schemeTtProxyKey: 'Key',
@@ -8735,12 +8752,22 @@ ${t('usage3')}
 <summary style="cursor:pointer;font-size:.88em;font-weight:600;line-height:1.35;list-style:none">${ocr('ttLabel')}<span style="color:var(--golden-color,#e0a800);text-decoration:underline">${ocr('ttGuideSummary')}</span></summary>
 <div class="kimi-hint" style="margin:4px 0 0;line-height:1.55">${ocr('ttGuideBody')}</div>
 </details>
-<div class="kimi-label" style="font-weight:600;font-size:.88em;margin:0">${ocr('stLabel')}</div>
-<p class="kimi-hint" style="margin:1px 0 3px;line-height:1.4">${ocr('hint')}</p>
+<details class="kimi-oc-tt" style="margin:0 0 3px">
+<summary style="cursor:pointer;font-size:.88em;font-weight:600;line-height:1.35;list-style:none">${ocr('stLabel')}<span style="color:var(--golden-color,#e0a800);text-decoration:underline">${ocr('stGuideSummary')}</span></summary>
+<div class="kimi-hint" style="margin:4px 0 0;line-height:1.5">
+<div style="font-weight:600;margin:2px 0">${ocr('stGuideLocal')}</div>
 <label class="kimi-label" style="font-size:.82em;opacity:.85;margin:2px 0 0">${ocr('cmdWinLabel')}</label>
-<div id="${extensionName}_oc_relay_cmd" title="${ocr('copyTip')}" style="font:11px/1.45 ui-monospace,Consolas,monospace;background:color-mix(in srgb,var(--kimi-ink-3) 12%,transparent);border:1px solid color-mix(in srgb,var(--kimi-ink-3) 28%,transparent);border-radius:5px;padding:4px 6px;margin:2px 0 3px;word-break:break-all;cursor:pointer;user-select:all">${OC_RELAY_CMD}</div>
+<div id="${extensionName}_oc_relay_local_win" title="${ocr('copyTip')}" style="${OC_CMD_STYLE}">${OC_RELAY_LOCAL_WIN}</div>
 <label class="kimi-label" style="font-size:.82em;opacity:.85;margin:2px 0 0">${ocr('cmdShLabel')}</label>
-<div id="${extensionName}_oc_relay_cmd_sh" title="${ocr('copyTip')}" style="font:11px/1.45 ui-monospace,Consolas,monospace;background:color-mix(in srgb,var(--kimi-ink-3) 12%,transparent);border:1px solid color-mix(in srgb,var(--kimi-ink-3) 28%,transparent);border-radius:5px;padding:4px 6px;margin:2px 0 5px;word-break:break-all;cursor:pointer;user-select:all">${OC_RELAY_CMD_SH}</div>
+<div id="${extensionName}_oc_relay_local_sh" title="${ocr('copyTip')}" style="${OC_CMD_STYLE}">${OC_RELAY_LOCAL_SH}</div>
+<div style="font-weight:600;margin:6px 0 2px">${ocr('stGuideCloud')}</div>
+<label class="kimi-label" style="font-size:.82em;opacity:.85;margin:2px 0 0">${ocr('cmdWinLabel')}</label>
+<div id="${extensionName}_oc_relay_cmd" title="${ocr('copyTip')}" style="${OC_CMD_STYLE}">${OC_RELAY_CMD}</div>
+<label class="kimi-label" style="font-size:.82em;opacity:.85;margin:2px 0 0">${ocr('cmdShLabel')}</label>
+<div id="${extensionName}_oc_relay_cmd_sh" title="${ocr('copyTip')}" style="${OC_CMD_STYLE}">${OC_RELAY_CMD_SH}</div>
+<div style="margin-top:4px;opacity:.85">${ocr('stGuideNote')}</div>
+</div>
+</details>
 <label class="kimi-label" for="${extensionName}_oc_relay_cfg">${ocr('cfgLabel')}</label>
 <input type="text" id="${extensionName}_oc_relay_cfg" class="text_pole" style="width:100%" placeholder="${ocr('cfgPh')}"/>
 <label class="kimi-label" for="${extensionName}_oc_relay_key" style="margin-top:5px">${ocr('keyLabel')}</label>
@@ -9666,8 +9693,16 @@ const storeBuild = 'v2.2.70';
                 if (gsel) new MutationObserver(keepGoogleModelOption).observe(gsel, { childList: true, subtree: true });
             } catch (e) { }
         }
-        $("#" + extensionName + "_oc_relay_cmd, #" + extensionName + "_oc_relay_cmd_sh").on("click", async function () {
-            const text = /_sh$/.test(this.id) ? OC_RELAY_CMD_SH : OC_RELAY_CMD;
+        const CMD_BY_ID = {
+            oc_relay_local_win: OC_RELAY_LOCAL_WIN,
+            oc_relay_local_sh: OC_RELAY_LOCAL_SH,
+            oc_relay_cmd: OC_RELAY_CMD,
+            oc_relay_cmd_sh: OC_RELAY_CMD_SH,
+        };
+        $("[id^='" + extensionName + "_oc_relay_'][id$='_win'], [id^='" + extensionName + "_oc_relay_'][id$='_sh'], #" + extensionName + "_oc_relay_cmd, #" + extensionName + "_oc_relay_cmd_sh").on("click", async function () {
+            const key = String(this.id).slice(extensionName.length + 1);
+            const text = CMD_BY_ID[key] || "";
+            if (!text) return;
             const ok = await copyPlain(text);
             say(ok ? ocr("copied") : ocr("copyFail"), !ok);
         });
