@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.60'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.61'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -720,7 +720,7 @@ const OC_RELAY_I18N = {
         stGuideCloud: '云端中转（不用挂窗口，但没本地丝滑）',
         stGuideNote: '没有本地窗口条件时用云端；有可用公益站，也可以自行上传 OC 的 Key 在 ST 里用。',
         wrap4aTitle: '4A 破限包裹（默认关）',
-        wrap4aHint: '建议至少 1 万 token；4A 注意力很高，长一点不用担心。<br>最好自己找小说，大家都发同样的，我不确定会不会被标记。',
+        wrap4aHint: '1、建议你关掉预设的破限！破限越多，破限越少。<br>2、塞小说至少 1 万 token，卡越黄，或者一直NSFW上下文长了，相对应的小说也要长；4A 注意力很高，长一点不用担心。最好自己找小说，如果大家都发同样的，我不确定会不会被标记。<br>3、塞小说只能让你提高不被直接道歉的几率，截断无解，可能别人有做防截断？但是多重roll总能出完！以及输入隐晦一些。',
         wrap4aPrefixLabel: '前置小说（上面一段）',
         wrap4aPrefixPh: '把小说的前一半粘到这里…',
         wrap4aSuffixLabel: '后置小说（下面一段）',
@@ -762,7 +762,7 @@ const OC_RELAY_I18N = {
         stGuideCloud: 'Cloud relay (no window, slightly less smooth)',
         stGuideNote: 'Use the cloud option when you cannot keep a local window; a public relay also works if you upload your own OC key.',
         wrap4aTitle: '4A wrap (off by default)',
-        wrap4aHint: 'Aim for at least ~10k tokens; 4A attention is strong, longer is fine.<br>Better to use your own novel — everyone sending the same text might get flagged (unknown).',
+        wrap4aHint: '1. Turn off the preset jailbreak — more jailbreak can mean less.<br>2. Use at least ~10k tokens of novel; the more "yellow" the card / the longer the NSFW context, the longer the novel should be. 4A attention is strong, longer is fine. Better to use your own novel — everyone sending the same text might get flagged (unknown).<br>3. This only raises the odds of avoiding an outright apology; truncation has no fix (someone may have an anti-truncation trick?). Re-rolling gets it out. Keep the input subtle.',
         wrap4aPrefixLabel: 'Prefix novel (top part)',
         wrap4aPrefixPh: 'Paste the first half of the novel here…',
         wrap4aSuffixLabel: 'Suffix novel (bottom part)',
@@ -804,7 +804,7 @@ const OC_RELAY_I18N = {
         stGuideCloud: '클라우드 중계 (창 없이, 약간 덜 부드러움)',
         stGuideNote: '로컬 창을 띄울 수 없을 때 클라우드를 쓰세요. 공용 중계가 있으면 OC 키를 올려 ST에서도 쓸 수 있습니다.',
         wrap4aTitle: '4A 랩 (기본 꺼짐)',
-        wrap4aHint: '최소 1만 토큰 이상 권장. 4A는 집중력이 높아 길어도 괜찮습니다.<br>가능하면 직접 소설을 구하세요. 모두 같은 글을 보내면 표시될 수 있습니다(미확인).',
+        wrap4aHint: '1. 프리셋 탈옥은 끄세요 — 탈옥이 많을수록 효과가 줄 수 있습니다.<br>2. 소설은 최소 1만 토큰. 카드가 더 "노랗"거나 NSFW 맥락이 길수록 소설도 길어야 합니다. 4A는 집중력이 높아 길어도 괜찮습니다. 가능하면 직접 소설을 구하세요. 모두 같은 글을 보내면 표시될 수 있습니다(미확인).<br>3. 이것은 사과를 피할 확률을 높일 뿐, 잘림은 해결되지 않습니다(누군가는 방지책이 있을까요?). 여러 번 리롤하면 결국 나옵니다. 입력은 완곡하게.',
         wrap4aPrefixLabel: '앞 소설 (위쪽)',
         wrap4aPrefixPh: '소설의 앞부분을 붙여넣으세요…',
         wrap4aSuffixLabel: '뒤 소설 (아래쪽)',
@@ -8884,13 +8884,13 @@ ${t('usage3')}
 <div style="margin:0 0 6px">
 <button type="button" id="${extensionName}_wrap4a_demo" class="menu_button" style="flex:none;white-space:nowrap">${ocr('wrap4aDemo')}</button>
 </div>
-<label class="kimi-label" for="${extensionName}_wrap4a_prefix">${ocr('wrap4aPrefixLabel')}</label>
+<label class="kimi-label" for="${extensionName}_wrap4a_prefix" style="font-size:.85em">${ocr('wrap4aPrefixLabel')}</label>
 <textarea id="${extensionName}_wrap4a_prefix" class="text_pole" style="width:100%;min-height:88px;font:12px/1.45 ui-monospace,Consolas,monospace" placeholder="${ocr('wrap4aPrefixPh')}"></textarea>
 <div id="${extensionName}_wrap4a_prefix_tok" style="text-align:right;font-size:.76em;opacity:.75;margin:1px 0 4px"></div>
 <div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:.8em;opacity:.85;margin:2px 0 6px;white-space:nowrap;overflow:hidden">
 <span>${ocr('wrap4aMidUp')} ↑</span><span style="opacity:.45">｜</span><span style="font-weight:600">${ocr('wrap4aMidCore')}</span><span style="opacity:.45">｜</span><span>↓ ${ocr('wrap4aMidDown')}</span>
 </div>
-<label class="kimi-label" for="${extensionName}_wrap4a_suffix">${ocr('wrap4aSuffixLabel')}</label>
+<label class="kimi-label" for="${extensionName}_wrap4a_suffix" style="font-size:.85em">${ocr('wrap4aSuffixLabel')}</label>
 <textarea id="${extensionName}_wrap4a_suffix" class="text_pole" style="width:100%;min-height:88px;font:12px/1.45 ui-monospace,Consolas,monospace" placeholder="${ocr('wrap4aSuffixPh')}"></textarea>
 <div id="${extensionName}_wrap4a_suffix_tok" style="text-align:right;font-size:.76em;opacity:.75;margin:1px 0 4px"></div>
 </div>
