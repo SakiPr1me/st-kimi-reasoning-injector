@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.80'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.81'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -4437,7 +4437,7 @@ function updateSchemeBadgeOnly() {
     const btxt = schemeBadgeText(act, schemeBadgeMap());
     if (btxt) {
         const b = document.createElement('span');
-        b.style.cssText = 'position:absolute;right:-8px;bottom:-5px;font-size:10px;line-height:1;font-weight:700;color:var(--SmartThemeBodyColor,#fff);pointer-events:none';
+        b.style.cssText = 'position:absolute;right:2px;bottom:1px;font-size:10px;line-height:1;font-weight:700;opacity:.6;color:var(--SmartThemeBodyColor,#fff);pointer-events:none';
         b.textContent = btxt;
         d.appendChild(b);
     }
@@ -6661,7 +6661,7 @@ function updateComboFloat() {
         const _bb = schemeBadgeText(__activeScheme, schemeBadgeMap());
         if (_bb) {
             const _bd = document.createElement('span');
-            _bd.style.cssText = 'position:absolute;right:2px;bottom:2px;font-size:10px;line-height:1;font-weight:700;color:var(--SmartThemeBodyColor,#fff);pointer-events:none';
+            _bd.style.cssText = 'position:absolute;right:3px;bottom:2px;font-size:10px;line-height:1;font-weight:700;opacity:.6;color:var(--SmartThemeBodyColor,#fff);pointer-events:none';
             _bd.textContent = _bb;
             $box.find('.kcf-head').first().append(_bd);
         }
@@ -6778,7 +6778,7 @@ function updateComboFloat() {
             }
             /* ★W179：同图标自动编号角标（手动 badge 优先）——小圆片钉右下角 */
             const _bdg = schemeBadgeText(s, schemeBadgeMap());
-            if (_bdg) inner += `<span style="position:absolute;right:2px;bottom:0;font-size:9px;line-height:1;font-weight:700;color:var(--SmartThemeBodyColor,#fff);pointer-events:none">${schemeEsc(_bdg)}</span>`;   // ★W180：去圆、正文字色
+            if (_bdg) inner += `<span style="position:absolute;right:2px;bottom:0;font-size:9px;line-height:1;font-weight:700;opacity:.6;color:var(--SmartThemeBodyColor,#fff);pointer-events:none">${schemeEsc(_bdg)}</span>`;   // ★W180：去圆、正文字色
         } else {
             inner = `<span style="display:inline-flex;align-items:center;justify-content:center">${__kimiSvgIcon(def.ico, def.color)}</span>`;
         }
@@ -7070,7 +7070,7 @@ function schemeIconHtml(s, px) {
         ? '<img src="' + data.replace(/"/g, '&quot;') + '" alt="" style="width:65%;height:65%;object-fit:contain;display:block"/>'
         : schemeEsc((s && s.icon) ? String(s.icon) : '⚡');
     const badge = schemeBadgeText(s, schemeBadgeMap());
-    const chip = badge ? '<span style="position:absolute;right:-6px;bottom:-4px;font-size:10px;line-height:1;font-weight:700;color:var(--SmartThemeBodyColor,#fff);pointer-events:none">' + schemeEsc(badge) + '</span>' : '';   // ★W180（作者）：去圆、正文字色
+    const chip = badge ? '<span style="position:absolute;right:2px;bottom:1px;font-size:10px;line-height:1;font-weight:700;opacity:.6;color:var(--SmartThemeBodyColor,#fff);pointer-events:none">' + schemeEsc(badge) + '</span>' : '';   // ★W180（作者）：去圆、正文字色
     return '<span class="kimi-scheme-ico" style="' + style + 'position:relative;' + (data ? ';background-image:none' : '') + (badge ? ';overflow:visible' : '') + '">' + inner + chip + '</span>';
 }
 /** ★W179（作者）：同图标方案的「角标」—— 手动 badge 优先；没手动的按 icon+iconData 分组自动编号
