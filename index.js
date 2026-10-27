@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.73'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.74'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -738,7 +738,7 @@ const OC_RELAY_I18N = {
         randNameSourceLabel: 'AI身份：',
         randNameCurrent: '下次发送将使用：',
         randNameReroll: '换一个',
-        schemeTtProxyTitle: 'TT酒馆点开我（反代 / Key）',
+        schemeTtProxyTitle: '输入反代url+Key，自动记忆填入',
         schemeTtProxyUrl: '反向代理 URL',
         schemeTtProxyKey: 'Key',
     },
@@ -784,7 +784,7 @@ const OC_RELAY_I18N = {
         randNameSourceLabel: 'AI identity: ',
         randNameCurrent: 'Next send will use: ',
         randNameReroll: 'Reroll',
-        schemeTtProxyTitle: 'TauriTavern only (proxy / key)',
+        schemeTtProxyTitle: 'Enter reverse-proxy URL + Key (auto-remembered)',
         schemeTtProxyUrl: 'Reverse proxy URL',
         schemeTtProxyKey: 'Key',
     },
@@ -830,7 +830,7 @@ const OC_RELAY_I18N = {
         randNameSourceLabel: 'AI 정체성: ',
         randNameCurrent: '다음 전송에 사용: ',
         randNameReroll: '다시 뽑기',
-        schemeTtProxyTitle: 'TauriTavern 전용 (프록시 / Key)',
+        schemeTtProxyTitle: '역방향 프록시 URL + Key 입력 (자동 기억)',
         schemeTtProxyUrl: '역방향 프록시 URL',
         schemeTtProxyKey: 'Key',
     },
@@ -4807,22 +4807,41 @@ function inlineInsSchedule() {
  *  ⇒ 自动替你按一次酒馆的「更新预设」= 把**整份预设（含此刻的开关状态）写进预设文件**。
  *  · 委托挂 document（列表行是反复重建的，直挂会被重建冲掉）；**冒泡阶段**（不加 capture）
  *    ⇒ 跑在酒馆自己的 handleToggle 之后，读到的是**拨完**的新状态；
- *  · 连续拨（含"一键快照"那种程序性连点）走 **600ms 尾防抖** ⇒ 一带只写一次
- *    （酒馆自己会弹一句「Preset updated」，不另外打扰）；
+ *  · ★W172b（作者实测：拨完立刻切预设 ⇒ 这次写盘落在**别的**预设上，原预设根本没存；作者确认自己的场景是
+ *    "中间点过一次方案，开关被方案里的旧快照盖回去"）：
+ *      ① 写盘改成**拨完立刻**（≤50ms 微防抖合并双击）——程序性写开关（方案切换的 writePromptToggles、
+ *         快照应用）都**不走 DOM 点击**，不会触发这条监听 ⇒ 不会连发写盘；
+ *      ② **正用着某方案（它绑的就是当前预设）⇒ 它的开关快照在这一刻跟着更新**（同一次拨动、同一个值），
+ *         之后切走再切回 = 新状态；方案没绑预设 / 绑的不是当前预设 / 没有活动方案 ⇒ 不碰方案数据。
  *  · B 在**点击那一刻**读：关掉它 = 立刻停（不留任何残留行为）；写盘只走酒馆自己的路。 */
 function inlineInsToggleSave(ev) {
     try {
         const tgt = ev && ev.target;
         if (!tgt || typeof tgt.closest !== 'function') return;
-        if (!tgt.closest('#' + INLINE_INS_LIST_ID + ' .prompt-manager-toggle-action')) return;
+        const tog = tgt.closest('#' + INLINE_INS_LIST_ID + ' .prompt-manager-toggle-action');
+        if (!tog) return;
         if (!inlineInsSaveOn()) return;
+        /* ★W172b-A：活动方案（绑的就是当前预设）的开关快照跟着这次拨动更新 —— 同步做，读的就是拨完的新值 */
+        try {
+            const li = tog.closest('li.completion_prompt_manager_prompt');
+            const pid = li ? li.getAttribute('data-pm-identifier') : null;
+            const sc = (settings.activeSchemeId && typeof schemeById === 'function') ? schemeById(settings.activeSchemeId) : null;
+            if (pid && sc && sc.presetName && oai_settings && sc.presetName === oai_settings.preset_settings_openai) {
+                const cur = (typeof readPromptToggles === 'function') ? readPromptToggles() : null;   // 酒馆 handleToggle 已跑完 ⇒ 这里就是拨完的新状态
+                if (cur && typeof cur === 'object') {
+                    if (!sc.toggles || typeof sc.toggles !== 'object' || Array.isArray(sc.toggles)) sc.toggles = cur;   // null ⇒ 抓全量（保持"开关只随预设存在"）
+                    else sc.toggles[pid] = cur[pid];
+                    saveSettingsDebounced();
+                }
+            }
+        } catch (e) { /* 方案快照更新失败绝不影响写盘本身 */ }
         if (inlineInsTogTimer) clearTimeout(inlineInsTogTimer);
         inlineInsTogTimer = setTimeout(() => {
             inlineInsTogTimer = 0;
             const btn = document.getElementById('update_oai_preset');
             if (!btn) return;
             try { $(btn).trigger('click'); } catch (e) { /* 写盘失败由酒馆自己那条路报错，这里不吞别的 */ }
-        }, 600);
+        }, 50);
     } catch (e) { /* 静默：绝不能把"拨开关"本身搞坏 */ }
 }
 
@@ -7152,8 +7171,8 @@ function openSchemeEditor(scheme) {
         + (profiles.length
             ? '<select id="kimi_scheme_profile" class="text_pole">' + opt(profiles, draft.profileName, t('schemeNoProfile')) + '</select>'
             : '<select id="kimi_scheme_profile" class="text_pole"><option value="" selected>' + t('schemeNoProfile') + '</option><option disabled>' + t('schemeNoProfiles') + '</option></select>')
-        + '<details style="margin-top:6px">'
-        + '<summary style="cursor:pointer;font-size:.85em;list-style:none;color:var(--kimi-ink-3,#bbb)">' + ocr('schemeTtProxyTitle') + '</summary>'
+        + '<details class="kimi-scheme-tt" style="margin-top:6px">'
+        + '<summary style="cursor:pointer;font-size:.85em;list-style:none;color:var(--kimi-ink-3,#bbb);display:flex;align-items:center;gap:6px"><i class="fa-solid fa-caret-right" data-kimi-tt-caret style="flex:none"></i><span>' + ocr('schemeTtProxyTitle') + '</span></summary>'
         + '<label class="kimi-label" style="margin-top:4px">' + ocr('schemeTtProxyUrl') + '</label>'
         + '<input type="text" id="kimi_scheme_ttproxy_url" class="text_pole" placeholder="https://opencode.ai/inference/go/v1" value="' + schemeEsc((draft.ttProxy && draft.ttProxy.url) || '') + '"/>'
         + '<label class="kimi-label">' + ocr('schemeTtProxyKey') + '</label>'
@@ -7212,6 +7231,15 @@ function openSchemeEditor(scheme) {
         }
     };
     paintIcon(); paintTog();
+    /* ★W173a（作者）：TT 折叠块要有明显的"能点开"的三角形 —— 跟随展开状态转向（收起 ▶ / 展开 ▼） */
+    (function () {
+        const det = $ov.find('details.kimi-scheme-tt').get(0);
+        const car = det ? det.querySelector('[data-kimi-tt-caret]') : null;
+        if (!det || !car) return;
+        const paintCaret = () => { car.classList.toggle('fa-caret-right', !det.open); car.classList.toggle('fa-caret-down', !!det.open); };
+        paintCaret();
+        det.addEventListener('toggle', paintCaret);
+    })();
     const close = () => { $(document).off('.kimi_scheme'); $ov.remove(); };
     $ov.find('.kimi-scheme-emoji').on('click', function () { draft.icon = this.getAttribute('data-e') || ''; draft.iconData = null; paintIcon(); });
     /* ★W163b：品牌图标（LobeHub）—— 点击后把 data URL 写入 iconData */
