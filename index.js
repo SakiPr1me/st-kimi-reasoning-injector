@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.71'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.72'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -411,7 +411,7 @@ const defaultSettings = {
     wrap4aEnabled: false,            // ★W167：4A 破限包裹（默认关；关着一律不读前后缀、请求里一个字都不加）
     wrap4aPrefix: '',                // 前置小说（上面一段）
     wrap4aSuffix: '',                // 后置小说（下面一段）
-    randHeadEnabled: false,          // ★W168：随机虚拟头（每次请求在第一条 system 最前面加一行随机编号；默认关）
+    randHeadEnabled: true,           // ★W170（作者拍板）：随机头部默认**开**（新装/升级缺键都取这一份）
     randNameEnabled: false,          // ★W168：随机人名（把请求里的「余小温」换成本聊天固定的人名；默认关）
     autoUpdate: true,                // 默认自动更新：每次检测到云端有新版直接更新到最新
     floatPanelKeys: ['inject', 'reroll', 'word', 'tag', 'api', 'psnap', 'fix'], // 悬浮条面板区显示哪些卡（★W150：顺序 = 主面板卡片顺序；★W155：「标签修复」与「API 池」互换 ⇒ 标签修复在前）
@@ -721,7 +721,7 @@ const OC_RELAY_I18N = {
         stGuideLocal: '本地挂窗口中转（推荐，最顺）',
         stGuideCloud: '云端中转（不用挂窗口，但没本地丝滑）',
         stGuideNote: '没有本地窗口条件时用云端；有可用公益站，也可以自行上传 OC 的 Key 在 ST 里用。',
-        wrap4aTitle: '4A 破限包裹（默认关）',
+        wrap4aTitle: '塞小说防道歉',
         wrap4aHint: '1、建议你关掉预设的破限！破限越多，破限越少。<br>2、塞小说至少 1 万 token，卡越黄，或者一直NSFW上下文长了，相对应的小说也要长；4A 注意力很高，长一点不用担心。最好自己找小说，如果大家都发同样的，我不确定会不会被标记。<br>3、塞小说只能让你提高不被直接道歉的几率，截断无解，可能别人有做防截断？但是多重roll总能出完！以及输入隐晦一些。',
         wrap4aPrefixLabel: '前置小说（上面一段）',
         wrap4aPrefixPh: '把小说的前一半粘到这里…',
@@ -733,9 +733,9 @@ const OC_RELAY_I18N = {
         wrap4aDemo: '填入默认示例测试',
         wrap4aDemoNote: '最好自己找小说，大家都发同样的，我不确定会不会被标记。',
         wrap4aTok: 'token',
-        randHeadTitle: '随机虚拟头（默认关）',
-        randHeadHint: '每次请求现生成一段编号头（≈1000+ token），贴在第一条系统消息最前面（防前缀指纹）。关掉后请求里一个字都不加。',
-        randNameTitle: '随机人名（默认关）',
+        randHeadTitle: '随机头部（防标记）',
+        randHeadHint: '每次请求现生成一小段诗（200~300 字），贴在第一条系统消息最前面（防前缀指纹）。关掉后请求里一个字都不加。',
+        randNameTitle: '随机AI角色（防标记）',
         randNameHint: '只改发出去的请求：每轮换一个新名字，把「余小温」全局替换成它；聊天记录不动。',
         randNameCurrent: '下次发送将使用：',
         randNameReroll: '换一个',
@@ -769,7 +769,7 @@ const OC_RELAY_I18N = {
         stGuideLocal: 'Local relay window (recommended, smoothest)',
         stGuideCloud: 'Cloud relay (no window, slightly less smooth)',
         stGuideNote: 'Use the cloud option when you cannot keep a local window; a public relay also works if you upload your own OC key.',
-        wrap4aTitle: '4A wrap (off by default)',
+        wrap4aTitle: 'Novel padding (anti-apology)',
         wrap4aHint: '1. Turn off the preset jailbreak — more jailbreak can mean less.<br>2. Use at least ~10k tokens of novel; the more "yellow" the card / the longer the NSFW context, the longer the novel should be. 4A attention is strong, longer is fine. Better to use your own novel — everyone sending the same text might get flagged (unknown).<br>3. This only raises the odds of avoiding an outright apology; truncation has no fix (someone may have an anti-truncation trick?). Re-rolling gets it out. Keep the input subtle.',
         wrap4aPrefixLabel: 'Prefix novel (top part)',
         wrap4aPrefixPh: 'Paste the first half of the novel here…',
@@ -781,9 +781,9 @@ const OC_RELAY_I18N = {
         wrap4aDemo: 'Fill in the default example',
         wrap4aDemoNote: 'Better to use your own novel — everyone sending the same text might get flagged (unknown).',
         wrap4aTok: 'token',
-        randHeadTitle: 'Random virtual header (off by default)',
-        randHeadHint: 'A long ID header (~1000+ tokens) is generated for every request and prepended to the first system message (anti-fingerprint). When off, nothing is added.',
-        randNameTitle: 'Random name (off by default)',
+        randHeadTitle: 'Random header (anti-flag)',
+        randHeadHint: 'A short poem (200–300 chars) is generated for every request and prepended to the first system message (anti-fingerprint). When off, nothing is added.',
+        randNameTitle: 'Random AI persona (anti-flag)',
         randNameHint: 'Request only: a new name each turn — "余小温" is replaced globally. Your chat log is not modified.',
         randNameCurrent: 'Next send will use: ',
         randNameReroll: 'Reroll',
@@ -817,7 +817,7 @@ const OC_RELAY_I18N = {
         stGuideLocal: '로컬 중계 창 (권장, 가장 부드러움)',
         stGuideCloud: '클라우드 중계 (창 없이, 약간 덜 부드러움)',
         stGuideNote: '로컬 창을 띄울 수 없을 때 클라우드를 쓰세요. 공용 중계가 있으면 OC 키를 올려 ST에서도 쓸 수 있습니다.',
-        wrap4aTitle: '4A 랩 (기본 꺼짐)',
+        wrap4aTitle: '소설 삽입 (사과 방지)',
         wrap4aHint: '1. 프리셋 탈옥은 끄세요 — 탈옥이 많을수록 효과가 줄 수 있습니다.<br>2. 소설은 최소 1만 토큰. 카드가 더 "노랗"거나 NSFW 맥락이 길수록 소설도 길어야 합니다. 4A는 집중력이 높아 길어도 괜찮습니다. 가능하면 직접 소설을 구하세요. 모두 같은 글을 보내면 표시될 수 있습니다(미확인).<br>3. 이것은 사과를 피할 확률을 높일 뿐, 잘림은 해결되지 않습니다(누군가는 방지책이 있을까요?). 여러 번 리롤하면 결국 나옵니다. 입력은 완곡하게.',
         wrap4aPrefixLabel: '앞 소설 (위쪽)',
         wrap4aPrefixPh: '소설의 앞부분을 붙여넣으세요…',
@@ -829,9 +829,9 @@ const OC_RELAY_I18N = {
         wrap4aDemo: '기본 예시 채우기',
         wrap4aDemoNote: '가능하면 직접 소설을 구하세요. 모두 같은 글을 보내면 표시될 수 있습니다(미확인).',
         wrap4aTok: 'token',
-        randHeadTitle: '랜덤 가상 헤더 (기본 꺼짐)',
-        randHeadHint: '요청마다 긴 번호 헤더(≈1000+ 토큰)를 만들어 첫 시스템 메시지 맨 앞에 붙입니다(지문 방지). 끄면 요청에 아무것도 추가되지 않습니다.',
-        randNameTitle: '랜덤 이름 (기본 꺼짐)',
+        randHeadTitle: '랜덤 헤더 (표시 방지)',
+        randHeadHint: '요청마다 짧은 시(200~300자)를 만들어 첫 시스템 메시지 맨 앞에 붙입니다(지문 방지). 끄면 요청에 아무것도 추가되지 않습니다.',
+        randNameTitle: '랜덤 AI 캐릭터 (표시 방지)',
         randNameHint: '요청에만 적용: 매 턴 새 이름으로 "余小温"을 전역 치환합니다. 채팅 기록은 그대로입니다.',
         randNameCurrent: '다음 전송에 사용: ',
         randNameReroll: '다시 뽑기',
@@ -1017,8 +1017,8 @@ if (settings.ocRelayKey === undefined) settings.ocRelayKey = defaultSettings.ocR
 if (settings.wrap4aEnabled === undefined) settings.wrap4aEnabled = defaultSettings.wrap4aEnabled;
 if (settings.wrap4aPrefix === undefined) settings.wrap4aPrefix = defaultSettings.wrap4aPrefix;
 if (settings.wrap4aSuffix === undefined) settings.wrap4aSuffix = defaultSettings.wrap4aSuffix;
-if (settings.randHeadEnabled === undefined) settings.randHeadEnabled = defaultSettings.randHeadEnabled;   // ★W168（铁律 32）：新装/升级同一份默认 = 关
-if (settings.randNameEnabled === undefined) settings.randNameEnabled = defaultSettings.randNameEnabled;   // ★W168（铁律 32）：同上
+if (settings.randHeadEnabled === undefined) settings.randHeadEnabled = defaultSettings.randHeadEnabled;   // ★W170（铁律 32）：新装/升级同一份默认 = 开
+if (settings.randNameEnabled === undefined) settings.randNameEnabled = defaultSettings.randNameEnabled;   // ★W168（铁律 32）：同上 = 关
 if (settings.autoUpdate === undefined) settings.autoUpdate = true;
 if (!Array.isArray(settings.floatPanelKeys)) settings.floatPanelKeys = ['inject', 'reroll', 'word', 'tag', 'api', 'psnap', 'fix'];   // ★W150：与新装默认同一份（顺序 = 主面板卡片顺序；★W155：「标签修复」与「API 池」互换）
 if (settings.floatPanelAllKey === undefined) settings.floatPanelAllKey = defaultSettings.floatPanelAllKey;   // ★W114（铁律 32）：新装默认 'all'；缺键时补上，和老用户/新装口径一致
@@ -1667,29 +1667,32 @@ function wrapLastUserMessage(msgs) {
     return false;
 }
 
-// ===== ★W168：随机虚拟头（防前缀指纹） + 随机人名（防名字标记） =====
+// ===== ★W168：随机头部（防前缀指纹） + 随机人名（防名字标记） =====
 // 只改「发出去的请求副本」（messages），聊天记录 / 气泡 / 滑动一个字都不动。
-// 两个开关默认都关；关掉时请求里一个字都不多（硬口径）。
-// 顺序固定：① 随机头 → ② 随机人名 → ③ 4A 破限包裹；三者都幂等（重复调用不叠加）。
-// —— 随机虚拟头：从三组短诗（现代诗 / 日式短句 / 意象派）里随机抽取、拼成 200~300 字的一页"随记" ——
+// 关掉时请求里一个字都不多（硬口径）。
+// 顺序固定：① 随机头部 → ② 随机人名 → ③ 塞小说防道歉（4A 包裹）；三者都幂等（重复调用不叠加）。
+// —— 随机头部：从短诗池里随机抽取、拼成 200~300 字的一页诗（★W170：**没有标题行** —— 作者说那个标题词容易被标记）——
 const RAND_POEM_POOL = ["雨停以后，屋檐还在滴水。","火车经过空站台，没有人下车。","我把窗关好，风还在屋里走。","路灯亮起的时候，雪刚好落到一半。","旧杂志翻到第三页，照片里的人还在笑。","楼下的梧桐把影子铺过整条街。","杯子里的水凉了，光还停在杯沿。","有人在远处练习小号，断断续续。","深夜的便利店，关东煮冒着白气。","我数着楼梯，数到第七级就忘了。","窗帘没有拉严，月光落在桌角。","一封没有寄出的信，折了又折。","公交车最后一排，玻璃上有雾。","巷子很深，猫在墙头打了个哈欠。","钟表走得很慢，像在等谁。","院子里的石榴熟透了，没有人摘。","海边的风把伞吹翻，我笑了一下。","旧唱片转到尽头，针还在原地。","清晨的菜市场，鱼鳞闪着光。","我把书合上，字还在眼前浮。","天台上的水箱，接住了一整夜的雨。","末班地铁开走，站台空得发亮。","衣架上的衬衫，被风吹成一个人的形状。","雪落在广告牌上，红字变得温柔。","古池——青蛙跃入，水声。","秋深了，邻家也成了做事的人。","梅雨时节，鹤的脚短了。","雪顶上，一行脚印通向寺门。","蝉声渗进石头里。","月光下的松针，一根一根数不完。","春夜，梦的余温还在枕上。","稻草人的帽子，被风吹歪了。","山谷里，钟声比云更慢。","萤火虫落在草叶上，像一盏小灯。","冬日的海，浪很小，天很大。","樱花落尽，枝头还是春天。","夜半醒来，雨声换了方向。","田埂上，白鹭站成一封信。","风吹过竹帘，屋里暗了一寸。","石阶生苔，脚步放轻了。","月出时，山影挪了半步。","秋刀鱼的烟，飘过整条街。","雪夜读书，灯芯结了一朵花。","春水涨了，木桥矮下去。","蝉蜕留在树上，夏天走了。","暮色里，归鸟把天空缝起来。","露水重了，草叶弯下腰。","风铃响了一声，又一声。","地铁站里，湿黑枝上的花瓣。","人群中那些面孔，像雨中的树。","红色的手推车，在雨里发亮。","白鹭飞起，田埂空了一半。","月光下的码头，木桩一根根站着。","旧工厂的窗，玻璃碎成星。","雨落在铁皮屋顶，像一场小声的鼓掌。","谷仓的门开着，风在里面转。","河面很宽，桥显得单薄。","夜里的公路，车灯拉成一条线。","车站的钟慢了三分钟。","海边的旧秋千，自己晃着。","雪地上，一只鸟的脚印很直。","烟囱冒出的烟，被风折了一下。","楼群之间，月亮显得很小。","田野尽头，一棵树守着整片天。","雨后的球场，篮筐还在滴水。","凌晨的加油站，灯白得刺眼。","老式电梯停下，发出很轻的一声。","湖面没有风，云停在水里。","山坡上的风车，转得很慢。","街角的电话亭，玻璃有裂纹。","火车穿过隧道，黑了七秒。","清晨的码头，绳索滴着水。"];
-const RAND_HEAD_PREFIX = '《随记·';   // 幂等标记：第一条 system 以它开头即视为已注入
 const RAND_HEAD_RECENT = [];
+const RAND_HEAD_DONE = new WeakSet();   // ★W170：已注入过的 messages 数组（幂等不再靠文本前缀）
+const RAND_HEAD_MSGS = new WeakSet();   // ★W170：已贴过头的 system 消息对象（两处调用若各拿一份新数组，靠这条兜住）
 const RAND_NL = String.fromCharCode(10);
 function randInt(n) { const v = Math.floor(Math.random() * (Number(n) || 1)); return v < 0 ? 0 : v; }
+/** 现生成一页诗（结构化随机，不用固定句子池）：200~300 字、行数随池子自然成篇。
+ *  ★W170：**首行不再有任何标题**（第一行就是诗本身）；字数按「含换行」的总长算 ⇒ 输出长度必在 200~300。
+ *  保留最近 5 个，重复就重抽；remember=false ⇒ 只生成、不占名额（面板那行示例用）。 */
 function buildRandHeader(remember) {
-    const chars = Array.from('青石微光沉静白砾霜雾云雪松竹梅兰菊泉溪河海沙岸桥灯巷檐窗门庭院阶廊径野林麓岩谷峰坡原隰洲渚汀沚');
-    const lead = RAND_HEAD_PREFIX + chars[randInt(chars.length)] + chars[randInt(chars.length)] + '》';
     const make = () => {
         const bag = RAND_POEM_POOL.slice();
-        const lines = [lead];
+        const lines = [];
         let len = 0, guard = 0;
-        while (len < 200 && guard++ < 40 && bag.length) {
+        while (len < 200 && guard++ < 80 && bag.length) {
             const i = randInt(bag.length);
             const line = bag.splice(i, 1)[0];
-            if (len + line.length > 300) continue;
+            const add = line.length + (lines.length ? 1 : 0);   // 行间换行也算字数
+            if (len + add > 300) continue;
             lines.push(line);
-            len += line.length;
+            len += add;
         }
         return lines.join(RAND_NL);
     };
@@ -1703,8 +1706,10 @@ function buildRandHeader(remember) {
     return block;
 }
 
-// —— 随机人名：姓 + 中字 + 名（8 × 4 × 24 = 768 种组合）——
-const RAND_SURNAMES = ['余', '温', '沈', '陆', '顾', '苏', '叶', '白'];
+// —— 随机人名：姓 + 中字 + 名（14 × 4 × 24 = 1344 种组合）——
+// ★W170（作者）：姓池去掉「沈」、加上「楚冷鹿闻染晏许」⇒ 14 个。
+// 名池按协调方裁定**保留现有 24 个唯一字**（作者那份名单里的「眠」在本表里本来就只有一次，去重后仍是 24）
+const RAND_SURNAMES = ['余', '温', '陆', '顾', '苏', '叶', '白', '楚', '冷', '鹿', '闻', '染', '晏', '许'];
 const RAND_MIDDLES = ['小', '晓', '筱', '笑'];
 const RAND_GIVEN = ['暖', '糯', '鲤', '满', '甜', '软', '桃', '橘', '团', '眠', '星', '雾', '柚', '棠', '荔', '苹', '圆', '豆', '糖', '灯', '铃', '鹿', '鸢', '禾'];
 const RAND_NAME_SRC = '余小温';            // 请求里要被换掉的占位名（聊天记录里保持原样）
@@ -1719,7 +1724,7 @@ function pickRandName(avoid) {
     }
     return name;
 }
-/** 纯函数：这个字符串是不是池子里能抽出来的名字（姓 + 中字 + 名，8 × 4 × 24）。
+/** 纯函数：这个字符串是不是池子里能抽出来的名字（姓 + 中字 + 名，14 × 4 × 24）。
  *  ★W168b（验收低优先项）：localStorage 被手改成数字 / null / 池外名字（如「张三」）时**一律重抽**，不采信。
  *  数字/null 本来就被 typeof 挡掉；池外名字以前会被原样用出去，现在由这条校验兜住。 */
 function isRandNameValid(name) {
@@ -1785,25 +1790,30 @@ function rerollRandName() {
     return name;
 }
 
-/** ① 随机头：加到第一条 role==='system' 的内容最前面；没有 system 就 unshift 一条。
- *  幂等：内容已经以 '［编号 ' 开头 ⇒ 跳过（连头都不再生成）。 */
+/** ① 随机头部：加到第一条 role==='system' 的内容最前面；没有 system 就 unshift 一条。
+ *  ★W170（作者）：幂等**不再靠文本前缀**（标题行已删，文字里也不该有可被认出的标记）
+ *   ⇒ 用 `RAND_HEAD_DONE`（WeakSet，按 messages 数组身份）：同一份 messages 只注入一次。
+ *   两道保险：① 数组身份（GENERATE_AFTER_DATA 与 CHAT_COMPLETION_SETTINGS_READY 若传同一数组，第二次直接跳过）；
+ *             ② 目标 system **消息对象**身份（W169e 起这两处可能各拿一份新数组、但消息对象是同一批
+ *                ⇒ 只靠数组身份会叠出第二页诗；故再记一份`RAND_HEAD_MSGS`，同样不靠任何文本标记）。
+ *   开关关着时不进 WeakSet（开回来以后同一份 messages 仍能注入）。 */
 function injectRandHeader(msgs) {
     const out = { changed: false, header: '' };
     try {
         if (!Array.isArray(msgs) || !settings.randHeadEnabled) return out;
+        if (RAND_HEAD_DONE.has(msgs)) return out;
         const NLC = String.fromCharCode(10);
         let target = null;
         for (let i = 0; i < msgs.length; i++) {
             const m = msgs[i];
             if (m && m.role === 'system' && typeof m.content === 'string') { target = m; break; }
         }
-        if (target && String(target.content).indexOf(RAND_HEAD_PREFIX) === 0) {
-            out.header = String(target.content).split(NLC)[0];   // 已经注入过 ⇒ 认出来（幂等）
-            return out;
-        }
+        if (target && RAND_HEAD_MSGS.has(target)) { RAND_HEAD_DONE.add(msgs); return out; }   // 这条 system 已经贴过
         const header = buildRandHeader();
         if (target) target.content = header + NLC + target.content;
         else msgs.unshift({ role: 'system', content: header });
+        RAND_HEAD_DONE.add(msgs);
+        if (target) RAND_HEAD_MSGS.add(target);
         out.header = header;
         out.changed = true;
     } catch (e) { }
@@ -9139,10 +9149,21 @@ ${t('usage3')}
 </div>
 </div>
 <div class="kimi-sep"></div>
+<!-- ★W170（作者）：三个「防标记」功能合并到**同一张卡**，顺序：随机头部 → 塞小说防道歉 → 随机AI角色；
+     每个功能一行勾选框，勾上只展开它自己那块（元素 id 全部保持不变，探针仍可用）。 -->
 <div class="kimi-inner-card">
 <label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
+<input type="checkbox" id="${extensionName}_rand_head" ${settings.randHeadEnabled ? 'checked' : ''}/>
+<span style="font-size:1.16em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('randHeadTitle')}</span>
+</label>
+<div id="${extensionName}_rand_head_box" style="display:${settings.randHeadEnabled ? '' : 'none'}">
+<p class="kimi-hint" style="margin:2px 0 5px;line-height:1.5">${ocr('randHeadHint')}</p>
+<div id="${extensionName}_rand_head_demo" class="kimi-hint" style="margin:0;font:12px/1.6 ui-monospace,Consolas,monospace;opacity:.9;white-space:pre-wrap"></div>
+</div>
+<div class="kimi-sep"></div>
+<label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
 <input type="checkbox" id="${extensionName}_wrap4a" ${settings.wrap4aEnabled ? 'checked' : ''}/>
-<span style="font-size:1.24em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('wrap4aTitle')}</span>
+<span style="font-size:1.16em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('wrap4aTitle')}</span>
 </label>
 <div id="${extensionName}_wrap4a_box" style="display:${settings.wrap4aEnabled ? '' : 'none'}">
 <p class="kimi-hint" style="margin:2px 0 6px;line-height:1.5">${ocr('wrap4aHint')}</p>
@@ -9159,20 +9180,10 @@ ${t('usage3')}
 <textarea id="${extensionName}_wrap4a_suffix" class="text_pole" style="width:100%;min-height:88px;font:12px/1.45 ui-monospace,Consolas,monospace" placeholder="${ocr('wrap4aSuffixPh')}"></textarea>
 <div id="${extensionName}_wrap4a_suffix_tok" style="text-align:right;font-size:.76em;opacity:.75;margin:1px 0 4px"></div>
 </div>
-</div>
-<!-- ★W168：随机虚拟头 / 随机人名（默认都关；只改发出去的请求副本） -->
-<div class="kimi-inner-card">
+<div class="kimi-sep"></div>
 <label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
-<input type="checkbox" id="${extensionName}_rand_head" ${settings.randHeadEnabled ? 'checked' : ''}/>
-<span style="font-size:1.24em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('randHeadTitle')}</span>
-</label>
-<div id="${extensionName}_rand_head_box" style="display:${settings.randHeadEnabled ? '' : 'none'}">
-<p class="kimi-hint" style="margin:2px 0 5px;line-height:1.5">${ocr('randHeadHint')}</p>
-<div id="${extensionName}_rand_head_demo" class="kimi-hint" style="margin:0;font:12px/1.45 ui-monospace,Consolas,monospace;opacity:.9"></div>
-</div>
-<label class="checkbox_label" style="display:flex;align-items:center;gap:6px;margin-top:6px">
 <input type="checkbox" id="${extensionName}_rand_name" ${settings.randNameEnabled ? 'checked' : ''}/>
-<span style="font-size:1.24em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('randNameTitle')}</span>
+<span style="font-size:1.16em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('randNameTitle')}</span>
 </label>
 <div id="${extensionName}_rand_name_box" style="display:${settings.randNameEnabled ? '' : 'none'}">
 <p class="kimi-hint" style="margin:2px 0 5px;line-height:1.5">${ocr('randNameHint')}</p>
