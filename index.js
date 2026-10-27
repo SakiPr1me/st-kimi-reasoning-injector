@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.72'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.73'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -412,7 +412,8 @@ const defaultSettings = {
     wrap4aPrefix: '',                // 前置小说（上面一段）
     wrap4aSuffix: '',                // 后置小说（下面一段）
     randHeadEnabled: true,           // ★W170（作者拍板）：随机头部默认**开**（新装/升级缺键都取这一份）
-    randNameEnabled: false,          // ★W168：随机人名（把请求里的「余小温」换成本聊天固定的人名；默认关）
+    randNameEnabled: false,          // ★W168：随机人名（把请求里的 AI身份 换成本轮随机名；默认关）
+    randNameSource: '余小温',        // ★W171（作者）：被替换的「AI身份」占位名（面板可改；空 ⇒ 回落这个默认）
     autoUpdate: true,                // 默认自动更新：每次检测到云端有新版直接更新到最新
     floatPanelKeys: ['inject', 'reroll', 'word', 'tag', 'api', 'psnap', 'fix'], // 悬浮条面板区显示哪些卡（★W150：顺序 = 主面板卡片顺序；★W155：「标签修复」与「API 池」互换 ⇒ 标签修复在前）
     floatPanelAllKey: 'all',
@@ -722,21 +723,19 @@ const OC_RELAY_I18N = {
         stGuideCloud: '云端中转（不用挂窗口，但没本地丝滑）',
         stGuideNote: '没有本地窗口条件时用云端；有可用公益站，也可以自行上传 OC 的 Key 在 ST 里用。',
         wrap4aTitle: '塞小说防道歉',
-        wrap4aHint: '1、建议你关掉预设的破限！破限越多，破限越少。<br>2、塞小说至少 1 万 token，卡越黄，或者一直NSFW上下文长了，相对应的小说也要长；4A 注意力很高，长一点不用担心。最好自己找小说，如果大家都发同样的，我不确定会不会被标记。<br>3、塞小说只能让你提高不被直接道歉的几率，截断无解，可能别人有做防截断？但是多重roll总能出完！以及输入隐晦一些。',
+        wrap4aHint: '1、建议你关掉预设的破限！破限越多，破限越少。<br>2、塞小说至少 1 万 token，卡越黄，或者一直NSFW上下文长了，相对应的小说也要长；4A 注意力很高，长一点不用担心。最好自己找小说，如果大家都发同样的，我不确定会不会被标记。<br>3、塞小说只能让你提高不被直接道歉的几率，截断无解，可能别人有做防截断？但是多重roll总能出完！以及输入隐晦一些。<br>4、搭配修改世界书，把深度D 1、2、3的内容，全部丢到D4，以及思维链确保已经按要求修改（条目商店或者Discord标注有）',
         wrap4aPrefixLabel: '前置小说（上面一段）',
         wrap4aPrefixPh: '把小说的前一半粘到这里…',
         wrap4aSuffixLabel: '后置小说（下面一段）',
         wrap4aSuffixPh: '把小说的后一半粘到这里…',
-        wrap4aMidUp: '前置',
-        wrap4aMidCore: '中间这里就是你的输入',
-        wrap4aMidDown: '后置',
+        wrap4aMidCore: '中间这里就是你的真实用户输入',
         wrap4aDemo: '填入默认示例测试',
         wrap4aDemoNote: '最好自己找小说，大家都发同样的，我不确定会不会被标记。',
         wrap4aTok: 'token',
         randHeadTitle: '随机头部（防标记）',
         randHeadHint: '每次请求现生成一小段诗（200~300 字），贴在第一条系统消息最前面（防前缀指纹）。关掉后请求里一个字都不加。',
-        randNameTitle: '随机AI角色（防标记）',
-        randNameHint: '只改发出去的请求：每轮换一个新名字，把「余小温」全局替换成它；聊天记录不动。',
+        randNameTitle: '随机AI身份（防标记）',
+        randNameSourceLabel: 'AI身份：',
         randNameCurrent: '下次发送将使用：',
         randNameReroll: '换一个',
         schemeTtProxyTitle: 'TT酒馆点开我（反代 / Key）',
@@ -770,21 +769,19 @@ const OC_RELAY_I18N = {
         stGuideCloud: 'Cloud relay (no window, slightly less smooth)',
         stGuideNote: 'Use the cloud option when you cannot keep a local window; a public relay also works if you upload your own OC key.',
         wrap4aTitle: 'Novel padding (anti-apology)',
-        wrap4aHint: '1. Turn off the preset jailbreak — more jailbreak can mean less.<br>2. Use at least ~10k tokens of novel; the more "yellow" the card / the longer the NSFW context, the longer the novel should be. 4A attention is strong, longer is fine. Better to use your own novel — everyone sending the same text might get flagged (unknown).<br>3. This only raises the odds of avoiding an outright apology; truncation has no fix (someone may have an anti-truncation trick?). Re-rolling gets it out. Keep the input subtle.',
+        wrap4aHint: '1. Turn off the preset jailbreak — more jailbreak can mean less.<br>2. Use at least ~10k tokens of novel; the more "yellow" the card / the longer the NSFW context, the longer the novel should be. 4A attention is strong, longer is fine. Better to use your own novel — everyone sending the same text might get flagged (unknown).<br>3. This only raises the odds of avoiding an outright apology; truncation has no fix (someone may have an anti-truncation trick?). Re-rolling gets it out. Keep the input subtle.<br>4. Also edit the world book: move everything at depth D 1, 2, 3 down into D4, and make sure the chain-of-thought has been modified as required (entries marked in the Store or on Discord).',
         wrap4aPrefixLabel: 'Prefix novel (top part)',
         wrap4aPrefixPh: 'Paste the first half of the novel here…',
         wrap4aSuffixLabel: 'Suffix novel (bottom part)',
         wrap4aSuffixPh: 'Paste the second half of the novel here…',
-        wrap4aMidUp: 'prefix',
-        wrap4aMidCore: 'your input goes here',
-        wrap4aMidDown: 'suffix',
+        wrap4aMidCore: 'your real user input goes here',
         wrap4aDemo: 'Fill in the default example',
         wrap4aDemoNote: 'Better to use your own novel — everyone sending the same text might get flagged (unknown).',
         wrap4aTok: 'token',
         randHeadTitle: 'Random header (anti-flag)',
         randHeadHint: 'A short poem (200–300 chars) is generated for every request and prepended to the first system message (anti-fingerprint). When off, nothing is added.',
-        randNameTitle: 'Random AI persona (anti-flag)',
-        randNameHint: 'Request only: a new name each turn — "余小温" is replaced globally. Your chat log is not modified.',
+        randNameTitle: 'Random AI identity (anti-flag)',
+        randNameSourceLabel: 'AI identity: ',
         randNameCurrent: 'Next send will use: ',
         randNameReroll: 'Reroll',
         schemeTtProxyTitle: 'TauriTavern only (proxy / key)',
@@ -818,21 +815,19 @@ const OC_RELAY_I18N = {
         stGuideCloud: '클라우드 중계 (창 없이, 약간 덜 부드러움)',
         stGuideNote: '로컬 창을 띄울 수 없을 때 클라우드를 쓰세요. 공용 중계가 있으면 OC 키를 올려 ST에서도 쓸 수 있습니다.',
         wrap4aTitle: '소설 삽입 (사과 방지)',
-        wrap4aHint: '1. 프리셋 탈옥은 끄세요 — 탈옥이 많을수록 효과가 줄 수 있습니다.<br>2. 소설은 최소 1만 토큰. 카드가 더 "노랗"거나 NSFW 맥락이 길수록 소설도 길어야 합니다. 4A는 집중력이 높아 길어도 괜찮습니다. 가능하면 직접 소설을 구하세요. 모두 같은 글을 보내면 표시될 수 있습니다(미확인).<br>3. 이것은 사과를 피할 확률을 높일 뿐, 잘림은 해결되지 않습니다(누군가는 방지책이 있을까요?). 여러 번 리롤하면 결국 나옵니다. 입력은 완곡하게.',
+        wrap4aHint: '1. 프리셋 탈옥은 끄세요 — 탈옥이 많을수록 효과가 줄 수 있습니다.<br>2. 소설은 최소 1만 토큰. 카드가 더 "노랗"거나 NSFW 맥락이 길수록 소설도 길어야 합니다. 4A는 집중력이 높아 길어도 괜찮습니다. 가능하면 직접 소설을 구하세요. 모두 같은 글을 보내면 표시될 수 있습니다(미확인).<br>3. 이것은 사과를 피할 확률을 높일 뿐, 잘림은 해결되지 않습니다(누군가는 방지책이 있을까요?). 여러 번 리롤하면 결국 나옵니다. 입력은 완곡하게.<br>4. 세계관 책도 함께 수정하세요: 깊이 D 1·2·3의 내용을 모두 D4로 옮기고, 사고 사슬이 요구대로 수정되었는지 확인하세요(항목 상점 또는 Discord에 표시된 것).',
         wrap4aPrefixLabel: '앞 소설 (위쪽)',
         wrap4aPrefixPh: '소설의 앞부분을 붙여넣으세요…',
         wrap4aSuffixLabel: '뒤 소설 (아래쪽)',
         wrap4aSuffixPh: '소설의 뒷부분을 붙여넣으세요…',
-        wrap4aMidUp: '앞',
-        wrap4aMidCore: '가운데가 당신의 입력입니다',
-        wrap4aMidDown: '뒤',
+        wrap4aMidCore: '여기가 당신의 실제 사용자 입력입니다',
         wrap4aDemo: '기본 예시 채우기',
         wrap4aDemoNote: '가능하면 직접 소설을 구하세요. 모두 같은 글을 보내면 표시될 수 있습니다(미확인).',
         wrap4aTok: 'token',
         randHeadTitle: '랜덤 헤더 (표시 방지)',
         randHeadHint: '요청마다 짧은 시(200~300자)를 만들어 첫 시스템 메시지 맨 앞에 붙입니다(지문 방지). 끄면 요청에 아무것도 추가되지 않습니다.',
-        randNameTitle: '랜덤 AI 캐릭터 (표시 방지)',
-        randNameHint: '요청에만 적용: 매 턴 새 이름으로 "余小温"을 전역 치환합니다. 채팅 기록은 그대로입니다.',
+        randNameTitle: '랜덤 AI 정체성 (표시 방지)',
+        randNameSourceLabel: 'AI 정체성: ',
         randNameCurrent: '다음 전송에 사용: ',
         randNameReroll: '다시 뽑기',
         schemeTtProxyTitle: 'TauriTavern 전용 (프록시 / Key)',
@@ -1019,6 +1014,7 @@ if (settings.wrap4aPrefix === undefined) settings.wrap4aPrefix = defaultSettings
 if (settings.wrap4aSuffix === undefined) settings.wrap4aSuffix = defaultSettings.wrap4aSuffix;
 if (settings.randHeadEnabled === undefined) settings.randHeadEnabled = defaultSettings.randHeadEnabled;   // ★W170（铁律 32）：新装/升级同一份默认 = 开
 if (settings.randNameEnabled === undefined) settings.randNameEnabled = defaultSettings.randNameEnabled;   // ★W168（铁律 32）：同上 = 关
+if (settings.randNameSource === undefined) settings.randNameSource = defaultSettings.randNameSource;      // ★W171（铁律 32）：缺键补 defaultSettings 同值 = 余小温
 if (settings.autoUpdate === undefined) settings.autoUpdate = true;
 if (!Array.isArray(settings.floatPanelKeys)) settings.floatPanelKeys = ['inject', 'reroll', 'word', 'tag', 'api', 'psnap', 'fix'];   // ★W150：与新装默认同一份（顺序 = 主面板卡片顺序；★W155：「标签修复」与「API 池」互换）
 if (settings.floatPanelAllKey === undefined) settings.floatPanelAllKey = defaultSettings.floatPanelAllKey;   // ★W114（铁律 32）：新装默认 'all'；缺键时补上，和老用户/新装口径一致
@@ -1712,7 +1708,17 @@ function buildRandHeader(remember) {
 const RAND_SURNAMES = ['余', '温', '陆', '顾', '苏', '叶', '白', '楚', '冷', '鹿', '闻', '染', '晏', '许'];
 const RAND_MIDDLES = ['小', '晓', '筱', '笑'];
 const RAND_GIVEN = ['暖', '糯', '鲤', '满', '甜', '软', '桃', '橘', '团', '眠', '星', '雾', '柚', '棠', '荔', '苹', '圆', '豆', '糖', '灯', '铃', '鹿', '鸢', '禾'];
-const RAND_NAME_SRC = '余小温';            // 请求里要被换掉的占位名（聊天记录里保持原样）
+const RAND_NAME_SRC_DEFAULT = '余小温';    // 默认「AI身份」占位名（作者可在面板里改；这里只是回落值）
+const RAND_NAME_SRC_MAX = 40;              // 「AI身份」长度上限（字）
+/** ★W171（作者）：「AI身份」当前值 —— **唯一来源**（面板 settings.randNameSource）。
+ *  空 / 全空格 / 缺键 ⇒ 回落到 `余小温`；绝不返回空串（否则 split('') 会处处替换）。
+ *  用户爱填什么填什么（「小明」「白夜」都行）—— 不校验是否在随机名池里。 */
+function randNameSource() {
+    let v = '';
+    try { v = String(settings.randNameSource == null ? '' : settings.randNameSource); } catch (e) { v = ''; }
+    v = v.trim().slice(0, RAND_NAME_SRC_MAX);   // 手改过 settings 的超长值也收在 40 字内
+    return v || RAND_NAME_SRC_DEFAULT;
+}
 const RAND_NAME_KEY = 'kimi_rand_names';   // 本机 localStorage：{ chatId: name }
 /** 纯函数：抽一个名字；avoid = 本机已经用掉的名字（同一个聊天「换一个」也走这里 ⇒ 一定换）*/
 function pickRandName(avoid) {
@@ -1757,6 +1763,8 @@ function loadRandNameMap() {
 }
 /** 本聊天的人名：有就复用，没有（或存的值不合法）就抽一个并写进 localStorage（每段聊天固定一个）*/
 const RAND_NAME_USED_KEY = 'kimi_rand_names_used';   // { chatId: [用过的名字] }
+const RAND_PENDING = new Map();                       // ★W171b：内存里的待用名 {chatId: name}（重渲染只读写它，不落盘）
+let RAND_SEND_NAME = null;                            // ★W171c：本次发送**开始时**锁住的名字（面板此刻显示的那个）
 const RAND_DONE = new WeakSet();                      // 同一份 messages 只轮换一次（GENERATE_AFTER_DATA + SETTINGS_READY 两处都调）
 function loadRandUsedMap() {
     try { const m = JSON.parse(localStorage.getItem(RAND_NAME_USED_KEY) || '{}'); return (m && typeof m === 'object' && !Array.isArray(m)) ? m : {}; } catch (e) { return {}; }
@@ -1768,18 +1776,33 @@ function usedNamesForChat(cid) {
     const a = m[String(cid)];
     return Array.isArray(a) ? a.filter((x) => typeof x === 'string' && isRandNameValid(x)) : [];
 }
-/** 下次发送将使用的名字（本地待用值；不合法就重抽）*/
+/** 下次发送将使用的名字（本地待用值；不合法就重抽）
+ *  ★W171b（验收必修 2）：抽出来的待用名**只放内存**（`RAND_PENDING`），**不写 localStorage** ——
+ *    面板重绘 / 换聊天重渲染一律不会给 `kimi_rand_names` 加键（只有**真正发送**那一关才落盘）。
+ *    语义不变：这就是"下次发送将使用"的那个名字，发送时用的也一定是它。 */
 function currentRandName() {
     const cid = randChatId();
     const map = loadRandNameMap();
     const cur = map[cid];
-    if (typeof cur === 'string' && isRandNameValid(cur)) return cur;
+    if (typeof cur === 'string' && isRandNameValid(cur)) { RAND_PENDING.set(cid, cur); return cur; }
+    const mem = RAND_PENDING.get(cid);
+    if (typeof mem === 'string' && isRandNameValid(mem)) return mem;   // 本页已经抽过 ⇒ 一直是它（面板=请求）
     const name = pickRandName(usedNamesForChat(cid).concat(usedRandNames(map)));
-    map[cid] = name;
-    saveRandNameMap(map);
+    RAND_PENDING.set(cid, name);
     return name;
 }
-/** 「换一个」：换掉"下次发送将使用"的那个名字（避开本聊天用过的）*/
+/** ★W171b：按**当前** chatId 重渲染面板「下次发送将使用」——只 peek（不消费、不推进、不写盘）。
+ *  面板/元素不存在就静默跳过（换聊天时设置面板可能还没建）。 */
+function refreshRandNameLabel() {
+    try {
+        const el = document.getElementById(extensionName + '_rand_name_val');
+        if (!el) return false;
+        if (!settings.randNameEnabled) return false;
+        el.textContent = currentRandName();
+        return true;
+    } catch (e) { return false; }
+}
+/** 「换一个」：换掉"下次发送将使用"的那个名字（避开本聊天用过的）—— 手动动作，**立刻落盘** */
 function rerollRandName() {
     const cid = randChatId();
     const map = loadRandNameMap();
@@ -1787,6 +1810,7 @@ function rerollRandName() {
     const name = pickRandName(avoid);
     map[cid] = name;
     saveRandNameMap(map);
+    RAND_PENDING.set(cid, name);   // ★W171b：内存同步（面板与发送读到的是同一个）
     return name;
 }
 
@@ -1834,9 +1858,14 @@ function replaceRandNames(msgs, consume) {
         const doConsume = consume !== false;               // false = 只补名、不记账不推进（GENERATE_AFTER_DATA 的 peek）
         if (doConsume && RAND_DONE.has(msgs)) return out;   // 同一份 messages 只轮换一次
         const cid = randChatId();
-        const name = currentRandName();                   // 本次发送用「下次发送将使用」的那个
-        // ★W169g（作者）：只做「把余小温全局替换成本轮随机名」——不追着历史里的旧名换
-        const sources = [RAND_NAME_SRC];
+        // ★W171c（验收必修）：本次发送用「**发送那一刻锁住**的那个名字」（GENERATION_STARTED 里抓的面板值）。
+        //   为什么必须锁：刷新后不选角色直接点发送时，ST 是**点了发送才创建聊天** ⇒ chatId 从 '' 变成新值，
+        //   而面板是在旧桶（default）上渲染的；不锁就会出现「面板一个名、请求另一个名」。
+        //   peek（GED）与 consume（READY）都用这一个 name；记账/推进仍按**发送时的真实 cid**（见下面 consume 段）。
+        const name = (typeof RAND_SEND_NAME === 'string' && isRandNameValid(RAND_SEND_NAME)) ? RAND_SEND_NAME : currentRandName();
+        // ★W171（作者）：占位名改成读面板「AI身份」（settings.randNameSource，空 ⇒ 回落 余小温）——
+        //   全工程**唯一来源**就是 randNameSource()，没有第二套常量。
+        const src = randNameSource();
         const FIELDS = ['content', 'name', 'reasoning_content'];
         for (let i = 0; i < msgs.length; i++) {
             const m = msgs[i];
@@ -1844,11 +1873,8 @@ function replaceRandNames(msgs, consume) {
             for (let f = 0; f < FIELDS.length; f++) {
                 const key = FIELDS[f];
                 const val = m[key];
-                if (typeof val !== 'string') continue;
-                let next = val;
-                for (let k = 0; k < sources.length; k++) {
-                    if (next.indexOf(sources[k]) >= 0) next = next.split(sources[k]).join(name);
-                }
+                if (typeof val !== 'string' || val.indexOf(src) < 0) continue;
+                const next = val.split(src).join(name);
                 if (next !== val) { m[key] = next; out.changed = true; }
             }
         }
@@ -1862,7 +1888,8 @@ function replaceRandNames(msgs, consume) {
         saveRandUsedMap(usedMap);
         const map = loadRandNameMap();
         map[cid] = pickRandName(arr.concat(usedRandNames(map)).concat([name]));
-        saveRandNameMap(map);
+        saveRandNameMap(map);                       // ★W171b：只有真正发送这一关才落盘（键 +1 就发生在这里）
+        RAND_PENDING.set(cid, map[cid]);            // 内存同步：下一轮面板显示 = 下一次真正用的
         RAND_DONE.add(msgs);
         out.name = name;
     } catch (e) { }
@@ -1914,6 +1941,8 @@ window.__ywRandApply = (messages) => {
     const used = applyRandAndWrapInPlace(copy);
     return { messages: copy, header: used.header, name: used.name };
 };
+// ★W171c：探针/验收用 —— "本次发送锁住的名字"：不带参数 = 直读；带参数 = 写值（只在探针里用，产品代码不调）
+window.__ywRandSendName = (v) => { if (v !== undefined) { RAND_SEND_NAME = v; } return RAND_SEND_NAME; };
 // ===== ★W168 END =====
 
 /** 粗算 token（拿不到酒馆分词器时的兜底） */
@@ -9149,18 +9178,10 @@ ${t('usage3')}
 </div>
 </div>
 <div class="kimi-sep"></div>
-<!-- ★W170（作者）：三个「防标记」功能合并到**同一张卡**，顺序：随机头部 → 塞小说防道歉 → 随机AI角色；
-     每个功能一行勾选框，勾上只展开它自己那块（元素 id 全部保持不变，探针仍可用）。 -->
+<!-- ★W171（作者）：三个「防标记」功能在同一张卡里，**UI 顺序** = 塞小说防道歉 → 随机头部 → 随机AI身份；
+     每个功能一行勾选框，勾上只展开它自己那块（元素 id 全部保持不变，探针仍可用）。
+     ★注意：这里只是**面板顺序**；请求注入顺序仍是「头 → 名字 → 包裹」（见 applyRandAndWrapInPlace）。 -->
 <div class="kimi-inner-card">
-<label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
-<input type="checkbox" id="${extensionName}_rand_head" ${settings.randHeadEnabled ? 'checked' : ''}/>
-<span style="font-size:1.16em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('randHeadTitle')}</span>
-</label>
-<div id="${extensionName}_rand_head_box" style="display:${settings.randHeadEnabled ? '' : 'none'}">
-<p class="kimi-hint" style="margin:2px 0 5px;line-height:1.5">${ocr('randHeadHint')}</p>
-<div id="${extensionName}_rand_head_demo" class="kimi-hint" style="margin:0;font:12px/1.6 ui-monospace,Consolas,monospace;opacity:.9;white-space:pre-wrap"></div>
-</div>
-<div class="kimi-sep"></div>
 <label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
 <input type="checkbox" id="${extensionName}_wrap4a" ${settings.wrap4aEnabled ? 'checked' : ''}/>
 <span style="font-size:1.16em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('wrap4aTitle')}</span>
@@ -9174,7 +9195,7 @@ ${t('usage3')}
 <textarea id="${extensionName}_wrap4a_prefix" class="text_pole" style="width:100%;min-height:88px;font:12px/1.45 ui-monospace,Consolas,monospace" placeholder="${ocr('wrap4aPrefixPh')}"></textarea>
 <div id="${extensionName}_wrap4a_prefix_tok" style="text-align:right;font-size:.76em;opacity:.75;margin:1px 0 4px"></div>
 <div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:.8em;opacity:.85;margin:2px 0 6px;white-space:nowrap;overflow:hidden">
-<span>${ocr('wrap4aMidUp')} ↑</span><span style="opacity:.45">｜</span><span style="font-weight:600">${ocr('wrap4aMidCore')}</span><span style="opacity:.45">｜</span><span>↓ ${ocr('wrap4aMidDown')}</span>
+<span style="font-weight:600">${ocr('wrap4aMidCore')}</span>
 </div>
 <label class="kimi-label" for="${extensionName}_wrap4a_suffix" style="font-size:.85em">${ocr('wrap4aSuffixLabel')}</label>
 <textarea id="${extensionName}_wrap4a_suffix" class="text_pole" style="width:100%;min-height:88px;font:12px/1.45 ui-monospace,Consolas,monospace" placeholder="${ocr('wrap4aSuffixPh')}"></textarea>
@@ -9182,12 +9203,22 @@ ${t('usage3')}
 </div>
 <div class="kimi-sep"></div>
 <label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
+<input type="checkbox" id="${extensionName}_rand_head" ${settings.randHeadEnabled ? 'checked' : ''}/>
+<span style="font-size:1.16em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('randHeadTitle')}</span>
+</label>
+<div id="${extensionName}_rand_head_box" style="display:${settings.randHeadEnabled ? '' : 'none'}">
+<p class="kimi-hint" style="margin:2px 0 5px;line-height:1.5">${ocr('randHeadHint')}</p>
+<div id="${extensionName}_rand_head_demo" class="kimi-hint" style="margin:0;font:12px/1.6 ui-monospace,Consolas,monospace;opacity:.9;white-space:pre-wrap"></div>
+</div>
+<div class="kimi-sep"></div>
+<label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
 <input type="checkbox" id="${extensionName}_rand_name" ${settings.randNameEnabled ? 'checked' : ''}/>
 <span style="font-size:1.16em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('randNameTitle')}</span>
 </label>
 <div id="${extensionName}_rand_name_box" style="display:${settings.randNameEnabled ? '' : 'none'}">
-<p class="kimi-hint" style="margin:2px 0 5px;line-height:1.5">${ocr('randNameHint')}</p>
-<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+<label class="kimi-label" for="${extensionName}_rand_name_src" style="font-size:.85em">${ocr('randNameSourceLabel')}</label>
+<input id="${extensionName}_rand_name_src" type="text" class="text_pole" style="width:100%" maxlength="40" value="${schemeEsc(randNameSource())}"/>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
 <span class="kimi-hint" style="margin:0">${ocr('randNameCurrent')}<b id="${extensionName}_rand_name_val"></b></span>
 <button type="button" id="${extensionName}_rand_name_reroll" class="menu_button" style="flex:none;white-space:nowrap">${ocr('randNameReroll')}</button>
 </div>
@@ -10803,7 +10834,9 @@ const storeBuild = 'v2.2.70';
         const $nameVal = $("#" + extensionName + "_rand_name_val");
         if (!$headChk.length && !$nameChk.length) return;
         const renderDemo = () => { $headDemo.text(buildRandHeader(false)); };   // 只生成不注入、不占「最近 5 个」名额
-        const renderName = () => { $nameVal.text(currentRandName()); };
+        // ★W171b：统一走同一个入口（按**当前** chatId、只 peek、不写盘）——
+        //   面板重绘 / 换聊天 / 生成结束都只更新这一行，绝不消费名字。
+        const renderName = () => { refreshRandNameLabel(); };
         if (settings.randHeadEnabled) renderDemo();
         if (settings.randNameEnabled) renderName();
         $headChk.on("change", function () {
@@ -10822,6 +10855,21 @@ const storeBuild = 'v2.2.70';
             rerollRandName();   // 清掉本聊天的缓存 ⇒ 重新抽一个
             renderName();
         });
+        // ★W171（作者）：「AI身份」输入框（被替换的占位名；空/全空格 ⇒ 有效值回落到 余小温）
+        const $srcInput = $("#" + extensionName + "_rand_name_src");
+        if ($srcInput.length) {
+            $srcInput.val(randNameSource());                       // 显示的是"当前有效值"（空 ⇒ 默认）
+            let tmrSrc = null;
+            $srcInput.on("input change", function () {
+                clearTimeout(tmrSrc);
+                const save = () => {
+                    const v = String($srcInput.val() == null ? '' : $srcInput.val()).trim().slice(0, RAND_NAME_SRC_MAX);
+                    settings.randNameSource = v;                   // 存 trim 后的原值（空串 = 让有效值回落到默认）
+                    saveSettingsDebounced();
+                };
+                tmrSrc = setTimeout(save, 400);
+            });
+        }
         // ★W169f（验收低优先项）：发送后「下次发送将使用」要跟着刷新（不然面板开着时显示的是刚用掉的那个）
         try {
             eventSource.on(event_types.GENERATION_ENDED, function () {
@@ -10863,6 +10911,9 @@ eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, onSettingsReady);
 let __apiFailRetry = 0;
 let __genSnap = null;   // 本次生成开始时：最后一条消息的 条数/swipe_id/分支数（判断 429 时 swipe 是否真的没生效）
 eventSource.on(event_types.GENERATION_STARTED, function () {
+    // ★W171c（验收必修）：**发送那一刻就把面板上那个名字锁住**（面板读的也是 currentRandName() ⇒ 同一个值）。
+    //   之后 ST 可能才创建/切换聊天（chatId 变），请求里用的仍然是这一刻锁住的名字 ⇒ 面板 == 请求。
+    RAND_SEND_NAME = (() => { try { return currentRandName(); } catch (e) { return null; } })();
     try {
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const ch = ctx && Array.isArray(ctx.chat) ? ctx.chat : [];
@@ -10875,6 +10926,7 @@ eventSource.on(event_types.GENERATION_STARTED, function () {
     } catch (e) { __genSnap = null; }
 });
 eventSource.on(event_types.GENERATION_ENDED, function () {
+    RAND_SEND_NAME = null;                 // ★W171c：这一轮用完就清，绝不残留给下一次
     try {
         if (!settings.enabled || !settings.rerollOnEmpty || settings.rerollPaused) { __apiFailRetry = 0; return; }
         if (manualStopClicked) { __apiFailRetry = 0; return; }   // 用户手动停的，不重试
@@ -10938,6 +10990,14 @@ eventSource.on(event_types.GENERATE_AFTER_DATA, function (data) {
 // 注入挂到 CHAT_COMPLETION_SETTINGS_READY（ST 发请求前最后机会）——不依赖 fetch 链，防其它插件覆盖 window.fetch 致注入失效
 eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, (generateData) => {
     try { if (typeof applyRequestInjections === 'function') applyRequestInjections(generateData); } catch (e) { console.warn('[余温工具箱] READY 注入失败:', e); }
+});
+
+// ★W171b（验收必修 2 · 既有真 bug）：换聊天 / 刷新后首轮，面板「下次发送将使用」≠ 请求实际用的名字
+//   —— 根因是面板渲染时拿的还是**旧 chatId**（没人监听聊天切换）。这里在**模块加载时注册一次**：
+//   CHAT_CHANGED ⇒ 只按当前 chatId 重渲染那一行（refreshRandNameLabel = peek：不消费、不推进、不写盘）；
+//   面板还没建就静默跳过（打开设置面板时会再渲染一次）。
+eventSource.on(event_types.CHAT_CHANGED, function () {
+    try { refreshRandNameLabel(); } catch (e) { }
 });
 
 /* ============================================================================================
