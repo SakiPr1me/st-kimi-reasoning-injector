@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.76'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.77'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -411,9 +411,10 @@ const defaultSettings = {
     wrap4aEnabled: false,            // ★W167：4A 破限包裹（默认关；关着一律不读前后缀、请求里一个字都不加）
     wrap4aPrefix: '',                // 前置小说（上面一段）
     wrap4aSuffix: '',                // 后置小说（下面一段）
-    randHeadEnabled: true,           // ★W170（作者拍板）：随机头部默认**开**（新装/升级缺键都取这一份）
+    randHeadEnabled: false,          // ★W177（作者 2026-10-28 拍板）：三个防标记**新装全默认关**（塞小说/头部/身份同一口径；用户手动勾选受尊重）
     randNameEnabled: false,          // ★W168：随机人名（把请求里的 AI身份 换成本轮随机名；默认关）
-    randNameSource: '余小温',        // ★W171（作者）：被替换的「AI身份」占位名（面板可改；空 ⇒ 回落这个默认）
+    randNameSource: '余小温',        // ★W171：被替换的「AI身份」占位名
+    uiFolds: {},                     // ★W177：防标记三段 + Reasoning Content 的手动折叠记忆（{key:'open'|'closed'}；没记录的 key 走默认=开着展开/关着收起）        // ★W171（作者）：被替换的「AI身份」占位名（面板可改；空 ⇒ 回落这个默认）
     autoUpdate: true,                // 默认自动更新：每次检测到云端有新版直接更新到最新
     floatPanelKeys: ['inject', 'reroll', 'psnap', 'word', 'tag', 'api', 'fix'], // 悬浮条面板区显示哪些卡（★W174-E：顺序 = 主面板卡片顺序 [注入/自动重Roll/方案切换/替换/标签修复/API池/不常用]；键只当勾选集合，渲染顺序一律按 KIMI_CARD_DEFS）
     floatPanelAllKey: 'all',
@@ -1015,9 +1016,10 @@ if (settings.ocRelayKey === undefined) settings.ocRelayKey = defaultSettings.ocR
 if (settings.wrap4aEnabled === undefined) settings.wrap4aEnabled = defaultSettings.wrap4aEnabled;
 if (settings.wrap4aPrefix === undefined) settings.wrap4aPrefix = defaultSettings.wrap4aPrefix;
 if (settings.wrap4aSuffix === undefined) settings.wrap4aSuffix = defaultSettings.wrap4aSuffix;
-if (settings.randHeadEnabled === undefined) settings.randHeadEnabled = defaultSettings.randHeadEnabled;   // ★W170（铁律 32）：新装/升级同一份默认 = 开
+if (settings.randHeadEnabled === undefined) settings.randHeadEnabled = defaultSettings.randHeadEnabled;   // ★W177（铁律 32）：新装/升级同一份默认 = 关（作者 2026-10-28 改）
 if (settings.randNameEnabled === undefined) settings.randNameEnabled = defaultSettings.randNameEnabled;   // ★W168（铁律 32）：同上 = 关
 if (settings.randNameSource === undefined) settings.randNameSource = defaultSettings.randNameSource;      // ★W171（铁律 32）：缺键补 defaultSettings 同值 = 余小温
+if (!settings.uiFolds || typeof settings.uiFolds !== 'object' || Array.isArray(settings.uiFolds)) settings.uiFolds = {};   // ★W177（铁律 32）：折叠记忆容器（脏数据归零，逐键读时再兜底）
 if (settings.autoUpdate === undefined) settings.autoUpdate = true;
 if (!Array.isArray(settings.floatPanelKeys)) settings.floatPanelKeys = ['inject', 'reroll', 'psnap', 'word', 'tag', 'api', 'fix'];   // ★W174-E：与新装默认同一份（键只当勾选集合；渲染顺序一律按 KIMI_CARD_DEFS）
 if (settings.floatPanelAllKey === undefined) settings.floatPanelAllKey = defaultSettings.floatPanelAllKey;   // ★W114（铁律 32）：新装默认 'all'；缺键时补上，和老用户/新装口径一致
@@ -9202,7 +9204,7 @@ ${t('injectStep1')}
 ${t('injectStep2')}
 </label>
 
-<details class="kimi-fold" id="${extensionName}_rc_fold" style="margin-top:8px">
+<details class="kimi-fold" id="${extensionName}_rc_fold"${foldIsOpen('rc', false) ? ' open' : ''} style="margin-top:8px">
 <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:5px;user-select:none">
 <i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true" style="flex:none"></i>
 <span class="kimi-label" style="margin:0">${t('rcLabel')}</span>
@@ -9281,12 +9283,12 @@ ${t('usage3')}
      全部元素 id 原样保留（_wrap4a/_wrap4a_box/_wrap4a_prefix/_wrap4a_suffix/_wrap4a_demo/
      _rand_head/_rand_head_box/_rand_head_demo/_rand_name/_rand_name_box/_rand_name_val/_rand_name_reroll/_rand_name_src）。 -->
 <div class="kimi-inner-card" id="kimi_rand_card">
-<div class="kimi-fold-head${settings.wrap4aEnabled ? ' open' : ''}" data-fold="wrap4a">
+<div class="kimi-fold-head${foldIsOpen('wrap4a', settings.wrap4aEnabled) ? ' open' : ''}" data-fold="wrap4a">
 <input type="checkbox" id="${extensionName}_wrap4a" ${settings.wrap4aEnabled ? 'checked' : ''}/>
 <span style="font-size:0.95em;font-weight:700;color:var(--golden-color,#e0a800);flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ocr('wrap4aTitle')}</span>
 <i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true"></i>
 </div>
-<div id="${extensionName}_wrap4a_box" style="display:${settings.wrap4aEnabled ? '' : 'none'}">
+<div id="${extensionName}_wrap4a_box" style="display:${foldIsOpen('wrap4a', settings.wrap4aEnabled) ? '' : 'none'}">
 <p class="kimi-hint" style="margin:2px 0 6px;line-height:1.5">${ocr('wrap4aHint')}</p>
 <div style="margin:0 0 6px">
 <button type="button" id="${extensionName}_wrap4a_demo" class="menu_button" style="flex:none;white-space:nowrap">${ocr('wrap4aDemo')}</button>
@@ -9306,22 +9308,22 @@ ${t('usage3')}
 </div>
 </div>
 <div class="kimi-sep"></div>
-<div class="kimi-fold-head${settings.randHeadEnabled ? ' open' : ''}" data-fold="rand_head">
+<div class="kimi-fold-head${foldIsOpen('rand_head', settings.randHeadEnabled) ? ' open' : ''}" data-fold="rand_head">
 <input type="checkbox" id="${extensionName}_rand_head" ${settings.randHeadEnabled ? 'checked' : ''}/>
 <span style="font-size:0.95em;font-weight:700;color:var(--golden-color,#e0a800);flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ocr('randHeadTitle')}</span>
 <i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true"></i>
 </div>
-<div id="${extensionName}_rand_head_box" style="display:${settings.randHeadEnabled ? '' : 'none'}">
+<div id="${extensionName}_rand_head_box" style="display:${foldIsOpen('rand_head', settings.randHeadEnabled) ? '' : 'none'}">
 <p class="kimi-hint" style="margin:2px 0 5px;line-height:1.5">${ocr('randHeadHint')}</p>
 <div id="${extensionName}_rand_head_demo" class="kimi-hint" style="margin:0;font:12px/1.6 ui-monospace,Consolas,monospace;opacity:.9;white-space:pre-wrap"></div>
 </div>
 <div class="kimi-sep"></div>
-<div class="kimi-fold-head${settings.randNameEnabled ? ' open' : ''}" data-fold="rand_name">
+<div class="kimi-fold-head${foldIsOpen('rand_name', settings.randNameEnabled) ? ' open' : ''}" data-fold="rand_name">
 <input type="checkbox" id="${extensionName}_rand_name" ${settings.randNameEnabled ? 'checked' : ''}/>
 <span style="font-size:0.95em;font-weight:700;color:var(--golden-color,#e0a800);flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ocr('randNameTitle')}</span>
 <i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true"></i>
 </div>
-<div id="${extensionName}_rand_name_box" style="display:${settings.randNameEnabled ? '' : 'none'}">
+<div id="${extensionName}_rand_name_box" style="display:${foldIsOpen('rand_name', settings.randNameEnabled) ? '' : 'none'}">
 <label class="kimi-label" for="${extensionName}_rand_name_src" style="font-size:.85em">${ocr('randNameSourceLabel')}</label>
 <input id="${extensionName}_rand_name_src" type="text" class="text_pole" style="width:100%" maxlength="40" value="${schemeEsc(randNameSource())}"/>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
@@ -10949,7 +10951,7 @@ const storeBuild = 'v2.2.70';
         // ★W171b：统一走同一个入口（按**当前** chatId、只 peek、不写盘）——
         //   面板重绘 / 换聊天 / 生成结束都只更新这一行，绝不消费名字。
         const renderName = () => { refreshRandNameLabel(); };
-        if (settings.randHeadEnabled) renderDemo();
+        { const hb = document.getElementById(extensionName + "_rand_head_box"); if (hb && hb.style.display !== 'none') renderDemo(); }   // ★W177：示例诗跟"盒是否真展开"走（折叠记忆后开关≠展开态）
         if (settings.randNameEnabled) renderName();
         $headChk.on("change", function () {
             settings.randHeadEnabled = $(this).is(":checked");
@@ -10986,6 +10988,11 @@ const storeBuild = 'v2.2.70';
         } catch (e) { }
     })();
 
+    // ★W177：折叠状态 = settings.uiFolds 里存过的（手动开合落盘）优先；没存过的走默认（功能开着展开/关着收起）。
+    function foldIsOpen(key, defOpen) {
+        try { const v = settings.uiFolds ? settings.uiFolds[key] : undefined; if (v === 'open') return true; if (v === 'closed') return false; } catch (e) { }
+        return !!defOpen;
+    };
     // ★W174-A：三段「防标记」+ Reasoning Content 的**独立折叠**——
     //   行头（.kimi-fold-head）点击 = 切换展开/收起；点勾选框只切功能（绝不带动展开）；
     //   默认展开态在渲染时已按"开着展开/关着收起"定好；用户手动展开/收起后以手动为准（不持久化）。
@@ -11004,6 +11011,7 @@ const storeBuild = 'v2.2.70';
                         const willOpen = box.style.display === 'none';
                         box.style.display = willOpen ? '' : 'none';
                         head.classList.toggle('open', willOpen);
+                        try { if (!settings.uiFolds || typeof settings.uiFolds !== 'object') settings.uiFolds = {}; settings.uiFolds[key] = willOpen ? 'open' : 'closed'; saveSettingsDebounced(); } catch (e) { }   // ★W177：手动开合落盘（刷新不丢）
                         if (willOpen && key === 'rand_head') {           // 示例诗：第一次展开时若为空 ⇒ 现生成
                             const d = document.getElementById(extensionName + '_rand_head_demo');
                             if (d && !d.textContent) d.textContent = buildRandHeader(false);
@@ -11027,6 +11035,7 @@ const storeBuild = 'v2.2.70';
             const paint = () => { car.classList.toggle('fa-caret-right', !det.open); car.classList.toggle('fa-caret-down', !!det.open); };
             paint();
             det.addEventListener('toggle', paint);
+                        det.addEventListener('toggle', function () { try { if (!settings.uiFolds || typeof settings.uiFolds !== 'object') settings.uiFolds = {}; settings.uiFolds['rc'] = det.open ? 'open' : 'closed'; saveSettingsDebounced(); } catch (e) { } });   // ★W177：RC 折叠记忆
         })();
     })();
 
