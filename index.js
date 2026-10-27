@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.74'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.75'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -415,7 +415,7 @@ const defaultSettings = {
     randNameEnabled: false,          // ★W168：随机人名（把请求里的 AI身份 换成本轮随机名；默认关）
     randNameSource: '余小温',        // ★W171（作者）：被替换的「AI身份」占位名（面板可改；空 ⇒ 回落这个默认）
     autoUpdate: true,                // 默认自动更新：每次检测到云端有新版直接更新到最新
-    floatPanelKeys: ['inject', 'reroll', 'word', 'tag', 'api', 'psnap', 'fix'], // 悬浮条面板区显示哪些卡（★W150：顺序 = 主面板卡片顺序；★W155：「标签修复」与「API 池」互换 ⇒ 标签修复在前）
+    floatPanelKeys: ['inject', 'reroll', 'psnap', 'word', 'tag', 'api', 'fix'], // 悬浮条面板区显示哪些卡（★W174-E：顺序 = 主面板卡片顺序 [注入/自动重Roll/方案切换/替换/标签修复/API池/不常用]；键只当勾选集合，渲染顺序一律按 KIMI_CARD_DEFS）
     floatPanelAllKey: 'all',
     clineModelOverride: false,       // 模型名前缀覆写：请求层把 model 改写为 指定提供商/基础模型名（⚠️脱离cline-pass前缀=按积分计费）
     clineProvider: 'modal',          // 当前选中的 Cline 提供商（默认 modal，据称质量最好）
@@ -498,10 +498,10 @@ const UI = {
         rcLabel: "Reasoning Content：",
         usageTitle: "使用方法：", usage1: "· 只打开step 1：原生思维链不进正文，正文质量理论最高。有概率极端内容夺舍失败（AI 道歉），好在出现英文可手动截停，重roll可破，主要看渠道。", usage2: "· 同时打开step 1和step2：思维链放进正文，破限较强，稳定夺舍。有概率在思考完就截断。这种截断在使用无限能源时会扣费！", usage3: "⚠️注意：两种破限方式都需要搭配专用预设，渠道仅测试opencode，其它自测。",
         rerollSectionTitle: "自动重ROLL：", alertSectionTitle: "完成提醒：",
-        rerollNoMutter: "结束仍无截断标记（半截楼/截断）", mutterSound: "完整生成播放", mutterVibrate: "同时震动提醒（Android；iOS不支持）", rcReset: "复原默认注入", rcLockedHint: "内置预设（不可修改）；需要自定义请用「＋ 追加模板」。", rcPresetHint: "切换 KIMI/DS 时此框会自动换成对应默认预设（KIMI：Meta 起手 / DS：We need 起手）。想保存自己的模板请用「＋ 追加模板」。", rcResetDone: "已复原为当前模式的默认预设", rcResetCustom: "自定义模板没有内置默认可复原", mutterTrigMarker: "检测到截断标记（K3/余温预设适用）", mutterTrigDone: "输出完成即提醒（不用截断标记的模型适用）", mutterSndDing: "柔和叮咚（推荐）", mutterSndCrisp: "清脆两声", mutterSndChord: "治愈和弦", mutterSndSoft: "低柔单音", mutterSndMelody: "八音盒旋律（约2秒）", mutterSndLongbell: "长铃余音（约2秒）", mutterSndLullaby: "摇篮琶音（约5秒）", mutterSndHarp: "竖琴流水（约5秒）", mutterSndTest: "试听", mutterHint: "两项均以「自动截断」卡的截断标记（默认 <mutter>）为准：有标记＝完整→响两声beep；无标记＝半截楼→swipe进新分支继续roll（受连续上限约束；手动停止的楼不会被判半截）。提示音为内置音，不依赖酒馆音效设置。", rerollLabel: "自动重roll：", rerollLockOn: "暂时关掉重roll", rerollLockOff: "已锁住 · 点此还原", rerollLockOnTitle: "一键把你勾选的重roll全部暂时关掉（随时可一键还原）", rerollLockOffTitle: "还原到你上次锁住前的勾选", rerollEnglish: "思维链是英文（触审易道歉）", rerollNoThink: "无思维链直接出正文（没思考 or 少思考）", rerollEmpty: "空回复（PVP）", rerollKeyword: "出现以下关键词即重roll", rerollKeywordsLabel: "关键词（逗号分隔）：", rerollKeywordsHint: "生成内容（含思维链）出现任一关键词 → 立即停止并重roll开新分支。多个用英文逗号 , 分隔，不区分大小写；留空=关闭该功能。★这一栏是<b>全文匹配</b>：URL 与 HTML 标签里的字符（http、jpg、&lt;mutter&gt; 等）同样会命中；命中时控制台会打出「位置 + 前后 40 字」，方便判断是不是配置问题。",
-        rerollBodyMarker: "正文出现以下内容即重roll",
-        rerollBodyMarkersHint: "只检测正文（不检测思维链）：正文一出现下面这些内容 → 立即停止并重roll开新分支。多个用英文逗号 , 分隔，不区分大小写；留空=关闭该功能。",
-        rerollLimitLabel: "连续自动重roll上限：", rerollTimes: " 次", rerollMinTokensLabel: "思考太短截断阈值：", rerollMinTokensHint: "",
+        rerollNoMutter: "结束仍无截断标记（半截楼/截断）", mutterSound: "完整生成播放", mutterVibrate: "同时震动提醒（Android；iOS不支持）", rcReset: "复原默认注入", rcLockedHint: "内置预设（不可修改）；需要自定义请用「＋ 追加模板」。", rcPresetHint: "切换 KIMI/DS 时此框会自动换成对应默认预设（KIMI：Meta 起手 / DS：We need 起手）。想保存自己的模板请用「＋ 追加模板」。", rcResetDone: "已复原为当前模式的默认预设", rcResetCustom: "自定义模板没有内置默认可复原", mutterTrigMarker: "检测到截断标记（K3/余温预设适用）", mutterTrigDone: "输出完成即提醒（不用截断标记的模型适用）", mutterSndDing: "柔和叮咚（推荐）", mutterSndCrisp: "清脆两声", mutterSndChord: "治愈和弦", mutterSndSoft: "低柔单音", mutterSndMelody: "八音盒旋律（约2秒）", mutterSndLongbell: "长铃余音（约2秒）", mutterSndLullaby: "摇篮琶音（约5秒）", mutterSndHarp: "竖琴流水（约5秒）", mutterSndTest: "试听", mutterHint: "两项均以「自动截断」卡的截断标记（默认 <mutter>）为准：有标记＝完整→响两声beep；无标记＝半截楼→swipe进新分支继续roll（受连续上限约束；手动停止的楼不会被判半截）。提示音为内置音，不依赖酒馆音效设置。", rerollLabel: "自动重roll：", rerollLockOn: "暂时关掉重roll", rerollLockOff: "已锁住 · 点此还原", rerollLockOnTitle: "一键把你勾选的重roll全部暂时关掉（随时可一键还原）", rerollLockOffTitle: "还原到你上次锁住前的勾选", rerollEnglish: "思维链是英文（触审易道歉）", rerollNoThink: "无思维链直接出正文", rerollEmpty: "空回复（PVP）", rerollKeyword: "思维链出现", rerollKeywordsLabel: "关键词（逗号分隔）：", rerollKeywordsHint: "生成内容（含思维链）出现任一关键词 → 立即停止并重roll开新分支。多个用英文逗号 , 分隔，不区分大小写；留空=关闭该功能。★这一栏是<b>全文匹配</b>：URL 与 HTML 标签里的字符（http、jpg、&lt;mutter&gt; 等）同样会命中；命中时控制台会打出「位置 + 前后 40 字」，方便判断是不是配置问题。",
+        rerollBodyMarker: "正文出现",
+        rerollBodyMarkersHint: "只检测正文（不检测思维链）：正文一出现下面这些内容 → 立即停止并重roll开新分支。注意：多个用英文逗号 , 分隔，不区分大小写；玩极端的内容时，容易出现英文思维链，英文思维链大概率道歉，但中文思维链也有道歉几率，只是比较低！你要多关注下手动截断。",
+        rerollLimitLabel: "连续自动重roll上限：", rerollTimes: " 次", rerollMinTokensLabel: "阈值", rerollMinTokensHint: "",
         rerollWarning: "注意：玩极端的内容时，容易出现英文思维链，重roll虽然可以避免大概率道歉的英文思维链，但是中文思维链也有道歉几率，只是比较低！你要多关注下手动截断。",
         foldHeightLabel: "思维链区域固定高度滚动", foldHeightHint: "给思维链区域加最大高度 + 滚动条（长思维链不再撑爆楼层；注入等效自定义 CSS）",
         showTpsLabel: "楼层显示生成速度（t/s）", showTpsHint: "在 token 数旁显示每秒 token 数（token 数 ÷ 生成耗时），和 AI 回复计时器同一数据源",
@@ -563,10 +563,10 @@ const UI = {
         rcLabel: "Reasoning Content: ",
         usageTitle: "Usage: ", usage1: "· Step 1 only: native CoT stays out of the body - theoretically best body quality. Extreme content may fail takeover (AI apologizes); stop manually if English thinking appears, reroll usually fixes it (depends on the channel).", usage2: "· Step 1 + Step 2: CoT goes into the body - stronger jailbreak, stable takeover. May stop right after thinking. That stop still costs tokens on unlimited-energy plans!", usage3: "⚠️ Both modes need the matching preset. Only tested on opencode channel.",
         rerollSectionTitle: "AUTO REROLL:", alertSectionTitle: "COMPLETION ALERT:",
-        rerollNoMutter: "No stop marker at end (truncated reply)", mutterSound: "Complete reply → play beep", rcReset: "Reset default injection", rcLockedHint: "Built-in preset (read-only). To customize, use “+ Add template”.", rcPresetHint: "Switching KIMI/DS replaces this box with that mode's default preset (KIMI: Meta opener / DS: We need opener). To keep your own template, use + Add template.", rcResetDone: "Restored the default preset for this mode", rcResetCustom: "Custom templates have no built-in default to restore", mutterVibrate: "Also vibrate (Android; not on iOS)", mutterTrigMarker: "On stop marker detected (K3 / YuWen presets)", mutterTrigDone: "When output finishes (models without stop marker)", mutterSndDing: "Soft ding-dong (recommended)", mutterSndCrisp: "Crisp double", mutterSndChord: "Healing chord", mutterSndSoft: "Low soft tone", mutterSndMelody: "Music-box melody (~2s)", mutterSndLongbell: "Long bell (~2s)", mutterSndLullaby: "Lullaby arpeggio (~5s)", mutterSndHarp: "Harp cascade (~5s)", mutterSndTest: "Test", mutterHint: "Both use the Auto-Stop marker (default <mutter>): marker found = complete → two beeps; missing = truncated → swipe to a new branch (bounded by the reroll limit; manually stopped replies are exempt). Beep is built-in, independent of ST sound settings.", rerollLabel: "Auto Reroll: ", rerollLockOn: "Temporarily turn off reroll", rerollLockOff: "Locked — click to restore", rerollLockOnTitle: "One click: temporarily turn off all reroll options you picked (restore anytime)", rerollLockOffTitle: "Restore the options you had before locking", rerollEnglish: "English thinking (easily triggers moderation apology)", rerollNoThink: "No thinking, straight to body (no/little thinking)", rerollEmpty: "Empty reply (PVP)", rerollKeyword: "Reroll when any of the following keywords appear", rerollKeywordsLabel: "Keywords (comma-separated): ", rerollKeywordsHint: "If any keyword appears in generated content (incl. thinking) → stop and reroll to a new branch. Separate with English commas , ; case-insensitive. Leave empty to disable. ★This box matches the <b>whole text</b>: characters inside URLs and HTML tags (http, jpg, &lt;mutter&gt;, ...) hit too; on a hit the console logs the position + 40 chars around it, so you can tell a config problem at a glance.",
-        rerollBodyMarker: "Reroll when the reply body contains",
-        rerollBodyMarkersHint: "Checks the reply body only, never the thinking chain: as soon as the body contains any of these → stop and reroll to a new branch. Separate with English commas , ; case-insensitive. Leave empty to disable.",
-        rerollLimitLabel: "Max consecutive auto rerolls: ", rerollTimes: " times", rerollMinTokensLabel: "Short-thinking cutoff threshold: ", rerollMinTokensHint: "",
+        rerollNoMutter: "No stop marker at end (truncated reply)", mutterSound: "Complete reply → play beep", rcReset: "Reset default injection", rcLockedHint: "Built-in preset (read-only). To customize, use “+ Add template”.", rcPresetHint: "Switching KIMI/DS replaces this box with that mode's default preset (KIMI: Meta opener / DS: We need opener). To keep your own template, use + Add template.", rcResetDone: "Restored the default preset for this mode", rcResetCustom: "Custom templates have no built-in default to restore", mutterVibrate: "Also vibrate (Android; not on iOS)", mutterTrigMarker: "On stop marker detected (K3 / YuWen presets)", mutterTrigDone: "When output finishes (models without stop marker)", mutterSndDing: "Soft ding-dong (recommended)", mutterSndCrisp: "Crisp double", mutterSndChord: "Healing chord", mutterSndSoft: "Low soft tone", mutterSndMelody: "Music-box melody (~2s)", mutterSndLongbell: "Long bell (~2s)", mutterSndLullaby: "Lullaby arpeggio (~5s)", mutterSndHarp: "Harp cascade (~5s)", mutterSndTest: "Test", mutterHint: "Both use the Auto-Stop marker (default <mutter>): marker found = complete → two beeps; missing = truncated → swipe to a new branch (bounded by the reroll limit; manually stopped replies are exempt). Beep is built-in, independent of ST sound settings.", rerollLabel: "Auto Reroll: ", rerollLockOn: "Temporarily turn off reroll", rerollLockOff: "Locked — click to restore", rerollLockOnTitle: "One click: temporarily turn off all reroll options you picked (restore anytime)", rerollLockOffTitle: "Restore the options you had before locking", rerollEnglish: "English thinking (easily triggers moderation apology)", rerollNoThink: "No thinking, straight to body", rerollEmpty: "Empty reply (PVP)", rerollKeyword: "Thinking chain contains", rerollKeywordsLabel: "Keywords (comma-separated): ", rerollKeywordsHint: "If any keyword appears in generated content (incl. thinking) → stop and reroll to a new branch. Separate with English commas , ; case-insensitive. Leave empty to disable. ★This box matches the <b>whole text</b>: characters inside URLs and HTML tags (http, jpg, &lt;mutter&gt;, ...) hit too; on a hit the console logs the position + 40 chars around it, so you can tell a config problem at a glance.",
+        rerollBodyMarker: "Reply body contains",
+        rerollBodyMarkersHint: "Checks the reply body only, never the thinking chain: as soon as the body contains any of these → stop and reroll to a new branch. Note: separate multiple entries with English commas , ; case-insensitive. With extreme content, an English thinking chain appears easily and almost always means an apology — a Chinese thinking chain can still trigger one, just with lower odds! Keep an eye on manual stop / truncation.",
+        rerollLimitLabel: "Max consecutive auto rerolls: ", rerollTimes: " times", rerollMinTokensLabel: "Threshold", rerollMinTokensHint: "",
         rerollWarning: "Note: extreme content often produces English thinking. Reroll avoids the high-risk English thinking, but Chinese thinking can still trigger apologies (lower chance). Watch for manual stops.",
         foldHeightLabel: "Fixed-height scroll for reasoning", foldHeightHint: "Give the reasoning area a max-height + scrollbar (long CoT won't blow up the message; same as injecting custom CSS)",
         showTpsLabel: "Show generation speed (t/s) on messages", showTpsHint: "Shows tokens per second next to the token counter (tokens ÷ generation time), same data source as the AI reply timer",
@@ -627,10 +627,10 @@ const UI = {
         rcLabel: "Reasoning Content: ",
         usageTitle: "사용법: ", usage1: "· step 1만: 네이티브 CoT가 본문에 안 들어가서 본문 품질이 이론상 최고. 극단적 내용은 탈취 실패(AI 사과) 가능성이 있고, 영어 사고가 나오면 수동 중단 + reroll로 해결(채널에 따라 다름).", usage2: "· step 1+2 동시: CoT가 본문에 들어가 탈옥이 강하고 안정적. 사고 직후 끊길 수 있음. 무제한 에너지 요금제에서는 이 끊김이 과금될 수 있음!", usage3: "⚠️ 두 방식 모두 전용 프리셋 필요. opencode 채널에서만 테스트됨.",
         rerollSectionTitle: "자동 REROLL:", alertSectionTitle: "완료 알림:",
-        rerollNoMutter: "끝에 중단 마커 없음(잘린 응답)", mutterSound: "완전한 응답 → 비프음 재생", rcReset: "기본 주입으로 복원", rcLockedHint: "내장 프리셋(수정 불가). 사용자 지정은 “＋ 템플릿 추가”를 사용하세요.", rcPresetHint: "KIMI/DS 전환 시 이 칸은 해당 모드의 기본 프리셋으로 자동 교체됩니다 (KIMI: Meta 시작 / DS: We need 시작). 직접 만든 템플릿은 「＋ 템플릿 추가」를 사용하세요.", rcResetDone: "현재 모드의 기본 프리셋으로 복원됨", rcResetCustom: "커스텀 템플릿은 복원할 내장 기본값이 없습니다", mutterVibrate: "진동 알림 함께(Android; iOS 미지원)", mutterTrigMarker: "중단 마커 감지 시 (K3/여온 프리셋)", mutterTrigDone: "출력 완료 시 (마커 없는 모델)", mutterSndDing: "부드러운 딩동(추천)", mutterSndCrisp: "맑은 두 소리", mutterSndChord: "힐링 코드", mutterSndSoft: "낮은 부드러운 소리", mutterSndMelody: "오르골 멜로디(약 2초)", mutterSndLongbell: "긴 종소리(약 2초)", mutterSndLullaby: "자장가 아르페지오(약 5초)", mutterSndHarp: "하프 흐름(약 5초)", mutterSndTest: "시청", mutterHint: "두 항목 모두 자동 중단 마커(기본 <mutter>) 기준: 마커 있음=완전→비프 2회; 없음=잘림→새 분기로 swipe(상한 제한 있음, 수동 정지 응답 제외). 비프음은 내장, ST 사운드 설정과 무관.", rerollLabel: "자동 reroll: ", rerollLockOn: "reroll 잠시 끄기", rerollLockOff: "잠김 — 클릭해 복원", rerollLockOnTitle: "선택한 reroll 옵션을 한 번에 잠시 꺼 둡니다(언제든 한 번에 복원)", rerollLockOffTitle: "잠그기 전의 선택으로 복원", rerollEnglish: "영어 사고(심사 사과 유발 쉬움)", rerollNoThink: "사고 없이 바로 본문 (사고 없음/적음)", rerollEmpty: "빈 응답 (PVP)", rerollKeyword: "다음 키워드 등장 시 reroll", rerollKeywordsLabel: "키워드(쉬표 구분): ", rerollKeywordsHint: "생성 내용(사고 포함)에 키워드가 나타나면 즉시 중단하고 새 분기로 reroll. 영문 쉬표 , 로 구분, 대소문자 무시. 비우면 비활성화. ★이 칸은 <b>전문 매칭</b>: URL·HTML 태그 안의 문자(http, jpg, &lt;mutter&gt; 등)도 걸립니다. 걸리면 콘솔에 위치 + 앞뒤 40자가 찍혀 설정 문제인지 바로 판단할 수 있습니다.",
-        rerollBodyMarker: "본문에 다음 내용이 나오면 reroll",
-        rerollBodyMarkersHint: "본문만 검사하고 사고(thinking)는 검사하지 않습니다: 본문에 아래 내용이 나오면 즉시 중단하고 새 분기로 reroll. 영문 쉼표 , 로 구분, 대소문자 무시. 비우면 비활성화.",
-        rerollLimitLabel: "연속 자동 reroll 상한: ", rerollTimes: " 회", rerollMinTokensLabel: "사고 너무 짧음 절단 기준: ", rerollMinTokensHint: "",
+        rerollNoMutter: "끝에 중단 마커 없음(잘린 응답)", mutterSound: "완전한 응답 → 비프음 재생", rcReset: "기본 주입으로 복원", rcLockedHint: "내장 프리셋(수정 불가). 사용자 지정은 “＋ 템플릿 추가”를 사용하세요.", rcPresetHint: "KIMI/DS 전환 시 이 칸은 해당 모드의 기본 프리셋으로 자동 교체됩니다 (KIMI: Meta 시작 / DS: We need 시작). 직접 만든 템플릿은 「＋ 템플릿 추가」를 사용하세요.", rcResetDone: "현재 모드의 기본 프리셋으로 복원됨", rcResetCustom: "커스텀 템플릿은 복원할 내장 기본값이 없습니다", mutterVibrate: "진동 알림 함께(Android; iOS 미지원)", mutterTrigMarker: "중단 마커 감지 시 (K3/여온 프리셋)", mutterTrigDone: "출력 완료 시 (마커 없는 모델)", mutterSndDing: "부드러운 딩동(추천)", mutterSndCrisp: "맑은 두 소리", mutterSndChord: "힐링 코드", mutterSndSoft: "낮은 부드러운 소리", mutterSndMelody: "오르골 멜로디(약 2초)", mutterSndLongbell: "긴 종소리(약 2초)", mutterSndLullaby: "자장가 아르페지오(약 5초)", mutterSndHarp: "하프 흐름(약 5초)", mutterSndTest: "시청", mutterHint: "두 항목 모두 자동 중단 마커(기본 <mutter>) 기준: 마커 있음=완전→비프 2회; 없음=잘림→새 분기로 swipe(상한 제한 있음, 수동 정지 응답 제외). 비프음은 내장, ST 사운드 설정과 무관.", rerollLabel: "자동 reroll: ", rerollLockOn: "reroll 잠시 끄기", rerollLockOff: "잠김 — 클릭해 복원", rerollLockOnTitle: "선택한 reroll 옵션을 한 번에 잠시 꺼 둡니다(언제든 한 번에 복원)", rerollLockOffTitle: "잠그기 전의 선택으로 복원", rerollEnglish: "영어 사고(심사 사과 유발 쉬움)", rerollNoThink: "사고 없이 바로 본문", rerollEmpty: "빈 응답 (PVP)", rerollKeyword: "사고 체인 등장", rerollKeywordsLabel: "키워드(쉬표 구분): ", rerollKeywordsHint: "생성 내용(사고 포함)에 키워드가 나타나면 즉시 중단하고 새 분기로 reroll. 영문 쉬표 , 로 구분, 대소문자 무시. 비우면 비활성화. ★이 칸은 <b>전문 매칭</b>: URL·HTML 태그 안의 문자(http, jpg, &lt;mutter&gt; 등)도 걸립니다. 걸리면 콘솔에 위치 + 앞뒤 40자가 찍혀 설정 문제인지 바로 판단할 수 있습니다.",
+        rerollBodyMarker: "본문 등장",
+        rerollBodyMarkersHint: "본문만 검사하고 사고(thinking)는 검사하지 않습니다: 본문에 아래 내용이 나오면 즉시 중단하고 새 분기로 reroll. 참고: 영문 쉼표 , 로 구분, 대소문자 무시. 극단적인 내용에서는 영어 사고 사슬이 쉽게 나오며 사과 확률이 높지만, 중국어 사고 사슬도 낮은 확률로 사과할 수 있습니다! 수동 중단에도 주의하세요.",
+        rerollLimitLabel: "연속 자동 reroll 상한: ", rerollTimes: " 회", rerollMinTokensLabel: "임계값", rerollMinTokensHint: "",
         rerollWarning: "주의: 극단적 콘텐츠에서는 영어 사고가 자주 나옵니다. reroll로 사과 확률 높은 영어 사고를 피할 수 있지만, 한국어 사고도 사과 확률이 낮지만 있습니다! 수동 중단에 신경 쓰세요.",
         foldHeightLabel: "사고 영역 고정 높이 스크롤", foldHeightHint: "사고 영역에 최대 높이 + 스크롤바 추가 (긴 CoT가 메시지를 부풀리지 않음; 커스텀 CSS 주입과 동일)",
         showTpsLabel: "메시지에 생성 속도 표시 (t/s)", showTpsHint: "token 수 옆에 초당 token 수 표시 (token 수 ÷ 생성 시간), AI 응답 타이머와 같은 데이터 소스",
@@ -698,7 +698,7 @@ const WRAP4A_EXAMPLE_SUFFIX = "    抛开烦恼,我拿起三明治,也吃了沙�
 const OC_RELAY_I18N = {
     zh: {
         title: 'Gemini 4 Argon：',
-        geminiNote: '注意：4a是正文思维链，所以请关闭「无思维链直接出正文」和「正文出现以下内容即重roll」的自动重roll',
+        geminiNote: '注意：4a是正文思维链，所以请关闭「无思维链直接出正文」和「正文出现」的自动重roll',
         ttLabel: 'TT 连接：',
         stLabel: 'ST 连接：',
         ttGuideSummary: '点此看攻略',
@@ -707,6 +707,7 @@ const OC_RELAY_I18N = {
         cmdWinLabel: '电脑（CMD 窗口）',
         cmdShLabel: '手机 Termux',
         cfgLabel: '配置串',
+        ocSectionTitle: 'Opencode配置：',
         cfgPh: 'ywoc1:https://yw-oc-relay-xxxx.pages.dev',
         keyLabel: 'OpenCode Key',
         keyPh: 'oc_sk_...',
@@ -744,7 +745,7 @@ const OC_RELAY_I18N = {
     },
     en: {
         title: 'Gemini 4 Argon:',
-        geminiNote: 'Note: 4A emits chain-of-thought in the body, so turn off the auto-rerolls for "no thinking → direct reply" and "keyword in body → reroll".',
+        geminiNote: 'Note: 4A emits chain-of-thought in the body, so turn off the auto-rerolls for "no thinking → direct reply" and "reply body contains".',
         ttLabel: 'TT connection: ',
         stLabel: 'ST connection: ',
         ttGuideSummary: 'View guide',
@@ -756,6 +757,7 @@ const OC_RELAY_I18N = {
         cfgPh: 'ywoc1:https://yw-oc-relay-xxxx.pages.dev',
         keyLabel: 'OpenCode Key',
         keyPh: 'oc_sk_...',
+        ocSectionTitle: 'Opencode config:',
         apply: 'OK',
         copied: 'Copied',
         copyTip: 'Click to copy',
@@ -790,7 +792,7 @@ const OC_RELAY_I18N = {
     },
     ko: {
         title: 'Gemini 4 Argon:',
-        geminiNote: '주의: 4A는 본문에 사고 사슬을 출력하므로 "사고 없이 바로 본문" 및 "본문에 키워드 포함 시 리롤" 자동 리롤을 꺼 주세요.',
+        geminiNote: '주의: 4A는 본문에 사고 사슬을 출력하므로 "사고 없이 바로 본문" 및 "본문 등장" 자동 리롤을 꺼 주세요.',
         ttLabel: 'TT 연결: ',
         stLabel: 'ST 연결: ',
         ttGuideSummary: '가이드 보기',
@@ -802,6 +804,7 @@ const OC_RELAY_I18N = {
         cfgPh: 'ywoc1:https://yw-oc-relay-xxxx.pages.dev',
         keyLabel: 'OpenCode Key',
         keyPh: 'oc_sk_...',
+        ocSectionTitle: 'Opencode 설정:',
         apply: '확인',
         copied: '복사됨',
         copyTip: '클릭하여 복사',
@@ -1016,7 +1019,7 @@ if (settings.randHeadEnabled === undefined) settings.randHeadEnabled = defaultSe
 if (settings.randNameEnabled === undefined) settings.randNameEnabled = defaultSettings.randNameEnabled;   // ★W168（铁律 32）：同上 = 关
 if (settings.randNameSource === undefined) settings.randNameSource = defaultSettings.randNameSource;      // ★W171（铁律 32）：缺键补 defaultSettings 同值 = 余小温
 if (settings.autoUpdate === undefined) settings.autoUpdate = true;
-if (!Array.isArray(settings.floatPanelKeys)) settings.floatPanelKeys = ['inject', 'reroll', 'word', 'tag', 'api', 'psnap', 'fix'];   // ★W150：与新装默认同一份（顺序 = 主面板卡片顺序；★W155：「标签修复」与「API 池」互换）
+if (!Array.isArray(settings.floatPanelKeys)) settings.floatPanelKeys = ['inject', 'reroll', 'psnap', 'word', 'tag', 'api', 'fix'];   // ★W174-E：与新装默认同一份（键只当勾选集合；渲染顺序一律按 KIMI_CARD_DEFS）
 if (settings.floatPanelAllKey === undefined) settings.floatPanelAllKey = defaultSettings.floatPanelAllKey;   // ★W114（铁律 32）：新装默认 'all'；缺键时补上，和老用户/新装口径一致
 if (settings.clineModelOverride === undefined) settings.clineModelOverride = false;
 delete settings.clineRouteFormat;
@@ -3200,6 +3203,18 @@ function isEmptyMes(mes) {
     return !t || t === '...';
 }
 
+/** ★W175（作者报：K3 流式输出思维链时被误判空回抢跑重roll）：K3 原生思维链在 msg.extra.reasoning 里流，
+ *  此时 mes 还是空串 —— 空回主路径只看 mes 就会抢跑。补一条：只要已经收到任何思考文本就不算空回
+ *  （真·零 token 空回本来就没有思考；只有思考没有正文的情况交给 GENERATION_ENDED 兜底判）。 */
+function msgHasThinking(msg) {
+    try {
+        if (!msg) return false;
+        if (String((msg.extra && msg.extra.reasoning) ?? '').trim() !== '') return true;
+        if (String(msg.reasoning_content ?? '').trim() !== '') return true;
+        return false;
+    } catch (e) { return false; }
+}
+
 // 空回重roll：零 token 回复（断流/服务器不稳）→ 对这条空消息开新 swipe 分支。
 // 用 swipe 而不是 /trigger——/trigger 在连续生成时可能 roll 成新一楼（参考插件「自动PVP」的 bug）。
 // v1.37.65：加 cause 参数（可选，只影响日志/横幅措辞）——便于区分「真·零 token 空回」和
@@ -3546,6 +3561,14 @@ function applyRerollLockUI() {
     if (kwEl) { kwEl.disabled = locked; kwEl.checked = locked ? false : (settings.rerollOnKeyword !== false); }
     const bmEl = document.getElementById(extensionName + '_reroll_bodymarker');   // ★W138-追加：渲染口径 = `=== true`（false/undefined 都画成不勾；默认不勾选）
     if (bmEl) { bmEl.disabled = locked; bmEl.checked = locked ? false : (settings.rerollOnBodyMarker === true); }
+    /* ★W174-D：两个 inline 输入框也受锁定（id 没变，只是这里补上 disable） */
+    const kwInput = document.getElementById(extensionName + '_reroll_keywords');
+    if (kwInput) kwInput.disabled = locked;
+    const bmInput = document.getElementById(extensionName + '_reroll_bodymarkers');
+    if (bmInput) bmInput.disabled = locked;
+    /* ★W174-D 补：阈值输入已搬进重roll卡（inline）⇒ 同样受锁定 */
+    const mtInput = document.getElementById(extensionName + '_reroll_mintokens');
+    if (mtInput) mtInput.disabled = locked;
 }
 function toggleRerollLock() {
     try {
@@ -5936,10 +5959,10 @@ function updatePsnapEntries() {
 const KIMI_CARD_DEFS = [
     { key: 'inject', ico: 'fa-bolt', titleKey: 'injectTitle' },
     { key: 'reroll', ico: 'fa-arrows-rotate', titleKey: 'rerollTitle' },
+    { key: 'psnap', ico: 'fa-list-check', titleKey: 'schemeTitle' },   // ★W174（作者）：预设方案切换挪到「替换」上面
     { key: 'word', ico: 'fa-broom', titleKey: 'wordTitle' },
     { key: 'tag', ico: 'fa-tag', titleKey: 'tagTitle' },
     { key: 'api', ico: 'fa-plug', titleKey: 'apiTitle' },
-    { key: 'psnap', ico: 'fa-list-check', titleKey: 'schemeTitle' },   // ★W163：方案切换（预设/API/开关）—— 原「预设条目开关快照」卡改版
     { key: 'fix', ico: 'fa-wrench', titleKey: 'fixTitle' },
 ];
 let _kimiCardFloating = null;   // 浮窗 DOM
@@ -7310,6 +7333,7 @@ window.__ywApplyDisplayReplace = (text) => applyReplacements(text, 'display');
 
 // 调试出口（CDP/控制台/自检脚本用：纯函数直测，不发真实请求）
 window.__ywDebug = {
+    msgHasThinking,   // ★W175：空回护栏直测（真页探针用）
     /* ★W163 方案切换（探针/悬浮条 W164 用）：读写内核 + 方案 CRUD + 一键切换 + 酒馆侧读取助手 */
     readPromptToggles, writePromptToggles, renderSchemeUI, openSchemeEditor, switchScheme, captureCurrentState,
     getConnectionProfiles, getCurrentProfileName, getPresetNames, getCurrentPresetName,
@@ -7541,6 +7565,42 @@ const KIMI_SETTINGS_CSS = `
        「opacity」 换成真色值（理由见上面令牌块那段注释） */
     color: var(--kimi-ink-2);
     font-weight: 600;
+}
+/* ★W174-A/B：独立折叠（勾选管功能、行头管展开）——行头 + 行尾会转的三角（▶ 收 / ▼ 开） */
+#kimi_reasoning_injector_settings .kimi-fold-head, #kimi_reasoning_injector_card_float .kimi-fold-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 8px;
+    padding: 2px 4px;
+    margin: 0 -4px;
+}
+#kimi_reasoning_injector_settings .kimi-fold-head:hover, #kimi_reasoning_injector_card_float .kimi-fold-head:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+#kimi_reasoning_injector_settings .kimi-fold-head input[type="checkbox"], #kimi_reasoning_injector_card_float .kimi-fold-head input[type="checkbox"] {
+    cursor: pointer;
+    flex: none;
+    margin: 0;
+}
+#kimi_reasoning_injector_settings .kimi-fold-head .kimi-fold-caret, #kimi_reasoning_injector_card_float .kimi-fold-head .kimi-fold-caret,
+#kimi_reasoning_injector_settings details.kimi-fold > summary .kimi-fold-caret, #kimi_reasoning_injector_card_float details.kimi-fold > summary .kimi-fold-caret {
+    flex: none;
+    margin-left: auto;
+    color: var(--kimi-ink-3, #bbb);
+    transition: transform 0.12s ease;
+}
+#kimi_reasoning_injector_settings .kimi-fold-head.open .kimi-fold-caret, #kimi_reasoning_injector_card_float .kimi-fold-head.open .kimi-fold-caret,
+#kimi_reasoning_injector_settings details.kimi-fold[open] > summary .kimi-fold-caret, #kimi_reasoning_injector_card_float details.kimi-fold[open] > summary .kimi-fold-caret {
+    transform: rotate(90deg);
+}
+#kimi_reasoning_injector_settings details.kimi-fold > summary, #kimi_reasoning_injector_card_float details.kimi-fold > summary {
+    list-style: none;
+}
+#kimi_reasoning_injector_settings details.kimi-fold > summary::-webkit-details-marker, #kimi_reasoning_injector_card_float details.kimi-fold > summary::-webkit-details-marker {
+    display: none;
 }
 #kimi_reasoning_injector_settings .kimi-hint {
     font-size: 0.72em;
@@ -8182,7 +8242,7 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id, type) => {
     // ③ 空回主路径（v1.11.5 核心修复）：零 token + 消息空（'' 或 '...'）→ 立即重roll，不等 2 秒 fallback。
     //    手动停止时序：stopGeneration → GENERATION_ENDED → GENERATION_STOPPED（streamGotToken=true）→ MESSAGE_RECEIVED，
     //    所以手动停止时 streamGotToken 已是 true，不会走到这里 → 不误判。
-    if (settings.enabled && settings.rerollOnEmpty && isGenerating && !streamGotToken && isEmpty) {
+    if (settings.enabled && settings.rerollOnEmpty && isGenerating && !streamGotToken && isEmpty && !msgHasThinking(msg)) {   // ★W175：思维链流式中不算空回
         console.log(`[余温工具箱] 空回主路径：消息#${id} 零token且为空 → 自动重roll`);
         handleEmptyReroll(id);
         emptyRerollHandled = true;
@@ -8919,7 +8979,7 @@ function initSettingsPanel() {
                         <button id="${extensionName}_chk_upd" type="button" class="kimi-chk-btn">检查更新</button>
                     </div>
                     <!-- ═══ 基础设置（总开关 + 语言）═══ -->
-<details class="kimi-card">
+<details class="kimi-card" data-card="base">
 <summary><i class="fa-solid fa-gear kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('baseTitle')}</summary>
 <div class="kimi-card-body">
 <label class="checkbox_label kimi-master-row">
@@ -9110,7 +9170,7 @@ ${t('showTpsLabel')}
 </details>
 
 <!-- ═══ 注入（默认展开）═══ -->
-<details class="kimi-card">
+<details class="kimi-card" data-card="inject">
 <summary><i class="fa-solid fa-bolt kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('injectTitle')}</summary>
 <div class="kimi-card-body">
 
@@ -9122,10 +9182,7 @@ ${(settings.customPresets || []).map(p => {
     const checked = settings.injectTarget === 'custom:' + p.id ? 'checked' : '';
     return `<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="${extensionName}_inject_target" value="custom:${p.id}" ${checked}/>${String(p.name || t('customName')).replace(/</g,'&lt;')} <span class="kimi-custom-del" data-id="${p.id}" title="${t('customDel')}">✕</span></label>`;
 }).join('')}
-</div>
-<div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-<button id="${extensionName}_add_custom" type="button" class="kimi-btn">${t('customAdd')}</button>
-<span class="kimi-hint">${t('customHint')}</span>
+<button id="${extensionName}_add_custom" type="button" class="kimi-btn" style="flex:none;margin-left:auto">${t('customAdd')}</button>
 </div>
 <div id="${extensionName}_custom_name_row" style="margin-top:5px;display:none;align-items:center;gap:6px">
 <label class="kimi-label" for="${extensionName}_custom_name" style="margin:0;white-space:nowrap">${t('customNameLabel')}</label>
@@ -9145,12 +9202,17 @@ ${t('injectStep1')}
 ${t('injectStep2')}
 </label>
 
-<div style="margin-top:8px">
-<label class="kimi-label" for="${extensionName}_reasoning_value">${t('rcLabel')}</label>
+<details class="kimi-fold" id="${extensionName}_rc_fold" style="margin-top:8px">
+<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:5px;user-select:none">
+<i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true" style="flex:none"></i>
+<span class="kimi-label" style="margin:0">${t('rcLabel')}</span>
+</summary>
+<div style="margin-top:4px">
 <textarea id="${extensionName}_reasoning_value" class="text_pole" ${(typeof settings.injectTarget === 'string' && settings.injectTarget.startsWith('custom:')) ? '' : 'readonly'} style="width: 100%; box-sizing: border-box; height: 120px;">${settings.reasoningContent}</textarea>
 <!-- 注入卡提示句已按用户要求移除；i18n 词条 rcPresetHint 保留在代码里 -->
 <p id="${extensionName}_rc_locked_hint" class="kimi-hint" style="display:${(typeof settings.injectTarget === 'string' && settings.injectTarget.startsWith('custom:')) ? 'none' : ''}">${t('rcLockedHint')}</p>
 </div>
+</details>
 
 <div class="kimi-sep"></div>
 
@@ -9196,53 +9258,69 @@ ${t('usage3')}
 <div style="margin-top:4px;opacity:.85">${ocr('stGuideNote')}</div>
 </div>
 </details>
-<label class="kimi-label" for="${extensionName}_oc_relay_cfg">${ocr('cfgLabel')}</label>
-<input type="text" id="${extensionName}_oc_relay_cfg" class="text_pole" style="width:100%" placeholder="${ocr('cfgPh')}"/>
-<label class="kimi-label" for="${extensionName}_oc_relay_key" style="margin-top:5px">${ocr('keyLabel')}</label>
-<input type="password" id="${extensionName}_oc_relay_key" class="text_pole" style="width:100%" placeholder="${ocr('keyPh')}"/>
+<div class="kimi-sep"></div>
+<div class="kimi-label" style="font-size:.8em;font-weight:700;margin:0 0 2px">${ocr('ocSectionTitle')}</div>
+<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+<label class="kimi-label" for="${extensionName}_oc_relay_cfg" style="margin:0;flex:none;white-space:nowrap">${ocr('cfgLabel')}</label>
+<input type="text" id="${extensionName}_oc_relay_cfg" class="text_pole" style="flex:1;min-width:0" placeholder="${ocr('cfgPh')}"/>
+</div>
+<div style="display:flex;align-items:center;gap:6px;margin-top:5px">
+<label class="kimi-label" for="${extensionName}_oc_relay_key" style="margin:0;flex:none;white-space:nowrap">${ocr('keyLabel')}</label>
+<input type="password" id="${extensionName}_oc_relay_key" class="text_pole" style="flex:1;min-width:0" placeholder="${ocr('keyPh')}"/>
+</div>
 <div style="display:flex;align-items:center;gap:8px;margin-top:7px">
 <button type="button" id="${extensionName}_oc_relay_apply" class="menu_button" style="flex:none;white-space:nowrap">${ocr('apply')}</button>
 <span id="${extensionName}_oc_relay_status" class="kimi-hint" style="margin:0"></span>
 </div>
 </div>
 <div class="kimi-sep"></div>
-<!-- ★W171（作者）：三个「防标记」功能在同一张卡里，**UI 顺序** = 塞小说防道歉 → 随机头部 → 随机AI身份；
-     每个功能一行勾选框，勾上只展开它自己那块（元素 id 全部保持不变，探针仍可用）。
-     ★注意：这里只是**面板顺序**；请求注入顺序仍是「头 → 名字 → 包裹」（见 applyRandAndWrapInPlace）。 -->
-<div class="kimi-inner-card">
-<label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
+<!-- ★W174-A（作者："只要勾选就必须展开有点蠢 这样吧 任何时候展开关闭都是可选的"）：
+     勾选框只管开关功能；展开/收起独立（点行头切换，勾选框绝不带动展开）；
+     默认展开态 = 该功能开着就展开/关着就收起（渲染时定一次，不持久化）；行尾一颗会转的三角。
+     顺序仍是 塞小说防道歉 → 随机头部 → 随机AI身份；请求注入顺序没动（头 → 名字 → 包裹）；
+     全部元素 id 原样保留（_wrap4a/_wrap4a_box/_wrap4a_prefix/_wrap4a_suffix/_wrap4a_demo/
+     _rand_head/_rand_head_box/_rand_head_demo/_rand_name/_rand_name_box/_rand_name_val/_rand_name_reroll/_rand_name_src）。 -->
+<div class="kimi-inner-card" id="kimi_rand_card">
+<div class="kimi-fold-head${settings.wrap4aEnabled ? ' open' : ''}" data-fold="wrap4a">
 <input type="checkbox" id="${extensionName}_wrap4a" ${settings.wrap4aEnabled ? 'checked' : ''}/>
-<span style="font-size:1.16em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('wrap4aTitle')}</span>
-</label>
+<span style="font-size:0.95em;font-weight:700;color:var(--golden-color,#e0a800);flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ocr('wrap4aTitle')}</span>
+<i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true"></i>
+</div>
 <div id="${extensionName}_wrap4a_box" style="display:${settings.wrap4aEnabled ? '' : 'none'}">
 <p class="kimi-hint" style="margin:2px 0 6px;line-height:1.5">${ocr('wrap4aHint')}</p>
 <div style="margin:0 0 6px">
 <button type="button" id="${extensionName}_wrap4a_demo" class="menu_button" style="flex:none;white-space:nowrap">${ocr('wrap4aDemo')}</button>
 </div>
 <label class="kimi-label" for="${extensionName}_wrap4a_prefix" style="font-size:.85em">${ocr('wrap4aPrefixLabel')}</label>
+<div style="position:relative">
 <textarea id="${extensionName}_wrap4a_prefix" class="text_pole" style="width:100%;min-height:88px;font:12px/1.45 ui-monospace,Consolas,monospace" placeholder="${ocr('wrap4aPrefixPh')}"></textarea>
-<div id="${extensionName}_wrap4a_prefix_tok" style="text-align:right;font-size:.76em;opacity:.75;margin:1px 0 4px"></div>
+<div id="${extensionName}_wrap4a_prefix_tok" style="position:absolute;top:-15px;right:6px;pointer-events:none;font-size:.72em;line-height:1.4;background:color-mix(in srgb, var(--SmartThemeBlurTintColor, #171717) 72%, transparent);padding:1px 6px;border-radius:6px"></div>
+</div>
 <div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:.8em;opacity:.85;margin:2px 0 6px;white-space:nowrap;overflow:hidden">
 <span style="font-weight:600">${ocr('wrap4aMidCore')}</span>
 </div>
 <label class="kimi-label" for="${extensionName}_wrap4a_suffix" style="font-size:.85em">${ocr('wrap4aSuffixLabel')}</label>
+<div style="position:relative">
 <textarea id="${extensionName}_wrap4a_suffix" class="text_pole" style="width:100%;min-height:88px;font:12px/1.45 ui-monospace,Consolas,monospace" placeholder="${ocr('wrap4aSuffixPh')}"></textarea>
-<div id="${extensionName}_wrap4a_suffix_tok" style="text-align:right;font-size:.76em;opacity:.75;margin:1px 0 4px"></div>
+<div id="${extensionName}_wrap4a_suffix_tok" style="position:absolute;top:-15px;right:6px;pointer-events:none;font-size:.72em;line-height:1.4;background:color-mix(in srgb, var(--SmartThemeBlurTintColor, #171717) 72%, transparent);padding:1px 6px;border-radius:6px"></div>
+</div>
 </div>
 <div class="kimi-sep"></div>
-<label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
+<div class="kimi-fold-head${settings.randHeadEnabled ? ' open' : ''}" data-fold="rand_head">
 <input type="checkbox" id="${extensionName}_rand_head" ${settings.randHeadEnabled ? 'checked' : ''}/>
-<span style="font-size:1.16em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('randHeadTitle')}</span>
-</label>
+<span style="font-size:0.95em;font-weight:700;color:var(--golden-color,#e0a800);flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ocr('randHeadTitle')}</span>
+<i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true"></i>
+</div>
 <div id="${extensionName}_rand_head_box" style="display:${settings.randHeadEnabled ? '' : 'none'}">
 <p class="kimi-hint" style="margin:2px 0 5px;line-height:1.5">${ocr('randHeadHint')}</p>
 <div id="${extensionName}_rand_head_demo" class="kimi-hint" style="margin:0;font:12px/1.6 ui-monospace,Consolas,monospace;opacity:.9;white-space:pre-wrap"></div>
 </div>
 <div class="kimi-sep"></div>
-<label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
+<div class="kimi-fold-head${settings.randNameEnabled ? ' open' : ''}" data-fold="rand_name">
 <input type="checkbox" id="${extensionName}_rand_name" ${settings.randNameEnabled ? 'checked' : ''}/>
-<span style="font-size:1.16em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('randNameTitle')}</span>
-</label>
+<span style="font-size:0.95em;font-weight:700;color:var(--golden-color,#e0a800);flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ocr('randNameTitle')}</span>
+<i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true"></i>
+</div>
 <div id="${extensionName}_rand_name_box" style="display:${settings.randNameEnabled ? '' : 'none'}">
 <label class="kimi-label" for="${extensionName}_rand_name_src" style="font-size:.85em">${ocr('randNameSourceLabel')}</label>
 <input id="${extensionName}_rand_name_src" type="text" class="text_pole" style="width:100%" maxlength="40" value="${schemeEsc(randNameSource())}"/>
@@ -9252,38 +9330,47 @@ ${t('usage3')}
 </div>
 </div>
 </div>
-<label class="kimi-label" for="${extensionName}_ds_thinking_mode">${t('dsModeLabel')}</label>
-<select id="${extensionName}_ds_thinking_mode" class="text_pole" style="width:100%">
-<option value="native" ${settings.dsThinkingMode !== 'disabled' ? 'selected' : ''}>${t('dsNative')}</option>
-<option value="disabled" ${settings.dsThinkingMode === 'disabled' ? 'selected' : ''}>${t('dsDisabled')}</option>
-</select>
-<div style="margin-top:5px">
-<label class="kimi-label" for="${extensionName}_ds_effort">${t('dsEffortLabel')}</label>
-<select id="${extensionName}_ds_effort" class="text_pole" style="width:100%">
-<option value="off" ${settings.dsReasoningEffort==='off'?'selected':''}>${t('dsEffortOff')}</option>
-<option value="low" ${settings.dsReasoningEffort==='low'?'selected':''}>${t('dsEffortLow')}</option>
-<option value="high" ${settings.dsReasoningEffort==='high'?'selected':''}>${t('dsEffortHigh')}</option>
-<option value="xhigh" ${settings.dsReasoningEffort==='xhigh'?'selected':''}>${t('dsEffortXhigh')}</option>
-<option value="max" ${settings.dsReasoningEffort==='max'?'selected':''}>${t('dsEffortMax')}</option>
-</select>
+<div class="kimi-inner-card" id="kimi_ds_card">
+<div style="display:flex;align-items:center;gap:6px">
+    <label class="kimi-label" for="${extensionName}_ds_thinking_mode" style="margin:0;flex:none;white-space:nowrap">${t('dsModeLabel')}</label>
+    <select id="${extensionName}_ds_thinking_mode" class="text_pole" style="flex:1;min-width:0">
+    <option value="native" ${settings.dsThinkingMode !== 'disabled' ? 'selected' : ''}>${t('dsNative')}</option>
+    <option value="disabled" ${settings.dsThinkingMode === 'disabled' ? 'selected' : ''}>${t('dsDisabled')}</option>
+    </select>
 </div>
-<div style="margin-top:5px">
-<label class="kimi-label" for="${extensionName}_effort">${t('k3EffortLabel')}</label>
-<select id="${extensionName}_effort" class="text_pole" style="width:100%">
-<option value="off" ${settings.reasoningEffort==='off'?'selected':''}>${t('k3EffortOff')}</option>
-<option value="low" ${settings.reasoningEffort==='low'?'selected':''}>${t('k3EffortLow')}</option>
-<option value="high" ${settings.reasoningEffort==='high'?'selected':''}>${t('k3EffortHigh')}</option>
-<option value="max" ${settings.reasoningEffort==='max'?'selected':''}>${t('k3EffortMax')}</option>
-</select>
+<div style="display:flex;align-items:center;gap:6px;margin-top:5px">
+    <label class="kimi-label" for="${extensionName}_ds_effort" style="margin:0;flex:none;white-space:nowrap">${t('dsEffortLabel')}</label>
+    <select id="${extensionName}_ds_effort" class="text_pole" style="flex:1;min-width:0">
+    <option value="off" ${settings.dsReasoningEffort==='off'?'selected':''}>${t('dsEffortOff')}</option>
+    <option value="low" ${settings.dsReasoningEffort==='low'?'selected':''}>${t('dsEffortLow')}</option>
+    <option value="high" ${settings.dsReasoningEffort==='high'?'selected':''}>${t('dsEffortHigh')}</option>
+    <option value="xhigh" ${settings.dsReasoningEffort==='xhigh'?'selected':''}>${t('dsEffortXhigh')}</option>
+    <option value="max" ${settings.dsReasoningEffort==='max'?'selected':''}>${t('dsEffortMax')}</option>
+    </select>
+</div>
+<div style="display:flex;align-items:center;gap:6px;margin-top:5px">
+    <label class="kimi-label" for="${extensionName}_effort" style="margin:0;flex:none;white-space:nowrap">${t('k3EffortLabel')}</label>
+    <select id="${extensionName}_effort" class="text_pole" style="flex:1;min-width:0">
+    <option value="off" ${settings.reasoningEffort==='off'?'selected':''}>${t('k3EffortOff')}</option>
+    <option value="low" ${settings.reasoningEffort==='low'?'selected':''}>${t('k3EffortLow')}</option>
+    <option value="high" ${settings.reasoningEffort==='high'?'selected':''}>${t('k3EffortHigh')}</option>
+    <option value="max" ${settings.reasoningEffort==='max'?'selected':''}>${t('k3EffortMax')}</option>
+    </select>
+</div>
 </div>
 </div>
 </details>
 
 
 <!-- ═══ 自动重roll ═══ -->
-<details class="kimi-card">
+<details class="kimi-card" data-card="reroll">
 <summary><i class="fa-solid fa-arrows-rotate kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('rerollTitle')}</summary>
 <div class="kimi-card-body">
+<div style="margin-bottom:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+<label class="kimi-label" for="${extensionName}_reroll_limit" style="display:inline-block;margin:0">${t('rerollLimitLabel')}</label>
+<input id="${extensionName}_reroll_limit" type="number" min="1" max="999" step="1" class="text_pole kimi-num" value="${settings.autoRerollLimit}"/>
+<span class="kimi-hint" style="display:inline;margin:0">${t('rerollTimes')}</span>
+</div>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
 <div class="kimi-section-label" style="margin:0">${t('rerollSectionTitle')}</div>
 <button id="${extensionName}_reroll_lock" type="button" class="kimi-btn kimi-reroll-lock" data-locked="${settings.rerollLockOn ? '1' : '0'}" style="margin-left:auto" title="${settings.rerollLockOn ? t('rerollLockOffTitle') : t('rerollLockOnTitle')}">${'🔒 ' + t(settings.rerollLockOn ? 'rerollLockOff' : 'rerollLockOn')}</button>
@@ -9293,9 +9380,14 @@ ${t('usage3')}
 <input id="${extensionName}_reroll_english" type="checkbox" ${settings.rerollOnEnglishThinking ? 'checked' : ''} ${settings.rerollLockOn ? 'disabled' : ''}/>
 ${t('rerollEnglish')}
 </label>
-<label class="checkbox_label">
+<label class="checkbox_label" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
 <input id="${extensionName}_reroll_nothink" type="checkbox" ${settings.rerollOnNoThinking ? 'checked' : ''} ${settings.rerollLockOn ? 'disabled' : ''}/>
-${t('rerollNoThink')}
+<span style="flex:1 1 auto">${t('rerollNoThink')}</span>
+<span style="display:inline-flex;align-items:center;gap:4px;margin-left:auto;flex:none">
+<span class="kimi-hint" style="display:inline;margin:0">${t('rerollMinTokensLabel')}</span>
+<input id="${extensionName}_reroll_mintokens" type="number" min="0" max="5000" step="10" class="text_pole kimi-num" style="width:70px" value="${settings.rerollMinThinkingTokens}"/>
+<span class="kimi-hint" style="display:inline;margin:0"> token</span>
+</span>
 </label>
 <label class="checkbox_label">
 <input id="${extensionName}_reroll_empty" type="checkbox" ${settings.rerollOnEmpty ? 'checked' : ''} ${settings.rerollLockOn ? 'disabled' : ''}/>
@@ -9305,32 +9397,19 @@ ${t('rerollEmpty')}
 <input id="${extensionName}_reroll_nomutter" type="checkbox" ${settings.rerollOnNoMutter ? 'checked' : ''} ${settings.rerollLockOn ? 'disabled' : ''}/>
 ${t('rerollNoMutter')}
 </label>
-<label class="checkbox_label">
+<label class="checkbox_label" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
 <input id="${extensionName}_reroll_keyword" type="checkbox" ${settings.rerollOnKeyword !== false ? 'checked' : ''} ${settings.rerollLockOn ? 'disabled' : ''}/>
-${t('rerollKeyword')}
+<span style="flex:none">${t('rerollKeyword')}</span>
+<input id="${extensionName}_reroll_keywords" type="text" class="text_pole" style="flex:1 1 120px;min-width:110px;width:auto" value="${String(settings.rerollKeywords ?? 'CSAM,')}" placeholder="CSAM, xxx"/>
 </label>
-<div style="margin-top:3px">
-<input id="${extensionName}_reroll_keywords" type="text" class="text_pole" style="width:100%" value="${String(settings.rerollKeywords ?? 'CSAM,')}" placeholder="CSAM, xxx"/>
-</div>
-<label class="checkbox_label">
+<label class="checkbox_label" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
 <input id="${extensionName}_reroll_bodymarker" type="checkbox" ${settings.rerollOnBodyMarker === true ? 'checked' : ''} ${settings.rerollLockOn ? 'disabled' : ''}/>
-${t('rerollBodyMarker')}
+<span style="flex:none">${t('rerollBodyMarker')}</span>
+<input id="${extensionName}_reroll_bodymarkers" type="text" class="text_pole" style="flex:1 1 120px;min-width:110px;width:auto" value="${String(settings.rerollBodyMarkers ?? '')}" placeholder="phase, Phase 0:"/>
 </label>
-<div style="margin-top:3px">
-<input id="${extensionName}_reroll_bodymarkers" type="text" class="text_pole" style="width:100%" value="${String(settings.rerollBodyMarkers ?? '')}" placeholder="phase, Phase 0:"/>
-</div>
 <div id="${extensionName}_bodymarkers_hint" class="kimi-hint" style="margin-top:2px">${t('rerollBodyMarkersHint')}</div>
 </div>
-<div style="margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-<label class="kimi-label" for="${extensionName}_reroll_limit" style="display:inline-block;margin:0">${t('rerollLimitLabel')}</label>
-<input id="${extensionName}_reroll_limit" type="number" min="1" max="999" step="1" class="text_pole kimi-num" value="${settings.autoRerollLimit}"/>
-<span class="kimi-hint" style="display:inline;margin:0">${t('rerollTimes')}</span>
-</div>
-<div style="margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-<label class="kimi-label" for="${extensionName}_reroll_mintokens" style="display:inline-block;margin:0">${t('rerollMinTokensLabel')}</label>
-<input id="${extensionName}_reroll_mintokens" type="number" min="0" max="5000" step="10" class="text_pole kimi-num" value="${settings.rerollMinThinkingTokens}"/>
-<span class="kimi-hint" style="display:inline;margin:0"> token</span>
-</div>
+
 <p class="kimi-hint">${t('rerollWarning')}</p>
 <div class="kimi-sep"></div>
 <div class="kimi-section-label">${t('alertSectionTitle')}</div>
@@ -9398,8 +9477,16 @@ ${t('mutterSound')}
 
 <!-- ★W150（作者第 2 条）：「思维链」卡整张从主面板撤掉（内容已搬进基础设置卡）；"美化折叠"那一半 2026-09-22 已下线，留档见 thinking-fold.removed.js -->
 
+<!-- ═══ ★W174-E：方案切换（预设/API/开关 整体切换）—— 整卡挪到「替换」上面 ═══ -->
+<details class="kimi-card" data-card="psnap">
+<summary><i class="fa-solid fa-list-check kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('schemeTitle')}</summary>
+<div class="kimi-card-body">
+    <div id="${extensionName}_psnap_list" style="margin-top:6px"></div>
+</div>
+</details>
+
 <!-- ═══ 替换 ═══ -->
-<details class="kimi-card">
+<details class="kimi-card" data-card="word">
 <summary><i class="fa-solid fa-broom kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('wordTitle')}</summary>
 <div class="kimi-card-body">
 
@@ -9424,18 +9511,11 @@ ${renderWordReplaceRows()}
 <!-- ═══ API 池（额度轮换）★W155：与「标签修复」互换（原 W150 把它放在标签修复之上）═══ -->
 <div id="${extensionName}_api_slot"></div>
 
-<!-- ═══ ★W163 方案切换（预设/API/开关 整体切换；原「预设条目开关快照」卡改版）═══ -->
-<details class="kimi-card">
-<summary><i class="fa-solid fa-list-check kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('schemeTitle')}</summary>
-<div class="kimi-card-body">
-    <div id="${extensionName}_psnap_list" style="margin-top:6px"></div>
-</div>
-</details>
 
 
 <!-- 其他功能已拆分：显示tps →「思维链」卡，保持滚动位置 →「不常用」卡 -->
 <!-- ═══ 修正（最不常用，放最下面）═══ -->
-<details class="kimi-card kimi-last">
+<details class="kimi-card kimi-last" data-card="fix">
 <summary><i class="fa-solid fa-wrench kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('fixTitle')}</summary>
 <div class="kimi-card-body">
 
@@ -9592,7 +9672,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
     import('./preset-updater.js?b=' + updaterBuild)
         .then(mod => {
             // 卡片插在「不常用」那张卡之前（和以前静态 HTML 的位置一致）
-            const anchor = document.querySelector('#extensions_settings details.kimi-card.kimi-last');
+            const anchor = document.querySelector('#extensions_settings details.kimi-card[data-card="word"]');
             if (anchor && anchor.parentNode) {
                 const det = document.createElement('details');
                 det.className = 'kimi-card';
@@ -9600,7 +9680,8 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
                     + '<div class="kimi-card-body" id="kimi_presetupd_body"></div>';
                 anchor.parentNode.insertBefore(det, anchor);
                 if (!KIMI_CARD_DEFS.some(d => d.key === 'presetupd')) {
-                    KIMI_CARD_DEFS.splice(Math.max(0, KIMI_CARD_DEFS.length - 1), 0, { key: 'presetupd', ico: 'fa-file-import', titleKey: 'presetUpdTitle' });
+                    const __wi = KIMI_CARD_DEFS.findIndex(function (d) { return d && d.key === 'word'; });
+                    KIMI_CARD_DEFS.splice(__wi < 0 ? KIMI_CARD_DEFS.length : __wi, 0, { key: 'presetupd', ico: 'fa-file-import', titleKey: 'presetUpdTitle' });
                 }
                 renderFloatPanelList();                    // ★W21B：把新注册的「预设更新器」补进面板型勾选列表（否则用户永远看不到它）
                 /* ★W25B：**还得把悬浮条本身重建一次**。根因（真界面读数）：悬浮条是在页面 init 时建的，
@@ -10525,6 +10606,8 @@ const storeBuild = 'v2.2.70';
             `<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="ds" ${settings.injectTarget === 'ds' ? 'checked' : ''}/>DS</label>`,
             ...(settings.customPresets || []).map(p => `<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="${extensionName}_inject_target" value="custom:${p.id}" ${settings.injectTarget === 'custom:' + p.id ? 'checked' : ''}/>${esc(String(p.name || t('customName')))} <span class="kimi-custom-del" data-id="${p.id}" title="${t('customDel')}">✕</span></label>`)
         ].join('');
+        const addBtn = document.getElementById(extensionName + "_add_custom");
+        if (addBtn) radios.appendChild(addBtn);   // ★W175：按钮长在模式行末尾（新模板出现在最后一个模式右边）；重建后接回去
         customNameRowSync();
     }
     // 模板名输入：写回 preset.name 并即时刷新 radio 标签
@@ -10827,8 +10910,7 @@ const storeBuild = 'v2.2.70';
         $chk.on("change", function () {
             settings.wrap4aEnabled = $(this).is(":checked");
             saveSettingsDebounced();
-            $box.toggle(settings.wrap4aEnabled);
-            if (settings.wrap4aEnabled) renderTok();
+            if (settings.wrap4aEnabled) renderTok();   // ★W174-A：勾选只管功能；展开/收起由行头那颗三角独立控制
         });
         let tmr = null;
         const saveSoon = () => {
@@ -10869,15 +10951,11 @@ const storeBuild = 'v2.2.70';
         if (settings.randNameEnabled) renderName();
         $headChk.on("change", function () {
             settings.randHeadEnabled = $(this).is(":checked");
-            saveSettingsDebounced();
-            $headBox.toggle(settings.randHeadEnabled);
-            if (settings.randHeadEnabled) renderDemo();
+            saveSettingsDebounced();                   // ★W174-A：勾选只管功能（展开/收起独立）
         });
         $nameChk.on("change", function () {
             settings.randNameEnabled = $(this).is(":checked");
             saveSettingsDebounced();
-            $nameBox.toggle(settings.randNameEnabled);
-            if (settings.randNameEnabled) renderName();
         });
         $("#" + extensionName + "_rand_name_reroll").on("click", function () {
             rerollRandName();   // 清掉本聊天的缓存 ⇒ 重新抽一个
@@ -10904,6 +10982,50 @@ const storeBuild = 'v2.2.70';
                 try { if (settings.randNameEnabled) renderName(); } catch (e) { }
             });
         } catch (e) { }
+    })();
+
+    // ★W174-A：三段「防标记」+ Reasoning Content 的**独立折叠**——
+    //   行头（.kimi-fold-head）点击 = 切换展开/收起；点勾选框只切功能（绝不带动展开）；
+    //   默认展开态在渲染时已按"开着展开/关着收起"定好；用户手动展开/收起后以手动为准（不持久化）。
+    (function bindFoldHeads() {
+        const root = document.getElementById('kimi_rand_card');
+        if (root) {
+            root.querySelectorAll('.kimi-fold-head').forEach(function (head) {
+                if (head.getAttribute('data-fold-bound') === '1') return;
+                head.setAttribute('data-fold-bound', '1');
+                head.addEventListener('click', function (ev) {
+                    try {
+                        if (ev.target && ev.target.closest && ev.target.closest('input[type="checkbox"]')) return;   // 勾选框只管功能
+                        const key = head.getAttribute('data-fold');
+                        const box = document.getElementById(extensionName + '_' + key + '_box');
+                        if (!box) return;
+                        const willOpen = box.style.display === 'none';
+                        box.style.display = willOpen ? '' : 'none';
+                        head.classList.toggle('open', willOpen);
+                        if (willOpen && key === 'rand_head') {           // 示例诗：第一次展开时若为空 ⇒ 现生成
+                            const d = document.getElementById(extensionName + '_rand_head_demo');
+                            if (d && !d.textContent) d.textContent = buildRandHeader(false);
+                        }
+                    } catch (e) { /* 折叠失败绝不影响功能本身 */ }
+                });
+            });
+            // 首屏就是展开态的（功能开着）⇒ 示例诗现在就补上（若为空）
+            if (settings.randHeadEnabled) {
+                const d = document.getElementById(extensionName + '_rand_head_demo');
+                if (d && !d.textContent) d.textContent = buildRandHeader(false);
+            }
+        }
+        // ★W174-B：Reasoning Content 折叠（<details>）—— 三角随 open 状态换向（同 W173a 方案弹窗那颗）
+        (function () {
+            const det = document.getElementById(extensionName + '_rc_fold');
+            if (!det || det.getAttribute('data-caret-bound') === '1') return;
+            det.setAttribute('data-caret-bound', '1');
+            const car = det.querySelector('.kimi-fold-caret');
+            if (!car) return;
+            const paint = () => { car.classList.toggle('fa-caret-right', !det.open); car.classList.toggle('fa-caret-down', !!det.open); };
+            paint();
+            det.addEventListener('toggle', paint);
+        })();
     })();
 
     // 监听 ST 构建完 prompt 的事件：截获已渲染 thinking 块 + 预解析种子（提示词查看器同款机制）
