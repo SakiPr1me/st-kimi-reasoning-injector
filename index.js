@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.67'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.68'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -734,10 +734,10 @@ const OC_RELAY_I18N = {
         wrap4aDemoNote: '最好自己找小说，大家都发同样的，我不确定会不会被标记。',
         wrap4aTok: 'token',
         randHeadTitle: '随机虚拟头（默认关）',
-        randHeadHint: '每次请求现生成一行编号头，贴在第一条系统消息最前面（防前缀指纹）。关掉后请求里一个字都不加。',
+        randHeadHint: '每次请求现生成一段编号头（≈1000+ token），贴在第一条系统消息最前面（防前缀指纹）。关掉后请求里一个字都不加。',
         randNameTitle: '随机人名（默认关）',
-        randNameHint: '只改发出去的请求：把「余小温」换成本聊天固定的人名，聊天记录不动。',
-        randNameCurrent: '本聊天使用：',
+        randNameHint: '只改发出去的请求：每轮换一个新名字，并把历史里用过的旧名字一起换成它（上下文保持一致）；聊天记录不动。',
+        randNameCurrent: '下次发送将使用：',
         randNameReroll: '换一个',
         schemeTtProxyTitle: 'TT酒馆点开我（反代 / Key）',
         schemeTtProxyUrl: '反向代理 URL',
@@ -782,10 +782,10 @@ const OC_RELAY_I18N = {
         wrap4aDemoNote: 'Better to use your own novel — everyone sending the same text might get flagged (unknown).',
         wrap4aTok: 'token',
         randHeadTitle: 'Random virtual header (off by default)',
-        randHeadHint: 'A fresh ID header is generated for every request and prepended to the first system message (anti-fingerprint). When off, nothing is added.',
+        randHeadHint: 'A long ID header (~1000+ tokens) is generated for every request and prepended to the first system message (anti-fingerprint). When off, nothing is added.',
         randNameTitle: 'Random name (off by default)',
-        randNameHint: 'Request only: "余小温" is replaced by a name fixed for this chat. Your chat log is not modified.',
-        randNameCurrent: 'This chat uses: ',
+        randNameHint: 'Request only: a new name each turn, and old names used in history are replaced too (context stays consistent). Your chat log is not modified.',
+        randNameCurrent: 'Next send will use: ',
         randNameReroll: 'Reroll',
         schemeTtProxyTitle: 'TauriTavern only (proxy / key)',
         schemeTtProxyUrl: 'Reverse proxy URL',
@@ -830,10 +830,10 @@ const OC_RELAY_I18N = {
         wrap4aDemoNote: '가능하면 직접 소설을 구하세요. 모두 같은 글을 보내면 표시될 수 있습니다(미확인).',
         wrap4aTok: 'token',
         randHeadTitle: '랜덤 가상 헤더 (기본 꺼짐)',
-        randHeadHint: '요청마다 새 번호 헤더를 만들어 첫 시스템 메시지 맨 앞에 붙입니다(지문 방지). 끄면 요청에 아무것도 추가되지 않습니다.',
+        randHeadHint: '요청마다 긴 번호 헤더(≈1000+ 토큰)를 만들어 첫 시스템 메시지 맨 앞에 붙입니다(지문 방지). 끄면 요청에 아무것도 추가되지 않습니다.',
         randNameTitle: '랜덤 이름 (기본 꺼짐)',
-        randNameHint: '요청에만 적용: "余小温"을 이 채팅의 고정 이름으로 바꿉니다. 채팅 기록은 그대로입니다.',
-        randNameCurrent: '이 채팅에서 사용: ',
+        randNameHint: '요청에만 적용: 매 턴 새 이름으로 바꾸고, 기록에 남은 예전 이름도 함께 바꿉니다(맥락 일관성). 채팅 기록은 그대로입니다.',
+        randNameCurrent: '다음 전송에 사용: ',
         randNameReroll: '다시 뽑기',
         schemeTtProxyTitle: 'TauriTavern 전용 (프록시 / Key)',
         schemeTtProxyUrl: '역방향 프록시 URL',
@@ -1674,6 +1674,7 @@ function wrapLastUserMessage(msgs) {
 const RAND_HEAD_HEX = '0123456789ABCDEF';
 const RAND_HEAD_POOL = '青石微光沉静白砾灰薄厚深浅冷暖霜雾云雪松竹梅兰菊泉溪河海沙岸桥灯巷檐窗门庭院阶廊径野林麓岩谷峰坡原隰洲渚汀沚';
 const RAND_HEAD_PREFIX = '［编号 ';
+const RAND_NL = String.fromCharCode(10);
 const RAND_HEAD_RECENT = [];
 function randInt(n) { const v = Math.floor(Math.random() * (Number(n) || 1)); return v < 0 ? 0 : v; }
 function randHex(n) { let s = ''; for (let i = 0; i < n; i++) s += RAND_HEAD_HEX.charAt(randInt(16)); return s; }
@@ -1681,19 +1682,25 @@ function randHex(n) { let s = ''; for (let i = 0; i < n; i++) s += RAND_HEAD_HEX
  *  保留最近 5 个，重复就重抽；remember=false ⇒ 只生成、不占名额（面板那行示例用）。 */
 function buildRandHeader(remember) {
     const pool = Array.from(RAND_HEAD_POOL);
-    let last = '';
-    for (let t = 0; t < 64; t++) {
-        const i1 = randInt(pool.length);
-        let i2 = randInt(pool.length - 1);
-        if (i2 >= i1) i2++;                       // 两个中文单字不重复
-        last = RAND_HEAD_PREFIX + randHex(4) + '·' + pool[i1] + pool[i2] + '·' + randHex(3) + '］';
-        if (RAND_HEAD_RECENT.indexOf(last) < 0) break;
-    }
+    const two = () => { const i1 = randInt(pool.length); let i2 = randInt(pool.length - 1); if (i2 >= i1) i2++; return pool[i1] + pool[i2]; };
+    const make = () => {
+        const lead = RAND_HEAD_PREFIX + randHex(4) + '·' + two() + '·' + randHex(3) + '］';
+        const lines = [lead];
+        // ★W169d（作者："起码要上千 token"）：每条 ~27 字 × 71 行 ⇒ ≈1900 字（按 1.6 字/token ≈ 1100+ token）
+        for (let i = 0; i < 70; i++) {
+            const code = String(100 + randInt(900));
+            const chk = String(10 + randInt(90));
+            lines.push('［档 ' + randHex(4) + '·' + two() + '·' + randHex(3) + '·码 ' + code + '·校 ' + chk + '］');
+        }
+        return lines.join(RAND_NL);
+    };
+    let block = make();
     if (remember !== false) {
-        RAND_HEAD_RECENT.push(last);
+        for (let t = 0; t < 8 && RAND_HEAD_RECENT.indexOf(block.split(RAND_NL)[0]) >= 0; t++) block = make();
+        RAND_HEAD_RECENT.push(block.split(RAND_NL)[0]);
         while (RAND_HEAD_RECENT.length > 5) RAND_HEAD_RECENT.shift();
     }
-    return last;
+    return block;
 }
 
 // —— 随机人名：姓 + 中字 + 名（8 × 4 × 24 = 768 种组合）——
@@ -1744,23 +1751,37 @@ function loadRandNameMap() {
     try { const m = JSON.parse(localStorage.getItem(RAND_NAME_KEY) || '{}'); return (m && typeof m === 'object' && !Array.isArray(m)) ? m : {}; } catch (e) { return {}; }
 }
 /** 本聊天的人名：有就复用，没有（或存的值不合法）就抽一个并写进 localStorage（每段聊天固定一个）*/
+const RAND_NAME_USED_KEY = 'kimi_rand_names_used';   // { chatId: [用过的名字] }
+const RAND_DONE = new WeakSet();                      // 同一份 messages 只轮换一次（GENERATE_AFTER_DATA + SETTINGS_READY 两处都调）
+function loadRandUsedMap() {
+    try { const m = JSON.parse(localStorage.getItem(RAND_NAME_USED_KEY) || '{}'); return (m && typeof m === 'object' && !Array.isArray(m)) ? m : {}; } catch (e) { return {}; }
+}
+function saveRandUsedMap(m) { try { localStorage.setItem(RAND_NAME_USED_KEY, JSON.stringify(m || {})); } catch (e) { } }
+function saveRandNameMap(m) { try { localStorage.setItem(RAND_NAME_KEY, JSON.stringify(m || {})); } catch (e) { } }
+function usedNamesForChat(cid) {
+    const m = loadRandUsedMap();
+    const a = m[String(cid)];
+    return Array.isArray(a) ? a.filter((x) => typeof x === 'string' && isRandNameValid(x)) : [];
+}
+/** 下次发送将使用的名字（本地待用值；不合法就重抽）*/
 function currentRandName() {
     const cid = randChatId();
     const map = loadRandNameMap();
     const cur = map[cid];
     if (typeof cur === 'string' && isRandNameValid(cur)) return cur;
-    const name = pickRandName(usedRandNames(map));
+    const name = pickRandName(usedNamesForChat(cid).concat(usedRandNames(map)));
     map[cid] = name;
-    try { localStorage.setItem(RAND_NAME_KEY, JSON.stringify(map)); } catch (e) { }
+    saveRandNameMap(map);
     return name;
 }
-/** 「换一个」：清掉本聊天的缓存 ⇒ 重新抽一个（避开本机已用过的名字）并落盘 */
+/** 「换一个」：换掉"下次发送将使用"的那个名字（避开本聊天用过的）*/
 function rerollRandName() {
     const cid = randChatId();
     const map = loadRandNameMap();
-    const name = pickRandName(usedRandNames(map));
+    const avoid = usedNamesForChat(cid).concat(usedRandNames(map)).concat([map[cid]]);
+    const name = pickRandName(avoid);
     map[cid] = name;
-    try { localStorage.setItem(RAND_NAME_KEY, JSON.stringify(map)); } catch (e) { }
+    saveRandNameMap(map);
     return name;
 }
 
@@ -1800,20 +1821,38 @@ function replaceRandNames(msgs) {
     const out = { changed: false, name: '' };
     try {
         if (!Array.isArray(msgs) || !settings.randNameEnabled) return out;
+        if (RAND_DONE.has(msgs)) return out;              // 同一份 messages 只轮换一次
+        const cid = randChatId();
+        const name = currentRandName();                   // 本次发送用「下次发送将使用」的那个
+        const used = usedNamesForChat(cid);
+        // 要换掉的源：占位名 + 本聊天历史里用过的名字（保证历史前后一致，不会一轮一个名混在上下文里）
+        const sources = [RAND_NAME_SRC].concat(used).filter((v, i, arr) => !!v && v !== name && arr.indexOf(v) === i);
         const FIELDS = ['content', 'name', 'reasoning_content'];
-        let name = '';
         for (let i = 0; i < msgs.length; i++) {
             const m = msgs[i];
             if (!m || typeof m !== 'object') continue;
             for (let f = 0; f < FIELDS.length; f++) {
                 const key = FIELDS[f];
                 const val = m[key];
-                if (typeof val !== 'string' || val.indexOf(RAND_NAME_SRC) < 0) continue;
-                if (!name) name = currentRandName();
-                const next = val.split(RAND_NAME_SRC).join(name);
+                if (typeof val !== 'string') continue;
+                let next = val;
+                for (let k = 0; k < sources.length; k++) {
+                    if (next.indexOf(sources[k]) >= 0) next = next.split(sources[k]).join(name);
+                }
                 if (next !== val) { m[key] = next; out.changed = true; }
             }
         }
+        // 轮换记账：本次用的进"用过"，再抽好下一次的
+        const usedMap = loadRandUsedMap();
+        const arr = Array.isArray(usedMap[cid]) ? usedMap[cid].slice() : [];
+        if (arr.indexOf(name) < 0) arr.push(name);
+        while (arr.length > 40) arr.shift();
+        usedMap[cid] = arr;
+        saveRandUsedMap(usedMap);
+        const map = loadRandNameMap();
+        map[cid] = pickRandName(arr.concat(usedRandNames(map)).concat([name]));
+        saveRandNameMap(map);
+        RAND_DONE.add(msgs);
         out.name = name;
     } catch (e) { }
     return out;
