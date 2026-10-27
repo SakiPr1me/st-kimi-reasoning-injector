@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.75'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.76'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -502,7 +502,7 @@ const UI = {
         rerollBodyMarker: "正文出现",
         rerollBodyMarkersHint: "只检测正文（不检测思维链）：正文一出现下面这些内容 → 立即停止并重roll开新分支。注意：多个用英文逗号 , 分隔，不区分大小写；玩极端的内容时，容易出现英文思维链，英文思维链大概率道歉，但中文思维链也有道歉几率，只是比较低！你要多关注下手动截断。",
         rerollLimitLabel: "连续自动重roll上限：", rerollTimes: " 次", rerollMinTokensLabel: "阈值", rerollMinTokensHint: "",
-        rerollWarning: "注意：玩极端的内容时，容易出现英文思维链，重roll虽然可以避免大概率道歉的英文思维链，但是中文思维链也有道歉几率，只是比较低！你要多关注下手动截断。",
+        rerollWarning: "注意：多个用英文逗号 , 分隔，不区分大小写；玩极端的内容时，容易出现英文思维链，英文思维链大概率道歉，但中文思维链也有道歉几率，只是比较低！你要多关注下手动截断。",
         foldHeightLabel: "思维链区域固定高度滚动", foldHeightHint: "给思维链区域加最大高度 + 滚动条（长思维链不再撑爆楼层；注入等效自定义 CSS）",
         showTpsLabel: "楼层显示生成速度（t/s）", showTpsHint: "在 token 数旁显示每秒 token 数（token 数 ÷ 生成耗时），和 AI 回复计时器同一数据源",
         thinkingLive: "思考中 {s}", thinkingDone: "思考 {s}",
@@ -567,7 +567,7 @@ const UI = {
         rerollBodyMarker: "Reply body contains",
         rerollBodyMarkersHint: "Checks the reply body only, never the thinking chain: as soon as the body contains any of these → stop and reroll to a new branch. Note: separate multiple entries with English commas , ; case-insensitive. With extreme content, an English thinking chain appears easily and almost always means an apology — a Chinese thinking chain can still trigger one, just with lower odds! Keep an eye on manual stop / truncation.",
         rerollLimitLabel: "Max consecutive auto rerolls: ", rerollTimes: " times", rerollMinTokensLabel: "Threshold", rerollMinTokensHint: "",
-        rerollWarning: "Note: extreme content often produces English thinking. Reroll avoids the high-risk English thinking, but Chinese thinking can still trigger apologies (lower chance). Watch for manual stops.",
+        rerollWarning: "Note: separate multiple entries with English commas , ; case-insensitive. With extreme content, an English thinking chain appears easily and almost always means an apology — a Chinese thinking chain can still trigger one, just with lower odds! Keep an eye on manual stop / truncation.",
         foldHeightLabel: "Fixed-height scroll for reasoning", foldHeightHint: "Give the reasoning area a max-height + scrollbar (long CoT won't blow up the message; same as injecting custom CSS)",
         showTpsLabel: "Show generation speed (t/s) on messages", showTpsHint: "Shows tokens per second next to the token counter (tokens ÷ generation time), same data source as the AI reply timer",
         thinkingLive: "Thinking {s}", thinkingDone: "Thought for {s}", reasoningTimerLabel: "Live reasoning timer (seconds while thinking)", reasoningTimerHint: "Shows \"Thinking Xs\" live during native reasoning, then freezes at exact seconds (ST only shows minutes)",
@@ -631,7 +631,7 @@ const UI = {
         rerollBodyMarker: "본문 등장",
         rerollBodyMarkersHint: "본문만 검사하고 사고(thinking)는 검사하지 않습니다: 본문에 아래 내용이 나오면 즉시 중단하고 새 분기로 reroll. 참고: 영문 쉼표 , 로 구분, 대소문자 무시. 극단적인 내용에서는 영어 사고 사슬이 쉽게 나오며 사과 확률이 높지만, 중국어 사고 사슬도 낮은 확률로 사과할 수 있습니다! 수동 중단에도 주의하세요.",
         rerollLimitLabel: "연속 자동 reroll 상한: ", rerollTimes: " 회", rerollMinTokensLabel: "임계값", rerollMinTokensHint: "",
-        rerollWarning: "주의: 극단적 콘텐츠에서는 영어 사고가 자주 나옵니다. reroll로 사과 확률 높은 영어 사고를 피할 수 있지만, 한국어 사고도 사과 확률이 낮지만 있습니다! 수동 중단에 신경 쓰세요.",
+        rerollWarning: "참고: 영문 쉼표 , 로 구분, 대소문자 무시. 극단적인 내용에서는 영어 사고 사슬이 쉽게 나오며 사과 확률이 높지만, 중국어 사고 사슬도 낮은 확률로 사과할 수 있습니다! 수동 중단에도 주의하세요.",
         foldHeightLabel: "사고 영역 고정 높이 스크롤", foldHeightHint: "사고 영역에 최대 높이 + 스크롤바 추가 (긴 CoT가 메시지를 부풀리지 않음; 커스텀 CSS 주입과 동일)",
         showTpsLabel: "메시지에 생성 속도 표시 (t/s)", showTpsHint: "token 수 옆에 초당 token 수 표시 (token 수 ÷ 생성 시간), AI 응답 타이머와 같은 데이터 소스",
         thinkingLive: "사고 중 {s}", thinkingDone: "사고 {s}", reasoningTimerLabel: "사고 실시간 타이머(초 표시)", reasoningTimerHint: "네이티브 사고 중 \"사고 중 Xs\"를 실시간 표시, 끝나면 정확한 초로 고정(ST는 분 단위만)",
@@ -10600,14 +10600,16 @@ const storeBuild = 'v2.2.70';
     function renderTargetRadios() {
         const radios = document.getElementById(extensionName + "_target_radios");
         if (!radios) return;
+        /* ★W176 修（作者报：点「追加模板」按钮就消失、删模板也不回来）：按钮现在长在这个容器里，
+           innerHTML 重建会把它抹掉 —— 必须在重建【前】抓节点、重建后接回去（旧写法在重建后才 getElementById ⇒ 永远 null）。 */
+        const addBtn = document.getElementById(extensionName + "_add_custom");
         const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         radios.innerHTML = [
             `<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="kimi" ${settings.injectTarget === 'kimi' ? 'checked' : ''}/>KIMI</label>`,
             `<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="ds" ${settings.injectTarget === 'ds' ? 'checked' : ''}/>DS</label>`,
             ...(settings.customPresets || []).map(p => `<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="${extensionName}_inject_target" value="custom:${p.id}" ${settings.injectTarget === 'custom:' + p.id ? 'checked' : ''}/>${esc(String(p.name || t('customName')))} <span class="kimi-custom-del" data-id="${p.id}" title="${t('customDel')}">✕</span></label>`)
         ].join('');
-        const addBtn = document.getElementById(extensionName + "_add_custom");
-        if (addBtn) radios.appendChild(addBtn);   // ★W175：按钮长在模式行末尾（新模板出现在最后一个模式右边）；重建后接回去
+        if (addBtn) radios.appendChild(addBtn);   // ★W175/W176：重建后接回（节点在重建前已抓住）
         customNameRowSync();
     }
     // 模板名输入：写回 preset.name 并即时刷新 radio 标签
