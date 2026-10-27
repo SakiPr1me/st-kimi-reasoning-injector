@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.66'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.67'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -411,6 +411,8 @@ const defaultSettings = {
     wrap4aEnabled: false,            // ★W167：4A 破限包裹（默认关；关着一律不读前后缀、请求里一个字都不加）
     wrap4aPrefix: '',                // 前置小说（上面一段）
     wrap4aSuffix: '',                // 后置小说（下面一段）
+    randHeadEnabled: false,          // ★W168：随机虚拟头（每次请求在第一条 system 最前面加一行随机编号；默认关）
+    randNameEnabled: false,          // ★W168：随机人名（把请求里的「余小温」换成本聊天固定的人名；默认关）
     autoUpdate: true,                // 默认自动更新：每次检测到云端有新版直接更新到最新
     floatPanelKeys: ['inject', 'reroll', 'word', 'tag', 'api', 'psnap', 'fix'], // 悬浮条面板区显示哪些卡（★W150：顺序 = 主面板卡片顺序；★W155：「标签修复」与「API 池」互换 ⇒ 标签修复在前）
     floatPanelAllKey: 'all',
@@ -731,6 +733,12 @@ const OC_RELAY_I18N = {
         wrap4aDemo: '填入默认示例测试',
         wrap4aDemoNote: '最好自己找小说，大家都发同样的，我不确定会不会被标记。',
         wrap4aTok: 'token',
+        randHeadTitle: '随机虚拟头（默认关）',
+        randHeadHint: '每次请求现生成一行编号头，贴在第一条系统消息最前面（防前缀指纹）。关掉后请求里一个字都不加。',
+        randNameTitle: '随机人名（默认关）',
+        randNameHint: '只改发出去的请求：把「余小温」换成本聊天固定的人名，聊天记录不动。',
+        randNameCurrent: '本聊天使用：',
+        randNameReroll: '换一个',
         schemeTtProxyTitle: 'TT酒馆点开我（反代 / Key）',
         schemeTtProxyUrl: '反向代理 URL',
         schemeTtProxyKey: 'Key',
@@ -773,6 +781,12 @@ const OC_RELAY_I18N = {
         wrap4aDemo: 'Fill in the default example',
         wrap4aDemoNote: 'Better to use your own novel — everyone sending the same text might get flagged (unknown).',
         wrap4aTok: 'token',
+        randHeadTitle: 'Random virtual header (off by default)',
+        randHeadHint: 'A fresh ID header is generated for every request and prepended to the first system message (anti-fingerprint). When off, nothing is added.',
+        randNameTitle: 'Random name (off by default)',
+        randNameHint: 'Request only: "余小温" is replaced by a name fixed for this chat. Your chat log is not modified.',
+        randNameCurrent: 'This chat uses: ',
+        randNameReroll: 'Reroll',
         schemeTtProxyTitle: 'TauriTavern only (proxy / key)',
         schemeTtProxyUrl: 'Reverse proxy URL',
         schemeTtProxyKey: 'Key',
@@ -815,6 +829,12 @@ const OC_RELAY_I18N = {
         wrap4aDemo: '기본 예시 채우기',
         wrap4aDemoNote: '가능하면 직접 소설을 구하세요. 모두 같은 글을 보내면 표시될 수 있습니다(미확인).',
         wrap4aTok: 'token',
+        randHeadTitle: '랜덤 가상 헤더 (기본 꺼짐)',
+        randHeadHint: '요청마다 새 번호 헤더를 만들어 첫 시스템 메시지 맨 앞에 붙입니다(지문 방지). 끄면 요청에 아무것도 추가되지 않습니다.',
+        randNameTitle: '랜덤 이름 (기본 꺼짐)',
+        randNameHint: '요청에만 적용: "余小温"을 이 채팅의 고정 이름으로 바꿉니다. 채팅 기록은 그대로입니다.',
+        randNameCurrent: '이 채팅에서 사용: ',
+        randNameReroll: '다시 뽑기',
         schemeTtProxyTitle: 'TauriTavern 전용 (프록시 / Key)',
         schemeTtProxyUrl: '역방향 프록시 URL',
         schemeTtProxyKey: 'Key',
@@ -997,6 +1017,8 @@ if (settings.ocRelayKey === undefined) settings.ocRelayKey = defaultSettings.ocR
 if (settings.wrap4aEnabled === undefined) settings.wrap4aEnabled = defaultSettings.wrap4aEnabled;
 if (settings.wrap4aPrefix === undefined) settings.wrap4aPrefix = defaultSettings.wrap4aPrefix;
 if (settings.wrap4aSuffix === undefined) settings.wrap4aSuffix = defaultSettings.wrap4aSuffix;
+if (settings.randHeadEnabled === undefined) settings.randHeadEnabled = defaultSettings.randHeadEnabled;   // ★W168（铁律 32）：新装/升级同一份默认 = 关
+if (settings.randNameEnabled === undefined) settings.randNameEnabled = defaultSettings.randNameEnabled;   // ★W168（铁律 32）：同上
 if (settings.autoUpdate === undefined) settings.autoUpdate = true;
 if (!Array.isArray(settings.floatPanelKeys)) settings.floatPanelKeys = ['inject', 'reroll', 'word', 'tag', 'api', 'psnap', 'fix'];   // ★W150：与新装默认同一份（顺序 = 主面板卡片顺序；★W155：「标签修复」与「API 池」互换）
 if (settings.floatPanelAllKey === undefined) settings.floatPanelAllKey = defaultSettings.floatPanelAllKey;   // ★W114（铁律 32）：新装默认 'all'；缺键时补上，和老用户/新装口径一致
@@ -1645,6 +1667,205 @@ function wrapLastUserMessage(msgs) {
     return false;
 }
 
+// ===== ★W168：随机虚拟头（防前缀指纹） + 随机人名（防名字标记） =====
+// 只改「发出去的请求副本」（messages），聊天记录 / 气泡 / 滑动一个字都不动。
+// 两个开关默认都关；关掉时请求里一个字都不多（硬口径）。
+// 顺序固定：① 随机头 → ② 随机人名 → ③ 4A 破限包裹；三者都幂等（重复调用不叠加）。
+const RAND_HEAD_HEX = '0123456789ABCDEF';
+const RAND_HEAD_POOL = '青石微光沉静白砾灰薄厚深浅冷暖霜雾云雪松竹梅兰菊泉溪河海沙岸桥灯巷檐窗门庭院阶廊径野林麓岩谷峰坡原隰洲渚汀沚';
+const RAND_HEAD_PREFIX = '［编号 ';
+const RAND_HEAD_RECENT = [];
+function randInt(n) { const v = Math.floor(Math.random() * (Number(n) || 1)); return v < 0 ? 0 : v; }
+function randHex(n) { let s = ''; for (let i = 0; i < n; i++) s += RAND_HEAD_HEX.charAt(randInt(16)); return s; }
+/** 现生成一行编号头（结构化随机，不用固定句子池）：［编号 XXXX·两字·XXX］。
+ *  保留最近 5 个，重复就重抽；remember=false ⇒ 只生成、不占名额（面板那行示例用）。 */
+function buildRandHeader(remember) {
+    const pool = Array.from(RAND_HEAD_POOL);
+    let last = '';
+    for (let t = 0; t < 64; t++) {
+        const i1 = randInt(pool.length);
+        let i2 = randInt(pool.length - 1);
+        if (i2 >= i1) i2++;                       // 两个中文单字不重复
+        last = RAND_HEAD_PREFIX + randHex(4) + '·' + pool[i1] + pool[i2] + '·' + randHex(3) + '］';
+        if (RAND_HEAD_RECENT.indexOf(last) < 0) break;
+    }
+    if (remember !== false) {
+        RAND_HEAD_RECENT.push(last);
+        while (RAND_HEAD_RECENT.length > 5) RAND_HEAD_RECENT.shift();
+    }
+    return last;
+}
+
+// —— 随机人名：姓 + 中字 + 名（8 × 4 × 24 = 768 种组合）——
+const RAND_SURNAMES = ['余', '温', '沈', '陆', '顾', '苏', '叶', '白'];
+const RAND_MIDDLES = ['小', '晓', '筱', '笑'];
+const RAND_GIVEN = ['暖', '糯', '鲤', '满', '甜', '软', '桃', '橘', '团', '眠', '星', '雾', '柚', '棠', '荔', '苹', '圆', '豆', '糖', '灯', '铃', '鹿', '鸢', '禾'];
+const RAND_NAME_SRC = '余小温';            // 请求里要被换掉的占位名（聊天记录里保持原样）
+const RAND_NAME_KEY = 'kimi_rand_names';   // 本机 localStorage：{ chatId: name }
+/** 纯函数：抽一个名字；avoid = 本机已经用掉的名字（同一个聊天「换一个」也走这里 ⇒ 一定换）*/
+function pickRandName(avoid) {
+    const used = Array.isArray(avoid) ? avoid : [];
+    let name = '';
+    for (let t = 0; t < 256; t++) {
+        name = RAND_SURNAMES[randInt(RAND_SURNAMES.length)] + RAND_MIDDLES[randInt(RAND_MIDDLES.length)] + RAND_GIVEN[randInt(RAND_GIVEN.length)];
+        if (used.indexOf(name) < 0) return name;
+    }
+    return name;
+}
+/** 纯函数：这个字符串是不是池子里能抽出来的名字（姓 + 中字 + 名，8 × 4 × 24）。
+ *  ★W168b（验收低优先项）：localStorage 被手改成数字 / null / 池外名字（如「张三」）时**一律重抽**，不采信。
+ *  数字/null 本来就被 typeof 挡掉；池外名字以前会被原样用出去，现在由这条校验兜住。 */
+function isRandNameValid(name) {
+    const s = String(name == null ? '' : name);
+    if (s.length !== 3) return false;
+    return RAND_SURNAMES.indexOf(s.charAt(0)) >= 0
+        && RAND_MIDDLES.indexOf(s.charAt(1)) >= 0
+        && RAND_GIVEN.indexOf(s.charAt(2)) >= 0;
+}
+/** 本机已经用掉的合法名字（脏值/池外名字不参与"避开"）*/
+function usedRandNames(map) {
+    const out = [];
+    try {
+        Object.keys(map || {}).forEach((k) => {
+            const v = map[k];
+            if (typeof v === 'string' && isRandNameValid(v)) out.push(v);
+        });
+    } catch (e) { }
+    return out;
+}
+function randChatId() {
+    try {
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        if (ctx && ctx.chatId) return String(ctx.chatId);
+    } catch (e) { }
+    return 'default';
+}
+function loadRandNameMap() {
+    try { const m = JSON.parse(localStorage.getItem(RAND_NAME_KEY) || '{}'); return (m && typeof m === 'object' && !Array.isArray(m)) ? m : {}; } catch (e) { return {}; }
+}
+/** 本聊天的人名：有就复用，没有（或存的值不合法）就抽一个并写进 localStorage（每段聊天固定一个）*/
+function currentRandName() {
+    const cid = randChatId();
+    const map = loadRandNameMap();
+    const cur = map[cid];
+    if (typeof cur === 'string' && isRandNameValid(cur)) return cur;
+    const name = pickRandName(usedRandNames(map));
+    map[cid] = name;
+    try { localStorage.setItem(RAND_NAME_KEY, JSON.stringify(map)); } catch (e) { }
+    return name;
+}
+/** 「换一个」：清掉本聊天的缓存 ⇒ 重新抽一个（避开本机已用过的名字）并落盘 */
+function rerollRandName() {
+    const cid = randChatId();
+    const map = loadRandNameMap();
+    const name = pickRandName(usedRandNames(map));
+    map[cid] = name;
+    try { localStorage.setItem(RAND_NAME_KEY, JSON.stringify(map)); } catch (e) { }
+    return name;
+}
+
+/** ① 随机头：加到第一条 role==='system' 的内容最前面；没有 system 就 unshift 一条。
+ *  幂等：内容已经以 '［编号 ' 开头 ⇒ 跳过（连头都不再生成）。 */
+function injectRandHeader(msgs) {
+    const out = { changed: false, header: '' };
+    try {
+        if (!Array.isArray(msgs) || !settings.randHeadEnabled) return out;
+        const NLC = String.fromCharCode(10);
+        let target = null;
+        for (let i = 0; i < msgs.length; i++) {
+            const m = msgs[i];
+            if (m && m.role === 'system' && typeof m.content === 'string') { target = m; break; }
+        }
+        if (target && String(target.content).indexOf(RAND_HEAD_PREFIX) === 0) {
+            out.header = String(target.content).split(NLC)[0];   // 已经注入过 ⇒ 认出来（幂等）
+            return out;
+        }
+        const header = buildRandHeader();
+        if (target) target.content = header + NLC + target.content;
+        else msgs.unshift({ role: 'system', content: header });
+        out.header = header;
+        out.changed = true;
+    } catch (e) { }
+    return out;
+}
+
+/** ② 随机人名：把消息里的「余小温」全部换掉（只改请求副本）。
+ *  ★W168b（验收 BUG-1）：扫描范围 = `content` + `name` + `reasoning_content` **三处**。
+ *   为什么必须扫三处：插件自己的种子注入会写 `last.name = 余小温` 和 `reasoning_content`（种子文本里带余小温），
+ *   而 ST 服务端在 `custom_prompt_post_processing` 开启时会把 `name` 合进 `content`
+ *   （`src/prompt-converters.js:864-868`，发生在客户端替换之后）⇒ 只扫 content 一定漏 `余小温: ` 这个开头。
+ *   顺序照旧：种子注入在前、随机名在后（见 applyRequestInjections 的 1) 与 1.2)）。
+ *  幂等：换过之后这三处都没有「余小温」了，再调自然不动。 */
+function replaceRandNames(msgs) {
+    const out = { changed: false, name: '' };
+    try {
+        if (!Array.isArray(msgs) || !settings.randNameEnabled) return out;
+        const FIELDS = ['content', 'name', 'reasoning_content'];
+        let name = '';
+        for (let i = 0; i < msgs.length; i++) {
+            const m = msgs[i];
+            if (!m || typeof m !== 'object') continue;
+            for (let f = 0; f < FIELDS.length; f++) {
+                const key = FIELDS[f];
+                const val = m[key];
+                if (typeof val !== 'string' || val.indexOf(RAND_NAME_SRC) < 0) continue;
+                if (!name) name = currentRandName();
+                const next = val.split(RAND_NAME_SRC).join(name);
+                if (next !== val) { m[key] = next; out.changed = true; }
+            }
+        }
+        out.name = name;
+    } catch (e) { }
+    return out;
+}
+
+/** 从 GENERATE_AFTER_DATA 的 data 里挑出「消息数组」。
+ *  ★W168b（验收 BUG-2）：这个事件给的是 ST 内部的 generate_data ——
+ *    chat-completion 路径是 `{ prompt: messagesArray }`，**没有 .messages**
+ *    （真页实测 data 形状 = {keys:['prompt'], hasMessages:false, promptIsArray:true, promptLen:N}），
+ *    所以原来那句 `Array.isArray(data.messages)` 对 chat-completion 是**死代码**。
+ *    text-completion 路径的 prompt 是字符串、NovelAI 是字符串数组 ⇒ 用形状守卫挡掉，别把对象塞进字符串数组。 */
+function pickGenerateMessages(data) {
+    try {
+        if (!data || typeof data !== 'object') return null;
+        const isMsgArr = (arr) => Array.isArray(arr) && arr.length > 0
+            && !!arr[0] && typeof arr[0] === 'object' && !Array.isArray(arr[0])
+            && typeof arr[0].role === 'string';
+        if (isMsgArr(data.messages)) return data.messages;
+        if (isMsgArr(data.prompt)) return data.prompt;
+    } catch (e) { }
+    return null;
+}
+
+/** 请求副本上的三件套（顺序固定：随机头 → 随机人名 → 4A 包裹；都幂等，重复调用不叠加）*/
+function applyRandAndWrapInPlace(msgs) {
+    const used = { changed: false, header: '', name: '' };
+    if (!Array.isArray(msgs)) return used;
+    const h = injectRandHeader(msgs);
+    if (h.changed) used.changed = true;
+    used.header = h.header || '';
+    const n = replaceRandNames(msgs);
+    if (n.changed) used.changed = true;
+    used.name = n.name || '';
+    if (settings.wrap4aEnabled) {
+        try { if (wrapLastUserMessage(msgs)) used.changed = true; } catch (e) { }
+    }
+    return used;
+}
+
+// 自测钩子（探针用：只算，不发请求）
+window.__ywRandTest = () => ({
+    header: buildRandHeader(),            // 只生成不注入
+    name: currentRandName(),              // 本聊天的人名
+    enabled: { head: !!settings.randHeadEnabled, name: !!settings.randNameEnabled },
+});
+window.__ywRandApply = (messages) => {
+    const copy = JSON.parse(JSON.stringify(Array.isArray(messages) ? messages : []));
+    const used = applyRandAndWrapInPlace(copy);
+    return { messages: copy, header: used.header, name: used.name };
+};
+// ===== ★W168 END =====
+
 /** 粗算 token（拿不到酒馆分词器时的兜底） */
 function estimateTokens(text) {
     const t = String(text || '');
@@ -1677,8 +1898,11 @@ function applyRequestInjections(bodyObj) {
             if (injectSeed(msgs, seed)) changed = true;
         }
 
-        // 1.2) 4A 破限包裹（只包最后一条 user；不改聊天记录）
-        if (settings.enabled && msgs && wrapLastUserMessage(msgs)) changed = true;
+        // 1.2) ★W168：随机虚拟头 → 随机人名 → 4A 破限包裹（顺序固定；三者都幂等，重复调用不叠加）
+        if (settings.enabled && msgs) {
+            const __randWrap = applyRandAndWrapInPlace(msgs);
+            if (__randWrap.changed) changed = true;
+        }
 
         // 1.5) 历史 assistant <content> 单换行补双换行
         if (settings.enabled && settings.fixMesOnGenerate !== false && msgs) {
@@ -8896,6 +9120,28 @@ ${t('usage3')}
 <div id="${extensionName}_wrap4a_suffix_tok" style="text-align:right;font-size:.76em;opacity:.75;margin:1px 0 4px"></div>
 </div>
 </div>
+<!-- ★W168：随机虚拟头 / 随机人名（默认都关；只改发出去的请求副本） -->
+<div class="kimi-inner-card">
+<label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
+<input type="checkbox" id="${extensionName}_rand_head" ${settings.randHeadEnabled ? 'checked' : ''}/>
+<span style="font-size:1.24em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('randHeadTitle')}</span>
+</label>
+<div id="${extensionName}_rand_head_box" style="display:${settings.randHeadEnabled ? '' : 'none'}">
+<p class="kimi-hint" style="margin:2px 0 5px;line-height:1.5">${ocr('randHeadHint')}</p>
+<div id="${extensionName}_rand_head_demo" class="kimi-hint" style="margin:0;font:12px/1.45 ui-monospace,Consolas,monospace;opacity:.9"></div>
+</div>
+<label class="checkbox_label" style="display:flex;align-items:center;gap:6px;margin-top:6px">
+<input type="checkbox" id="${extensionName}_rand_name" ${settings.randNameEnabled ? 'checked' : ''}/>
+<span style="font-size:1.24em;font-weight:700;color:var(--golden-color,#e0a800)">${ocr('randNameTitle')}</span>
+</label>
+<div id="${extensionName}_rand_name_box" style="display:${settings.randNameEnabled ? '' : 'none'}">
+<p class="kimi-hint" style="margin:2px 0 5px;line-height:1.5">${ocr('randNameHint')}</p>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+<span class="kimi-hint" style="margin:0">${ocr('randNameCurrent')}<b id="${extensionName}_rand_name_val"></b></span>
+<button type="button" id="${extensionName}_rand_name_reroll" class="menu_button" style="flex:none;white-space:nowrap">${ocr('randNameReroll')}</button>
+</div>
+</div>
+</div>
 <label class="kimi-label" for="${extensionName}_ds_thinking_mode">${t('dsModeLabel')}</label>
 <select id="${extensionName}_ds_thinking_mode" class="text_pole" style="width:100%">
 <option value="native" ${settings.dsThinkingMode !== 'disabled' ? 'selected' : ''}>${t('dsNative')}</option>
@@ -10496,6 +10742,37 @@ const storeBuild = 'v2.2.70';
         });
     })();
 
+    // ★W168：随机虚拟头 / 随机人名（默认都关；只改发出去的请求副本）
+    (function bindRandCards() {
+        const $headChk = $("#" + extensionName + "_rand_head");
+        const $headBox = $("#" + extensionName + "_rand_head_box");
+        const $headDemo = $("#" + extensionName + "_rand_head_demo");
+        const $nameChk = $("#" + extensionName + "_rand_name");
+        const $nameBox = $("#" + extensionName + "_rand_name_box");
+        const $nameVal = $("#" + extensionName + "_rand_name_val");
+        if (!$headChk.length && !$nameChk.length) return;
+        const renderDemo = () => { $headDemo.text(buildRandHeader(false)); };   // 只生成不注入、不占「最近 5 个」名额
+        const renderName = () => { $nameVal.text(currentRandName()); };
+        if (settings.randHeadEnabled) renderDemo();
+        if (settings.randNameEnabled) renderName();
+        $headChk.on("change", function () {
+            settings.randHeadEnabled = $(this).is(":checked");
+            saveSettingsDebounced();
+            $headBox.toggle(settings.randHeadEnabled);
+            if (settings.randHeadEnabled) renderDemo();
+        });
+        $nameChk.on("change", function () {
+            settings.randNameEnabled = $(this).is(":checked");
+            saveSettingsDebounced();
+            $nameBox.toggle(settings.randNameEnabled);
+            if (settings.randNameEnabled) renderName();
+        });
+        $("#" + extensionName + "_rand_name_reroll").on("click", function () {
+            rerollRandName();   // 清掉本聊天的缓存 ⇒ 重新抽一个
+            renderName();
+        });
+    })();
+
     // 监听 ST 构建完 prompt 的事件：截获已渲染 thinking 块 + 预解析种子（提示词查看器同款机制）
     updateRerollStatus();
     // 思维链计时常驻（interval 幂等，覆盖生成中/结束后/切聊天所有阶段）
@@ -10588,10 +10865,18 @@ eventSource.on(event_types.MESSAGE_RECEIVED, function (mesId) {
     } catch (e) { }
 });
 // ★W167b（作者：提示词查看器是一次 dry-run，应该能看到包裹）：
-//   GENERATE_AFTER_DATA 在 Generate() 里**先于**查看器快照发生（script.js:5318 vs 5340），
-//   所以在这里也包一次 —— 查看器/预览就能看到包裹后的内容；后面那次是幂等空转。
+//   GENERATE_AFTER_DATA 在 Generate() 里**先于**查看器快照发生（script.js:5318 vs 5340）。
+// ★W168b 更正（验收 BUG-2）：这个事件给的是 ST 内部的 generate_data ——
+//   chat-completion 路径是 `{ prompt: messagesArray }`（**没有 .messages**；真页实测 keys=['prompt']），
+//   text-completion 是字符串 prompt、NovelAI 是字符串数组 ⇒ 统一走 pickGenerateMessages() 的形状守卫。
+//   挑到了就原地做「随机头 → 随机人名 → 4A 包裹」；同一次请求后面在 CHAT_COMPLETION_SETTINGS_READY
+//   还会再跑一遍（幂等空转，不叠加）。
 eventSource.on(event_types.GENERATE_AFTER_DATA, function (data) {
-    try { if (data && Array.isArray(data.messages) && settings.enabled) wrapLastUserMessage(data.messages); } catch (e) { }
+    try {
+        if (!settings.enabled) return;
+        const list = pickGenerateMessages(data);
+        if (list) applyRandAndWrapInPlace(list);
+    } catch (e) { }
 });
 // 注入挂到 CHAT_COMPLETION_SETTINGS_READY（ST 发请求前最后机会）——不依赖 fetch 链，防其它插件覆盖 window.fetch 致注入失效
 eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, (generateData) => {
