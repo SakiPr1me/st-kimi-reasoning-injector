@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.68'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.69'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -1817,11 +1817,12 @@ function injectRandHeader(msgs) {
  *   （`src/prompt-converters.js:864-868`，发生在客户端替换之后）⇒ 只扫 content 一定漏 `余小温: ` 这个开头。
  *   顺序照旧：种子注入在前、随机名在后（见 applyRequestInjections 的 1) 与 1.2)）。
  *  幂等：换过之后这三处都没有「余小温」了，再调自然不动。 */
-function replaceRandNames(msgs) {
+function replaceRandNames(msgs, consume) {
     const out = { changed: false, name: '' };
     try {
         if (!Array.isArray(msgs) || !settings.randNameEnabled) return out;
-        if (RAND_DONE.has(msgs)) return out;              // 同一份 messages 只轮换一次
+        const doConsume = consume !== false;               // false = 只补名、不记账不推进（GENERATE_AFTER_DATA 的 peek）
+        if (doConsume && RAND_DONE.has(msgs)) return out;   // 同一份 messages 只轮换一次
         const cid = randChatId();
         const name = currentRandName();                   // 本次发送用「下次发送将使用」的那个
         const used = usedNamesForChat(cid);
@@ -1842,6 +1843,7 @@ function replaceRandNames(msgs) {
                 if (next !== val) { m[key] = next; out.changed = true; }
             }
         }
+        if (!doConsume) { out.name = name; return out; }   // peek：名字填上就走，不动 used / pending
         // 轮换记账：本次用的进"用过"，再抽好下一次的
         const usedMap = loadRandUsedMap();
         const arr = Array.isArray(usedMap[cid]) ? usedMap[cid].slice() : [];
@@ -1877,13 +1879,13 @@ function pickGenerateMessages(data) {
 }
 
 /** 请求副本上的三件套（顺序固定：随机头 → 随机人名 → 4A 包裹；都幂等，重复调用不叠加）*/
-function applyRandAndWrapInPlace(msgs) {
+function applyRandAndWrapInPlace(msgs, consume) {
     const used = { changed: false, header: '', name: '' };
     if (!Array.isArray(msgs)) return used;
     const h = injectRandHeader(msgs);
     if (h.changed) used.changed = true;
     used.header = h.header || '';
-    const n = replaceRandNames(msgs);
+    const n = replaceRandNames(msgs, consume !== false);
     if (n.changed) used.changed = true;
     used.name = n.name || '';
     if (settings.wrap4aEnabled) {
@@ -10914,7 +10916,7 @@ eventSource.on(event_types.GENERATE_AFTER_DATA, function (data) {
     try {
         if (!settings.enabled) return;
         const list = pickGenerateMessages(data);
-        if (list) applyRandAndWrapInPlace(list);
+        if (list) applyRandAndWrapInPlace(list, false);   // ★W169e：GED 只 peek（不消耗名字）——真正发请求的那一关才 consume
     } catch (e) { }
 });
 // 注入挂到 CHAT_COMPLETION_SETTINGS_READY（ST 发请求前最后机会）——不依赖 fetch 链，防其它插件覆盖 window.fetch 致注入失效
