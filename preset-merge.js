@@ -88,13 +88,24 @@ function fpMeta(role, pos, depth) {
 }
 export function entryFingerprint(p) {
     if (!p) return '';
-    return JSON.stringify([entryText(p), ...fpMeta(p.role, p.injection_position, p.injection_depth)]);
+    /* ★W198（作者报：从本预设抽的条目上传，缝入时仍显示"改了内容"，而且不管怎么修都不消失）——
+       真因在**服务端**：`sanitizeEntry()` 里 `content: clean(s.content)` 的 `clean()` 默认 `trim()`
+       ⇒ 商店包里回来的正文**首尾空白已被剪掉**。实测真身 `余温V1008.json`：
+         · 🐋DS最大思考 476→474 字（开头 2 个换行没了）
+         · 🌙思维链2·KIMI 2492→2491（结尾 `\n` 没了）
+         · 😺思维链·Gmn 1970→1969（结尾 `\n` 没了）
+       而指纹拿**原始正文**比 ⇒ 自己上传的东西被判成"改了内容"。
+       ⇒ 指纹里的正文改用 `normalizeText()`（= 只吃首尾空白/行尾空格/零宽字符，**中间内容一个字节都不动**）：
+         这样"服务端剪掉的那点首尾空白"不再制造假差异，而真正的改动（含中间空行、改字）照旧被认出来
+         （`diffBlocks()` 的 changed 判定仍按规范化后文本比，中间空行算改动 —— 见那里的注释）。
+       ★口径统一：判断"算不算改了"用规范化正文；**写盘永远用原始正文**（applyPatch / buildMerged 那几处）。 */
+    return JSON.stringify([normalizeText(entryText(p)), ...fpMeta(p.role, p.injection_position, p.injection_depth)]);
 }
 
 /** 同上，但入参是 indexPreset 产出的**条目对象**（字段名不同，别再传错） */
 export function entryFp(e) {
     if (!e) return '';
-    return JSON.stringify([e.text ?? '', ...fpMeta(e.role, e.pos, e.depth)]);   // ★W189：同一份默认值口径
+    return JSON.stringify([normalizeText(e.text ?? ''), ...fpMeta(e.role, e.pos, e.depth)]);   // ★W189 默认值口径 + ★W198 首尾空白归一
 }
 
 /** 正文规范化（配对/空条目判断用）：去零宽、行尾空白、首尾空白 */
