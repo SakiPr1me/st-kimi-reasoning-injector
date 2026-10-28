@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.87';
+const VERSION = '2.2.88';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -9176,6 +9176,24 @@ async function startEdit(id) {
            ⇒ 这一次"编辑并更新"**不会再带出它们**（那正是他要的），但必须**如实说一句**（见 `hidLine`）。 */
         w.pre = { n: pre.picked.length, byRung: pre.byRung, hid: pre.hidden };     // 向导顶上那句人话要用它
     } catch (e) { warn('预选原条目失败（照旧能手动挑）', e); }
+    /* ★★W211（作者 2026-10-28："我暂时下架了，重新上架可以吗，还是要重新上传？"）——
+       **「编辑并更新」必须把这张卡里带的正则也勾回来**，否则是个陷阱：条目会自动勾好，正则区是**收起的、
+       一条都没勾**，用户直接点提交 ⇒ `buildPayload()` 读到空的 `pickedRegex` ⇒ 正则又没进包
+       ⇒ 他会以为"改了还是没修"（正是他这一轮报的那个现象原样复发）。
+       口径与条目那三级不同：正则**只按名字认领**（与预览/缝入判定同一把尺 `PM.normalizeName`；
+       不使用 findRegex 兜底 —— W209 已经裁定过"只按名字"，两处必须是同一口径）。
+       有命中就把正则区**自动展开**（`rxShow`），让用户一眼看见"这几条会跟着走"，可以自己取消。 */
+    try {
+        const wantRx = new Set((Array.isArray(pack.regexes) ? pack.regexes : [])
+            .map(r => PM.normalizeName(String((r.reg && r.reg.scriptName) || (r.next && r.next.scriptName) || '')))
+            .filter(Boolean));
+        if (wantRx.size) {
+            const back = ((S.w && S.w.regexes) || [])
+                .filter(r => wantRx.has(PM.normalizeName(String(r.name || ''))))
+                .map(r => String(r.id));
+            if (back.length) { w.pickedRegex = back; w.rxShow = true; }
+        }
+    } catch (e) { warn('预选正则失败（照旧能手动勾）', e); }
     renderAll();
     toast('info', '这是「编辑并更新」：改完提交会覆盖原来那张卡（编号不变），缝过它的人会看到「有更新」。');
 }
