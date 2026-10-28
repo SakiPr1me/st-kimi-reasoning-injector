@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.87'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.88'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -3709,7 +3709,7 @@ function openClineModal() {
     const w = document.createElement('div');
     w.id = 'kimi_cline_float';
     w.className = 'kimi-cline-float';
-    w.style.cssText = 'position:fixed;top:70px;right:14px;z-index:10001;width:min(440px,94vw);max-height:80vh;' +
+    w.style.cssText = 'position:fixed;top:70px;right:14px;z-index:30001;width:min(440px,94vw);max-height:80vh;' +
         'display:flex;flex-direction:column;overflow:hidden;' +
         'border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;' +
         'background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));color:var(--SmartThemeBodyColor);' +
@@ -3782,10 +3782,10 @@ function ensureClineModalStyle() {
     if (__clineStyleDone) return;
     __clineStyleDone = true;
     const css = `
-.kimi-cline-win{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10001;width:min(430px,92vw);max-height:86vh;overflow-y:auto;background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.5);color:var(--SmartThemeBodyColor)}
+.kimi-cline-win{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30001;width:min(430px,92vw);max-height:86vh;overflow-y:auto;background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.5);color:var(--SmartThemeBodyColor)}
 .kimi-cline-close{background:none;border:none;color:var(--SmartThemeBodyColor);font-size:1em;cursor:pointer;padding:2px 8px;border-radius:6px}
 .kimi-cline-close:hover{background:rgba(128,128,128,.2)}
-.kimi-cline-float{position:fixed;top:70px;right:14px;z-index:10001;width:min(440px,94vw);max-height:80vh;overflow-y:auto;background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;padding:12px 14px;box-shadow:0 8px 30px rgba(0,0,0,.55);color:var(--SmartThemeBodyColor)}
+.kimi-cline-float{position:fixed;top:70px;right:14px;z-index:30001;width:min(440px,94vw);max-height:80vh;overflow-y:auto;background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;padding:12px 14px;box-shadow:0 8px 30px rgba(0,0,0,.55);color:var(--SmartThemeBodyColor)}
 #kimi_cline_float .kimi-cline-p{border:1px solid var(--SmartThemeBorderColor);border-radius:10px;padding:9px 6px;background:rgba(128,128,128,.1);color:var(--SmartThemeBodyColor);cursor:pointer;font-size:.92em;text-align:center}
 #kimi_cline_float .kimi-cline-p:hover{filter:brightness(1.25)}
 #kimi_cline_float .kimi-cline-p.kimi-cline-cur{border:1.5px solid var(--golden-color,#e0a800)!important;background:rgba(224,168,0,.16);font-weight:700}
@@ -3793,7 +3793,7 @@ function ensureClineModalStyle() {
 #kimi_cline_float .kimi-btn{padding:3px 10px;border-radius:8px;border:1px solid var(--SmartThemeBorderColor);background:rgba(255,255,255,.05);color:var(--SmartThemeBodyColor,inherit);cursor:pointer;font-size:.85em;transition:filter .15s ease}
 #kimi_cline_float .kimi-btn:hover{filter:brightness(1.15)}
 #kimi_cline_float input[type="checkbox"]{accent-color:var(--golden-color,#e0a800)}
-.kimi-cline-overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px}
+.kimi-cline-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:30000;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px}
 .kimi-cline-modal-card{background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;padding:16px;width:min(430px,92vw);flex-shrink:0;box-shadow:0 4px 24px rgba(0,0,0,.45);color:var(--SmartThemeBodyColor)}
 .kimi-cline-p{border:1px solid var(--SmartThemeBorderColor);border-radius:10px;padding:9px 6px;background:rgba(255,255,255,.04);color:var(--SmartThemeBodyColor);cursor:pointer;font-size:.92em;text-align:center;transition:filter .15s ease,border-color .15s ease}
 .kimi-cline-p:hover{filter:brightness(1.3)}
@@ -3845,7 +3845,7 @@ function ensureUpstreamStyle() {
     if (document.getElementById('kimi-upstream-style')) return;
     const st = document.createElement('style');
     st.id = 'kimi-upstream-style';
-    st.textContent = '.kimi-cline-overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px}'
+    st.textContent = '.kimi-cline-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:30000;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px}'
         + '.kimi-up-card{border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));color:var(--SmartThemeBodyColor);width:min(720px,94vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;padding:14px 16px;box-shadow:0 4px 24px rgba(0,0,0,.45)}'
         + '.kimi-up-card table{width:100%;border-collapse:collapse;font-size:.82em}'
         + '.kimi-up-card th,.kimi-up-card td{padding:4px 6px;text-align:left;border-bottom:1px solid var(--SmartThemeBorderColor);white-space:nowrap}'
@@ -7275,7 +7275,7 @@ function ensureSchemeStyle() {
     if (__schemeStyleDone) return;
     __schemeStyleDone = true;
     const css = ''
-        + '.kimi-scheme-overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px}'
+        + '.kimi-scheme-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:30000;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px}'
         + '.kimi-scheme-card{background:var(--SmartThemeBlurTintColor,var(--grey30,rgb(23 23 23)));border:1px solid var(--SmartThemeBorderColor);border-left:3px solid var(--SmartThemeQuoteColor);border-radius:12px;padding:16px;width:min(430px,92vw);flex-shrink:0;box-shadow:0 4px 24px rgba(0,0,0,.45);color:var(--SmartThemeBodyColor);user-select:none}'
         + '#kimi_scheme_editor .kimi-btn{padding:3px 10px;border-radius:8px;border:1px solid var(--SmartThemeBorderColor);background:rgba(255,255,255,.05);color:var(--SmartThemeBodyColor,inherit);cursor:pointer;font-size:.85em;min-height:32px;transition:filter .15s ease}'
         + '#kimi_scheme_editor .kimi-btn:hover{filter:brightness(1.15)}'
