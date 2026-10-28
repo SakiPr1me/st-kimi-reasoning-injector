@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.86'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.87'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -414,6 +414,8 @@ const defaultSettings = {
     randHeadEnabled: false,          // ★W177（作者 2026-10-28 拍板）：三个防标记**新装全默认关**（塞小说/头部/身份同一口径；用户手动勾选受尊重）
     randNameEnabled: false,          // ★W168：随机人名（把请求里的 AI身份 换成本轮随机名；默认关）
     randNameSource: '余小温',        // ★W171：被替换的「AI身份」占位名
+    randNamePool: null,              // ★W187：自定义名字池 {surnames:[],middles:[],givens:[]}；null/空 = 用内置
+    randPoemPool: null,              // ★W187：自定义诗库（字符串数组）；null/空 = 用内置 72 句
     uiFolds: {},                     // ★W177：防标记三段 + Reasoning Content 的手动折叠记忆（{key:'open'|'closed'}；没记录的 key 走默认=开着展开/关着收起）        // ★W171（作者）：被替换的「AI身份」占位名（面板可改；空 ⇒ 回落这个默认）
     autoUpdate: true,                // 默认自动更新：每次检测到云端有新版直接更新到最新
     floatPanelKeys: ['inject', 'reroll', 'psnap', 'word', 'tag', 'api', 'fix'], // 悬浮条面板区显示哪些卡（★W174-E：顺序 = 主面板卡片顺序 [注入/自动重Roll/方案切换/替换/标签修复/API池/不常用]；键只当勾选集合，渲染顺序一律按 KIMI_CARD_DEFS）
@@ -740,6 +742,7 @@ const OC_RELAY_I18N = {
         randNameSourceLabel: 'AI身份：',
         randNameCurrent: '下次发送将使用：',
         randNameReroll: '换一个',
+        randHeadPoolEdit: '编辑诗库', randNamePoolEdit: '编辑名字库', poolOk: '确定', poolSurname: '姓', poolMiddle: '中', poolGiven: '名',
         schemeTtProxyTitle: '输入反代url+Key，自动记忆填入',
         schemeTtProxyUrl: '反向代理 URL',
         schemeTtProxyKey: 'Key',
@@ -787,6 +790,7 @@ const OC_RELAY_I18N = {
         randNameSourceLabel: 'AI identity: ',
         randNameCurrent: 'Next send will use: ',
         randNameReroll: 'Reroll',
+        randHeadPoolEdit: 'Edit poem pool', randNamePoolEdit: 'Edit name pools', poolOk: 'OK', poolSurname: 'Surname', poolMiddle: 'Middle', poolGiven: 'Given',
         schemeTtProxyTitle: 'Enter reverse-proxy URL + Key (auto-remembered)',
         schemeTtProxyUrl: 'Reverse proxy URL',
         schemeTtProxyKey: 'Key',
@@ -834,6 +838,7 @@ const OC_RELAY_I18N = {
         randNameSourceLabel: 'AI 정체성: ',
         randNameCurrent: '다음 전송에 사용: ',
         randNameReroll: '다시 뽑기',
+        randHeadPoolEdit: '시库 편집', randNamePoolEdit: '이름库 편집', poolOk: '확인', poolSurname: '성', poolMiddle: '중간', poolGiven: '이름',
         schemeTtProxyTitle: '역방향 프록시 URL + Key 입력 (자동 기억)',
         schemeTtProxyUrl: '역방향 프록시 URL',
         schemeTtProxyKey: 'Key',
@@ -1020,6 +1025,8 @@ if (settings.randHeadEnabled === undefined) settings.randHeadEnabled = defaultSe
 if (settings.randNameEnabled === undefined) settings.randNameEnabled = defaultSettings.randNameEnabled;   // ★W168（铁律 32）：同上 = 关
 if (settings.randNameSource === undefined) settings.randNameSource = defaultSettings.randNameSource;      // ★W171（铁律 32）：缺键补 defaultSettings 同值 = 余小温
 if (!settings.uiFolds || typeof settings.uiFolds !== 'object' || Array.isArray(settings.uiFolds)) settings.uiFolds = {};   // ★W177（铁律 32）：折叠记忆容器（脏数据归零，逐键读时再兜底）
+if (settings.randNamePool === undefined) settings.randNamePool = null;   // ★W187（铁律 32）：缺键=null（用内置池）
+if (settings.randPoemPool === undefined) settings.randPoemPool = null;
 if (settings.autoUpdate === undefined) settings.autoUpdate = true;
 if (!Array.isArray(settings.floatPanelKeys)) settings.floatPanelKeys = ['inject', 'reroll', 'psnap', 'word', 'tag', 'api', 'fix'];   // ★W174-E：与新装默认同一份（键只当勾选集合；渲染顺序一律按 KIMI_CARD_DEFS）
 if (settings.floatPanelAllKey === undefined) settings.floatPanelAllKey = defaultSettings.floatPanelAllKey;   // ★W114（铁律 32）：新装默认 'all'；缺键时补上，和老用户/新装口径一致
@@ -1684,7 +1691,7 @@ function randInt(n) { const v = Math.floor(Math.random() * (Number(n) || 1)); re
  *  保留最近 5 个，重复就重抽；remember=false ⇒ 只生成、不占名额（面板那行示例用）。 */
 function buildRandHeader(remember) {
     const make = () => {
-        const bag = RAND_POEM_POOL.slice();
+        const bag = activePoemPool().slice();
         const lines = [];
         let len = 0, guard = 0;
         while (len < 200 && guard++ < 80 && bag.length) {
@@ -1712,7 +1719,7 @@ function buildRandHeader(remember) {
 // 名池按协调方裁定**保留现有 24 个唯一字**（作者那份名单里的「眠」在本表里本来就只有一次，去重后仍是 24）
 const RAND_SURNAMES = ['余', '温', '陆', '顾', '苏', '叶', '白', '楚', '冷', '鹿', '闻', '染', '晏', '许'];
 const RAND_MIDDLES = ['小', '晓', '筱', '笑'];
-const RAND_GIVEN = ['暖', '糯', '鲤', '满', '甜', '软', '桃', '橘', '团', '眠', '星', '雾', '柚', '棠', '荔', '苹', '圆', '豆', '糖', '灯', '铃', '鹿', '鸢', '禾'];
+const RAND_GIVEN = ['暖', '糯', '鲤', '满', '甜', '软', '桃', '橘', '团', '眠', '星', '雾', '柚', '棠', '荔', '圆', '豆', '糖', '灯', '铃', '鹿', '鸢', '禾'];   // ★W187（作者）：去掉「苹」⇒ 23 个
 const RAND_NAME_SRC_DEFAULT = '余小温';    // 默认「AI身份」占位名（作者可在面板里改；这里只是回落值）
 const RAND_NAME_SRC_MAX = 40;              // 「AI身份」长度上限（字）
 /** ★W171（作者）：「AI身份」当前值 —— **唯一来源**（面板 settings.randNameSource）。
@@ -1730,7 +1737,8 @@ function pickRandName(avoid) {
     const used = Array.isArray(avoid) ? avoid : [];
     let name = '';
     for (let t = 0; t < 256; t++) {
-        name = RAND_SURNAMES[randInt(RAND_SURNAMES.length)] + RAND_MIDDLES[randInt(RAND_MIDDLES.length)] + RAND_GIVEN[randInt(RAND_GIVEN.length)];
+        const P = activeNamePools();
+        name = P.surnames[randInt(P.surnames.length)] + P.middles[randInt(P.middles.length)] + P.givens[randInt(P.givens.length)];
         if (used.indexOf(name) < 0) return name;
     }
     return name;
@@ -1741,9 +1749,26 @@ function pickRandName(avoid) {
 function isRandNameValid(name) {
     const s = String(name == null ? '' : name);
     if (s.length !== 3) return false;
-    return RAND_SURNAMES.indexOf(s.charAt(0)) >= 0
-        && RAND_MIDDLES.indexOf(s.charAt(1)) >= 0
-        && RAND_GIVEN.indexOf(s.charAt(2)) >= 0;
+    const P = activeNamePools();
+    return P.surnames.indexOf(s.charAt(0)) >= 0
+        && P.middles.indexOf(s.charAt(1)) >= 0
+        && P.givens.indexOf(s.charAt(2)) >= 0;
+}
+/** ★W187：把用户编辑的池子读成数组（脏数据一律丢弃） */
+function poolArr(v) {
+    try { return Array.isArray(v) ? v.map(x => String(x == null ? '' : x).trim()).filter(Boolean) : []; } catch (e) { return []; }
+}
+/** ★W187：当前生效的名字池 —— 用户存过且非空就用，否则回落内置（三栏各自独立回落） */
+function activeNamePools() {
+    let p = null;
+    try { p = (settings.randNamePool && typeof settings.randNamePool === 'object' && !Array.isArray(settings.randNamePool)) ? settings.randNamePool : null; } catch (e) { p = null; }
+    const s = poolArr(p && p.surnames), m = poolArr(p && p.middles), g = poolArr(p && p.givens);
+    return { surnames: s.length ? s : RAND_SURNAMES, middles: m.length ? m : RAND_MIDDLES, givens: g.length ? g : RAND_GIVEN };
+}
+/** ★W187：当前生效的诗库 */
+function activePoemPool() {
+    const a = poolArr(settings.randPoemPool);
+    return a.length ? a : RAND_POEM_POOL;
 }
 /** 本机已经用掉的合法名字（脏值/池外名字不参与"避开"）*/
 function usedRandNames(map) {
@@ -7460,6 +7485,7 @@ window.__ywApplyDisplayReplace = (text) => applyReplacements(text, 'display');
 
 // 调试出口（CDP/控制台/自检脚本用：纯函数直测，不发真实请求）
 window.__ywDebug = {
+    activeNamePools, activePoemPool, pickRandName, isRandNameValid, buildRandHeader,   // ★W187：池子编辑直测
     msgHasThinking,   // ★W175：空回护栏直测（真页探针用）
     /* ★W163 方案切换（探针/悬浮条 W164 用）：读写内核 + 方案 CRUD + 一键切换 + 酒馆侧读取助手 */
     readPromptToggles, writePromptToggles, renderSchemeUI, openSchemeEditor, switchScheme, captureCurrentState,
@@ -9441,6 +9467,11 @@ ${t('usage3')}
 <div id="${extensionName}_rand_head_box" style="display:${foldIsOpen('rand_head', settings.randHeadEnabled) ? '' : 'none'}">
 <p class="kimi-hint" style="margin:2px 0 5px;line-height:1.5">${ocr('randHeadHint')}</p>
 <div id="${extensionName}_rand_head_demo" class="kimi-hint" style="margin:0;font:12px/1.6 ui-monospace,Consolas,monospace;opacity:.9;white-space:pre-wrap"></div>
+<div style="margin-top:6px"><button type="button" id="${extensionName}_rand_head_edit" class="kimi-btn">${ocr('randHeadPoolEdit')}</button></div>
+<div id="${extensionName}_rand_head_edit_box" style="display:none;margin-top:5px">
+<textarea id="${extensionName}_rand_head_pool" class="text_pole" style="width:100%;min-height:92px;font:12px/1.45 ui-monospace,Consolas,monospace"></textarea>
+<div style="margin-top:5px"><button type="button" id="${extensionName}_rand_head_pool_ok" class="kimi-btn">${ocr('poolOk')}</button></div>
+</div>
 </div>
 <div class="kimi-sep"></div>
 <div class="kimi-fold-head${foldIsOpen('rand_name', settings.randNameEnabled) ? ' open' : ''}" data-fold="rand_name">
@@ -9454,6 +9485,13 @@ ${t('usage3')}
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
 <span class="kimi-hint" style="margin:0">${ocr('randNameCurrent')}<b id="${extensionName}_rand_name_val"></b></span>
 <button type="button" id="${extensionName}_rand_name_reroll" class="menu_button" style="flex:none;white-space:nowrap">${ocr('randNameReroll')}</button>
+</div>
+<div style="margin-top:6px"><button type="button" id="${extensionName}_rand_name_edit" class="kimi-btn">${ocr('randNamePoolEdit')}</button></div>
+<div id="${extensionName}_rand_name_edit_box" style="display:none;margin-top:5px">
+<div style="display:flex;align-items:center;gap:6px;margin-top:3px"><label class="kimi-label" style="margin:0;flex:none">${ocr('poolSurname')}</label><input id="${extensionName}_rand_name_pool_s" type="text" class="text_pole" style="flex:1;min-width:0"/></div>
+<div style="display:flex;align-items:center;gap:6px;margin-top:3px"><label class="kimi-label" style="margin:0;flex:none">${ocr('poolMiddle')}</label><input id="${extensionName}_rand_name_pool_m" type="text" class="text_pole" style="flex:1;min-width:0"/></div>
+<div style="display:flex;align-items:center;gap:6px;margin-top:3px"><label class="kimi-label" style="margin:0;flex:none">${ocr('poolGiven')}</label><input id="${extensionName}_rand_name_pool_g" type="text" class="text_pole" style="flex:1;min-width:0"/></div>
+<div style="margin-top:5px"><button type="button" id="${extensionName}_rand_name_pool_ok" class="kimi-btn">${ocr('poolOk')}</button></div>
 </div>
 </div>
 </div>
@@ -11084,6 +11122,41 @@ const storeBuild = 'v2.2.70';
         $nameChk.on("change", function () {
             settings.randNameEnabled = $(this).is(":checked");
             saveSettingsDebounced();
+        });
+        /* ★W187（作者）：两个池子编辑器 —— 点开即预填当前生效池子；确定 ⇒ 解析入库、落盘、收起（不写说明文字） */
+        $("#" + extensionName + "_rand_head_edit").on("click", function () {
+            const $b = $("#" + extensionName + "_rand_head_edit_box");
+            if ($b.is(":visible")) { $b.hide(); return; }
+            $("#" + extensionName + "_rand_head_pool").val(activePoemPool().join(String.fromCharCode(10)));
+            $b.show();
+        });
+        $("#" + extensionName + "_rand_head_pool_ok").on("click", function () {
+            const raw = String($("#" + extensionName + "_rand_head_pool").val() || "");
+            const lines = raw.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+            if (lines.length) { settings.randPoemPool = lines; saveSettingsDebounced(); }
+            $("#" + extensionName + "_rand_head_edit_box").hide();
+            const d = document.getElementById(extensionName + "_rand_head_demo");
+            if (d) d.textContent = buildRandHeader(false);
+        });
+        $("#" + extensionName + "_rand_name_edit").on("click", function () {
+            const $b = $("#" + extensionName + "_rand_name_edit_box");
+            if ($b.is(":visible")) { $b.hide(); return; }
+            const P = activeNamePools();
+            $("#" + extensionName + "_rand_name_pool_s").val(P.surnames.join(", "));
+            $("#" + extensionName + "_rand_name_pool_m").val(P.middles.join(", "));
+            $("#" + extensionName + "_rand_name_pool_g").val(P.givens.join(", "));
+            $b.show();
+        });
+        $("#" + extensionName + "_rand_name_pool_ok").on("click", function () {
+            const splitChars = (v) => String(v || "").split(/[,，、\s]+/).map(x => x.trim()).filter(Boolean);
+            const cur = activeNamePools();
+            const s = splitChars($("#" + extensionName + "_rand_name_pool_s").val());
+            const m = splitChars($("#" + extensionName + "_rand_name_pool_m").val());
+            const g = splitChars($("#" + extensionName + "_rand_name_pool_g").val());
+            settings.randNamePool = { surnames: s.length ? s : cur.surnames, middles: m.length ? m : cur.middles, givens: g.length ? g : cur.givens };
+            saveSettingsDebounced();
+            $("#" + extensionName + "_rand_name_edit_box").hide();
+            try { refreshRandNameLabel(); } catch (e) { }
         });
         $("#" + extensionName + "_rand_name_reroll").on("click", function () {
             rerollRandName();   // 清掉本聊天的缓存 ⇒ 重新抽一个
