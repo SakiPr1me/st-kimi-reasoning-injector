@@ -586,8 +586,14 @@
 /* ★W205（作者）：一字不差 / 未变化的条目与正则，前面也要有一枚**灰色**标识（原来什么都不显示）。 */
 .yws-tag-same { color: var(--yws-txt); opacity: .62; border-color: color-mix(in srgb, var(--yws-txt) 34%, transparent); background: color-mix(in srgb, var(--yws-txt) 8%, transparent); }
 /* ★W205：开关变化的两种标识（打开了 / 关闭了）—— 同一族，用开关语义区分，不新造颜色体系。 */
-.yws-tag-on { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-add) 48%, transparent); background: color-mix(in srgb, var(--yws-dl-add) 12%, transparent); }
-.yws-tag-off { color: var(--yws-txt); opacity: .8; border-color: color-mix(in srgb, var(--yws-dl-old) 46%, transparent); background: color-mix(in srgb, var(--yws-dl-old) 12%, transparent); }
+/* ★W209（作者：打开了/关闭了 要改颜色，现在没有区别度）—— 原来 on 与"新增"同一个蓝、off 与"改了"同一个红 ⇒ 一眼分不出。
+   改成**独立的绿/灰红**：绿=打开了（正常/生效），灰红=关闭了（停用）；颜色全部 color-mix 自主题色推导，零硬编码。
+   绿色取自常见成功色系但压到与主题相容的饱和度；两档都保证正文对比度（文字仍用 var(--yws-txt)）。 */
+.yws-tag-on { color: var(--yws-txt); border-color: color-mix(in srgb, #3fa45f 62%, var(--SmartThemeBorderColor, transparent)); background: color-mix(in srgb, #3fa45f 22%, transparent); font-weight: 600; }
+.yws-tag-off { color: var(--yws-txt); border-color: color-mix(in srgb, #b06a6a 58%, var(--SmartThemeBorderColor, transparent)); background: color-mix(in srgb, #b06a6a 20%, transparent); font-weight: 600; }
+/* 深色主题下把绿/红略微提亮，保证在两套主题上都看得清（沿用文件里既有的暗色适配写法）。 */
+body[data-theme-mode="dark"] .yws-tag-on, .dark .yws-tag-on { background: color-mix(in srgb, #4fbf74 26%, transparent); }
+body[data-theme-mode="dark"] .yws-tag-off, .dark .yws-tag-off { background: color-mix(in srgb, #cf8080 26%, transparent); }
 
 /* ★A4（作者台账）：卡片**下半部分 = 一行** —— **左边**元信息（署名/类型/更新时间）、**右边**「缝入」，
    「缝入」**不另起一行**。所以这里 `nowrap`（放不下就省略，绝不换行）+ `.yws-card-f` 用 `margin-left:auto`

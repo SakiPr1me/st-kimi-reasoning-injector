@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.85';
+const VERSION = '2.2.86';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.85';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.85';
+const BUILD = 'v2.2.86';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -8367,8 +8367,8 @@ function previewRows(pack, mine) {
         const mineList = (() => {
             try { return mine && mine.preset ? (PM.getRegexList(mine.preset) || []).map(x => PM.normalizeRegexScript(x)) : []; } catch (e) { return []; }
         })();
-        const rxByName = new Map(), rxByFind = new Map();
-        for (const r of mineList) { rxByName.set(PM.normalizeName(r.scriptName || ''), r); rxByFind.set(PM.normalizeText(r.findRegex || ''), r); }
+        const rxByName = new Map();   // ★W209：不再需要 rxByFind
+        for (const r of mineList) rxByName.set(PM.normalizeName(r.scriptName || ''), r);   // ★W209：只按名字建索引（查找式兜底已去掉）
         for (const r of pack.regexes) {
             const reg = PM.normalizeRegexScript(r.reg || r.next || {});
             const nm = String(reg.scriptName || '（没名字的正则）');
@@ -8385,7 +8385,13 @@ function previewRows(pack, mine) {
                  · 开关（disabled）一样/不一样 → 决定是否标「打开了 / 关闭了」。
                两个维度可以叠加（既改正文又改开关时，标签以开关为准并保留红蓝差异）。 */
             const rxOldByName = rxByName.get(PM.normalizeName(nm)) || null;
-            const old = rxOldByName || rxByFind.get(PM.normalizeText(reg.findRegex || '')) || null;
+            /* ★W209（作者报：`杀感叹号3` 明明是新增，却变成「改这条」）——
+               原来的兜底是"名字没配上就**按查找式**配"（`rxByFind`）：
+               对比的那份里只要有一条**查找式相同、名字不同**的正则，就会被认成"我手上有这条"，
+               然后因为指纹不同被判「改这条」—— 它其实压根不是同一条。
+               ⇒ 去掉这个兜底：**只按名字认领**（正则的身份就是它的名字）。
+               名字没配上 = 我确实没有这条 ⇒ 「新增」。 */
+            const old = rxOldByName;
             /* ★W207（作者：你说的"正文"不只有替换内容，还有查找的正则）——
                上一步只比了 findRegex + replaceString，**漏了**作用范围(placement)/只测正文(markdownOnly)/
                只测提示词(promptOnly)/编辑也跑(runOnEdit)/宏替换档/保留轮数(minDepth,maxDepth)/要剥的串(trimStrings)。
