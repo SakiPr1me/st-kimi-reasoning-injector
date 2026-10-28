@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.88';
+const VERSION = '2.2.89';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -945,8 +945,14 @@ function kindText(c) {
     if (c.kind === 'ywp-preset') return n ? '整份 · ' + numOf(n) + ' 条' : '整份';
     if (c.kind === 'ywp-patch') return countText(n, '处改动');
     /* ★R9-i（R8 P2-5 商店半）：`scope:"regex"` 的包 = 只带正则、不带条目 —— 卡片上必须**一眼看出这条含正则**
-       （正则会在对方每一条消息上跑，不能让下载的人点进去才发现）。 */
-    if (c.scope === 'regex') return n ? '含 ' + countText(n, '条正则') : '正则';
+       （正则会在对方每一条消息上跑，不能让下载的人点进去才发现）。
+       ★★W216-b（2026-10-28 顺手修掉的连带毛病）：这一支原来读 `c.count`，而**纯正则包的 count 是条目数 = 0**
+         （服务端 `count` 只数 entries，正则条数在 W216 之前根本没发出来）⇒ 卡片只写得出「正则」两个字、
+         数不出来几条。现在服务端带了 `rxCount` ⇒ 优先读它，读不到才退回老口径 `count`（老后端零变化）。 */
+    if (c.scope === 'regex') {
+        const nrx = Number(c.rxCount) || n;
+        return nrx ? '含 ' + countText(nrx, '条正则') : '正则';
+    }
     /* ★W204（作者报：15 条目 + 5 正则，卡片只写「5 个条目」）—— 混装包要**两样都报**。
        纯正则包（scope==="regex"，上面已 return）走不到这里。 */
     const rxPart = (Number(c.rxCount) > 0 && (c.scope !== 'regex')) ? ' + ' + numOf(c.rxCount) + ' 条正则' : '';
@@ -1895,6 +1901,9 @@ function saveCache(items) {
         const brief = (items || []).slice(0, 400).map(c => ({
             id: c.id, title: c.title, why: c.why, author: c.author, kind: c.kind, scope: c.scope,
             count: c.count, entryNames: c.entryNames, official: !!c.official, sews: Number(c.sews) || 0,
+            /* ★★W216（作者 2026-10-28）：混装包的**正则条数**放行进缓存 —— 少放一个字段 = 离线/重启后
+               那张卡又只报条目数（E1 的 `baseVersion`、W21B 的 `playText` 都栽在同一个坑上）。 */
+            rxCount: Number(c.rxCount) || 0,
             likes: Number(c.likes) || 0, liked: !!c.liked, updatedAt: c.updatedAt, createdAt: c.createdAt,
             fp: c.fp, rev: c.rev, srcPresetName: c.srcPresetName, baseName: c.baseName,
             /* ★★E1（plan §6.3 第③处 / 【查漏(补充) 2-3】）：**卡片是显式白名单** —— 少点一个字段，
