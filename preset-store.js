@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.84';
+const VERSION = '2.2.85';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.84';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.84';
+const BUILD = 'v2.2.85';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -9890,7 +9890,14 @@ function previewSrcOptionsHtml(p) {
             cloud.push({ name: lv, label: String(it.title || '').trim() || ver });
         }
     } catch (e) { warn('「假设用户预设」里那组云端基准没排出来（不影响下面那些）', e); }
-    const opt = (name, label) => '<option value="' + esc(name) + '"' + (name === pick ? ' selected' : '') + '>' + esc(label || name) + '</option>';
+    /* ★W208（作者报：选了标注「（我的）」那一项，结果跳到别的去了、不能真实选择）——
+       根因：云端组与本机组**同名** ⇒ 两个 option 的 `value` 一模一样，而 selected 原来只按名字判
+       ⇒ 重绘时"云端那一份"又被打上 selected，你看点的那一项就"跳走"了。
+       修：option 带 `data-src`（cloud / local），选中态按「名字 + 来源」一起判；
+       用户点了哪一组就记住哪一组（`pickSrc`）。名字仍是唯一 value（数据上就是同一份预设文件）。 */
+    const pickSrc = String((p && p.pickSrc) || '');
+    const opt = (name, label, src) => '<option value="' + esc(name) + '" data-src="' + esc(src || 'cloud') + '"' +
+        ((name === pick && String(src || 'cloud') === (pickSrc || 'cloud')) ? ' selected' : '') + '>' + esc(label || name) + '</option>';
     /* ★W202（作者报：云端有了 V1008 之后，本机那份同名的在「假设用户预设」里找不到了）——
        原来这里是**去重**：云端那组先占名字，本机组就用 `!seen.has(n)` 把它排掉 ⇒ 本机已装里看不到
        自己那份（虽然功能上在云端组能选，但看起来就是"我的预设不见了"）。
@@ -9899,15 +9906,17 @@ function previewSrcOptionsHtml(p) {
        ★踩坑规避（原来去重的理由）：HTML 里"最后一个带 selected 的 option 胜出" ⇒ 同名会出现在两组里，
          所以 **selected 只给云端组那一份**（本机组同名的那个不写 selected）—— 默认仍落在云端基准上。 */
     const cloudNames = new Set(cloud.map(x => x.name));
-    const cloudGrp = cloud.length ? '<optgroup label="官方基准（云端）" data-cloud="1">' + cloud.map(x => opt(x.name, x.label)).join('') + '</optgroup>' : '';
+    const cloudGrp = cloud.length ? '<optgroup label="官方基准（云端）" data-cloud="1">' + cloud.map(x => opt(x.name, x.label, 'cloud')).join('') + '</optgroup>' : '';
     /* ★W206（作者：假设用户预设里，本机那份和云端那份**同名**时，本机项后面加「（我的）」）——
        纯显示区分，`value` 仍是原名（选中逻辑一个字没变）；已选中的仍是云端那一份。 */
     const localGrp = all.length
         ? '<optgroup label="本机已装">' + all.map(n => {
             const dup = cloudNames.has(n);                 // 这个名字云端也有 ⇒ 本条是"我的那份"
             const label = dup ? (n + '（我的）') : n;
-            const sel = (n === pick && !dup) ? ' selected' : '';
-            return '<option value="' + esc(n) + '"' + sel + '>' + esc(label) + '</option>';
+            /* ★W208：选中态 = 名字相同 **且** 来源是本机（同名时云端那份不会再抢走选中） */
+            const src = 'local';
+            const sel = (n === pick && (pickSrc === 'local' || !dup)) ? ' selected' : '';
+            return '<option value="' + esc(n) + '" data-src="' + src + '"' + sel + '>' + esc(label) + '</option>';
         }).join('') + '</optgroup>'
         : '';
     return cloudGrp + localGrp;
@@ -14463,7 +14472,15 @@ function onChange(m, ev) {
     }
     /* ★C20：预览里换"对比用的预设" → 就地重算（真内核现算，不写盘）
        ★BD5：卡片要是**正展开着**，展开里那份 rows 也得跟着换（不另算一遍 —— 直接用刚算好的那份）。 */
-    else if (inp === 'prev-src') { if (S.prev) { S.prev.pick = t.value; computePreview(); syncPreviewCardRows(); } renderAll(); }
+    else if (inp === 'prev-src') {
+        if (S.prev) {
+            S.prev.pick = t.value;
+            /* ★W208：记住用户点的是**哪一组**的那一项（同名时云端/本机两个 option 的 value 相同） */
+            try { const op = t.options[t.selectedIndex]; S.prev.pickSrc = op ? String(op.getAttribute('data-src') || '') : ''; } catch (e) { S.prev.pickSrc = ''; }
+            computePreview(); syncPreviewCardRows();
+        }
+        renderAll();
+    }
     /* ★★W10-①：原来这里收那颗「我确认，这份能公开」勾（data-in=w-fullok）—— 勾、状态位、闸三样一起删了。 */
     /* ★Wave I：那颗「更新时提醒大家」—— **只更新状态、不重绘整页**（重绘会跳滚动/丢焦点，违反全局铁律）。
        存的仍是"勾着吗"，包侧只在**不勾**时才发字段。 */
