@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.76';
+const VERSION = '2.2.77';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.76';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.76';
+const BUILD = 'v2.2.77';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -8297,8 +8297,11 @@ function previewRows(pack, mine) {
         return rows;
     }
     /* ★R9-i：`scope:"regex"` 的包 —— 一条正则一行（红=你手上有没有这条 / 蓝=这条带来的查找替换）。
-       以前这里落到 `entries: []` 上 → 预览永远说"没有任何变化"（对正则包是假话）。 */
-    if (pack.kind === 'ywp-entry' && pack.scope === 'regex' && Array.isArray(pack.regexes) && pack.regexes.length) {
+       以前这里落到 `entries: []` 上 → 预览永远说"没有任何变化"（对正则包是假话）。
+       ★W200（作者报：勾了 4 条正则上传，预览里一条正则都看不到）—— 原来这里还要求 `scope === 'regex'`，
+       而"部分上传 + 勾了正则"的包 scope 是 single/multi ⇒ **混装包永远走不进这一段**。
+       现在改成：**只要包里有正则就列出来**（scope 只决定"有没有条目"，不决定"要不要显示正则"）。 */
+    if (pack.kind === 'ywp-entry' && Array.isArray(pack.regexes) && pack.regexes.length) {
         const mineList = (() => {
             try { return mine && mine.preset ? (PM.getRegexList(mine.preset) || []).map(x => PM.normalizeRegexScript(x)) : []; } catch (e) { return []; }
         })();
@@ -8317,7 +8320,9 @@ function previewRows(pack, mine) {
                     { mine: old ? String(old.replaceString || '（空 = 删掉匹配到的部分）') : '（无）', next: String(reg.replaceString || '（空 = 删掉匹配到的部分）') }],
             });
         }
-        return rows;
+        /* ★W200：纯正则包 ⇒ 到此为止（没有条目可列）；**混装包（条目 + 正则）⇒ 继续往下**，
+           让条目也照常列出来（上面已经 push 的正则行保留在 rows 里）。 */
+        if (pack.scope === 'regex') return rows;
     }
     if (pack.kind === 'ywp-entry') {
         for (const e of (pack.entries || [])) {
@@ -9454,8 +9459,9 @@ function editRowOf(id) {
 function previewCardData() {
     const pack = buildPayload();
     const names = ((pack.kind === 'ywp-entry' && pack.entries) || []).map(e => (e.entry && e.entry.name) || '');
-    /* ★R9-i：正则包没有条目 —— 预览卡片的"含 N 条正则"按**正则条数**报（不然卡片会写"0 个条目"） */
-    const rxCount = (pack.scope === 'regex' && Array.isArray(pack.regexes)) ? pack.regexes.length : 0;
+    /* ★R9-i：正则包没有条目 —— 预览卡片的"含 N 条正则"按**正则条数**报（不然卡片会写"0 个条目"）
+       ★W200：混装包（条目 + 正则）也要报正则数 —— 原来这里同样只认 scope==='regex'，勾了正则也显示 0。 */
+    const rxCount = (Array.isArray(pack.regexes)) ? pack.regexes.length : 0;
     /* ★★U12（§BO-11/12）：**版本信息**（点「更新日期」要看到"这是第几版"）——
        编辑态（`S.editId`）那张卡在**本机账本**里（查找口径 = `editBanner` 那一份），它现在线上是第 `rev` 版；
        `/update` 每次把 `rev` +1 ⇒ **预览里显示的是"提交后"的版本号**，并多一行把两件事都说清（`revNote`）。
@@ -10745,7 +10751,7 @@ function regexPickerInPart(w) {
     if (!all.length) return '<div class="yws-dim" style="margin-top:6px">这份预设里没有正则</div>';
     const rows = all.map(r => {
         const nm = String((r.script && r.script.scriptName) || r.name || '（未命名正则）');
-        const on = picked.has(r.id);
+        const on = picked.has(String(r.id));   // ★W200：勾选存的是 String(id)，这里也要按字符串比
         const dis = !!(r.script && r.script.disabled);
         /* ★W193（作者：正则区连点几次选不中）—— **别用 .yws-prow**：那个类会被'拖刷涂选'接管（按下 preventDefault、改成拖刷），
            点一下常常既没勾上、又把后面的 click 吞掉。正则区用自己的类，点击走普通 click。 */
@@ -10948,7 +10954,7 @@ function pickRegexListHtml(w, shown) {
        ⑤"**没启用的项半透明**" → 关着的行挂 `.yws-off`（透明度与 W10 那套同一个口径）；
        ⑥"列表里**不要再写预览内容**" → 那截 `yws-find`（查找式前 40 字）删掉 —— 让人点进去看（①）。 */
     return shown.map(r => {
-        const on = picked.has(r.id);
+        const on = picked.has(String(r.id));   // ★W200：勾选存的是 String(id)，这里也要按字符串比
         const s = r.script || {};
         const en = rxOnOf(w, r);
         const open = String((w && w.ropen) || '') === String(r.id);
@@ -11250,9 +11256,13 @@ function buildPayload() {
     /* ★W191（作者）：部分上传里勾了正则 ⇒ 同一个包里带上（后端 PACK_KEYS['ywp-entry'] 本就放行 regexes/regexOrder）。
      *  形状与 scope:'regex' 那档逐字段相同（读侧 regexOpOf 同一把尺），只是多带 entries。 */
     try {
-        const rxWant = new Set(w.pickedRegex || []);
+        const rxWant = new Set(S.wiz.pickedRegex || []);
         const rxAll = (S.w && S.w.regexes) || [];
-        const pickedRx = rxAll.filter(r => rxWant.has(r.id));
+        /* ★W200（作者报：勾了 4 条正则上传，预览/缝入里一条都没有）—— **真 BUG**：
+           勾选时存的是 `String(id)`（见 `w-rxpick` / `w-rxall`），而这里原来用 `rxWant.has(r.id)`
+           去比 `r.id`（ST 的正则 id 常是**数字**）⇒ 一条都匹配不上 ⇒ `pickedRx` 恒为空 ⇒ 正则永远进不了包。
+           统一按**字符串**比（两边都 String()）。 */
+        const pickedRx = rxAll.filter(r => rxWant.has(String(r.id)));
         if (pickedRx.length) {
             out.regexes = pickedRx.map(r => {
                 const i = rxAll.findIndex(x => String(x.id) === String(r.id));
