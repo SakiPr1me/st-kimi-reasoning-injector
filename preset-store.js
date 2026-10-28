@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.91';
+const VERSION = '2.2.92';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -9182,6 +9182,11 @@ async function startEdit(id) {
            ★改前最后那一档写的是 `listPresetNames()[0]`（列表第一份）—— 与下面那条 W42 的根因同一处。 */
         srcName: (pack.src && pack.src.presetName) || (pack.baseName || '') || wizSrcDefault(),
         baseName: pack.baseName || '', picked: [], pickedRegex: [], q: '',
+        /* ★★W219-b：这张卡当初是不是**从「官方基准（云端）」那一组**选的官方旧版 —— 从包里带回来。
+           没有它的话：编辑时 srcName 与 baseName 同名（本机只有一份文件）⇒ 那条"同名不比"的防线
+           把整排标签全挡掉（作者 2026-10-28 报的正是这个）。
+           ★老包（没这一位）⇒ `undefined` ⇒ 走原来那条判断，行为零变化。 */
+        baseIsCloud: pack.baseIsCloud === true, baseCloudPreset: null,
         /* ★★E1：编辑一张已声明过基准的卡 ⇒ 把声明**照原样带回来**（不预填 = 这次更新会**静默丢掉**它）；
            `buildPayload` 里另有一道"这台后端支不支持"的闸（老后端不带，见 `baseVerOk()`）。 */
         baseVersion: baseVerOf(pack.baseVersion),
@@ -11530,6 +11535,22 @@ function buildPayload() {
         return { mode: 'new', entry: Object.assign({ name: e.name, content: e.text }, stFields(e.prompt, e.enabled)), place };
     });
     const out = { kind: 'ywp-entry', v: 1, title, why: whyRaw, author, scope, entries, src: { presetName: w.srcName, presetFingerprint: null } };
+    /* ★★W219（作者 2026-10-28："修改已经上传的内容的时候，选择条目里没有那些标识"）——
+       真因：**包里从来不带 `baseName`**，而「编辑并更新」是从包里的 `pack.baseName` 还原「官方旧版」的
+       （见 `startEdit()` 的 `baseName: pack.baseName || ''`）⇒ 那条永远是空串 ⇒ `S.w.base` 为 null
+       ⇒ `changeTagOf()` 一开头就 `if (!base) return { t: '' }` ⇒ **编辑时整排标签全空**。
+       （新上传时你在界面上选了「官方旧版」，`w.baseName` 是有的、标签正常；一进编辑就没了 —— 作者看到的就是这个。）
+       修：把这次用的「官方旧版」名字**写进包**，编辑时就能原样还原。
+       ★为什么写在这里而不是 `src` 里：`baseName` 是**包的一级字段**（服务端 `/list` 卡片视图也在读它，
+         见 `cardOf()` 的 `baseName: p.baseName || ''`）—— 与服务端既有口径对齐，不新造字段。
+       ★只在确实选过时写（空串不写），老包形状逐字节不变。 */
+    if (String(w.baseName || '')) out.baseName = String(w.baseName);
+    /* ★★W219-b（作者 2026-10-28 同一条的**另一半**）：把"这次是从云端那组选的官方旧版"也记进包。
+       为什么需要：编辑那张卡时 `srcName`（我挑条目的那份）与 `baseName`（官方旧版）**往往同名**
+       —— 本机只有一份文件，`loadWizardPreset` 那条"同名就不比"的防线会把标签全部挡掉，
+       而这恰恰是作者报的场景。记下这一位 ⇒ 编辑时能走"跟**云端真正的官方旧版**比"那条路（W217 的行为）。
+       ★只在确实从云端选过时才写；空/假 ⇒ 键不存在，老包形状逐字节不变。 */
+    if (w.baseIsCloud === true) out.baseIsCloud = true;
     /* ★W191（作者）：部分上传里勾了正则 ⇒ 同一个包里带上（后端 PACK_KEYS['ywp-entry'] 本就放行 regexes/regexOrder）。
      *  形状与 scope:'regex' 那档逐字段相同（读侧 regexOpOf 同一把尺），只是多带 entries。 */
     try {
