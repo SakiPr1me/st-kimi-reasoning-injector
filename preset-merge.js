@@ -547,7 +547,16 @@ export function diffLines(a, b, { maxCells = 400000 } = {}) {
  * 这样界面呈现的就是"差异本身"，用户把每一处不同点完，这一条就拼好了（顺序天然就是 diff 的顺序）。
  */
 export function diffBlocks(a, b, opts) {
-    const lines = diffLines(a, b, opts);
+    /* ★W195（作者报：明明是自己这份预设上传的，预览却显示「改这条 / 旧（你那份里没有这段）/ 新（这段会被去掉）」）——
+       ST 写盘与上传是两条不同的序列化路径，正文末尾多一个换行 / 多一点空白就会被行级 diff 判成"有一处改动"，
+       而那一处两侧渲染出来都是空行 ⇒ 界面正好显示成"旧没有这段 / 新这段会被去掉"。
+       ⇒ 进 diff 之前两侧先过 `normalizeText()`（去首尾空白、压掉行尾空格、清零宽字符）：
+         规范化后完全一致 ⇒ 没有任何变化块（调用方一律得到"一字不差"）；不一致才 diff 规范化后的文本
+         （红蓝里也不会再出现纯空白的噪音块）。★所有调用方（商店预览 / 更新器红蓝 / 合二为一）自动受益。 */
+    const na = normalizeText(String(a ?? ''));
+    const nb = normalizeText(String(b ?? ''));
+    if (na === nb) return [];
+    const lines = diffLines(na, nb, opts);
     const blocks = [];
     let cur = null;
     for (const l of lines) {

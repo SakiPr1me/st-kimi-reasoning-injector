@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.73';
+const VERSION = '2.2.74';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.73';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.73';
+const BUILD = 'v2.2.74';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -8217,9 +8217,18 @@ function mineIndex() {
     if (!S.target) return null;
     try { return { name: S.target, idx: PM.indexPreset(readPreset(S.target)) }; } catch (e) { return null; }
 }
-/** 两边正文按行比出"哪几处不一样"：只留**变化块**（红/蓝各一组），一样的行不占地方 */
+/** 两边正文按行比出"哪几处不一样"：只留**变化块**（红/蓝各一组），一样的行不占地方
+ *  ★W195（作者报：明明是我自己这份预设上传的，预览却显示「改这条 / 旧（你那份里没有这段）/ 新（这段会被去掉）」）——
+ *   根因：这里拿**原始正文**做行级 diff，而 ST 写盘与上传走两条不同的序列化路径，
+ *   末尾多一个换行/多几个空格就会被判成"有一处改动"，而且那一处两侧渲染出来都是空行
+ *   ⇒ 界面上正好显示成"旧：没有这段 / 新：这段会被去掉"。
+ *   ⇒ 比较前两侧先过 `PM.normalizeText()`（去首尾空白、压行尾空格）：
+ *     规范化后一致 ⇒ 直接返回 0 处；不一致时才用**规范化后的文本**做 diff（红蓝里不再出现纯空白噪音）。 */
 function changeBlocks(mineTxt, nextTxt, maxBlocks) {
-    const blocks = PM.diffBlocks(String(mineTxt ?? ''), String(nextTxt ?? ''));
+    const nm = PM.normalizeText(String(mineTxt ?? ''));
+    const nn = PM.normalizeText(String(nextTxt ?? ''));
+    if (nm === nn) return { blocks: [], more: 0, total: 0 };
+    const blocks = PM.diffBlocks(nm, nn);
     const chg = blocks.filter(b => b.changed).map(b => ({ mine: b.mine.join('\n'), next: b.next.join('\n') }));
     return { blocks: chg.slice(0, maxBlocks), more: Math.max(0, chg.length - maxBlocks), total: chg.length };
 }
@@ -9696,6 +9705,11 @@ function previewTargetDefault() {
     const w = S.wiz || {};
     const src = String(w.srcName || '');
     const names = listPresetNames();
+    /* ★W195（作者报：预览里明明我本机有这个条目却显示"新增"，另有一份同名/同版本预设时尤其明显）——
+       预览要对比的"你那份"必须**就是上传时选的那一份**（w.srcName），而不是按版本号猜出来的那份。
+       以前这里先走"云端基准/自动判定"，本机存在两份同版本（或同名带尾标）时会比错人家伙 ⇒ 条目按名字配不上 ⇒ 全判新增。
+       ⇒ 现在：源预设还在本机 ⇒ 直接用它（这就是"你上传的这份"）；它不在了才走下面那套基准判定。 */
+    if (src && names.includes(src)) return src;
     /* ★AR4 ④：第一步选的「官方旧版」优先（它跟源不是同一份；`loadWizardPreset` 只认
        `baseName !== srcName` 的那种，这里再兜一道"本机确实有这份预设"）。 */
     const base = String(w.baseName || '');
