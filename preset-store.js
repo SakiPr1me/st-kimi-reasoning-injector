@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.90';
+const VERSION = '2.2.91';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -8330,9 +8330,32 @@ function previewRows(pack, mine) {
                         pairs: [{ mine: '（你的预设里没有这一条）', next: nextTxt }] });
                 } else {
                     const d = changeBlocks(cur.text, nextTxt, MAXB);
-                    add({ key: 'p:' + nm, name: nm, tag: '改变', cls: 'yws-tag-patch',
-                        stat: d.total ? '有 ' + numOf(d.total) + ' 处不一样' : '',
-                        pairs: d.blocks, more: d.more });
+                    /* ★★W218（作者 2026-10-28 报："明明跟目前的预设相比**实质上没变化**（就是从本预设上传的），
+                       商店里展开预览写着「改变」，可我点开它又写着**内容无实质变化**"）——
+                       真因：这一支原来**无条件**标「改变」：
+                         · 上游 `buildPayload()` 在"跟官方旧版有差异"时一律把条目写成 `mode:'patch'`（带 base/next），
+                           而从自己预设上传时 base 与 next **往往逐字相同**；
+                         · 于是折行看到 mode==='patch' 就盖「改变」，而点开详情走的是**真内核**
+                           （`analyze()` → `STATUS.SAME`）⇒ 说"没实质变化"。两套尺子、两个结论。
+                       ⇒ 现在**折行也看差异块**（`d.total`）：有差异才是「改变」，没差异就按条目侧那一套继续判
+                         开关（打开了/关闭了）、再退「一致」—— 与详情页、与商店列表、与缝入侧同一把尺。
+                       ★"你的预设里没有这条"那一支（!cur）保持原样：那时确实无处可比，说「改变」不算错。 */
+                    const enWantP = (e.entry && typeof e.entry.enabled === 'boolean') ? e.entry.enabled : null;
+                    const enMineP = (cur.enabled === null || cur.enabled === undefined) ? null : !!cur.enabled;
+                    const enDiffP = (enWantP !== null && enMineP !== null && enWantP !== enMineP);
+                    if (!d.total) {
+                        if (enDiffP) {
+                            add({ key: 'p:' + nm, name: nm, tag: (enWantP ? '打开了' : '关闭了'),
+                                cls: (enWantP ? 'yws-tag-on' : 'yws-tag-off'), stat: '', pairs: [] });
+                        } else {
+                            add({ key: 'p:' + nm, name: nm, tag: '一致', cls: 'yws-tag-same', stat: '', pairs: [] });
+                        }
+                    } else {
+                        add({ key: 'p:' + nm, name: nm, tag: (enDiffP ? (enWantP ? '打开了' : '关闭了') : '改变'),
+                            cls: (enDiffP ? (enWantP ? 'yws-tag-on' : 'yws-tag-off') : 'yws-tag-patch'),
+                            stat: '有 ' + numOf(d.total) + ' 处不一样',
+                            pairs: d.blocks, more: d.more });
+                    }
                 }
             } else {
                 const nextTxt = String((e.entry && e.entry.content) || '');
@@ -9404,6 +9427,7 @@ function loadWizardPreset() {
     } catch (e) { S.w.err = '读不到「' + w.srcName + '」：' + e.message; }
     // 对照预设（可选）：拿它算出"旧版"（base），这样对方能逐处挑
     S.w.base = null;
+    S.w.basePreset = null;      // ★W218：base 的**原文**（内核 indexPreset 不给 regexes，正则行要靠它）
     /* ★★W217（作者 2026-10-28 报：**「从哪份挑」和「官方旧版」选了同名的两份时，下面条目后面就不显示变化**）
        —— 真因就在这一行：原来是 `w.baseName && w.baseName !== w.srcName`。
        ★为什么当初写这个判断：同名时 `readPreset()` 读回来的是**同一份文件** ⇒ 自己跟自己比，永远"没动过"、
@@ -9422,6 +9446,10 @@ function loadWizardPreset() {
                还没取到（首次渲染/离线）就退回本机同名那份 —— 至少比"什么都没有"强，而且不会白屏。 */
             const src = (w.baseIsCloud && w.baseCloudPreset) ? w.baseCloudPreset : readPreset(w.baseName);
             S.w.base = PM.indexPreset(src);
+            /* ★★W218：**把 base 的原文也留一份** —— 内核 `indexPreset()` 只给 entries，**不给 regexes**，
+               而上传界面的正则行要靠"跟官方旧版里同名那条比开关/正文"才画得出「打开了 / 关闭了」。
+               `PM.getRegexList(preset)` 需要 preset 原文，所以在这里存一次（纯内存、只读）。 */
+            S.w.basePreset = src;
         } catch (e) { /* 忽略 */ }
     }
 }
@@ -10956,11 +10984,42 @@ function regexPickerInPart(w) {
         const nm = String((r.script && r.script.scriptName) || r.name || '（未命名正则）');
         const on = picked.has(String(r.id));   // ★W200：勾选存的是 String(id)，这里也要按字符串比
         const dis = !!(r.script && r.script.disabled);
+        /* ★★W218（作者 2026-10-28 报："对于正则，上传部分条目时里面并没有和上面的条目一样写着
+           打开了 关闭了…之类的"）—— 真因：条目行有 `changeTagOf()` 那套标签，**正则行只有「（关着）」三个字**，
+           两套完全不同的视觉。现在给正则行补**同一套**标签（同一把尺 = `changeTagOf` 判开关/正文的口径）：
+             · 跟「官方旧版」里同名那条比：旧版没有 ⇒「新增」；开关不同 ⇒「打开了 / 关闭了」；
+               正文不同 ⇒「改写」；都一样 ⇒ 不印（与条目行一致：没动过就不印）。
+             · 没填「官方旧版」⇒ 不印标签（与条目行同一条纪律，绝不猜）。
+           ★`dis` 那个「（关着）」**保留**：它说的是"这条正则现在是关的"（与旧版比不比的结论无关），
+             两者可以同时出现（例：旧版也关着 ⇒ 标签空、但有「（关着）」）。 */
+        const rtag = (function () {
+            try {
+                const base = S.w.base;
+                if (!base) return null;
+                /* ★★重要（W218 踩到）：内核 `indexPreset()` 的返回值里**只有 entries / orderList**，
+                   **没有 regexes** —— 第一次写这段时用了 `base.regexes`，恒 undefined ⇒ 每条都判成「新增」。
+                   正则必须走内核对正则的唯一读口 `PM.getRegexList(那份 preset)`。
+                   ★那份 preset 从哪来：`S.w.basePreset`（W218 起，`loadWizardPreset` 建 base 时顺手存一份原文），
+                     老路径没存就退回按名字重读一次（纯只读、失败就静默不标）。 */
+                const basePreset = S.w.basePreset
+                    || (S.wiz && S.wiz.baseName ? readPreset(S.wiz.baseName) : null);
+                if (!basePreset) return null;
+                const blist = (PM.getRegexList(basePreset) || []).map(x => PM.normalizeRegexScript(x));
+                const old = blist.find(x => PM.normalizeName(String(x.scriptName || '')) === PM.normalizeName(nm)) || null;
+                if (!old) return { t: '新增', cls: 'yws-st-new' };
+                const oldDis = (old.disabled === true);
+                if (oldDis !== dis) return { t: dis ? '关闭了' : '打开了', cls: dis ? 'yws-st-off' : 'yws-st-on' };
+                let bodySame = false;
+                try { bodySame = PM.regexBodySig(old) === PM.regexBodySig(r.script || {}); } catch (e) { bodySame = false; }
+                return bodySame ? null : { t: '改写', cls: 'yws-st-chg' };
+            } catch (e) { return null; }   // 判不出来就不印（宁可不标，绝不误标）
+        })();
         /* ★W193（作者：正则区连点几次选不中）—— **别用 .yws-prow**：那个类会被'拖刷涂选'接管（按下 preventDefault、改成拖刷），
            点一下常常既没勾上、又把后面的 click 吞掉。正则区用自己的类，点击走普通 click。 */
         return '<div class="yws-rxrow yws-prow-look" data-act="w-rxpick" data-id="' + esc(String(r.id)) + '" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--SmartThemeBorderColor,rgba(128,128,128,.2))">' +
             '<input type="checkbox" ' + (on ? 'checked' : '') + ' style="pointer-events:none;accent-color:var(--SmartThemeQuoteColor);" />' +
             '<span class="yws-pname">' + esc(nm) + '</span>' +
+            (rtag ? '<span class="yws-ptag ' + rtag.cls + '">' + esc(rtag.t) + '</span>' : '') +
             (dis ? '<span class="yws-dim">（关着）</span>' : '') + '</div>';
     }).join('');
     return bar + '<div class="yws-plist" style="margin-top:4px">' + rows + '</div>';
