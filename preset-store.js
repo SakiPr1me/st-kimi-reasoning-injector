@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.89';
+const VERSION = '2.2.90';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -9088,7 +9088,7 @@ function startUpload(opts) {
        `srcFallback` = 源预设被静默换过时记一笔（见 loadWizardPreset / srcFallbackHtml）。 */
     /* ★W22（W2b）：draft 里多了 playText 这一位（第四档「小剧场」的正文；初值显式给，别靠 undefined）。
        ★★W42（派单②）：`srcName` 的初值走 `wizSrcDefault()` = **酒馆当前预设**（不再取 `listPresetNames()[0]`）。 */
-    S.wiz = { step: 1, scope: 'part', srcName: wizSrcDefault(), baseName: '', picked: [], pickedRegex: [], q: '', draft: { title: '', why: '', author: authorNameNow(), playText: '' }, result: null, dlg: null, updated: false, rxOn: {}, ropen: '', rxTry: {}, afterPick: {}, srcFallback: null };
+    S.wiz = { step: 1, scope: 'part', srcName: wizSrcDefault(), baseName: '', picked: [], pickedRegex: [], q: '', draft: { title: '', why: '', author: authorNameNow(), playText: '' }, result: null, dlg: null, updated: false, rxOn: {}, ropen: '', rxTry: {}, afterPick: {}, srcFallback: null, baseIsCloud: false, baseCloudPreset: null };
     S.wiz.baseVersion = '';
     /* ★★E1：顺手问一次官方基准清单（fire-and-forget：**失败一律静默**，只影响"云端那组渲染不渲染"） */
     void loadBaseList();
@@ -9404,8 +9404,25 @@ function loadWizardPreset() {
     } catch (e) { S.w.err = '读不到「' + w.srcName + '」：' + e.message; }
     // 对照预设（可选）：拿它算出"旧版"（base），这样对方能逐处挑
     S.w.base = null;
-    if (w.baseName && w.baseName !== w.srcName) {
-        try { S.w.base = PM.indexPreset(readPreset(w.baseName)); } catch (e) { /* 忽略 */ }
+    /* ★★W217（作者 2026-10-28 报：**「从哪份挑」和「官方旧版」选了同名的两份时，下面条目后面就不显示变化**）
+       —— 真因就在这一行：原来是 `w.baseName && w.baseName !== w.srcName`。
+       ★为什么当初写这个判断：同名时 `readPreset()` 读回来的是**同一份文件** ⇒ 自己跟自己比，永远"没动过"、
+         逐行标签全是空的，看起来像"坏了"。所以当时干脆不比。
+       ★为什么现在必须比：作者的真实场景正是**同名**——他本机那份叫 `余温V1008`（自己改过的），
+         而云端官方那一版也叫 `余温V1008`。他要的是"拿我这份跟**云端那份真正的官方旧版**比"。
+         `w.baseName !== w.srcName` 把这条路整个挡死了 ⇒ 他看到的永远是"没有变化"。
+       ★现在的口径（三档，`w.baseIsCloud` 由下拉那一支写）：
+         ① `w.baseIsCloud` = 用户从「官方基准（云端）」那组选的 ⇒ **一律比**（哪怕名字跟源预设一模一样）——
+            这时 base 的内容应当来自**云端那一版**，不是本机同名那份（见 `loadWizardPreset` 的取数分支）；
+         ② 名字不同 ⇒ 跟改前一模一样（本机读那份）；
+         ③ 名字相同**且不是从云端选的** ⇒ 仍然不比（原来那条"自己跟自己比"的毛病还在，不能放它进来）。 */
+    if (w.baseName && (w.baseIsCloud || w.baseName !== w.srcName)) {
+        try {
+            /* ★W217：从云端基准那组选的 ⇒ 用**云端那一版**的 preset（`S.w.baseCloudPreset`，由下拉分支异步取好）；
+               还没取到（首次渲染/离线）就退回本机同名那份 —— 至少比"什么都没有"强，而且不会白屏。 */
+            const src = (w.baseIsCloud && w.baseCloudPreset) ? w.baseCloudPreset : readPreset(w.baseName);
+            S.w.base = PM.indexPreset(src);
+        } catch (e) { /* 忽略 */ }
     }
 }
 /** ★§21 D13：版权提醒 —— 作者给了**新文案并指定位置**（第一步页面最上方、比"提交前"更靠前更醒目），
@@ -10333,7 +10350,13 @@ function baseBitsOf(preset) {
  *  ★清单没拿到 ⇒ **云端那组不渲染**（不许出现空组，plan §6.3【修正-查漏 6-5】）；
  *    清单拿到了但库里还是空的 ⇒ 也不渲染（同上，另给一句灰字说明，见 `baseCloudNoteHtml`）。 */
 function baseOptionsHtml(w) {
-    const locals = listPresetNames().filter(n => n !== w.srcName);
+    /* ★★W217（作者 2026-10-28）：本机组**不再排除**与源预设同名的那一份 —— 原来 `filter(n => n !== w.srcName)`
+       把"本机那份跟我正在挑的这份同名"整个藏起来，而作者的真场景恰好是**同名**（本机 `余温V1008` 是自己改的，
+       官方那一版也叫 `余温V1008`）。同名的那一项在标签后面加「（我的）」，与「假设用户预设」下拉同一套写法
+       （W206 立的），让用户一眼分清"这是我这台机器上的那份"。
+       隐藏同名还有一个副作用：本机组里"我现在挑的那份"被藏了，但**它确实是可选项**（人就是想拿它当坐标系）。 */
+    const locals = listPresetNames();
+    const cloudNames = new Set(baseItems().map(it => String(baseLocalNameOf(String(it.ver || '')) || '')).filter(Boolean));
     const cloud = baseItems().map(it => {
         const ver = String(it.ver || '');
         const title = String(it.title || '').trim();
@@ -10342,16 +10365,27 @@ function baseOptionsHtml(w) {
            「ver」 退到**机器侧**（option 的 value / baseVersion / KV 键 / 卡上的声明），界面上不再出现。
            ★名字空（老记录 / 没带 title）才退回显示 ver —— 那时总得有个能认的东西。 */
         const label = title || ver;
-        return '<option value="' + esc(ver) + '"' + (ver === w.baseVersion ? ' selected' : '') + '>' + esc(label) + '</option>';
+        /* ★W217：云端那组的选中态按「版本号」判（值就是版本号，本来就不会跟本机组撞）。 */
+        return '<option value="' + esc(ver) + '" data-base-src="cloud"' + (ver === w.baseVersion ? ' selected' : '') + '>' + esc(label) + '</option>';
     }).join('');
     /* 卡上声明的版本这次清单里没有（例：编辑一张写了 V0917 的老卡，而库里只有 V0811/V0824）——
        **照旧显示出来**（声明是卡自己的事实，不许静默丢掉）。 */
     const orphan = (String(w.baseVersion || '') && !baseItemOf(w.baseVersion))
-        ? '<option value="' + esc(String(w.baseVersion)) + '" selected>' + esc(String(w.baseVersion)) + '（清单里没有这一版）</option>' : '';
+        ? '<option value="' + esc(String(w.baseVersion)) + '" data-base-src="cloud" selected>' + esc(String(w.baseVersion)) + '（清单里没有这一版）</option>' : '';
+    /* ★★W217（作者 2026-10-28）：本机组**两项改动**
+         ① 不再排除同名（见函数头注释）；
+         ② 与云端某一版同名的那份，标签后面加「（我的）」—— 与「假设用户预设」下拉同一套写法（W206 立的），
+            这样「官方基准（云端）· 余温V1008」与「本机已装 · 余温V1008（我的）」一眼能分清，
+            用户就知道上面那个是**云端真正的官方旧版**、下面这个是自己机器上那份。
+       ★选中态仍按名字判（`n === w.baseName`）——本机组的值就是预设名，与改前一个字没变。 */
+    const localOpts = locals.map(n => {
+        const dup = cloudNames.has(n);
+        const label = dup ? (n + '（我的）') : n;
+        return '<option value="' + esc(n) + '" data-base-src="local"' + ((n === w.baseName && !w.baseVersion) ? ' selected' : '') + '>' + esc(label) + '</option>';
+    }).join('');
     return '<option value="">（你的条目基于哪个官方版本？不填也行）</option>' +
         ((cloud || orphan) ? '<optgroup label="官方基准（云端）" data-cloud="1">' + cloud + orphan + '</optgroup>' : '') +
-        (locals.length ? '<optgroup label="本机已装">' + locals.map(n =>
-            '<option value="' + esc(n) + '"' + ((n === w.baseName && !w.baseVersion) ? ' selected' : '') + '>' + esc(n) + '</option>').join('') + '</optgroup>' : '');
+        (locals.length ? '<optgroup label="本机已装">' + localOpts + '</optgroup>' : '');
 }
 /** 「官方基准（云端）」那组的**灰字说明**（plan §6.3【修正-查漏 6-5】要的那一句；只在第一步、部分上传那档画）：
  *   · 已经选了一版 ⇒ 如实回显"提交时会写明基于哪一版"（用户点完能看见自己选了什么）；
@@ -10395,8 +10429,15 @@ function viewUpload() {
                    都不渲染（play-ui.md §1.1 点名要删的那几样之一）。其余档一个字没改。
                    ★★W86：许愿档同款（`isTextScope` 把这两档一次说清）。 */
                 (isTextScope(w.scope) ? '' : (w.scope === 'full' ? fullPresetPicker(names) :
+                    /* ★★W217（作者 2026-10-28）：**「从哪份挑」里，跟官方基准同名的本机预设加「（我的）」** ——
+                       作者原话："特别是从哪份挑 如果同名后面就加上（我的）"。
+                       口径与「假设用户预设」下拉、「官方旧版」下拉**同一套写法**（W206/W217）：只在**确实重名**时加，
+                       纯显示、`value` 仍是预设名（选中逻辑一个字没变）。 */
                     '<label class="yws-lbl yws-lbl-in yws-picklab">从哪份挑<select class="yws-sel" data-in="w-src">' +
-                        names.map(n => '<option value="' + esc(n) + '"' + (n === w.srcName ? ' selected' : '') + '>' + esc(n) + '</option>').join('') + '</select></label>' +
+                        names.map(n => {
+                            const dup = baseItems().some(it => String(baseLocalNameOf(String(it.ver || '')) || '') === n);
+                            return '<option value="' + esc(n) + '"' + (n === w.srcName ? ' selected' : '') + '>' + esc(dup ? (n + '（我的）') : n) + '</option>';
+                        }).join('') + '</select></label>' +
                     /* ★R9-i：正则那一档不填「官方旧版」（正则没有"新旧版逐处挑"那套基线；包是 mode:'new' 整条带过去） */
                     (w.scope === 'regex' ? '' :
                     /* ★W9（作者第五批反馈）：下拉第一项的**字面照抄作者原话** ——
@@ -10968,6 +11009,21 @@ function changeTagOf(w, e) {
     for (const x of base.entries) { pool.set(String(x.identifier), x); pool.set('n:' + PM.normalizeName(x.name), x); }
     const old = pool.get(String(e.identifier)) || pool.get('n:' + PM.normalizeName(e.name)) || null;
     if (!old) return { t: '新增', cls: 'yws-st-new', why: '官方旧版里没有这条' };
+    /* ★★W217（作者 2026-10-28）：**开关变化也要显示** —— 原来看的只有正文，开关动了这里一个字都不说。
+       作者原话："展现出 新增 修改 打开了 关闭了"。口径与商店预览那一侧**完全同一把尺**
+       （`previewRows()` 里 `enWant/enMine` 那一段，W206 立的）：
+         · 开关不同 ⇒ 优先标「打开了 / 关闭了」（开关比正文更显眼，也更好理解）；
+         · 开关相同再看正文：一样 ⇒ 不印标签（= 没动过），不一样 ⇒ 改写。
+       ★`enabled` 三态：`true/false` = 确定；`null` = 这条不在任何顺序表里（内核 `indexPreset` 的语义）
+         ⇒ 这种没法判开关，只要一边是 null 就跳过开关那一档、只看正文（宁可少标，绝不误标）。 */
+    const enMine = (typeof e.enabled === 'boolean') ? e.enabled : null;
+    const enWant = (typeof old.enabled === 'boolean') ? old.enabled : null;
+    const swDiff = (enMine !== null && enWant !== null && enMine !== enWant);
+    if (swDiff) {
+        return enMine
+            ? { t: '打开了', cls: 'yws-st-on', why: '官方旧版里这条是关着的，你这份打开了' }
+            : { t: '关闭了', cls: 'yws-st-off', why: '官方旧版里这条是开着的，你这份关掉了' };
+    }
     if (PM.normalizeText(old.text) === PM.normalizeText(e.text)) return { t: '', cls: '', why: '跟官方旧版一字不差（没动过 → 行上不印标签，省得一行一个"没动过"）' };
     return { t: '改写', cls: 'yws-st-chg', why: '跟官方旧版不一样' };
 }
@@ -14482,11 +14538,35 @@ function onChange(m, ev) {
        ★`baseVerOk()` = 这台后端答过 `/base/list` 200（= 新后端）：老后端收到 `baseVersion` 会 **400** ⇒ 一律不带。 */
     else if (inp === 'w-base') {
         const v = String(t.value || '');
+        /* ★★W217（作者 2026-10-28）：**这一格现在要记住"从哪一组选的"** —— 云端组选出来的那一项，
+           哪怕名字/版本跟源预设同名，也必须**跟云端那一版真比**（原来 `baseName !== srcName` 把同名整个挡死）。
+           判据 = option 上的 `data-base-src`（cloud / local），比按值猜版本号形状更准。 */
+        const pickedOpt = (t.selectedOptions && t.selectedOptions[0]) || null;
+        const srcKind = String((pickedOpt && pickedOpt.getAttribute && pickedOpt.getAttribute('data-base-src')) || '');
         S.wiz.afterPick = {};
+        S.wiz.baseIsCloud = (srcKind === 'cloud');
+        S.wiz.baseCloudPreset = null;                    // 换了一格 ⇒ 旧的云端内容立刻作废（不许拿去比）
         if (baseVerOf(v) === v.toUpperCase() && v) {              // 云端组 / 回显项（值就是版本号）
             S.wiz.baseVersion = baseVerOf(v);
             S.wiz.baseName = baseLocalNameOf(S.wiz.baseVersion);  // 本机有就顺手当坐标系；没有 = 空串（不撒谎）
             if (!S.wiz.baseName) warn('本机没有「' + S.wiz.baseVersion + '」这一版：只声明版本，落点得手动指定');
+            /* ★W217：**异步把云端那一版的整份拉下来**（`GET /base/pack?ver=`），拿到后用它当"官方旧版"的坐标系。
+               拉不到（离线 / 老后端 / 这版没进基准库）⇒ 保持 null，`loadWizardPreset` 会退回本机同名那份
+               —— 界面照常可用，绝不因为这一发网络失败就卡住上传（与全仓库同一条降级纪律）。 */
+            (function () {
+                const wantVer = S.wiz.baseVersion;
+                try {
+                    api.basePack(wantVer).then(r => {
+                        if (!S.wiz || S.wiz.baseVersion !== wantVer) return;      // 期间又换了一格 ⇒ 丢弃
+                        const preset = (r && r.preset) ? r.preset : (r && r.pack && r.pack.preset ? r.pack.preset : null);
+                        if (!preset || !Array.isArray(preset.prompts)) return;
+                        S.wiz.baseCloudPreset = preset;
+                        loadWizardPreset();                                        // 用云端那一版重算 base
+                        if (S.prev && S.prev.open && !S.prev.pick) computePreview();
+                        renderAll();
+                    }).catch(() => { /* 静默降级：退回本机那份 */ });
+                } catch (e) { /* 同上 */ }
+            })();
         } else {                                                  // 本机组（值 = 预设名，语义与今天一致）
             S.wiz.baseName = v;
             const cv = baseVerOf(v);

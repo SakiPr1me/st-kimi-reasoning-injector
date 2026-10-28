@@ -1602,6 +1602,13 @@ body[data-theme-mode="dark"] .yws-tag-off, .dark .yws-tag-off { background: colo
 .yws-ptag.yws-st-new { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-add) 48%, transparent); background: color-mix(in srgb, var(--yws-dl-add) 15%, transparent); }
 .yws-ptag.yws-st-chg { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-old) 46%, transparent); background: color-mix(in srgb, var(--yws-dl-old) 14%, transparent); }
 .yws-ptag.yws-st-same { color: var(--yws-txt-2); background: transparent; }
+/* ★★W217（作者 2026-10-28）：**开关变化的气泡**（「打开了 / 关闭了」）—— 与商店预览那两颗
+   （`.yws-tag-on` / `.yws-tag-off`）**同一个色相**，两处看起来是同一件事。
+   色值全部走 `color-mix` + 那两个硬编码色相（就这两处色相，其余零硬编码 —— 与 W209 那条纪律一致）。 */
+.yws-ptag.yws-st-on { color: var(--yws-txt); border-color: color-mix(in srgb, #3fa45f 62%, var(--SmartThemeBorderColor, transparent)); background: color-mix(in srgb, #3fa45f 22%, transparent); font-weight: 700; }
+.yws-ptag.yws-st-off { color: var(--yws-txt); border-color: color-mix(in srgb, #b06a6a 58%, var(--SmartThemeBorderColor, transparent)); background: color-mix(in srgb, #b06a6a 20%, transparent); font-weight: 700; }
+body[data-theme-mode="dark"] .yws-ptag.yws-st-on, .dark .yws-ptag.yws-st-on { background: color-mix(in srgb, #4fbf74 26%, transparent); }
+body[data-theme-mode="dark"] .yws-ptag.yws-st-off, .dark .yws-ptag.yws-st-off { background: color-mix(in srgb, #cf8080 26%, transparent); }
 .yws-prow .yws-caret { width: 14px; height: 14px; }
 
 /* ---------------------------------------------------------------- 7b. ★条目详情弹窗（§17 D12） */
