@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.77';
+const VERSION = '2.2.78';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.77';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.77';
+const BUILD = 'v2.2.78';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -13937,22 +13937,38 @@ function onClick(m, ev) {
         }
         case 'w-rxpick': {
             /* ★W193（作者报：正则区每点一次就跳回最上面、连点几次选不中）—— 原来这里 renderAll() 整页重建，
-               列表被换成新元素 + 滚动回顶 ⇒ 下一次点击落在旧坐标上就打空。改成**就地更新**那一段。 */
+               列表被换成新元素 + 滚动回顶 ⇒ 下一次点击落在旧坐标上就打空。改成**就地更新**那一段。
+               ★W200b（作者报：勾了正则，**预览里看不到正则的变化**）—— 就地更新的代价是预览不刷新：
+               预览卡片用的是缓存（`S.prev.rows`，勾选那一刻之前算的）。所以勾完顺手重算预览
+               （`computePreview()` 只重算数据、`syncPreviewCardRows()` 就地换那一段，不动正则列表 DOM ⇒
+               不破坏 W193 那条"连点不跳"）。 */
             const rid = String(target.getAttribute('data-id') || '');
             const set = new Set(S.wiz.pickedRegex || []);
             if (set.has(rid)) set.delete(rid); else set.add(rid);
             S.wiz.pickedRegex = [...set];
             syncRegexPickUi(m, rid);
+            /* ★W200b：勾选后让预览跟上 —— 直接**重算数据**（computePreview 是纯只读的），
+               再让预览那一段就地换掉。不走 syncPreviewSoon：它要求 .yws-pv 已经在 DOM 里（第一步/第二步
+               的界面上不一定有），找不到就静默 return ⇒ 勾了正则预览纹丝不动（就是作者报的现象）。 */
+            try { if (S.prev && S.prev.open) { computePreview(); syncPreviewCardRows(); } } catch (e) { }
             break;
         }
         case 'w-rxall': {
             S.wiz.pickedRegex = ((S.w && S.w.regexes) || []).map(r => String(r.id));
             syncRegexPickUi(m, null);
+            /* ★W200b：勾选后让预览跟上 —— 直接**重算数据**（computePreview 是纯只读的），
+               再让预览那一段就地换掉。不走 syncPreviewSoon：它要求 .yws-pv 已经在 DOM 里（第一步/第二步
+               的界面上不一定有），找不到就静默 return ⇒ 勾了正则预览纹丝不动（就是作者报的现象）。 */
+            try { if (S.prev && S.prev.open) { computePreview(); syncPreviewCardRows(); } } catch (e) { }
             break;
         }
         case 'w-rxnone': {
             S.wiz.pickedRegex = [];
             syncRegexPickUi(m, null);
+            /* ★W200b：勾选后让预览跟上 —— 直接**重算数据**（computePreview 是纯只读的），
+               再让预览那一段就地换掉。不走 syncPreviewSoon：它要求 .yws-pv 已经在 DOM 里（第一步/第二步
+               的界面上不一定有），找不到就静默 return ⇒ 勾了正则预览纹丝不动（就是作者报的现象）。 */
+            try { if (S.prev && S.prev.open) { computePreview(); syncPreviewCardRows(); } } catch (e) { }
             break;
         }
         /* ★★U15（作者拍板 §BV-1 · 2026-09-22 深夜）：**「只看打开的」那颗筛选开关** —— 点一次拨过去、
