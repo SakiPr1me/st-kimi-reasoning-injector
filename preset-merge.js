@@ -77,20 +77,24 @@ export function entryText(p) {
 
 /** 条目"内容指纹"：正文 + 角色 + 注入位置/深度（决定"算不算改了"）。
  *  入参必须是**原始 prompt 对象**（prompts[] 里的那一项）；条目对象请用 entryFp()。 */
+/** ★W189：按酒馆默认值归一（缺键 == 默认，别再当成"改了"）：role 缺=system；位置缺=0(相对)；
+ *  深度缺=4；**绝对注入(position≠0)时深度本来就不生效** ⇒ 指纹里置 null（"深度2 vs 缺键"不算差异）。 */
+function fpMeta(role, pos, depth) {
+    const num = (v, d) => { if (v == null || v === '') return d; const n = Number(v); return Number.isFinite(n) ? n : d; };
+    const r = (typeof role === 'string' && role) ? role : 'system';
+    const pn = num(pos, 0);
+    const dn = pn === 0 ? num(depth, 4) : null;
+    return [r, pn, dn];
+}
 export function entryFingerprint(p) {
     if (!p) return '';
-    return JSON.stringify([
-        entryText(p),
-        p.role ?? null,
-        p.injection_position ?? null,
-        p.injection_depth ?? null,
-    ]);
+    return JSON.stringify([entryText(p), ...fpMeta(p.role, p.injection_position, p.injection_depth)]);
 }
 
 /** 同上，但入参是 indexPreset 产出的**条目对象**（字段名不同，别再传错） */
 export function entryFp(e) {
     if (!e) return '';
-    return JSON.stringify([e.text ?? '', e.role ?? null, e.pos ?? null, e.depth ?? null]);
+    return JSON.stringify([e.text ?? '', ...fpMeta(e.role, e.pos, e.depth)]);   // ★W189：同一份默认值口径
 }
 
 /** 正文规范化（配对/空条目判断用）：去零宽、行尾空白、首尾空白 */

@@ -5712,9 +5712,17 @@ function itemHtml(it) {
         if (!fieldDiff) return '';
         const L = [];
         const pair = (label, a, b) => { if (String(a ?? '') !== String(b ?? '')) L.push(label + ' ' + (a ?? '（无）') + ' → ' + (b ?? '（无）')); };
-        pair('注入深度', it.mine.depth, it.next.depth);
-        pair('注入位置', it.mine.pos, it.next.pos);
-        pair('角色', it.mine.role, it.next.role);
+        /* ★W189（作者报：明明没改动却显示"注入深度4→（无）·注入位置0→（无）"）：
+           缺键与默认值在酒馆里等价（位置缺=0 相对、深度缺=4、角色缺=system），比对前先归一；
+           绝对注入（位置≠0）时深度不生效 ⇒ 两侧都不参与比较。 */
+        const numN = (v, d) => { if (v == null || v === '') return d; const n = Number(v); return Number.isFinite(n) ? n : d; };
+        const roleN = (v) => (typeof v === 'string' && v) ? v : 'system';
+        const posM = numN(it.mine.pos, 0), posN = numN(it.next.pos, 0);
+        const depM = posM === 0 ? numN(it.mine.depth, 4) : null;
+        const depN = posN === 0 ? numN(it.next.depth, 4) : null;
+        pair('注入深度', depM, depN);
+        pair('注入位置', posM, posN);
+        pair('角色', roleN(it.mine.role), roleN(it.next.role));
         return L.join(' · ');
     })();
     if (it.next && it.mine) {
