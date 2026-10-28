@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.74';
+const VERSION = '2.2.75';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.74';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.74';
+const BUILD = 'v2.2.75';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -8235,16 +8235,38 @@ function changeBlocks(mineTxt, nextTxt, maxBlocks) {
 const LINE_CAP = 400;                       // 每一处差异最多显示多少字（超了截断，到更新器里看全部）
 /** 红/蓝两组：**红 = 你当前预设里的旧文 / 蓝 = 这条带来的新文**（作者点名要的配色，见 §17 B7）
  *  ★一侧为空时**不留空白行**（截图里发现：新增/删除那种单侧改动会渲染成一格空底，看不出发生了什么）——
- *  照实写一句"这段原来没有 / 这段会被去掉"。 */
+ *  照实写一句"这段原来没有 / 这段会被去掉"。
+ *  ★W196（作者问："如果我是两段文字之间加了空行呢？"）：**空行本身也是一种改动**，但它渲染出来两侧都是空的
+ *    （旧侧没有行、新侧只有一个空字符串）⇒ 上一版会显示成"旧：你那份里没有这段 / 新：这段会被去掉"，
+ *    让人以为整段被删了。这里单独认出来，用人话说清楚是"加了空行 / 删了空行 / 空行数变了"。 */
 function diffPairsHtml(pairs, more) {
     if (!pairs.length) return '<div class="yws-diffbox"><div class="yws-verdict yws-same">跟你的那份一字不差</div></div>';
+    /* 一条差异块是不是"只有空行变化"：两侧去掉空行后完全相同 */
+    const blankOnly = (p) => {
+        const a = String(p.mine ?? ''), b = String(p.next ?? '');
+        const sa = a.split('\n').filter(l => l.trim() !== '').join('\n');
+        const sb = b.split('\n').filter(l => l.trim() !== '').join('\n');
+        return sa === sb;                        // 去掉空行后一样 ⇒ 差的就是空行
+    };
+    const blankCount = (s) => String(s ?? '').split('\n').filter(l => l.trim() === '').length;
+    const blankWord = (p) => {
+        const a = blankCount(p.mine), b = blankCount(p.next);
+        if (a === b) return '空行位置变了';
+        return a < b ? '这里多了 ' + (b - a) + ' 个空行' : '这里少了 ' + (a - b) + ' 个空行';
+    };
     const side = (cls, k, txt, empty) => '<div class="yws-dl ' + cls + '"><span class="yws-dl-k">' + k + '</span><span class="yws-dl-t' +
         (txt ? '' : ' yws-dl-none') + '">' + esc(txt || empty) + '</span></div>';
-    return '<div class="yws-diffbox">' + pairs.map(p =>
-        '<div class="yws-dlb">' +
+    return '<div class="yws-diffbox">' + pairs.map(p => {
+        if (blankOnly(p)) {
+            return '<div class="yws-dlb"><div class="yws-dl yws-dl-blank" style="opacity:.9">' +
+                '<span class="yws-dl-k">空行</span><span class="yws-dl-t">' + esc(blankWord(p)) +
+                '（文字本身没变，缝进去会按这个空行排）</span></div></div>';
+        }
+        return '<div class="yws-dlb">' +
             side('yws-dl-old', '旧', clip(p.mine, LINE_CAP), '（你那份里没有这段）') +
             side('yws-dl-new', '新', clip(p.next, LINE_CAP), '（这段会被去掉）') +
-        '</div>').join('') +
+        '</div>';
+    }).join('') +
         (more > 0 ? '<div class="yws-dlmore">还有 ' + numOf(more) + ' 处没列出来 —— 到更新器里看全部</div>' : '') +
     '</div>';
 }
