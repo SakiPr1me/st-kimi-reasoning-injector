@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.78';
+const VERSION = '2.2.79';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.78';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.78';
+const BUILD = 'v2.2.79';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -9679,6 +9679,21 @@ function previewHtml(w) {
             /* ★★W40-④：那一行说明**整块删掉**（作者原话："下面默认就是可预览的"，而"点卡片或点「缝入」"
                已经搬到抬头那个盒子里 ⇒ 两处说同一件事）。★小剧场那句一并收进盒子里（不然它剩下的
                "别人点「获取剧场」…"就没地方挂了，而那正是这一档最该说清的一件事）。 */
+            /* ★W202（作者报：勾了正则，主预览里看不到正则；只有点开卡片才有）——
+               主预览这块按 BD5 只放"卡片 + 一句说明"，逐条详情在卡片展开态里。但**"这次会带上正则"
+               这件事必须在主预览里看得见**（否则用户以为没带上，正是作者撞到的）。卡片上面补一行摘要：
+               带上 N 条 + 头两条名字（不列全部 ⇒ 不重复卡片展开态那份清单）。样式复用既有 `.yws-basehint`。 */
+            (function () {
+                try {
+                    const pk = buildPayload();
+                    const rx = Array.isArray(pk && pk.regexes) ? pk.regexes : [];
+                    if (!rx.length) return '';
+                    const names = rx.map(r => String((r.reg && r.reg.scriptName) || r.name || '（未命名）'));
+                    const head = names.slice(0, 2).join('、') + (names.length > 2 ? ' 等' : '');
+                    return '<div class="yws-basehint yws-pvtag">这次会一起带上 <b>' + numOf(rx.length) + ' 条正则</b>：' +
+                        esc(clip(head, 60)) + '（逐条详情点卡片展开看）</div>';
+                } catch (e) { return ''; }
+            })() +
             '<div class="yws-pvcard">' + previewCardHtml(card) + '</div>' +
             /* 伪缝入本身算不出来时如实说（不静默、也不假装没事） */
             (p.err ? '<div class="yws-warnbox">' + esc(p.err) + '</div>' : '') +
@@ -9789,13 +9804,21 @@ function previewSrcOptionsHtml(p) {
         }
     } catch (e) { warn('「假设用户预设」里那组云端基准没排出来（不影响下面那些）', e); }
     const opt = (name, label) => '<option value="' + esc(name) + '"' + (name === pick ? ' selected' : '') + '>' + esc(label || name) + '</option>';
-    /* ★同一份本机预设**只出现一次**（云端那组优先）—— 两段里各画一份"同名同值"的 option 会踩一个真坑：
-      HTML 解析"最后一个带 selected 的 option 胜出" ⇒ 选中的会落到下面那组的那一份上，
-      而用户/探针想看到的是"默认落在**云端基准**那一份上"（作者第 5 条的判据就在这一格）。
-      ⇒ 去掉重复项：那几份预设只在「官方基准（云端）」组里出现，其余的进「本机已装」。 */
-    const rest = all.filter(n => !seen.has(n));
+    /* ★W202（作者报：云端有了 V1008 之后，本机那份同名的在「假设用户预设」里找不到了）——
+       原来这里是**去重**：云端那组先占名字，本机组就用 `!seen.has(n)` 把它排掉 ⇒ 本机已装里看不到
+       自己那份（虽然功能上在云端组能选，但看起来就是"我的预设不见了"）。
+       ⇒ 改成**两组都列全**：本机组 = 你本机装着的那一份**全都在**（这才是"我的预设列表"）；
+         云端组继续列"云端有这一版、本机也装着"的那几份，只是标签换成云端标题。
+       ★踩坑规避（原来去重的理由）：HTML 里"最后一个带 selected 的 option 胜出" ⇒ 同名会出现在两组里，
+         所以 **selected 只给云端组那一份**（本机组同名的那个不写 selected）—— 默认仍落在云端基准上。 */
+    const cloudNames = new Set(cloud.map(x => x.name));
     const cloudGrp = cloud.length ? '<optgroup label="官方基准（云端）" data-cloud="1">' + cloud.map(x => opt(x.name, x.label)).join('') + '</optgroup>' : '';
-    const localGrp = rest.length ? '<optgroup label="本机已装">' + rest.map(n => opt(n, n)).join('') + '</optgroup>' : '';
+    const localGrp = all.length
+        ? '<optgroup label="本机已装">' + all.map(n => {
+            const same = n === pick && cloudNames.has(n);   // 该项已在云端组里选中过 ⇒ 这里不要再写 selected
+            return '<option value="' + esc(n) + '"' + (n === pick && !cloudNames.has(n) ? ' selected' : '') + '>' + esc(n) + '</option>';
+        }).join('') + '</optgroup>'
+        : '';
     return cloudGrp + localGrp;
 }
 function openPseudoDetail() {
