@@ -709,6 +709,29 @@ export function mountPresetUpdater(container) {
     applyColors();
     restoreSaved();
     renderSource();
+    /* ★W190（作者报：商店新下载并打开的预设，在更新器下拉里看不到，必须刷新酒馆才出现）：
+       本卡的下拉是**挂载时画一次**；商店下载走 ST 的 updateList 会即时把新预设加进酒馆下拉，
+       但我们这份不重画 ⇒ 看不到。修两处（都只重画「来源」那块，按名字保留已选中的项）：
+       ① 本卡展开时（details toggle）；② 酒馆预设变化时（PRESET_CHANGED），若本卡正开着也重画。 */
+    try {
+        const card = container.closest('details.kimi-card');
+        if (card && !card.dataset.ywpuSrcRefresh) {
+            card.dataset.ywpuSrcRefresh = '1';
+            card.addEventListener('toggle', () => {
+                if (!card.open) return;
+                try { renderSource(); } catch (e) { }
+            });
+        }
+    } catch (e) { }
+    try {
+        eventSource.on(event_types.PRESET_CHANGED, () => {
+            try {
+                const card = container.closest('details.kimi-card');
+                if (!card || !card.open) return;
+                renderSource();
+            } catch (e) { }
+        });
+    } catch (e) { }
     /* ★Wave K1 · 顺带修复：读不出内容的预设（文件坏了/被外部改过）**当场说一句人话** ——
        常驻那一行在来源区（`.ywpu-risk`，见 renderSource），这里再补一条 toast（打开面板就能看见）。 */
     if (S.badPresets && S.badPresets.length) {
