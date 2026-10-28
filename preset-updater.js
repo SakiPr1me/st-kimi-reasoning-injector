@@ -88,7 +88,7 @@ const EXT = 'preset_updater';
      （点它一下 = 排除，再点一下 = 收回；小标「已默认收进来 / 不要它」）；③**没点过的不同处按新版**。
      ⇒ chip 文案、结果行那句人话、正文顶上说明同步；**「按原顺序全收」那颗按钮删掉**（用途已被②整份覆盖）。
    读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md §修订；台账 §XXVIII） */
-const VERSION = '5.3.41';   // 更新器模块版本（随工具箱一起发布）
+const VERSION = '5.3.42';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -172,7 +172,7 @@ const VERSION = '5.3.41';   // 更新器模块版本（随工具箱一起发布�
      随之同步：chip 文案（"没改动的已收好 / 没选的按新版"）· 结果行那句人话（另含 X 段没改动的 + Y 处没点的按新版）·
      正文顶上说明 · **删掉「按原顺序全收」**（用途已被②整份覆盖，避免语义重叠的按钮）。
      判据仍全走既有 `source:'custom'` + `customText` 通路 ⇒ **内核改动继续为 0**；与 index.js 的 updaterBuild 成对升） */
-const BUILD = 'v5.3.41';
+const BUILD = 'v5.3.42';
 const API_ID = 'openai';                       // 对话补全预设（用户只使用对话补全）
 
 // ---------------------------------------------------------------- 设置
@@ -9573,7 +9573,13 @@ function cloudPickMine(hintName) {
 function storePackToPatch(pack, mine) {
     const kind = String((pack && pack.kind) || '');
     const have = new Set();
+    /* ★W197：同名条目的**正文**也留一份（规范名 → 原文）—— "同名 add 转 update"时，
+       op.base 必须是你本机这一条的原文，否则内核拿空串去比 ⇒ 整条都算改动。
+       （只有 `mine` 读得出来时才建；读不出来就退回原来的空串行为。） */
+    const haveMap = new Map();
     try { for (const e of PM.indexPreset(mine).entries) have.add(PM.normalizeName(e.name)); } catch (e) { /* 读不了就当"没有同名" */ }
+    try { for (const e of PM.indexPreset(mine).entries) { const k = PM.normalizeName(e.name); if (k && !haveMap.has(k)) haveMap.set(k, String(e.text ?? '')); } } catch (e) { /* 同上 */ }
+    const haveText = (nk) => (haveMap.has(nk) ? haveMap.get(nk) : null);
     const sameName = [];
     const conv = (e, i) => {
         if (!e || typeof e !== 'object') return null;
@@ -9583,7 +9589,16 @@ function storePackToPatch(pack, mine) {
         if (mode === 'add' && PM.normalizeName(nm) && have.has(PM.normalizeName(nm))) { mode = 'update'; sameName.push(nm); }
         const key = 'store:' + mode + ':' + PM.normalizeName(nm) + '#' + i;    // 稳定 key（逐条决策/逐处挑都用它）
         if (mode === 'update' && e.mode === 'patch') return { op: 'update', key, name: nm, wasName: nm, base: String(e.base ?? ''), next: String(e.next ?? ''), place: e.place || {} };
-        if (mode === 'update') return { op: 'update', key, name: nm, wasName: nm, base: '', next: String((e.entry && e.entry.content) ?? e.next ?? ''), place: e.place || {}, entry: e.entry || null };
+        /* ★★W197（作者报：从本预设抽出来的条目上传，缝入时那几条仍显示"改了内容"，而且展开是
+           「旧（你那份里没有这段）/新（这段会被去掉）」）——**真 BUG 在这里**：
+           上一行把"同名"的 add 强行改成 update（正确的意图：别重复加一条），但 `base` 给了**空串** ⇒
+           内核拿"空"跟你的原文比 ⇒ 整条都算改动（实测：DS最大思考 476 字 / 思维链2·KIMI 2492 字 /
+           思维链·Gmn 1970 字，三条全是 changed≥1；把 base 换成你本机原文后 changed=0）。
+           ⇒ 老侧改用**你本机这一条的原文**（`haveText` 里按规范化名字查），查不到才退回空串。 */
+        if (mode === 'update') {
+            const mineText = haveText(PM.normalizeName(nm));
+            return { op: 'update', key, name: nm, wasName: nm, base: (mineText != null ? mineText : ''), next: String((e.entry && e.entry.content) ?? e.next ?? ''), place: e.place || {}, entry: e.entry || null };
+        }
         if (mode === 'remove') return { op: 'remove', key, name: nm, base: String(e.base ?? ''), place: e.place || {} };
         /* ★★D2（2026-09-22 · **保真 BUG**）：改前这里**写死 `enabled: true`** ⇒ 上传方"关着"的条目
            到收方变成**开着**（无声改了他的设定）—— 上传侧 `stFields()` 现在会把真实开关装进包里。
@@ -9601,7 +9616,8 @@ function storePackToPatch(pack, mine) {
         const ops = (Array.isArray(pack.ops) ? pack.ops : []).map((op, i) => {
             if (!op || typeof op !== 'object' || op.op !== 'add' || !PM.normalizeName(String(op.name || '')) || !have.has(PM.normalizeName(String(op.name || '')))) return op;
             sameName.push(String(op.name || ''));                        // 同一个口径：新增撞名 → 改你那条
-            return { op: 'update', key: String(op.key || ('store:update#' + i)), name: String(op.name || ''), wasName: String(op.name || ''), base: '', next: String((op.entry && op.entry.content) ?? op.next ?? ''), place: op.place || {}, entry: op.entry || null };
+            { const _nk = PM.normalizeName(String(op.name || '')); const _mt = haveText(_nk);
+              return { op: 'update', key: String(op.key || ('store:update#' + i)), name: String(op.name || ''), wasName: String(op.name || ''), base: (_mt != null ? _mt : ''), next: String((op.entry && op.entry.content) ?? op.next ?? ''), place: op.place || {}, entry: op.entry || null }; }
         });
         return { patch: { ...pack, ops }, sameName };
     }
