@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.79';
+const VERSION = '2.2.80';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.79';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.79';
+const BUILD = 'v2.2.80';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -8215,7 +8215,7 @@ function mineIndex() {
     const names = listPresetNames();
     syncTargetFollow(names);
     if (!S.target) return null;
-    try { return { name: S.target, idx: PM.indexPreset(readPreset(S.target)) }; } catch (e) { return null; }
+    try { const _pp = readPreset(S.target); return { name: S.target, preset: _pp, idx: PM.indexPreset(_pp) }; } catch (e) { return null; }   // ★W203：带 preset 原文
 }
 /** 两边正文按行比出"哪几处不一样"：只留**变化块**（红/蓝各一组），一样的行不占地方
  *  ★W195（作者报：明明是我自己这份预设上传的，预览却显示「改这条 / 旧（你那份里没有这段）/ 新（这段会被去掉）」）——
@@ -8296,34 +8296,6 @@ function previewRows(pack, mine) {
             pairs: [{ mine: '（许愿 / 交流不跟你手上那份预设比）', next: String(pack.text || '') }] });
         return rows;
     }
-    /* ★R9-i：`scope:"regex"` 的包 —— 一条正则一行（红=你手上有没有这条 / 蓝=这条带来的查找替换）。
-       以前这里落到 `entries: []` 上 → 预览永远说"没有任何变化"（对正则包是假话）。
-       ★W200（作者报：勾了 4 条正则上传，预览里一条正则都看不到）—— 原来这里还要求 `scope === 'regex'`，
-       而"部分上传 + 勾了正则"的包 scope 是 single/multi ⇒ **混装包永远走不进这一段**。
-       现在改成：**只要包里有正则就列出来**（scope 只决定"有没有条目"，不决定"要不要显示正则"）。 */
-    if (pack.kind === 'ywp-entry' && Array.isArray(pack.regexes) && pack.regexes.length) {
-        const mineList = (() => {
-            try { return mine && mine.preset ? (PM.getRegexList(mine.preset) || []).map(x => PM.normalizeRegexScript(x)) : []; } catch (e) { return []; }
-        })();
-        const rxByName = new Map(), rxByFind = new Map();
-        for (const r of mineList) { rxByName.set(PM.normalizeName(r.scriptName || ''), r); rxByFind.set(PM.normalizeText(r.findRegex || ''), r); }
-        for (const r of pack.regexes) {
-            const reg = PM.normalizeRegexScript(r.reg || r.next || {});
-            const nm = String(reg.scriptName || '（没名字的正则）');
-            const old = rxByName.get(PM.normalizeName(nm)) || rxByFind.get(PM.normalizeText(reg.findRegex || '')) || null;
-            const mode = String(r.mode || 'new');
-            const tag = mode === 'remove' ? '删这条' : (mode === 'patch' ? '改这条' : (mode === 'switch' ? '开关' : '新增'));
-            add({
-                key: 'rx:' + nm, name: nm, tag, cls: mode === 'remove' ? 'yws-tag-old' : (mode === 'patch' ? 'yws-tag-patch' : 'yws-tag-new'),
-                stat: old ? '你手上已经有一条同名的 —— 缝的时候会问你要哪条' : '你手上没有这条 → 会给你加上（作用：' + regexPlaceText(reg) + '）',
-                pairs: [{ mine: old ? String(old.findRegex || '') : '（你手上没有这条正则）', next: String(reg.findRegex || '') },
-                    { mine: old ? String(old.replaceString || '（空 = 删掉匹配到的部分）') : '（无）', next: String(reg.replaceString || '（空 = 删掉匹配到的部分）') }],
-            });
-        }
-        /* ★W200：纯正则包 ⇒ 到此为止（没有条目可列）；**混装包（条目 + 正则）⇒ 继续往下**，
-           让条目也照常列出来（上面已经 push 的正则行保留在 rows 里）。 */
-        if (pack.scope === 'regex') return rows;
-    }
     if (pack.kind === 'ywp-entry') {
         for (const e of (pack.entries || [])) {
             const nm = String((e.entry && e.entry.name) || e.name || '（未命名）');
@@ -8360,6 +8332,44 @@ function previewRows(pack, mine) {
                 }
             }
         }
+    /* ★R9-i：`scope:"regex"` 的包 —— 一条正则一行（红=你手上有没有这条 / 蓝=这条带来的查找替换）。
+       以前这里落到 `entries: []` 上 → 预览永远说"没有任何变化"（对正则包是假话）。
+       ★W200（作者报：勾了 4 条正则上传，预览里一条正则都看不到）—— 原来这里还要求 `scope === 'regex'`，
+       而"部分上传 + 勾了正则"的包 scope 是 single/multi ⇒ **混装包永远走不进这一段**。
+       现在改成：**只要包里有正则就列出来**（scope 只决定"有没有条目"，不决定"要不要显示正则"）。 */
+    if (pack.kind === 'ywp-entry' && Array.isArray(pack.regexes) && pack.regexes.length) {
+        const mineList = (() => {
+            try { return mine && mine.preset ? (PM.getRegexList(mine.preset) || []).map(x => PM.normalizeRegexScript(x)) : []; } catch (e) { return []; }
+        })();
+        const rxByName = new Map(), rxByFind = new Map();
+        for (const r of mineList) { rxByName.set(PM.normalizeName(r.scriptName || ''), r); rxByFind.set(PM.normalizeText(r.findRegex || ''), r); }
+        for (const r of pack.regexes) {
+            const reg = PM.normalizeRegexScript(r.reg || r.next || {});
+            const nm = String(reg.scriptName || '（没名字的正则）');
+            const old = rxByName.get(PM.normalizeName(nm)) || rxByFind.get(PM.normalizeText(reg.findRegex || '')) || null;
+            const mode = String(r.mode || 'new');
+            /* ★W203（作者报：这些正则都显示「新增」，可我本地 V1008 明明都有）—— 原来 tag 只看包里的 mode
+               （上传侧一律写 'new'），完全不看你手上有没有这条 ⇒ 自己上传的东西全被标成新增。
+               改成与条目侧同一口径：先看 mode（删/改/开关是包明确声明的）；new 再看本地有没有同名/同查找式：
+               有且内容一致 ⇒ 不标标签；有但内容不同 ⇒ 改这条；真的没有 ⇒ 新增。 */
+            const tag = (function () {
+                if (mode === 'remove') return '删这条';
+                if (mode === 'patch') return '改这条';
+                if (mode === 'switch') return '开关';
+                if (!old) return '新增';
+                const sameBody = PM.normalizeText(String(old.findRegex || '')) === PM.normalizeText(String(reg.findRegex || ''))
+                    && PM.normalizeText(String(old.replaceString || '')) === PM.normalizeText(String(reg.replaceString || ''));
+                return sameBody ? '' : '改这条';
+            })();
+            add({
+                key: 'rx:' + nm, name: nm, tag, cls: tag === '删这条' ? 'yws-tag-old' : ((tag === '改这条' || tag === '开关') ? 'yws-tag-patch' : (tag ? 'yws-tag-new' : '')),
+                stat: (!old ? '你手上没有这条 → 会给你加上（作用：' + regexPlaceText(reg) + '）'
+                    : (tag === '' ? '跟你的那份一字不差（缝了也没变化）' : '你手上已经有一条同名的 —— 缝的时候会问你要哪条')),
+                pairs: [{ mine: old ? String(old.findRegex || '') : '（你手上没有这条正则）', next: String(reg.findRegex || '') },
+                    { mine: old ? String(old.replaceString || '（空 = 删掉匹配到的部分）') : '（无）', next: String(reg.replaceString || '（空 = 删掉匹配到的部分）') }],
+            });
+        }
+    }
         return rows;
     }
     if (pack.kind === 'ywp-patch') {
@@ -9477,7 +9487,18 @@ function previewCardData() {
            = 看着像「坏了 / 没做完」（AA-1④ 那个坑）。其余 kind 照旧不带（它们没有这一位）。
            ★★W86：许愿档同款（它的正文也在同一格里）。 */
         playText: ((pack.kind === 'ywp-play' || pack.kind === 'ywp-wish') ? String(pack.text || '') : ''),
-        entryNames: rxCount ? pack.regexes.map(r => String((r.reg || {}).scriptName || '')).slice(0, 8) : names.slice(0, 8),
+        /* ★W203（作者报：折叠态名字下面**只显示正则名**，条目全没了）—— 原来这一行是
+           `rxCount ? 正则名 : 条目名`（二选一）⇒ 只要包里带正则，条目名就被整段替换掉。
+           现在改成**条目优先、正则追加在后面**（两类都有就都显示；只有正则的纯正则包照旧只显示正则）。 */
+        entryNames: (() => {
+            const out = names.slice(0, 8);
+            if (rxCount) {
+                const rxNames = pack.regexes.map(r => String((r.reg || {}).scriptName || '')).filter(Boolean);
+                // 条目名先占满 8 格，剩下的位置给正则（这样"条目在前、正则在后面"是硬保证）
+                for (const n of rxNames) { if (out.length >= 8) break; out.push(n); }
+            }
+            return out;
+        })(),
         official: false, sews: 0, likes: 0, liked: false, updatedAt: nowDay(), createdAt: nowDay(),
         rev: rev,
         revNote: baseRev
@@ -9839,7 +9860,13 @@ function openPseudoDetail() {
     const cur = currentPresetName();
     /* ★AR4 ④：第一步选的「官方旧版」优先（`previewTargetDefault()` 同口径）—— 锚点就是从它里面找的。 */
     const base = String(w.baseName || '');
-    const target = (pick && pick !== src && names.includes(pick)) ? pick
+    /* ★W203（作者报：在「假设用户预设」里选了 `余温V1008`，点缝入却对比**另一份莫名其妙**的预设）——
+       原来是 `pick && pick !== src && ...`：只要你选的那份**正好等于上传源**，这个条件就不成立（`pick === src`），
+       于是落到"当前在用的那份 / 随便第一份" ⇒ 作者看到的"莫名其妙另一份"。
+       ⇒ 修：**用户明确选过就一律用他选的**（`pick && names.includes(pick)`）；只有他自己没选（空）时
+         才走原来那套"避开源预设"的兜底。选的就是源那份也没关系 —— 那是他明确要看的对比，
+         内核会给"一字不差"，不是错误。 */
+    const target = (pick && names.includes(pick)) ? pick
         : ((base && base !== src && names.includes(base)) ? base
         : (cur && cands.includes(cur) ? cur : (cands[0] || '')));
     if (!target) {
@@ -9874,7 +9901,7 @@ function computePreview() {
     const pick = S.prev.pick || previewTargetDefault();       // ★R9-i：默认挑一份"跟上传源不一样"的（见 previewTargetDefault）
     try {
         const names = listPresetNames();
-        if (pick && names.includes(pick)) mine = { name: pick, idx: PM.indexPreset(readPreset(pick)) };
+        if (pick && names.includes(pick)) { const _pp = readPreset(pick); mine = { name: pick, preset: _pp, idx: PM.indexPreset(_pp) }; }   // ★W203：带上 preset 原文（正则比对要读它）
     } catch (e) { warn('预览：读不到那份预设（照旧显示卡片预览）', e); }
     S.prev.mineName = mine ? mine.name : '';
     S.prev.rowsBase = rowsVsBase(pack, w);        // ★C20③：与官方旧版的对比（没填官方旧版就是空数组）
