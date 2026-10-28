@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.71';
+const VERSION = '2.2.72';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.71';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.71';
+const BUILD = 'v2.2.72';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -2985,7 +2985,9 @@ function paint(m) {
        `S.cm.defInk` 取（那几个渲染函数是"按函数名被探针抽出去单跑"的，不许在里面调模块函数）。
        ★必须在拼 html **之前**（拼串过程中就要用）；换主题之后第一次重绘也算的是新主题。 */
     refreshDefInk(m.el);
-    const keepPlist = (() => { const e = $('.yws-plist', m.el); return e ? e.scrollTop : 0; })();
+    /* ★W193（作者报：正则区每点一次就跳回最上面）—— 原来只存还**第一个** .yws-plist 的滚动；
+       部分上传里正则区是**第二个**列表 ⇒ 它的滚动位置没人管，重绘就回顶。改为**按序号逐个**存还。 */
+    const keepPlists = (() => { const out = []; $('.yws-plist', m.el).forEach(e => out.push(e.scrollTop)); return out; })();
     /* ★P2-5（audit-p12）：整块 「innerHTML」 重建还会甩掉两样东西 ——
        ① 条目详情弹窗（挂在 body 的 `#yws-dlg-host`）的**内层滚动**（`mountWizDialog()` 每次都重写宿主 innerHTML）
        ② **焦点**（上传向导的搜索框打字打到一半，后台一次 `/stats` 轮询触发 renderAll → 焦点丢、光标跳）
@@ -3021,7 +3023,7 @@ function paint(m) {
             ) + '</div>' +
         '</div>';
     m.el.innerHTML = html;
-    if (keepPlist) { const e = $('.yws-plist', m.el); if (e) e.scrollTop = keepPlist; }
+    if (keepPlists.length) { const els = $('.yws-plist', m.el); keepPlists.forEach((v, i) => { if (els[i] && v) els[i].scrollTop = v; }); }   // ★W193：逐个还
     /* ★★W（AR2）：这里原来还有一次 「syncTitleChip()」（把「已连上」那颗胶囊插到「🛒 条目商店」标题旁）——
        那颗胶囊**整个删掉**了，所以这个调用点也一并删（★留着就是 `ReferenceError`：函数已经不存在）。 */
     applyTitleInk(m);          // ★P2-8：卡片标题色加一道"亮度兜底"（个别主题的引用色压在自己底上只有 3.23）
@@ -10709,7 +10711,9 @@ function regexPickerInPart(w) {
         const nm = String((r.script && r.script.scriptName) || r.name || '（未命名正则）');
         const on = picked.has(r.id);
         const dis = !!(r.script && r.script.disabled);
-        return '<div class="yws-prow" data-act="w-rxpick" data-id="' + esc(String(r.id)) + '" style="cursor:pointer">' +
+        /* ★W193（作者：正则区连点几次选不中）—— **别用 .yws-prow**：那个类会被'拖刷涂选'接管（按下 preventDefault、改成拖刷），
+           点一下常常既没勾上、又把后面的 click 吞掉。正则区用自己的类，点击走普通 click。 */
+        return '<div class="yws-rxrow yws-prow-look" data-act="w-rxpick" data-id="' + esc(String(r.id)) + '" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--SmartThemeBorderColor,rgba(128,128,128,.2))">' +
             '<input type="checkbox" ' + (on ? 'checked' : '') + ' style="pointer-events:none;accent-color:var(--SmartThemeQuoteColor);" />' +
             '<span class="yws-pname">' + esc(nm) + '</span>' +
             (dis ? '<span class="yws-dim">（关着）</span>' : '') + '</div>';
@@ -13886,14 +13890,25 @@ function onClick(m, ev) {
             renderAll(); break;
         }
         case 'w-rxpick': {
-            const rid = target.getAttribute('data-id');
+            /* ★W193（作者报：正则区每点一次就跳回最上面、连点几次选不中）—— 原来这里 renderAll() 整页重建，
+               列表被换成新元素 + 滚动回顶 ⇒ 下一次点击落在旧坐标上就打空。改成**就地更新**那一段。 */
+            const rid = String(target.getAttribute('data-id') || '');
             const set = new Set(S.wiz.pickedRegex || []);
             if (set.has(rid)) set.delete(rid); else set.add(rid);
             S.wiz.pickedRegex = [...set];
-            renderAll(); break;
+            syncRegexPickUi(m, rid);
+            break;
         }
-        case 'w-rxall': S.wiz.pickedRegex = ((S.w && S.w.regexes) || []).map(r => r.id); renderAll(); break;
-        case 'w-rxnone': S.wiz.pickedRegex = []; renderAll(); break;
+        case 'w-rxall': {
+            S.wiz.pickedRegex = ((S.w && S.w.regexes) || []).map(r => String(r.id));
+            syncRegexPickUi(m, null);
+            break;
+        }
+        case 'w-rxnone': {
+            S.wiz.pickedRegex = [];
+            syncRegexPickUi(m, null);
+            break;
+        }
         /* ★★U15（作者拍板 §BV-1 · 2026-09-22 深夜）：**「只看打开的」那颗筛选开关** —— 点一次拨过去、
            再点一次取消（就是作者那句"再点一次就取消筛选"）。落地三件事：
              ① 开关状态存在 settings.hideDisabledInPicker（**默认 false**，跟着用户走、下次进来还是它）；
@@ -14461,6 +14476,26 @@ function syncPickUi(m) {
     }
     const cnt = $('.yws-pickbar b', m.el);
     if (cnt) cnt.textContent = String(picked.size);
+}
+/** ★W193：正则区的就地更新（不重建列表）—— 只改被点那一行的勾选态 + 两个计数；
+ *  oneId 非空 = 只更新那一行（单点），null = 全量刷（全选/取消正则）。
+ *  列表 DOM 不动 ⇒ 连点不会落空、滚动不回顶（与「条目区」syncPickUi 同一套思路）。 */
+function syncRegexPickUi(m, oneId) {
+    try {
+        const picked = new Set((S.wiz.pickedRegex || []).map(String));
+        const rows = $$('[data-act="w-rxpick"]', m.el);   // ★W193：必须用 $$（$ 只拿第一个元素）
+        rows.forEach(row => {
+            const id = String(row.getAttribute('data-id') || '');
+            if (oneId != null && id !== String(oneId)) return;
+            const cb = $('input[type="checkbox"]', row);
+            if (cb) cb.checked = picked.has(id);
+            row.classList.toggle('yws-selrow', picked.has(id));
+        });
+        /* 计数：正则区那一行的 "已选 N 条"（它自己那颗 <b>） */
+        const bars = $$('.yws-pickbar', m.el).filter(b => String(b.textContent || '').indexOf('正则') >= 0 && String(b.textContent || '').indexOf('已选') >= 0);
+        const bar = bars[0] || null;
+        if (bar) { const b = $('b', bar); if (b) b.textContent = String(picked.size); }
+    } catch (e) { /* 就地更新失败不影响勾选本身（状态已写进 S.wiz） */ }
 }
 function bindPaint() {
     if (bindPaint._done) return;
