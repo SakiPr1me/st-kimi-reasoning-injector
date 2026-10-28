@@ -583,6 +583,11 @@
 .yws-tag-new { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-add) 48%, transparent); background: color-mix(in srgb, var(--yws-dl-add) 14%, transparent); }
 .yws-tag-patch { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-old) 46%, transparent); background: color-mix(in srgb, var(--yws-dl-old) 13%, transparent); }
 .yws-tag-old { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-old) 46%, transparent); background: color-mix(in srgb, var(--yws-dl-old) 13%, transparent); }
+/* ★W205（作者）：一字不差 / 未变化的条目与正则，前面也要有一枚**灰色**标识（原来什么都不显示）。 */
+.yws-tag-same { color: var(--yws-txt); opacity: .62; border-color: color-mix(in srgb, var(--yws-txt) 34%, transparent); background: color-mix(in srgb, var(--yws-txt) 8%, transparent); }
+/* ★W205：开关变化的两种标识（打开了 / 关闭了）—— 同一族，用开关语义区分，不新造颜色体系。 */
+.yws-tag-on { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-add) 48%, transparent); background: color-mix(in srgb, var(--yws-dl-add) 12%, transparent); }
+.yws-tag-off { color: var(--yws-txt); opacity: .8; border-color: color-mix(in srgb, var(--yws-dl-old) 46%, transparent); background: color-mix(in srgb, var(--yws-dl-old) 12%, transparent); }
 
 /* ★A4（作者台账）：卡片**下半部分 = 一行** —— **左边**元信息（署名/类型/更新时间）、**右边**「缝入」，
    「缝入」**不另起一行**。所以这里 `nowrap`（放不下就省略，绝不换行）+ `.yws-card-f` 用 `margin-left:auto`

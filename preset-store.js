@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.81';
+const VERSION = '2.2.82';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.81';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.81';
+const BUILD = 'v2.2.82';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -8249,12 +8249,18 @@ const LINE_CAP = 400;                       // 每一处差异最多显示多少
  *    让人以为整段被删了。这里单独认出来，用人话说清楚是"加了空行 / 删了空行 / 空行数变了"。 */
 function diffPairsHtml(pairs, more) {
     if (!pairs.length) return '<div class="yws-diffbox"><div class="yws-verdict yws-same">跟你的那份一字不差</div></div>';
-    /* 一条差异块是不是"只有空行变化"：两侧去掉空行后完全相同 */
+    /* 一条差异块是不是"只有空行变化"：两侧都要有非空文字、且去掉空行后完全相同。
+       ★W205（作者报：一条**新增**的正则——替换内容为空——在预览里被显示成「空行 / 空行位置变了」，
+       而不是「新增」）：原来只比"去掉空行后是否相同" —— 旧侧没有这一条时（mine 是占位空串），
+       两侧去掉空行后**都是空串** ⇒ 被判成"只有空行差异" ⇒ 空行块把真正的"新增"吃掉了。
+       ⇒ 任一侧为空 = 不是空行差异（老实走红蓝："你那份里没有这一条 / 这段会被去掉"）。 */
+    const hasText = (s) => String(s ?? '').split('\n').some(l => l.trim() !== '');
     const blankOnly = (p) => {
         const a = String(p.mine ?? ''), b = String(p.next ?? '');
+        if (!hasText(a) || !hasText(b)) return false;
         const sa = a.split('\n').filter(l => l.trim() !== '').join('\n');
         const sb = b.split('\n').filter(l => l.trim() !== '').join('\n');
-        return sa === sb;                        // 去掉空行后一样 ⇒ 差的就是空行
+        return sa === sb && sa !== '';
     };
     const blankCount = (s) => String(s ?? '').split('\n').filter(l => l.trim() === '').length;
     const blankWord = (p) => {
@@ -8331,7 +8337,8 @@ function previewRows(pack, mine) {
                 } else {
                     const d = changeBlocks(cur.text, nextTxt, MAXB);
                     if (!d.total) {
-                        add({ key: 'n:' + nm, name: nm, tag: '', cls: '',
+                        /* ★W205（作者）：一字不差的条目也要有**灰色「一致」**标识（原来什么都不显示）。 */
+                        add({ key: 'n:' + nm, name: nm, tag: '一致', cls: 'yws-tag-same',
                             stat: '', pairs: [] });
                     } else {
                         add({ key: 'u:' + nm, name: nm, tag: '改这条', cls: 'yws-tag-patch',
@@ -8376,12 +8383,20 @@ function previewRows(pack, mine) {
                 if (!old) return '新增';
                 const sameBody = PM.normalizeText(String(old.findRegex || '')) === PM.normalizeText(String(reg.findRegex || ''))
                     && PM.normalizeText(String(old.replaceString || '')) === PM.normalizeText(String(reg.replaceString || ''));
-                return sameBody ? '' : '改这条';
+                return sameBody ? '一致' : '改这条';
             })();
+            /* ★W205（作者）：一字不差的正则也要有**灰色**标识；开关变化标「打开了 / 关闭了」。 */
+            const rxSwitchTag = (mode === 'switch')
+                ? ((rxOnOf(w, r) === false) ? '关闭了' : '打开了')
+                : null;
+            const finalTag = rxSwitchTag || tag;
             add({
-                key: 'rx:' + nm, name: nm, tag, cls: tag === '删这条' ? 'yws-tag-old' : ((tag === '改这条' || tag === '开关') ? 'yws-tag-patch' : (tag ? 'yws-tag-new' : '')),
-                /* ★W204（作者：这些说明大可不必）—— 正则行也只留标签本身；"没变化"与"新增"同一套前标，
-                   后面不再缀解释句。 */
+                key: 'rx:' + nm, name: nm, tag: finalTag,
+                cls: finalTag === '删这条' ? 'yws-tag-old'
+                    : (finalTag === '改这条' ? 'yws-tag-patch'
+                        : (finalTag === '一致' ? 'yws-tag-same'
+                            : (finalTag === '关闭了' ? 'yws-tag-off' : (finalTag === '打开了' ? 'yws-tag-on' : 'yws-tag-new')))),
+                /* ★W204（作者：这些说明大可不必）—— 正则行只留标签本身，后面不缀解释句。 */
                 stat: '',
                 pairs: [{ mine: old ? String(old.findRegex || '') : '（你手上没有这条正则）', next: String(reg.findRegex || '') },
                     { mine: old ? String(old.replaceString || '（空 = 删掉匹配到的部分）') : '（无）', next: String(reg.replaceString || '（空 = 删掉匹配到的部分）') }],
@@ -8414,8 +8429,10 @@ function previewRows(pack, mine) {
                     stat: cur ? '你手上的这条会被删掉' : '你的预设里没有这条（删不到东西）',
                     pairs: cur ? [{ mine: cur.text, next: '（这条会从你的预设里删掉）' }] : [] });
             } else {
-                add({ key: 's:' + nm, name: nm, tag: '开关', cls: 'yws-tag-patch',
-                    stat: '这条的开关会变成「' + (op.enabled === false ? '关' : '开') + '」', pairs: [] });
+                /* ★W205（作者）：开关变化要有明确标识「打开了 / 关闭了」（原来写"开关"）。 */
+                const isOff = op.enabled === false;
+                add({ key: 's:' + nm, name: nm, tag: (isOff ? '关闭了' : '打开了'), cls: (isOff ? 'yws-tag-off' : 'yws-tag-on'),
+                    stat: '', pairs: [] });
             }
         }
         return rows;
