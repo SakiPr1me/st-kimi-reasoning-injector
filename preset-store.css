@@ -581,7 +581,9 @@
     padding: 1px 8px; color: var(--yws-txt-2); white-space: nowrap; line-height: 1.6; flex: 0 0 auto;
 }
 .yws-tag-new { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-add) 48%, transparent); background: color-mix(in srgb, var(--yws-dl-add) 14%, transparent); }
-.yws-tag-patch { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-old) 46%, transparent); background: color-mix(in srgb, var(--yws-dl-old) 13%, transparent); }
+/* ★W210（作者：把「改这条」改名「改变」，颜色改成点击缝入后里面「改了内容」那个紫色）——
+   紫色取更新器那一支的同一个色相 `#a78bfa`（`--yst-both`），保证"预览"与"缝入后"两处对得上。 */
+.yws-tag-patch { color: var(--yws-txt); border-color: color-mix(in srgb, #a78bfa 58%, transparent); background: color-mix(in srgb, #a78bfa 18%, transparent); font-weight: 600; }
 .yws-tag-old { color: var(--yws-txt); border-color: color-mix(in srgb, var(--yws-dl-old) 46%, transparent); background: color-mix(in srgb, var(--yws-dl-old) 13%, transparent); }
 /* ★W205（作者）：一字不差 / 未变化的条目与正则，前面也要有一枚**灰色**标识（原来什么都不显示）。 */
 .yws-tag-same { color: var(--yws-txt); opacity: .62; border-color: color-mix(in srgb, var(--yws-txt) 34%, transparent); background: color-mix(in srgb, var(--yws-txt) 8%, transparent); }
