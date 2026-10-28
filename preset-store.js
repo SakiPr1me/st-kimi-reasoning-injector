@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.70';
+const VERSION = '2.2.71';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.70';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.70';
+const BUILD = 'v2.2.71';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -8303,9 +8303,23 @@ function previewRows(pack, mine) {
                 }
             } else {
                 const nextTxt = String((e.entry && e.entry.content) || '');
-                add({ key: 'n:' + nm, name: nm, tag: '新增', cls: 'yws-tag-new',
-                    stat: cur ? '你已有一条同名的 —— 缝的时候会问你要哪条' : '你的预设里没有这条 → 会作为新条目加进来',
-                    pairs: [{ mine: '（你的预设里没有这一条 → 新增）', next: nextTxt }] });
+                /* ★W192（作者报：卡片预览里所有变化都显示"新增"，内容不同也显示新增）：
+                   这一支原来**无条件**标「新增」并把旧侧写成"你的预设里没有这一条"——哪怕你这份
+                   里明明有同名条目。按"我这份里到底有没有/一不一样"分成三种：没变 / 改这条 / 真新增。 */
+                if (!cur) {
+                    add({ key: 'n:' + nm, name: nm, tag: '新增', cls: 'yws-tag-new',
+                        stat: '你的预设里没有这条 → 会作为新条目加进来',
+                        pairs: [{ mine: '（你的预设里没有这一条 → 新增）', next: nextTxt }] });
+                } else {
+                    const d = changeBlocks(cur.text, nextTxt, MAXB);
+                    if (!d.total) {
+                        add({ key: 'n:' + nm, name: nm, tag: '', cls: '',
+                            stat: '跟你的那份一字不差（缝了也没变化）', pairs: [] });
+                    } else {
+                        add({ key: 'u:' + nm, name: nm, tag: '改这条', cls: 'yws-tag-patch',
+                            stat: '有 ' + numOf(d.total) + ' 处不一样', pairs: d.blocks, more: d.more });
+                    }
+                }
             }
         }
         return rows;
@@ -10682,6 +10696,26 @@ function srcFallbackHtml(w) {
         '但<b>你本机没有这份预设</b> —— 已经拿 <b>' + esc(clip(String(f.got || ''), 40)) + '</b> 当底稿了。' +
         '要换底稿就用上面那颗「从哪份挑」（换完记得把条目<b>重新挑一遍</b>）。</div>';
 }
+/** ★W191（作者）：部分上传里的"正则区" —— 勾上「正则」后出现在条目列表最下面。
+ *  勾选记在 w.pickedRegex（与「正则」那一档同一个集合）；上传时一并带上（后端 PACK_KEYS 早已放行 entries+regexes）。
+ *  一条正则都没有 ⇒ 一句人话，不画空盒子。 */
+function regexPickerInPart(w) {
+    const all = (S.w && S.w.regexes) || [];
+    const picked = new Set(w.pickedRegex || []);
+    const bar = '<div class="yws-pickbar" style="margin-top:6px"><span><b>正则</b> · 已选 <b>' + picked.size + '</b> 条 · 共 ' + numOf(all.length) + ' 条</span>' +
+        '<button class="yws-btn yws-mini" data-act="w-rxall">全选正则</button><button class="yws-btn yws-mini" data-act="w-rxnone">取消正则</button></div>';
+    if (!all.length) return '<div class="yws-dim" style="margin-top:6px">这份预设里没有正则</div>';
+    const rows = all.map(r => {
+        const nm = String((r.script && r.script.scriptName) || r.name || '（未命名正则）');
+        const on = picked.has(r.id);
+        const dis = !!(r.script && r.script.disabled);
+        return '<div class="yws-prow" data-act="w-rxpick" data-id="' + esc(String(r.id)) + '" style="cursor:pointer">' +
+            '<input type="checkbox" ' + (on ? 'checked' : '') + ' style="pointer-events:none;accent-color:var(--SmartThemeQuoteColor);" />' +
+            '<span class="yws-pname">' + esc(nm) + '</span>' +
+            (dis ? '<span class="yws-dim">（关着）</span>' : '') + '</div>';
+    }).join('');
+    return bar + '<div class="yws-plist" style="margin-top:4px">' + rows + '</div>';
+}
 function entryPicker(w) {
     if (S.w.err) return '<div class="yws-warn">' + esc(S.w.err) + '</div>';
     const list = S.w.entries || [];
@@ -10707,8 +10741,12 @@ function entryPicker(w) {
             segBtn('w-onoff', onOnlyTxt, pickerHideDisabled(), onOnlyTitle) +
             '<button class="yws-btn yws-mini" data-act="w-all" title="' + esc(allTxt) + '">' + esc(allTxt) + '</button><button class="yws-btn yws-mini" data-act="w-none">取消选择</button>' +
             '<input class="yws-inp yws-search" data-in="w-q" placeholder="搜条目名/正文" value="' + esc(w.q || '') + '">' +
+            /* ★W191（作者）：右上角「正则」勾选 —— 勾上 = 最下面多出一块正则列表，条目与正则可以一起上传。 */
+            '<label class="yws-mini" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;flex:none" title="勾上以后，最下面会列出这份预设里的正则，可以和条目一起上传">' +
+                '<input type="checkbox" data-act="w-rxshow" ' + (w.rxShow ? 'checked' : '') + ' style="accent-color:var(--SmartThemeQuoteColor);"/>正则</label>' +
             '</div>' +
-        '<div class="yws-plist">' + pickListHtml(w) + '</div></div>';
+        '<div class="yws-plist">' + pickListHtml(w) + '</div>' +
+        (w.rxShow ? regexPickerInPart(w) : '') + '</div>';
 }
 /** 条目行的"改没改"标签（★§17 D12：一眼看出 新增 / 改写）：
  *  口径 = 跟「官方旧版」那份按 名字（或 identifier）配对后比正文 —— 没填官方旧版就如实说分不出来。
@@ -11169,6 +11207,25 @@ function buildPayload() {
         return { mode: 'new', entry: Object.assign({ name: e.name, content: e.text }, stFields(e.prompt, e.enabled)), place };
     });
     const out = { kind: 'ywp-entry', v: 1, title, why: whyRaw, author, scope, entries, src: { presetName: w.srcName, presetFingerprint: null } };
+    /* ★W191（作者）：部分上传里勾了正则 ⇒ 同一个包里带上（后端 PACK_KEYS['ywp-entry'] 本就放行 regexes/regexOrder）。
+     *  形状与 scope:'regex' 那档逐字段相同（读侧 regexOpOf 同一把尺），只是多带 entries。 */
+    try {
+        const rxWant = new Set(w.pickedRegex || []);
+        const rxAll = (S.w && S.w.regexes) || [];
+        const pickedRx = rxAll.filter(r => rxWant.has(r.id));
+        if (pickedRx.length) {
+            out.regexes = pickedRx.map(r => {
+                const i = rxAll.findIndex(x => String(x.id) === String(r.id));
+                const prev = (i > 0) ? rxAll[i - 1] : null;
+                const pv = prev ? prev.script : null;
+                const place = pv
+                    ? { afterId: String(pv.id || ''), afterName: PM.normalizeName(pv.scriptName || ''), afterFind: PM.normalizeText(pv.findRegex || '').slice(0, 200), afterIndex: i - 1 }
+                    : { afterId: '', afterName: '', afterFind: '', afterIndex: null };
+                return { mode: 'new', reg: { ...r.script, disabled: !rxOnOf(w, r) }, place };
+            });
+            out.regexOrder = rxAll.map(r => String(r.id || '')).filter(Boolean);
+        }
+    } catch (e) { warn('带上正则失败（照旧上传条目）', e); }
     /* ★★E1：声明"我这些条目基于哪一版官方预设"——**只有确实选了、且这台后端支持新字段时才带**
        （不选 = 字段**不存在**，与今天逐字节一致；老后端 = 一律不带，见 `baseVerOk()`）。 */
     if (w.baseVersion && baseVerOk()) out.baseVersion = String(w.baseVersion);
@@ -13822,6 +13879,21 @@ function onClick(m, ev) {
            以前是 `(S.w.entries||[]).map(…)` = 全部 149 条，搜出 10 行点全选却选了 149 条（会传错内容）。 */
         case 'w-all': S.wiz.picked = shownEntries(S.wiz).map(e => e.identifier); syncPickUi(m); renderAll(); break;
         case 'w-none': S.wiz.picked = []; syncPickUi(m); renderAll(); break;
+        /* ★W191（作者）：部分上传里的正则区 —— 勾上「正则」显示/隐藏；点正则行勾选；全选/取消正则。 */
+        case 'w-rxshow': {
+            S.wiz.rxShow = !S.wiz.rxShow;
+            /* 正则清单在向导初始化时已装进 S.w.regexes（PM.getRegexList + normalizeRegexScript），这里不用再读 */
+            renderAll(); break;
+        }
+        case 'w-rxpick': {
+            const rid = target.getAttribute('data-id');
+            const set = new Set(S.wiz.pickedRegex || []);
+            if (set.has(rid)) set.delete(rid); else set.add(rid);
+            S.wiz.pickedRegex = [...set];
+            renderAll(); break;
+        }
+        case 'w-rxall': S.wiz.pickedRegex = ((S.w && S.w.regexes) || []).map(r => r.id); renderAll(); break;
+        case 'w-rxnone': S.wiz.pickedRegex = []; renderAll(); break;
         /* ★★U15（作者拍板 §BV-1 · 2026-09-22 深夜）：**「只看打开的」那颗筛选开关** —— 点一次拨过去、
            再点一次取消（就是作者那句"再点一次就取消筛选"）。落地三件事：
              ① 开关状态存在 settings.hideDisabledInPicker（**默认 false**，跟着用户走、下次进来还是它）；
