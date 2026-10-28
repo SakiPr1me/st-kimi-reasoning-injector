@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.82';
+const VERSION = '2.2.83';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.82';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.82';
+const BUILD = 'v2.2.83';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -8336,12 +8336,23 @@ function previewRows(pack, mine) {
                         pairs: [{ mine: '（你的预设里没有这一条 → 新增）', next: nextTxt }] });
                 } else {
                     const d = changeBlocks(cur.text, nextTxt, MAXB);
+                    /* ★W206（作者报：`尾部2·Gmn3.8` 改了开关却显示「一致」）—— 条目这一支**只看正文**，
+                       开关（顺序表里的 enabled）从头到尾没参与判定。现在补上：正文一样时再看开关，
+                       开关不同就标「打开了 / 关闭了」（两者都变时以开关为主标签，红蓝差异照旧显示）。 */
+                    const enWant = (e.entry && typeof e.entry.enabled === 'boolean') ? e.entry.enabled : null;
+                    const enMine = (cur.enabled === null || cur.enabled === undefined) ? null : !!cur.enabled;
+                    const enDiff = (enWant !== null && enMine !== null && enWant !== enMine);
                     if (!d.total) {
-                        /* ★W205（作者）：一字不差的条目也要有**灰色「一致」**标识（原来什么都不显示）。 */
-                        add({ key: 'n:' + nm, name: nm, tag: '一致', cls: 'yws-tag-same',
-                            stat: '', pairs: [] });
+                        if (enDiff) {
+                            add({ key: 'n:' + nm, name: nm, tag: (enWant ? '打开了' : '关闭了'), cls: (enWant ? 'yws-tag-on' : 'yws-tag-off'),
+                                stat: '', pairs: [] });
+                        } else {
+                            /* ★W205（作者）：一字不差的条目也要有**灰色「一致」**标识（原来什么都不显示）。 */
+                            add({ key: 'n:' + nm, name: nm, tag: '一致', cls: 'yws-tag-same',
+                                stat: '', pairs: [] });
+                        }
                     } else {
-                        add({ key: 'u:' + nm, name: nm, tag: '改这条', cls: 'yws-tag-patch',
+                        add({ key: 'u:' + nm, name: nm, tag: (enDiff ? (enWant ? '打开了' : '关闭了') : '改这条'), cls: (enDiff ? (enWant ? 'yws-tag-on' : 'yws-tag-off') : 'yws-tag-patch'),
                             stat: '有 ' + numOf(d.total) + ' 处不一样', pairs: d.blocks, more: d.more });
                     }
                 }
@@ -8365,31 +8376,39 @@ function previewRows(pack, mine) {
                `rxByName` 是按**名字**配的：名字撞上就算「我有」，内容不一样也不管。
                现在：按名字命中后**再比一次正文**（findRegex + replaceString 规范化后一致）才算「我有」；
                不一致就当没有（会显示「新增」）。 */
+            /* ★W206（作者报：`不发送余小温本体聊天` 改了开关，预览还显示「一致」；`杀感叹号3` 明明是新增也显示「一致」）
+               两处错共用一条根因：原来的 old 判定要求**正文也一模一样**才算"我手上有这条"，于是：
+                 · 开关变了的（正文没变）→ 名字对上了也被判"不是同一条"或被当成一致，开关差异根本没参与判断；
+                 · `杀感叹号3` 的 replaceString 是**空串**，两边空串相等 ⇒ 一条本不该匹配上的也被"正文相同"放进来。
+               现在改成：**按名字配**（`rxOldByName` 优先，其次按 findRegex），拿到 old 后再分两个维度判：
+                 · 正文（findRegex + replaceString）一样/不一样 → 决定「一致」还是「改这条」；
+                 · 开关（disabled）一样/不一样 → 决定是否标「打开了 / 关闭了」。
+               两个维度可以叠加（既改正文又改开关时，标签以开关为准并保留红蓝差异）。 */
             const rxOldByName = rxByName.get(PM.normalizeName(nm)) || null;
-            const rxOldByFind = rxByFind.get(PM.normalizeText(reg.findRegex || '')) || null;
-            const sameRxBody = (a, b) => !!a && !!b
+            const old = rxOldByName || rxByFind.get(PM.normalizeText(reg.findRegex || '')) || null;
+            const rxBodySame = (a, b) => !!a && !!b
                 && PM.normalizeText(String(a.findRegex || '')) === PM.normalizeText(String(b.findRegex || ''))
                 && PM.normalizeText(String(a.replaceString || '')) === PM.normalizeText(String(b.replaceString || ''));
-            const old = (sameRxBody(rxOldByName, reg) ? rxOldByName : (sameRxBody(rxOldByFind, reg) ? rxOldByFind : null));
+            /* 开关：包里这条"应不应该跑" vs 我本地这条"现在跑不跑" */
+            const rxWantOn = !(reg.disabled === true);
+            const rxMineOn = old ? !(old.disabled === true) : null;
+            const rxSwitchDiff = !!old && (rxMineOn !== rxWantOn);
             const mode = String(r.mode || 'new');
             /* ★W203（作者报：这些正则都显示「新增」，可我本地 V1008 明明都有）—— 原来 tag 只看包里的 mode
                （上传侧一律写 'new'），完全不看你手上有没有这条 ⇒ 自己上传的东西全被标成新增。
                改成与条目侧同一口径：先看 mode（删/改/开关是包明确声明的）；new 再看本地有没有同名/同查找式：
                有且内容一致 ⇒ 不标标签；有但内容不同 ⇒ 改这条；真的没有 ⇒ 新增。 */
+            /* ★W206：标签优先级 = 删/改（包明确声明）→ 没有这条（新增）→ **开关变了（打开了/关闭了）** → 正文变了（改这条）→ 一致。 */
             const tag = (function () {
                 if (mode === 'remove') return '删这条';
                 if (mode === 'patch') return '改这条';
-                if (mode === 'switch') return '开关';
+                if (mode === 'switch') return rxWantOn ? '打开了' : '关闭了';
                 if (!old) return '新增';
-                const sameBody = PM.normalizeText(String(old.findRegex || '')) === PM.normalizeText(String(reg.findRegex || ''))
-                    && PM.normalizeText(String(old.replaceString || '')) === PM.normalizeText(String(reg.replaceString || ''));
-                return sameBody ? '一致' : '改这条';
+                if (rxSwitchDiff) return rxWantOn ? '打开了' : '关闭了';
+                return rxBodySame(old, reg) ? '一致' : '改这条';
             })();
             /* ★W205（作者）：一字不差的正则也要有**灰色**标识；开关变化标「打开了 / 关闭了」。 */
-            const rxSwitchTag = (mode === 'switch')
-                ? ((rxOnOf(w, r) === false) ? '关闭了' : '打开了')
-                : null;
-            const finalTag = rxSwitchTag || tag;
+            const finalTag = tag;   // ★W206：开关标签已在上面的 tag 里判完（不再二次覆盖）
             add({
                 key: 'rx:' + nm, name: nm, tag: finalTag,
                 cls: finalTag === '删这条' ? 'yws-tag-old'
@@ -9875,10 +9894,14 @@ function previewSrcOptionsHtml(p) {
          所以 **selected 只给云端组那一份**（本机组同名的那个不写 selected）—— 默认仍落在云端基准上。 */
     const cloudNames = new Set(cloud.map(x => x.name));
     const cloudGrp = cloud.length ? '<optgroup label="官方基准（云端）" data-cloud="1">' + cloud.map(x => opt(x.name, x.label)).join('') + '</optgroup>' : '';
+    /* ★W206（作者：假设用户预设里，本机那份和云端那份**同名**时，本机项后面加「（我的）」）——
+       纯显示区分，`value` 仍是原名（选中逻辑一个字没变）；已选中的仍是云端那一份。 */
     const localGrp = all.length
         ? '<optgroup label="本机已装">' + all.map(n => {
-            const same = n === pick && cloudNames.has(n);   // 该项已在云端组里选中过 ⇒ 这里不要再写 selected
-            return '<option value="' + esc(n) + '"' + (n === pick && !cloudNames.has(n) ? ' selected' : '') + '>' + esc(n) + '</option>';
+            const dup = cloudNames.has(n);                 // 这个名字云端也有 ⇒ 本条是"我的那份"
+            const label = dup ? (n + '（我的）') : n;
+            const sel = (n === pick && !dup) ? ' selected' : '';
+            return '<option value="' + esc(n) + '"' + sel + '>' + esc(label) + '</option>';
         }).join('') + '</optgroup>'
         : '';
     return cloudGrp + localGrp;
