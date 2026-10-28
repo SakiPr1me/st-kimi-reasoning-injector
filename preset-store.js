@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.80';
+const VERSION = '2.2.81';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,7 +250,7 @@ const VERSION = '2.2.80';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.80';
+const BUILD = 'v2.2.81';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -947,9 +947,12 @@ function kindText(c) {
     /* ★R9-i（R8 P2-5 商店半）：`scope:"regex"` 的包 = 只带正则、不带条目 —— 卡片上必须**一眼看出这条含正则**
        （正则会在对方每一条消息上跑，不能让下载的人点进去才发现）。 */
     if (c.scope === 'regex') return n ? '含 ' + countText(n, '条正则') : '正则';
-    if (c.scope === 'single') return '1 个条目';
-    if (c.scope === 'multi') return countText(n, '个条目');
-    return n ? countText(n, '个条目') : '条目';
+    /* ★W204（作者报：15 条目 + 5 正则，卡片只写「5 个条目」）—— 混装包要**两样都报**。
+       纯正则包（scope==="regex"，上面已 return）走不到这里。 */
+    const rxPart = (Number(c.rxCount) > 0 && (c.scope !== 'regex')) ? ' + ' + numOf(c.rxCount) + ' 条正则' : '';
+    if (c.scope === 'single') return '1 个条目' + rxPart;
+    if (c.scope === 'multi') return countText(n, '个条目') + rxPart;
+    return (n ? countText(n, '个条目') : '条目') + rxPart;
 }
 /** ★P11（审查 C14）：包类型的人话 —— `kind=ywp-xxx` 这种内部枚举**不许直接给用户看**（审核页曾经原样显示） */
 function kindName(k) {
@@ -1050,7 +1053,7 @@ function listPresetNames() {
  *  改前这里读 `openai_settings`（= 文件那本账的副本）⇒ "改了预设插件读到旧的"。
  *  ⇒ **当前正在选用的那一份：键表照文件、值取内存**（prompts / prompt_order 一定取内存）；其余预设照旧读文件那本账。
  *  ★读内存失败 ⇒ 退回文件那份（绝不因为这条"取新"把读取搞坏）。 */
-function readPreset(name) {
+function readPreset(name, opts) {
     const pm = presetManager();
     if (!pm) throw new Error('取不到酒馆的预设管理器，请刷新页面重试');
     const list = pm.getPresetList(API_ID);
@@ -1063,6 +1066,11 @@ function readPreset(name) {
     }
     if (!body) throw new Error('找不到预设「' + name + '」');
     try {
+        /* ★★W204（作者报：在「假设用户预设」里选了带商店标识的旧版，预览却说「跟你的那份一字不差」，
+           连那条只有新版才有的正则也说一样）—— 真因：下面那段"当前在用的那份取内存值"的逻辑，
+           在对比目标恰好是酒馆当前在用的那一份时会被内存覆盖 ⇒ 读到的是你改过的现在态，而不是文件原样。
+           修：预览对比这条路传 { raw: true } 跳过内存合并、只读文件原样；其余调用（缝入/写盘/读最新态）不变。 */
+        if (opts && opts.raw) return JSON.parse(JSON.stringify(body));
         const ctx = window.SillyTavern?.getContext?.();
         const live = ctx && ctx.chatCompletionSettings;
         const sel = (typeof pm.getSelectedPresetName === 'function') ? String(pm.getSelectedPresetName() || '') : '';
@@ -8308,7 +8316,7 @@ function previewRows(pack, mine) {
                 } else {
                     const d = changeBlocks(cur.text, nextTxt, MAXB);
                     add({ key: 'p:' + nm, name: nm, tag: '改这条', cls: 'yws-tag-patch',
-                        stat: d.total ? '有 ' + numOf(d.total) + ' 处不一样' : '跟你的那份一字不差（缝了也没变化）',
+                        stat: d.total ? '有 ' + numOf(d.total) + ' 处不一样' : '',
                         pairs: d.blocks, more: d.more });
                 }
             } else {
@@ -8318,13 +8326,13 @@ function previewRows(pack, mine) {
                    里明明有同名条目。按"我这份里到底有没有/一不一样"分成三种：没变 / 改这条 / 真新增。 */
                 if (!cur) {
                     add({ key: 'n:' + nm, name: nm, tag: '新增', cls: 'yws-tag-new',
-                        stat: '你的预设里没有这条 → 会作为新条目加进来',
+                        stat: '',
                         pairs: [{ mine: '（你的预设里没有这一条 → 新增）', next: nextTxt }] });
                 } else {
                     const d = changeBlocks(cur.text, nextTxt, MAXB);
                     if (!d.total) {
                         add({ key: 'n:' + nm, name: nm, tag: '', cls: '',
-                            stat: '跟你的那份一字不差（缝了也没变化）', pairs: [] });
+                            stat: '', pairs: [] });
                     } else {
                         add({ key: 'u:' + nm, name: nm, tag: '改这条', cls: 'yws-tag-patch',
                             stat: '有 ' + numOf(d.total) + ' 处不一样', pairs: d.blocks, more: d.more });
@@ -8346,7 +8354,16 @@ function previewRows(pack, mine) {
         for (const r of pack.regexes) {
             const reg = PM.normalizeRegexScript(r.reg || r.next || {});
             const nm = String(reg.scriptName || '（没名字的正则）');
-            const old = rxByName.get(PM.normalizeName(nm)) || rxByFind.get(PM.normalizeText(reg.findRegex || '')) || null;
+            /* ★W204（作者报：`杀感叹号3` 显示「跟我的那份一模一样」，可对比的那版里根本没这条正则）——
+               `rxByName` 是按**名字**配的：名字撞上就算「我有」，内容不一样也不管。
+               现在：按名字命中后**再比一次正文**（findRegex + replaceString 规范化后一致）才算「我有」；
+               不一致就当没有（会显示「新增」）。 */
+            const rxOldByName = rxByName.get(PM.normalizeName(nm)) || null;
+            const rxOldByFind = rxByFind.get(PM.normalizeText(reg.findRegex || '')) || null;
+            const sameRxBody = (a, b) => !!a && !!b
+                && PM.normalizeText(String(a.findRegex || '')) === PM.normalizeText(String(b.findRegex || ''))
+                && PM.normalizeText(String(a.replaceString || '')) === PM.normalizeText(String(b.replaceString || ''));
+            const old = (sameRxBody(rxOldByName, reg) ? rxOldByName : (sameRxBody(rxOldByFind, reg) ? rxOldByFind : null));
             const mode = String(r.mode || 'new');
             /* ★W203（作者报：这些正则都显示「新增」，可我本地 V1008 明明都有）—— 原来 tag 只看包里的 mode
                （上传侧一律写 'new'），完全不看你手上有没有这条 ⇒ 自己上传的东西全被标成新增。
@@ -8363,8 +8380,9 @@ function previewRows(pack, mine) {
             })();
             add({
                 key: 'rx:' + nm, name: nm, tag, cls: tag === '删这条' ? 'yws-tag-old' : ((tag === '改这条' || tag === '开关') ? 'yws-tag-patch' : (tag ? 'yws-tag-new' : '')),
-                stat: (!old ? '你手上没有这条 → 会给你加上（作用：' + regexPlaceText(reg) + '）'
-                    : (tag === '' ? '跟你的那份一字不差（缝了也没变化）' : '你手上已经有一条同名的 —— 缝的时候会问你要哪条')),
+                /* ★W204（作者：这些说明大可不必）—— 正则行也只留标签本身；"没变化"与"新增"同一套前标，
+                   后面不再缀解释句。 */
+                stat: '',
                 pairs: [{ mine: old ? String(old.findRegex || '') : '（你手上没有这条正则）', next: String(reg.findRegex || '') },
                     { mine: old ? String(old.replaceString || '（空 = 删掉匹配到的部分）') : '（无）', next: String(reg.replaceString || '（空 = 删掉匹配到的部分）') }],
             });
@@ -8380,7 +8398,7 @@ function previewRows(pack, mine) {
             if (op.op === 'add') {
                 const cur = findMine(nm, op.entry && op.entry.identifier);
                 add({ key: 'a:' + nm, name: nm, tag: '新增条目', cls: 'yws-tag-new',
-                    stat: cur ? '你已有一条同名的 —— 缝的时候会问你要哪条' : '你的预设里没有这条 → 会作为新条目加进来',
+                    stat: cur ? '你已有一条同名的 —— 缝的时候会问你要哪条' : '',
                     pairs: [{ mine: '（你的预设里没有这一条 → 新增）', next: String((op.entry && op.entry.content) || op.next || '') }] });
             } else if (op.op === 'update') {
                 const cur = findMine(nm, op.entry && op.entry.identifier);
@@ -8388,7 +8406,7 @@ function previewRows(pack, mine) {
                 const oldTxt = cur ? cur.text : String(op.base || '');
                 const d = changeBlocks(oldTxt, nextTxt, MAXB);
                 add({ key: 'u:' + nm, name: nm, tag: '改正文', cls: 'yws-tag-patch',
-                    stat: (cur ? '' : '你的预设里没有这条 —— ') + (d.total ? '有 ' + numOf(d.total) + ' 处不一样' : '跟你的那份一字不差'),
+                    stat: d.total ? '有 ' + numOf(d.total) + ' 处不一样' : '',
                     pairs: d.blocks.length ? d.blocks : [{ mine: oldTxt, next: nextTxt }], more: d.more });
             } else if (op.op === 'remove') {
                 const cur = findMine(nm, op.entry && op.entry.identifier);
@@ -9481,7 +9499,11 @@ function previewCardData() {
     const rev = baseRev ? baseRev + 1 : 1;
     return {
         id: PREVIEW_CARD_ID, title: pack.title, why: pack.why, author: pack.author,
-        kind: pack.kind, scope: pack.scope, count: rxCount || names.length,
+        kind: pack.kind, scope: pack.scope,
+        /* ★W204（作者报：上传 15 条目 + 5 正则，卡片作者名旁边只写「5 个条目」）—— 原来 count 是
+           `rxCount || names.length`：只要带正则，条目数就被正则数顶掉。现在**条目数优先**（它就是"几个条目"），
+           正则条数另走 `rxCount` 一位（kindText 里单独拼「+ N 条正则」）。 */
+        count: names.length || rxCount, rxCount: rxCount,
         /* ★W22（W2b）：**小剧场预览卡要带 playText** —— 收起态的正文头段与展开态的全文都读它
            （cardHtml / cardBodyHtml 的剧场支按 c.playText 渲染）。不带上它，预览卡的正文是空的
            = 看着像「坏了 / 没做完」（AA-1④ 那个坑）。其余 kind 照旧不带（它们没有这一位）。
@@ -9491,11 +9513,13 @@ function previewCardData() {
            `rxCount ? 正则名 : 条目名`（二选一）⇒ 只要包里带正则，条目名就被整段替换掉。
            现在改成**条目优先、正则追加在后面**（两类都有就都显示；只有正则的纯正则包照旧只显示正则）。 */
         entryNames: (() => {
-            const out = names.slice(0, 8);
+            /* ★W204（作者报：15 条目 + 5 正则，折叠行最后只显示「＋5」）—— 原来条目只用前 8 个，
+               正则再往里挤；条目多到 8 以上就被截断。改成：**条目全列**（它是主角），正则接在后面；
+               界面靠「＋x」自己收（渲染层本来就按前 3 个 + ＋x 显示，这里给全量让它数得对）。 */
+            const out = names.slice();
             if (rxCount) {
                 const rxNames = pack.regexes.map(r => String((r.reg || {}).scriptName || '')).filter(Boolean);
-                // 条目名先占满 8 格，剩下的位置给正则（这样"条目在前、正则在后面"是硬保证）
-                for (const n of rxNames) { if (out.length >= 8) break; out.push(n); }
+                for (const n of rxNames) out.push(n);
             }
             return out;
         })(),
@@ -9901,7 +9925,7 @@ function computePreview() {
     const pick = S.prev.pick || previewTargetDefault();       // ★R9-i：默认挑一份"跟上传源不一样"的（见 previewTargetDefault）
     try {
         const names = listPresetNames();
-        if (pick && names.includes(pick)) { const _pp = readPreset(pick); mine = { name: pick, preset: _pp, idx: PM.indexPreset(_pp) }; }   // ★W203：带上 preset 原文（正则比对要读它）
+        if (pick && names.includes(pick)) { const _pp = readPreset(pick, { raw: true }); mine = { name: pick, preset: _pp, idx: PM.indexPreset(_pp) }; }   // ★W203/W204：带 preset 原文，且**只读文件原样**（不吃内存覆盖）
     } catch (e) { warn('预览：读不到那份预设（照旧显示卡片预览）', e); }
     S.prev.mineName = mine ? mine.name : '';
     S.prev.rowsBase = rowsVsBase(pack, w);        // ★C20③：与官方旧版的对比（没填官方旧版就是空数组）
