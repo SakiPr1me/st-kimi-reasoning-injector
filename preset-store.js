@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.105';
+const VERSION = '2.2.106';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -8303,6 +8303,24 @@ function diffPairsHtml(pairs, more) {
         (more > 0 ? '<div class="yws-dlmore">还有 ' + numOf(more) + ' 处没列出来 —— 到更新器里看全部</div>' : '') +
     '</div>';
 }
+/** ★★W257：**一行上的标识**（唯一渲染口）。
+ *  作者 2026-10-29 的硬要求："这里看到的标识就应该是点击缝入后看到的；允许两个或多个标识在两个预览界面看到"。
+ *  ⇒ 所以这枚函数被**三个预览界面共用**：电商卡片的展开态（`togglePreviewCard` 那一块）、
+ *    预览块 `.yws-pv` 的逐条、待审页的差异列表。只要 `previewRows()` 给出 `tags` 数组，三处画出来必然一致
+ *    —— 彻底避免"改了一处、另一处还是老样子"（这正是 W218/W253/W256 反复栽的坑）。
+ *  ★`r.tag`/`r.cls`（单枚，老形状）仍然认：`previewRows()` 会把它折算进 `tags`，
+ *    但外部（老探针/老调用）可能只塞了 `tag` ⇒ 这里再兜一道。 */
+function rowTagsHtml(r) {
+    const list = (r && Array.isArray(r.tags) && r.tags.length)
+        ? r.tags
+        : ((r && r.tag) ? [{ t: r.tag, cls: r.cls }] : []);
+    if (!list.length) return '';
+    const one = (x) => '<span class="yws-tag ' + esc(String((x && x.cls) || '')) + '"' +
+        ((x && x.note) ? ' title="' + esc(String(x.note)) + '"' : '') + '>' + esc(String((x && x.t) || '')) + '</span>';
+    /* 单枚时不套容器 —— 与改前的 DOM 逐字一致（老探针 `.yws-prow2-h > .yws-tag` 的选择器不会失效）。 */
+    if (list.length === 1) return one(list[0]);
+    return '<span class="yws-tags">' + list.map(one).join('') + '</span>';
+}
 /** 包里每一条 → 一行预览（行尾折角；点整行摊开差异）。**纯只读**：不定位、不判定、不写任何东西 */
 function previewRows(pack, mine) {
     const rows = [];
@@ -8310,7 +8328,38 @@ function previewRows(pack, mine) {
     const byName = new Map(), byId = new Map();
     if (mine) for (const e of mine.idx.entries) { byName.set(PM.normalizeName(e.name), e); byId.set(String(e.identifier), e); }
     const findMine = (name, id) => (id && byId.get(String(id))) || byName.get(PM.normalizeName(name)) || null;
-    const add = (o) => rows.push(Object.assign({ tag: '', cls: '', stat: '', pairs: [], more: 0, body: '', kind: 'text' }, o));
+    /* ★★W257（作者 2026-10-29："在编辑预览界面里面就不能是显示「新增」而是「改名」；而且不只是编辑预览界面，
+       上架商店后的预览界面也应该是这样写 —— 你以后修改预览界面要两个预览界面都同步，
+       这里看到的就应该是商店里看到的，这里看到的标识就应该是点击缝入后看到的"）——
+
+       **为什么以前显示「新增」**：`findMine()` 只按「名字 / identifier」找。包里那条改了名 ⇒ 名字对不上
+       ⇒ `cur` 为空 ⇒ 落到「新增」分支。而缝入侧（`preset-updater.js` 的 `conv()`）拿到的是包里**带回来的旧名字**
+       （`entry.wasName`，W234 加的）⇒ 它能认出"这是同一条改了名"。**两套尺子、两个结论** —— 与 W218/W253 同源。
+
+       **修**：`findMine` 增加第三档「按包里带回来的旧名字找」（与缝入侧**同一条线索、同一个优先级**）。
+       找到之后，标签按"名字变了没有 / 正文变了没有 / 开关变了没有"三个维度组合，**一条记录可以带多枚标签**
+       （作者明说：允许两个或多个标识）。
+
+       ★银行家的边界（宁可不标也不标错）：
+         · 只在包里**明确带了** `wasName` 时才走这一档 —— 没带就是没线索，不许猜（猜错 = 把别人的条目当你的）；
+         · `wasName` 与当前名字**规范化后相同** ⇒ 等于没改名，不产生「改名」标签；
+         · 三档都找不到才是真「新增」。 */
+    const findMineBy = (name, id, wasName) => {
+        const hit = findMine(name, id);
+        if (hit) return { e: hit, renamedFrom: '' };
+        const w = String(wasName || '');
+        if (!w) return { e: null, renamedFrom: '' };
+        if (PM.normalizeName(w) === PM.normalizeName(String(name || ''))) return { e: null, renamedFrom: '' };  // 等于没改名
+        const byWas = byName.get(PM.normalizeName(w)) || (byId.get(w) || null);
+        return byWas ? { e: byWas, renamedFrom: w } : { e: null, renamedFrom: '' };
+    };
+    /* 一行可以挂多枚标签（W257）：`tags` 是数组，`tag/cls` 仍保留 = 第一枚（老渲染/老契约逐字兼容）。 */
+    const add = (o) => {
+        const tags = Array.isArray(o.tags) && o.tags.length ? o.tags : ((o.tag ? [{ t: o.tag, cls: o.cls }] : []));
+        rows.push(Object.assign({ tag: '', cls: '', tags, stat: '', pairs: [], more: 0, body: '', kind: 'text' }, o,
+            { tags, tag: tags.length ? tags[0].t : '', cls: tags.length ? tags[0].cls : '' }));
+    };
+    const T_RENAMED = (wasName, nm) => ({ t: '改名', cls: 'yws-tag-renamed', note: '原名「' + wasName + '」→ 现在叫「' + nm + '」' });
     if (!pack || !pack.kind) return rows;
     /* ★★W22（W2b）：**小剧场包** —— 它不是「没有条目」，是**这一档本来就没有条目**。
        不给这一支的话，预览 / 待审会走到最后那句「这个包里没有条目。」—— 对剧场是**假话**（§D21 批过同族）。
@@ -8332,11 +8381,17 @@ function previewRows(pack, mine) {
     if (pack.kind === 'ywp-entry') {
         for (const e of (pack.entries || [])) {
             const nm = String((e.entry && e.entry.name) || e.name || '（未命名）');
-            const cur = findMine(nm, e.entry && e.entry.identifier);
+            /* ★W257：三档找"我手上那条" —— 名字/identifier → **包里带回来的旧名字**（`wasName`，与缝入侧同一条线索）。
+               `renamedFrom` 非空 = 这一条是**改了名的同一条**（不是新增）。 */
+            const wasNameIn = String((e.entry && e.entry.wasName) || e.wasName || '');
+            const found = findMineBy(nm, e.entry && e.entry.identifier, wasNameIn);
+            const cur = found.e;
+            const renamedFrom = found.renamedFrom;
+            const renTag = renamedFrom ? [T_RENAMED(renamedFrom, nm)] : [];   // 改名这枚标签（有才加）
             if (e.mode === 'patch') {
                 const nextTxt = String(e.next || '');
                 if (!cur) {
-                    add({ key: 'p:' + nm, name: nm, tag: '改变', cls: 'yws-tag-patch', stat: '你的预设里没有这条 —— 缝的时候会提示找不到位置',
+                    add({ key: 'p:' + nm, name: nm, tags: [{ t: '改变', cls: 'yws-tag-patch' }], stat: '你的预设里没有这条 —— 缝的时候会提示找不到位置',
                         pairs: [{ mine: '（你的预设里没有这一条）', next: nextTxt }] });
                 } else {
                     const d = changeBlocks(cur.text, nextTxt, MAXB);
@@ -8349,20 +8404,19 @@ function previewRows(pack, mine) {
                            （`analyze()` → `STATUS.SAME`）⇒ 说"没实质变化"。两套尺子、两个结论。
                        ⇒ 现在**折行也看差异块**（`d.total`）：有差异才是「改变」，没差异就按条目侧那一套继续判
                          开关（打开了/关闭了）、再退「一致」—— 与详情页、与商店列表、与缝入侧同一把尺。
-                       ★"你的预设里没有这条"那一支（!cur）保持原样：那时确实无处可比，说「改变」不算错。 */
+                       ★"你的预设里没有这条"那一支（!cur）保持原样：那时确实无处可比，说「改变」不算错。
+                       ★★W257：这一支也补上「改名」标签（**可以和「改变」/「打开了」并存**）——
+                         作者原话："允许两个或多个标识在两个预览界面看到"。 */
                     const enWantP = (e.entry && typeof e.entry.enabled === 'boolean') ? e.entry.enabled : null;
                     const enMineP = (cur.enabled === null || cur.enabled === undefined) ? null : !!cur.enabled;
                     const enDiffP = (enWantP !== null && enMineP !== null && enWantP !== enMineP);
+                    const swTagP = enDiffP ? [{ t: (enWantP ? '打开了' : '关闭了'), cls: (enWantP ? 'yws-tag-on' : 'yws-tag-off') }] : [];
                     if (!d.total) {
-                        if (enDiffP) {
-                            add({ key: 'p:' + nm, name: nm, tag: (enWantP ? '打开了' : '关闭了'),
-                                cls: (enWantP ? 'yws-tag-on' : 'yws-tag-off'), stat: '', pairs: [] });
-                        } else {
-                            add({ key: 'p:' + nm, name: nm, tag: '一致', cls: 'yws-tag-same', stat: '', pairs: [] });
-                        }
+                        const rest = swTagP.length ? swTagP : (renTag.length ? [] : [{ t: '一致', cls: 'yws-tag-same' }]);
+                        add({ key: 'p:' + nm, name: nm, tags: renTag.concat(rest), stat: '', pairs: [] });
                     } else {
-                        add({ key: 'p:' + nm, name: nm, tag: (enDiffP ? (enWantP ? '打开了' : '关闭了') : '改变'),
-                            cls: (enDiffP ? (enWantP ? 'yws-tag-on' : 'yws-tag-off') : 'yws-tag-patch'),
+                        add({ key: 'p:' + nm, name: nm,
+                            tags: renTag.concat(swTagP.length ? swTagP : [{ t: '改变', cls: 'yws-tag-patch' }]),
                             stat: '有 ' + numOf(d.total) + ' 处不一样',
                             pairs: d.blocks, more: d.more });
                     }
@@ -8373,28 +8427,30 @@ function previewRows(pack, mine) {
                    这一支原来**无条件**标「新增」并把旧侧写成"你的预设里没有这一条"——哪怕你这份
                    里明明有同名条目。按"我这份里到底有没有/一不一样"分成三种：没变 / 改这条 / 真新增。 */
                 if (!cur) {
-                    add({ key: 'n:' + nm, name: nm, tag: '新增', cls: 'yws-tag-new',
+                    add({ key: 'n:' + nm, name: nm, tags: [{ t: '新增', cls: 'yws-tag-new' }],
                         stat: '',
                         pairs: [{ mine: '（你的预设里没有这一条 → 新增）', next: nextTxt }] });
                 } else {
                     const d = changeBlocks(cur.text, nextTxt, MAXB);
                     /* ★W206（作者报：`尾部2·Gmn3.8` 改了开关却显示「一致」）—— 条目这一支**只看正文**，
                        开关（顺序表里的 enabled）从头到尾没参与判定。现在补上：正文一样时再看开关，
-                       开关不同就标「打开了 / 关闭了」（两者都变时以开关为主标签，红蓝差异照旧显示）。 */
+                       开关不同就标「打开了 / 关闭了」（两者都变时以开关为主标签，红蓝差异照旧显示）。
+                       ★★W257：**只改名、内容一字没动**这一档（正是作者这次报的：`尾部2·Gmn4/3.8`）——
+                         以前 `findMine` 按名字找不到 ⇒ 落进上面的「新增」；现在先按 `wasName` 认出来，
+                         这里再判：正文 0 差异 + 开关没变 ⇒ 标签就是**「改名」**（不再给「一致」，
+                         因为"我手上那条叫另一个名字"这件事才是这条的重点）。 */
                     const enWant = (e.entry && typeof e.entry.enabled === 'boolean') ? e.entry.enabled : null;
                     const enMine = (cur.enabled === null || cur.enabled === undefined) ? null : !!cur.enabled;
                     const enDiff = (enWant !== null && enMine !== null && enWant !== enMine);
+                    const swTag = enDiff ? [{ t: (enWant ? '打开了' : '关闭了'), cls: (enWant ? 'yws-tag-on' : 'yws-tag-off') }] : [];
                     if (!d.total) {
-                        if (enDiff) {
-                            add({ key: 'n:' + nm, name: nm, tag: (enWant ? '打开了' : '关闭了'), cls: (enWant ? 'yws-tag-on' : 'yws-tag-off'),
-                                stat: '', pairs: [] });
-                        } else {
-                            /* ★W205（作者）：一字不差的条目也要有**灰色「一致」**标识（原来什么都不显示）。 */
-                            add({ key: 'n:' + nm, name: nm, tag: '一致', cls: 'yws-tag-same',
-                                stat: '', pairs: [] });
-                        }
+                        /* 改名 + 开关变 ⇒ 两枚都要（作者要的"多标识"）；只改名 ⇒ 只给「改名」；
+                           都没变 ⇒ 灰色「一致」（W205 立的口径）。 */
+                        const rest = swTag.length ? swTag : (renTag.length ? [] : [{ t: '一致', cls: 'yws-tag-same' }]);
+                        add({ key: 'n:' + nm, name: nm, tags: renTag.concat(rest), stat: '', pairs: [] });
                     } else {
-                        add({ key: 'u:' + nm, name: nm, tag: (enDiff ? (enWant ? '打开了' : '关闭了') : '改变'), cls: (enDiff ? (enWant ? 'yws-tag-on' : 'yws-tag-off') : 'yws-tag-patch'),
+                        add({ key: 'u:' + nm, name: nm,
+                            tags: renTag.concat(swTag.length ? swTag : [{ t: '改变', cls: 'yws-tag-patch' }]),
                             stat: '有 ' + numOf(d.total) + ' 处不一样', pairs: d.blocks, more: d.more });
                     }
                 }
@@ -8427,13 +8483,30 @@ function previewRows(pack, mine) {
                  · 开关（disabled）一样/不一样 → 决定是否标「打开了 / 关闭了」。
                两个维度可以叠加（既改正文又改开关时，标签以开关为准并保留红蓝差异）。 */
             const rxOldByName = rxByName.get(PM.normalizeName(nm)) || null;
+            /* ★★W257（作者："以后修改预览界面要两个预览界面都同步" + 之前的"以后有什么问题，你要同时修复正则和条目"）——
+               **正则侧也同样漏了「改名」**：包里带回来的旧名字在 `reg.wasName`（上传侧 W247 写入，
+               服务端 `sanitizeRegexReg()` 对未知字段原样保留 ⇒ 能穿过）。
+               以前这里只按**当前名字**配 ⇒ 改了名的正则认不出来 ⇒ 落进「新增」，
+               而缝入侧（`preset-updater.js` 的 `regexOps`）早就会按 `reg.wasName` 认领（W247）。
+               ⇒ 补上第三档，与条目侧、与缝入侧**同一条线索**：
+                 当前名字 → `wasName` → 都没有才算新增。
+               ★边界：只在包里**明确带了** `wasName` 且它与当前名字**规范化后不同**时才走这一档（不猜）。 */
+            const rxWasName = String((reg && reg.wasName) || (r.reg && r.reg.wasName) || '');
+            const rxRenamed = (function () {
+                if (rxOldByName) return '';                       // 名字直接对上了 ⇒ 没改名
+                const w = rxWasName;
+                if (!w) return '';
+                if (PM.normalizeName(w) === PM.normalizeName(nm)) return '';   // 等于没改名
+                const byWas = rxByName.get(PM.normalizeName(w)) || null;
+                return byWas ? w : '';
+            })();
             /* ★W209（作者报：`杀感叹号3` 明明是新增，却变成「改这条」）——
                原来的兜底是"名字没配上就**按查找式**配"（`rxByFind`）：
                对比的那份里只要有一条**查找式相同、名字不同**的正则，就会被认成"我手上有这条"，
                然后因为指纹不同被判「改这条」—— 它其实压根不是同一条。
                ⇒ 去掉这个兜底：**只按名字认领**（正则的身份就是它的名字）。
                名字没配上 = 我确实没有这条 ⇒ 「新增」。 */
-            const old = rxOldByName;
+            const old = rxOldByName || (rxRenamed ? (rxByName.get(PM.normalizeName(rxRenamed)) || null) : null);
             /* ★W207（作者：你说的"正文"不只有替换内容，还有查找的正则）——
                上一步只比了 findRegex + replaceString，**漏了**作用范围(placement)/只测正文(markdownOnly)/
                只测提示词(promptOnly)/编辑也跑(runOnEdit)/宏替换档/保留轮数(minDepth,maxDepth)/要剥的串(trimStrings)。
@@ -8476,12 +8549,17 @@ function previewRows(pack, mine) {
             })();
             /* ★W205（作者）：一字不差的正则也要有**灰色**标识；开关变化标「打开了 / 关闭了」。 */
             const finalTag = tag;   // ★W206：开关标签已在上面的 tag 里判完（不再二次覆盖）
+            const clsOf = (t) => t === '删这条' ? 'yws-tag-old'
+                : (t === '改变' ? 'yws-tag-patch'
+                    : (t === '一致' ? 'yws-tag-same'
+                        : (t === '关闭了' ? 'yws-tag-off' : (t === '打开了' ? 'yws-tag-on' : 'yws-tag-new'))));
+            /* ★★W257：**正则侧也允许两枚标签并存**（与条目侧同一个口径、同一个 `rowTagsHtml()` 出口）——
+               「改名」+「改变」/「改名」+「打开了」都要看得见。只改名（正文与开关都没动）时
+               主标签就是「改名」，不再给「一致」（"叫另一个名字"才是这条的重点）。 */
+            const rxTags = (rxRenamed ? [T_RENAMED(rxRenamed, nm)] : []).concat(
+                (finalTag === '一致' && rxRenamed) ? [] : [{ t: finalTag, cls: clsOf(finalTag) }]);
             add({
-                key: 'rx:' + nm, name: nm, tag: finalTag,
-                cls: finalTag === '删这条' ? 'yws-tag-old'
-                    : (finalTag === '改变' ? 'yws-tag-patch'
-                        : (finalTag === '一致' ? 'yws-tag-same'
-                            : (finalTag === '关闭了' ? 'yws-tag-off' : (finalTag === '打开了' ? 'yws-tag-on' : 'yws-tag-new')))),
+                key: 'rx:' + nm, name: nm, tags: rxTags,
                 /* ★W204（作者：这些说明大可不必）—— 正则行只留标签本身，后面不缀解释句。 */
                 stat: '',
                 pairs: [{ mine: old ? String(old.findRegex || '') : '（你手上没有这条正则）', next: String(reg.findRegex || '') },
@@ -8617,7 +8695,7 @@ function cardBodyHtml(c) {
                 return '<div class="yws-prow2' + (open ? ' yws-open' : '') + (offRow ? ' yws-off' : '') + '" data-act="row-toggle" data-rk="' + esc(r.key) + '" data-nm="' + esc(PM.normalizeName(r.name)) + '"' +
                     (offRow ? ' title="这一条在你的预设里是关着的（开关关掉了，仍然列在这里给你看）"' : '') + '>' +
                     '<div class="yws-prow2-h">' +
-                        (r.tag ? '<span class="yws-tag ' + r.cls + '">' + esc(r.tag) + '</span>' : '') +
+                        rowTagsHtml(r) +
                         '<span class="yws-pname2">' + esc(clip(r.name, 60)) + '</span>' +
                         '<span class="yws-verdict">' + esc(r.stat) + '</span>' +
                         '<span class="yws-caret" aria-hidden="true"></span>' +
@@ -9853,7 +9931,7 @@ function previewHtml(w) {
             (rowsBase.length ? '<div class="yws-rows">' + rowsBase.map(r =>
                 '<div class="yws-prow2' + (S.openRows['pv:' + r.key] ? ' yws-open' : '') + '" data-act="prev-row" data-rk="' + esc('pv:' + r.key) + '">' +
                     '<div class="yws-prow2-h">' +
-                        '<span class="yws-tag ' + r.cls + '">' + esc(r.tag) + '</span>' +
+                        rowTagsHtml(r) +
                         '<span class="yws-pname2">' + esc(clip(r.name, 60)) + '</span>' +
                         '<span class="yws-verdict">' + esc(r.stat) + '</span>' +
                         '<span class="yws-caret" aria-hidden="true"></span>' +
@@ -13849,7 +13927,7 @@ function reviewDiffHtml(it) {
     const list = rows.length ? '<div class="yws-rows">' + rows.map(r =>
         '<div class="yws-prow2 yws-open">' +
             '<div class="yws-prow2-h">' +
-                (r.tag ? '<span class="yws-tag ' + r.cls + '">' + esc(r.tag) + '</span>' : '') +
+                rowTagsHtml(r) +
                 '<span class="yws-pname2">' + esc(clip(r.name, 60)) + '</span>' +
                 '<span class="yws-verdict">' + esc(r.stat) + '</span>' +
             '</div>' +
@@ -15500,6 +15578,9 @@ export function initStoreDebug() {
         //   （`openCard` 这个老名字留着 = toggleCard 的别名，e2e/文档里到处是它）
         openCard: toggleCard, toggleCard, toggleRow, retryCard, previewRows, openInUpdater, afterStitched,
         buildPayload, submitPayload, startUpload, stFields, fp8, kindText, fieldRows, changeTagOf, changeBlocks,
+        /* ★★W257：标签的**唯一渲染口**也出口（真页探针要证"屏幕上真写着「改名」"，
+           必须走产品自己那枚函数，不能在探针里再拼一份 HTML —— 那就测了个假的）。 */
+        rowTagsHtml,
         loadMine, loadPending, credImport, dateText, getOfficialPreset, getCardPreset,
         /* ★★W25A（第 9 条 + 协调者追加）：凭据的**唯一出口** = `credValue()`（就是那一串有效值）。
            ★`credsJson` 这个名字**留一个兼容别名**（指同一个函数）：历史探针/文档里到处是它，

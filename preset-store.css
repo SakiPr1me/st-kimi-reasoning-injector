@@ -596,6 +596,22 @@
 /* 深色主题下把绿/红略微提亮，保证在两套主题上都看得清（沿用文件里既有的暗色适配写法）。 */
 body[data-theme-mode="dark"] .yws-tag-on, .dark .yws-tag-on { background: color-mix(in srgb, #4fbf74 26%, transparent); }
 body[data-theme-mode="dark"] .yws-tag-off, .dark .yws-tag-off { background: color-mix(in srgb, #cf8080 26%, transparent); }
+/* ★★W257（作者 2026-10-29："编辑预览界面里就不能显示「新增」而是「改名」，上架商店后的预览界面也应该是这样写"）——
+   「改名」这枚标识的色相**直接抄更新器**（`--yst-renamed: #22d3ee`，见 preset-updater.css 那把尺），
+   两处看起来必须是同一件事 —— 与 W210 把「改变」对齐到紫色（`--yst-both`）是同一条纪律。
+   ★不写 `var(--yst-renamed)`：商店模块是**发布隔离**的另一份实现，跨模块读更新器的自定义属性会在
+     "更新器没加载 / 加载顺序不同"时变成空色 ⇒ 这里写同一个**字面色号**（值相同、来源不同）。 */
+.yws-tag-renamed {
+    color: var(--yws-txt);
+    border-color: color-mix(in srgb, #22d3ee 55%, transparent);
+    background: color-mix(in srgb, #22d3ee 16%, transparent);
+    font-weight: 600;
+}
+body[data-theme-mode="dark"] .yws-tag-renamed, .dark .yws-tag-renamed { background: color-mix(in srgb, #3ad4e8 22%, transparent); }
+/* ★★W257：一条记录可以同时带**两枚**标识（作者："允许两个或多个标识在两个预览界面看到"）——
+   例如「改名」+「改变」（既改了名字又改了内容）、「改名」+「打开了」。
+   容器不换行、放不下就省略（与 `.yws-tag` 本身 `flex:0 0 auto` 同一口径）。 */
+.yws-tags { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; max-width: 100%; overflow: hidden; }
 
 /* ★A4（作者台账）：卡片**下半部分 = 一行** —— **左边**元信息（署名/类型/更新时间）、**右边**「缝入」，
    「缝入」**不另起一行**。所以这里 `nowrap`（放不下就省略，绝不换行）+ `.yws-card-f` 用 `margin-left:auto`
