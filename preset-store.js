@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.106';
+const VERSION = '2.2.107';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -8609,19 +8609,101 @@ function previewRows(pack, mine) {
                 stat: '这是一整份预设（' + countText(n, '个条目') + '）—— 连"你的预设里没有的"和"你有的"都在一起，到更新器里整份对比', pairs: [] }];
         }
         try {
-            const an = PM.analyze({ mine: readPreset(mine.name), next: p });
+            /* ★★W258-b：**用传进来的那份原文**（`mine.preset`），不要 `readPreset(mine.name)` 重读 ——
+               重读那条路拿的是"当前在用的预设的内存态"，与传进来那份（文件原样，W204 立的 `{raw:true}` 口径）
+               可能不是同一份 ⇒ 对比基准跟界面写着的那份对不上。
+               ★传不进来才退回重读（老调用方 / 待审页那种 `mine=null` 的情况走不到这里）。 */
+            const minePreset = (mine && mine.preset) || readPreset(mine.name);
+            const an = PM.analyze({ mine: minePreset, next: p });
             const items = (an.items || []).filter(it => it.next);          // 只有"新那份里有的"才是这条带来的
-            let changed = 0, same = 0, added = 0;
+            let changed = 0, same = 0, added = 0, renamedCnt = 0;
+            /* ★★W258（作者 2026-10-29："我点击 对比 余温V1008（云端2026-10-08)，这个还是显示新增，
+               没有在预览卡片里显示改名，而且它根本不是新增，但是缝入的时候又正常。到底怎么回事！"）
+
+               **真因（W257 只修了一半）**：W257 改的是 `ywp-entry`（部分上传）那条分支。
+               而商店里那张 V1008 卡是 **`ywp-preset`（整份预设）** —— 走的是**这里**，一段**完全独立**的判定：
+                   `if (!it.mine) { 标「新增」 } else { 比正文 ⇒ 一样/改变 }`
+               它**根本没读内核已经算好的 `status` / `renamed`**。于是：
+                 · 内核说 `renamed`（改名、正文一字未动）⇒ 有 `it.mine`，但正文 0 差异 ⇒ **整条 `continue` 掉、
+                   预览里一行都不出现**（作者说的"没在预览卡片里显示改名"）；
+                 · 若改名后那条在我手上确实没有同名/同 id 的条目（内核的改名分身校正没兜住），
+                   `it.mine` 为空 ⇒ **直接标「新增」**（作者看到的那一枚）。
+               ⇒ 一句话：**预览另写了一套判定，把内核已经算准的结论丢了**。
+                 这正是 W218/W253/W256/W257 反复栽的同一个坑 —— 所以这次**彻底改成一件事：
+                 这一段不再自己判"是什么"，只吃内核的结论，只负责"怎么排、显示几条"。**
+
+               ★另一处（作者这次亲眼看到的直接原因）：改名那条若**同时有开关变化**，会落进"有实质变化"那档，
+                 而那档**只显示前 6 条** ⇒ 排在后面的改名条目**被截掉**，屏幕上一行都没有。
+                 ⇒ 现在**改名类优先排在最前面**，且不参与那 6 条的截断。 */
+            const renamedRows = [], otherRows = [];
+            /* 兜底识别改名（与内核 W256 同一条信号）：包里这条的正文与我手上**某一条**一模一样，
+               而我手上那条的名字**在包里彻底消失了** ⇒ 这就是"改了名"（不是新增）。
+               ★只在 `it.mine` 为空时才用，且要求正文非空、名字不同、旧名字包内确实不存在（宁可不认也不误认）。 */
+            const mineByText = new Map();
+            try {
+                for (const e of PM.indexPreset(minePreset).entries) {
+                    const t = PM.normalizeText(e.text || '');
+                    if (t && t.trim() && !mineByText.has(t)) mineByText.set(t, e);
+                }
+            } catch (e) { /* 建不起来就不兜（不影响主判据） */ }
+            const packNames = new Set(items.map(it => PM.normalizeName(String((it.next && it.next.name) || ''))));
             for (const it of items) {
                 const nm = String((it.next && it.next.name) || (it.mine && it.mine.name) || '（未命名）');
-                if (!it.mine) { added++; if (added <= MAXB) add({ key: 'a:' + nm, name: nm, tag: '新增', cls: 'yws-tag-new', stat: '你的预设里没有这条', pairs: [{ mine: '（新增）', next: String(it.next.text || '') }] }); continue; }
-                const d = changeBlocks(it.mine.text, it.next.text, 2);
-                if (!d.total) { same++; continue; }
+                let wasName = String((it.mine && it.mine.name) || '');
+                let nameChanged = it.renamed === true || it.nameChanged === true
+                    || (!!wasName && PM.normalizeName(wasName) !== PM.normalizeName(nm));
+                /* ★兜底：内核没配上、但正文与我手上某一条一模一样、且那条的旧名字在包里没了 ⇒ 认作改名 */
+                if (!it.mine && !nameChanged) {
+                    const t = PM.normalizeText(String((it.next && it.next.text) || ''));
+                    const cand = (t && t.trim()) ? (mineByText.get(t) || null) : null;
+                    if (cand && PM.normalizeName(cand.name) !== PM.normalizeName(nm)
+                        && !packNames.has(PM.normalizeName(cand.name))) {
+                        wasName = String(cand.name || '');
+                        nameChanged = true;
+                    }
+                }
+                const renTag = nameChanged ? [T_RENAMED(wasName || '（原名未知）', nm)] : [];
+                const swTag = (it.enabledDiff === true)
+                    ? [{ t: ((it.next && it.next.enabled !== false) ? '打开了' : '关闭了'),
+                        cls: ((it.next && it.next.enabled !== false) ? 'yws-tag-on' : 'yws-tag-off') }] : [];
+                /* ① 真·新增：内核说这条只在新版里有、而且不是改名认领过的 */
+                if (!it.mine && !nameChanged) {
+                    added++;
+                    otherRows.push({ key: 'a:' + nm, name: nm, tags: [{ t: '新增', cls: 'yws-tag-new' }],
+                        stat: '你的预设里没有这条', pairs: [{ mine: '（新增）', next: String(it.next.text || '') }] });
+                    continue;
+                }
+                const d = changeBlocks((it.mine && it.mine.text) || '', it.next.text, 2);
+                /* ② 只改名（正文一字未动、开关也没动）—— 以前这里 `continue` 掉，屏幕上就看不见了 */
+                if (!d.total && !swTag.length) {
+                    if (renTag.length) {
+                        renamedCnt++;
+                        renamedRows.push({ key: 'r:' + nm, name: nm, tags: renTag, stat: '', pairs: [] });
+                    } else { same++; }
+                    continue;
+                }
+                /* ③ 有实质变化（改正文 / 改开关）—— 改名可与它们并存，且**优先排前面** */
                 changed++;
-                if (changed <= MAXB) add({ key: 'u:' + nm, name: nm, tag: '改变', cls: 'yws-tag-patch', stat: '有 ' + numOf(d.total) + ' 处不一样', pairs: d.blocks, more: d.more });
+                const row = { key: 'u:' + nm, name: nm,
+                    tags: renTag.concat(swTag.length ? swTag : [{ t: '改变', cls: 'yws-tag-patch' }]),
+                    stat: d.total ? ('有 ' + numOf(d.total) + ' 处不一样') : '',
+                    pairs: d.total ? d.blocks : [], more: d.total ? d.more : 0 };
+                if (renTag.length) { renamedCnt++; renamedRows.push(row); }   // ★W258：带改名的也算进 renamedCnt（摘要要报）
+                else otherRows.push(row);
+            }
+            /* 排序：改名类**全部**先上（不受 MAXB 限制 —— 改名是作者点名的重点），
+               其余按"新增 / 改变 各自最多 MAXB"截断（与改前的展示预算一致）。 */
+            for (const r of renamedRows) add(r);
+            let shownAdd = 0, shownChg = 0;
+            for (const r of otherRows) {
+                const isAdd = r.tags.some(t => t.t === '新增');
+                if (isAdd) { if (shownAdd >= MAXB) continue; shownAdd++; }
+                else { if (shownChg >= MAXB) continue; shownChg++; }
+                add(r);
             }
             if (!rows.length) rows.push({ key: 'p', name: '整份预设', tag: '整份', cls: '', kind: 'text', stat: '跟你的那份一样（缝了没变化）', pairs: [] });
-            rows.summary = '这是作者上传的一整份预设（' + countText(n, '个条目') + '）：比你的那份多了 ' + numOf(added) + ' 个条目、改了 ' + numOf(changed) + ' 条、' + numOf(same) + ' 条一样';
+            rows.summary = '这是作者上传的一整份预设（' + countText(n, '个条目') + '）：比你的那份多了 ' + numOf(added) + ' 个条目、改了 ' + numOf(changed) + ' 条' +
+                (renamedCnt ? ('、' + numOf(renamedCnt) + ' 条只改了名字') : '') + '、' + numOf(same) + ' 条一样';
             return rows;
         } catch (e) {
             warn('整份预设的初步对比算不出来（照旧能给更新器）', e);
