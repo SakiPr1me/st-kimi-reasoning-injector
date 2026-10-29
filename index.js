@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.144'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.145'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -416,9 +416,16 @@ const defaultSettings = {
     wrap4aPrefix: '',                // 前置小说（上面一段）
     wrap4aSuffix: '',                // 后置小说（下面一段）
     randHeadEnabled: false,          // ★W177（作者 2026-10-28 拍板）：三个防标记**新装全默认关**（塞小说/头部/身份同一口径；用户手动勾选受尊重）
-    randNameEnabled: false,          // ★W168：随机人名（把请求里的 AI身份 换成本轮随机名；默认关）
+    randNameEnabled: true,           // ★W274（作者 2026-10-29）：**默认勾选**（配合总开关默认关 ⇒ 拿到手打开总开关就是"AI身份随机"）
     randNameSource: '余小温',        // ★W171：被替换的「AI身份」占位名
     randNamePool: null,              // ★W187：自定义名字池 {surnames:[],middles:[],givens:[]}；null/空 = 用内置
+    /* ★★W270（作者 2026-10-29）：**小火苗（用户身份）**也能随机换名 —— 与 AI 侧完全独立的开关/占位名/池子/记账。
+       作者原话："因为默认人设是 AI 是余小温 用户是小火苗… 除了可以更改余小温的名字，还可以更改小火苗的名字"。
+       ★默认**关**（与 randNameEnabled 同一口径：新装/升级都不主动改大家的名字，用户自己勾）。 */
+    randMasterEnabled: false,        // ★W273：随机AI身份那块的**总开关**（与内层两个勾是"与"关系；默认关）
+    randUserEnabled: false,          // 小火苗：随机换名开关
+    randUserSource: '小火苗',        // 小火苗：被替换的「用户身份」占位名
+    randUserPool: null,              // 小火苗：名字池 {mode,surnames,middles,givens,fixed}；null/空 = 用内置（固定池默认有「达芙妮」）
     randPoemPool: null,              // ★W187：自定义诗库（字符串数组）；null/空 = 用内置 72 句
     uiFolds: {},                     // ★W177：防标记三段 + Reasoning Content 的手动折叠记忆（{key:'open'|'closed'}；没记录的 key 走默认=开着展开/关着收起）        // ★W171（作者）：被替换的「AI身份」占位名（面板可改；空 ⇒ 回落这个默认）
     autoUpdate: true,                // 默认自动更新：每次检测到云端有新版直接更新到最新
@@ -744,10 +751,20 @@ const OC_RELAY_I18N = {
         randHeadTitle: '随机头部（防标记）',
         randHeadHint: '每次请求现生成一小段诗（200~300 字），贴在第一条系统消息最前面（防前缀指纹）。关掉后请求里一个字都不加。',
         randNameTitle: '随机AI身份（防标记）',
-        randNameSourceLabel: 'AI身份：',
+        randNameSourceLabel: 'AI身份', randMasterTitle: '总开关：关着时下面两个都不生效（勾选状态会保留）',
         randNameCurrent: '下次发送将使用：',
         randNameReroll: '换一个',
-        randHeadPoolEdit: '编辑诗库', randNamePoolEdit: '编辑名字库', poolOk: '确定', poolSurname: '姓', poolMiddle: '中', poolGiven: '名',
+        randHeadPoolEdit: '编辑诗库', randNamePoolEdit: '编辑名字库', randNamePoolEditAi: '编辑AI名字库', poolOk: '确定', poolSurname: '姓', poolMiddle: '中', poolGiven: '名',
+        /* ★W270：小火苗（用户身份）+ 两种取名模式 */
+        randUserTitle: '随机用户身份（防标记）',
+        randUserSourceLabel: '用户身份',
+        randUserNameCurrent: '下次发送将使用：',
+        randUserNameReroll: '换一个',
+        randUserPoolEdit: '编辑用户名字库',
+        poolModeLabel: '取名方式：',
+        poolModeParts: '姓氏+中+名自由组合',
+        poolModeFixed: '固定组合（逗号分隔）',
+        poolFixedLabel: '整名',
         schemeTtProxyTitle: '输入反代url+Key，自动记忆填入',
         schemeTtProxyUrl: '反向代理 URL',
         schemeTtProxyKey: 'Key',
@@ -793,10 +810,19 @@ const OC_RELAY_I18N = {
         randHeadTitle: 'Random header (anti-flag)',
         randHeadHint: 'A short poem (200–300 chars) is generated for every request and prepended to the first system message (anti-fingerprint). When off, nothing is added.',
         randNameTitle: 'Random AI identity (anti-flag)',
-        randNameSourceLabel: 'AI identity: ',
+        randNameSourceLabel: 'AI identity', randMasterTitle: 'Master switch: when off, neither identity below takes effect (your ticks are kept)',
         randNameCurrent: 'Next send will use: ',
         randNameReroll: 'Reroll',
-        randHeadPoolEdit: 'Edit poem pool', randNamePoolEdit: 'Edit name pools', poolOk: 'OK', poolSurname: 'Surname', poolMiddle: 'Middle', poolGiven: 'Given',
+        randHeadPoolEdit: 'Edit poem pool', randNamePoolEdit: 'Edit name pools', randNamePoolEditAi: 'Edit AI name pools', poolOk: 'OK', poolSurname: 'Surname', poolMiddle: 'Middle', poolGiven: 'Given',
+        randUserTitle: 'Random user identity (anti-fingerprint)',
+        randUserSourceLabel: 'User identity',
+        randUserNameCurrent: 'Next send will use: ',
+        randUserNameReroll: 'Reroll',
+        randUserPoolEdit: 'Edit user name pools',
+        poolModeLabel: 'Naming mode: ',
+        poolModeParts: 'Surname + middle + given',
+        poolModeFixed: 'Fixed list (comma separated)',
+        poolFixedLabel: 'Full names',
         schemeTtProxyTitle: 'Enter reverse-proxy URL + Key (auto-remembered)',
         schemeTtProxyUrl: 'Reverse proxy URL',
         schemeTtProxyKey: 'Key',
@@ -842,10 +868,19 @@ const OC_RELAY_I18N = {
         randHeadTitle: '랜덤 헤더 (표시 방지)',
         randHeadHint: '요청마다 짧은 시(200~300자)를 만들어 첫 시스템 메시지 맨 앞에 붙입니다(지문 방지). 끄면 요청에 아무것도 추가되지 않습니다.',
         randNameTitle: '랜덤 AI 정체성 (표시 방지)',
-        randNameSourceLabel: 'AI 정체성: ',
+        randNameSourceLabel: 'AI 정체성', randMasterTitle: '마스터 스위치: 꺼져 있으면 아래 두 항목 모두 적용되지 않습니다 (체크 상태는 유지)',
         randNameCurrent: '다음 전송에 사용: ',
         randNameReroll: '다시 뽑기',
-        randHeadPoolEdit: '시库 편집', randNamePoolEdit: '이름库 편집', poolOk: '확인', poolSurname: '성', poolMiddle: '중간', poolGiven: '이름',
+        randHeadPoolEdit: '시库 편집', randNamePoolEdit: '이름库 편집', randNamePoolEditAi: 'AI 이름库 편집', poolOk: '확인', poolSurname: '성', poolMiddle: '중간', poolGiven: '이름',
+        randUserTitle: '랜덤 사용자 정체성 (지문 방지)',
+        randUserSourceLabel: '사용자 정체성',
+        randUserNameCurrent: '다음 전송에 사용: ',
+        randUserNameReroll: '다시 뽑기',
+        randUserPoolEdit: '사용자 이름库 편집',
+        poolModeLabel: '이름 방식: ',
+        poolModeParts: '성 + 중간 + 이름',
+        poolModeFixed: '고정 조합 (쉼표 구분)',
+        poolFixedLabel: '전체 이름',
         schemeTtProxyTitle: '역방향 프록시 URL + Key 입력 (자동 기억)',
         schemeTtProxyUrl: '역방향 프록시 URL',
         schemeTtProxyKey: 'Key',
@@ -1030,10 +1065,28 @@ if (settings.wrap4aEnabled === undefined) settings.wrap4aEnabled = defaultSettin
 if (settings.wrap4aPrefix === undefined) settings.wrap4aPrefix = defaultSettings.wrap4aPrefix;
 if (settings.wrap4aSuffix === undefined) settings.wrap4aSuffix = defaultSettings.wrap4aSuffix;
 if (settings.randHeadEnabled === undefined) settings.randHeadEnabled = defaultSettings.randHeadEnabled;   // ★W177（铁律 32）：新装/升级同一份默认 = 关（作者 2026-10-28 改）
-if (settings.randNameEnabled === undefined) settings.randNameEnabled = defaultSettings.randNameEnabled;   // ★W168（铁律 32）：同上 = 关
+/* ★W274：先记下"**用户原来**是不是已经在用 AI 身份随机" —— **必须在下两行补默认之前抓**，
+   否则新装用户的名字会被上面补成 true，再被下面的一次性迁移误判成"老用户在用" ⇒ 总开关被误开。 */
+const __randNameWasOn = (settings.randNameEnabled === true);
+if (settings.randNameEnabled === undefined) settings.randNameEnabled = defaultSettings.randNameEnabled;   // ★W274（作者 2026-10-29）：默认改为 **true**（配合总开关默认关 ⇒ 拿到手打开总开关就是"AI身份随机"）
 if (settings.randNameSource === undefined) settings.randNameSource = defaultSettings.randNameSource;      // ★W171（铁律 32）：缺键补 defaultSettings 同值 = 余小温
 if (!settings.uiFolds || typeof settings.uiFolds !== 'object' || Array.isArray(settings.uiFolds)) settings.uiFolds = {};   // ★W177（铁律 32）：折叠记忆容器（脏数据归零，逐键读时再兜底）
 if (settings.randNamePool === undefined) settings.randNamePool = null;   // ★W187（铁律 32）：缺键=null（用内置池）
+/* ★W270（铁律 32）：小火苗三件 —— 与 AI 侧同一套口径（缺键补 defaultSettings 同值） */
+if (settings.randMasterEnabled === undefined) settings.randMasterEnabled = defaultSettings.randMasterEnabled;   // ★W273（铁律 32）：= 关
+/* ★★W274（作者 2026-10-29 拍板"老用户保持能用"）：上面"缺键补默认"只照顾**新装**；
+   而**老用户**本来就有 randNameEnabled 这个键（以前就能勾）—— 他们要是早就勾着 AI 身份在用，
+   现在突然多出一个总开关且默认关 ⇒ **会无声地把他们的功能关掉**（行为回退）。
+   ⇒ 一次性迁移：这一版之前就在用（randNameEnabled===true）的老用户，把总开关一并置为 true。
+   ★用一次性旗 `randMasterInitV1`：只跑一次；之后用户自己关掉总开关**受尊重**（不会每启动又被打开）。
+   ★新装用户走不到这里（randMasterEnabled 是缺键 ⇒ 上面刚补成 false，旗也是这一版才立）。 */
+if (settings.randMasterInitV1 !== true) {
+    settings.randMasterInitV1 = true;
+    try { if (__randNameWasOn) settings.randMasterEnabled = true; } catch (e) { }   // ★W274：用补默认**之前**的快照判 ⇒ 新装用户不会被误开
+}
+if (settings.randUserEnabled === undefined) settings.randUserEnabled = defaultSettings.randUserEnabled;   // = 关
+if (settings.randUserSource === undefined) settings.randUserSource = defaultSettings.randUserSource;      // = 小火苗
+if (settings.randUserPool === undefined) settings.randUserPool = null;                                   // null = 内置（固定池含「达芙妮」）
 if (settings.randPoemPool === undefined) settings.randPoemPool = null;
 if (settings.autoUpdate === undefined) settings.autoUpdate = true;
 if (!Array.isArray(settings.floatPanelKeys)) settings.floatPanelKeys = ['inject', 'reroll', 'psnap', 'word', 'tag', 'api', 'fix'];   // ★W174-E：与新装默认同一份（键只当勾选集合；渲染顺序一律按 KIMI_CARD_DEFS）
@@ -1730,6 +1783,36 @@ const RAND_MIDDLES = ['小', '晓', '筱', '笑'];
 const RAND_GIVEN = ['暖', '糯', '鲤', '满', '甜', '软', '桃', '橘', '团', '眠', '星', '雾', '柚', '棠', '荔', '圆', '豆', '糖', '灯', '铃', '鹿', '鸢', '禾'];   // ★W187（作者）：去掉「苹」⇒ 23 个
 const RAND_NAME_SRC_DEFAULT = '余小温';    // 默认「AI身份」占位名（作者可在面板里改；这里只是回落值）
 const RAND_NAME_SRC_MAX = 40;              // 「AI身份」长度上限（字）
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ★★W270（作者 2026-10-29）：「小火苗」（用户身份）也能随机换名 —— 与「余小温」**同一套逻辑**，
+   但**池子完全独立**（改 AI 的名字不该影响用户的名字，反之亦然）。
+
+   作者原话要点：
+     · "因为默认人设是 AI 是余小温，用户是小火苗" ⇒ 两个占位名各自可改；
+     · "除了可以更改余小温的名字，还可以更改小火苗的名字"；
+     · "另行加一组池子，来更改小火苗的名字，逻辑和余小温的池子一样"；
+     · "余小温的池子有两种：一种是姓氏+中间+名自由组合，另一种是逗号分隔的整字；勾选哪种就是哪种"；
+     · "做成小火苗的池子：姓氏 中间 名；默认池子你自由发挥，但固定组合池子默认有一个 达芙妮"。
+
+   ⇒ 两个名字**各有两种取名模式**（`mode`）：
+       `'parts'` = 姓氏 × 中字 × 名 自由组合（默认）
+       `'fixed'` = 逗号分隔的整名清单，直接抽（小火苗默认就有「达芙妮」）
+     池子数据结构（AI / 用户各一份，互不影响）：
+       settings.randNamePool = { mode:'parts'|'fixed', surnames:[], middles:[], givens:[], fixed:[] }  ← AI（余小温）
+       settings.randUserPool = 同形状                                                                   ← 用户（小火苗）
+   ★老数据零迁移：老的 `randNamePool` 只有 {surnames,middles,givens}、没有 `mode`
+     ⇒ 读成 `'parts'`，与改前行为**逐字一致**。 */
+const RAND_USER_SRC_DEFAULT = '小火苗';    // 默认「用户身份」占位名（面板可改；空 ⇒ 回落这里）
+
+/* 小火苗（用户）默认池子 —— 作者让我自由发挥，硬要求：**固定组合默认有「达芙妮」**。
+   取名思路：偏"小火苗"的温暖/微光意象 + 几个昵称感的整名；★刻意与 AI 池不重叠
+   （避免"两个身份抽到同一个名字"那种看着像 BUG 的现象）。 */
+const RAND_USER_SURNAMES = ['火', '苗', '烛', '焰', '灯', '晓', '宁', '夏', '初', '南', '池', '沐', '星', '暖'];
+const RAND_USER_MIDDLES = ['小', '阿', '之', '晓'];
+const RAND_USER_GIVENS = ['苗', '焰', '灵', '心', '禾', '桃', '橘', '栗', '葵', '萤', '曦', '莹', '芽', '烟', '煖', '灼', '灿', '昭', '曼', '朵', '团', '纱', '橘'];
+/* 固定组合默认池（小火苗）：作者点名要「达芙妮」；另补几个整名，切到 fixed 模式时不至于只有一条可选。 */
+const RAND_USER_FIXED = ['小火苗', '苗苗', '灯灯', '阿焰', '南栀', '小暖'];   // ★W274（作者 2026-10-29）：默认**不含**「达芙妮」（他要求删掉）
 /** ★W171（作者）：「AI身份」当前值 —— **唯一来源**（面板 settings.randNameSource）。
  *  空 / 全空格 / 缺键 ⇒ 回落到 `余小温`；绝不返回空串（否则 split('') 会处处替换）。
  *  用户爱填什么填什么（「小明」「白夜」都行）—— 不校验是否在随机名池里。 */
@@ -1740,51 +1823,117 @@ function randNameSource() {
     return v || RAND_NAME_SRC_DEFAULT;
 }
 const RAND_NAME_KEY = 'kimi_rand_names';   // 本机 localStorage：{ chatId: name }
-/** 纯函数：抽一个名字；avoid = 本机已经用掉的名字（同一个聊天「换一个」也走这里 ⇒ 一定换）*/
-function pickRandName(avoid) {
+/** 纯函数：抽一个名字；avoid = 本机已经用掉的名字（同一个聊天「换一个」也走这里 ⇒ 一定换）
+ *  ★W270：加 `who` 参数（`'ai'` 默认 / `'user'`），并按该身份的 **mode** 抽：
+ *    `'parts'` ⇒ 姓 + 中字 + 名；`'fixed'` ⇒ 从整名清单里直接抽。
+ *    ★不传 `who` 时行为与改前**逐字一致**（AI、parts 模式）。 */
+function pickRandName(avoid, who) {
     const used = Array.isArray(avoid) ? avoid : [];
+    const P = (String(who) === 'user') ? activeUserPools() : activeNamePools();
+    const fixed = (P.mode === 'fixed');
     let name = '';
     for (let t = 0; t < 256; t++) {
-        const P = activeNamePools();
-        name = P.surnames[randInt(P.surnames.length)] + P.middles[randInt(P.middles.length)] + P.givens[randInt(P.givens.length)];
-        if (used.indexOf(name) < 0) return name;
+        name = fixed
+            ? String(P.fixed[randInt(P.fixed.length)] || '')
+            : (P.surnames[randInt(P.surnames.length)] + P.middles[randInt(P.middles.length)] + P.givens[randInt(P.givens.length)]);
+        if (name && used.indexOf(name) < 0) return name;
     }
     return name;
 }
-/** 纯函数：这个字符串是不是池子里能抽出来的名字（姓 + 中字 + 名，14 × 4 × 24）。
+/** 纯函数：这个字符串是不是池子里能抽出来的名字。
  *  ★W168b（验收低优先项）：localStorage 被手改成数字 / null / 池外名字（如「张三」）时**一律重抽**，不采信。
- *  数字/null 本来就被 typeof 挡掉；池外名字以前会被原样用出去，现在由这条校验兜住。 */
-function isRandNameValid(name) {
+ *  ★W270：按身份的 mode 判 —— parts 模式仍是"姓+中+名 且三段都在池里"（**长度必须是 3**，与改前一致）；
+ *    fixed 模式则是"这个字符串在整名清单里"。`who` 省略 = AI（改前行为）。 */
+function isRandNameValid(name, who) {
     const s = String(name == null ? '' : name);
-    if (s.length !== 3) return false;
-    const P = activeNamePools();
-    return P.surnames.indexOf(s.charAt(0)) >= 0
-        && P.middles.indexOf(s.charAt(1)) >= 0
-        && P.givens.indexOf(s.charAt(2)) >= 0;
+    const P = (String(who) === 'user') ? activeUserPools() : activeNamePools();
+    if (P.mode === 'fixed') return !!s && P.fixed.indexOf(s) >= 0;
+    /* ★★W271（作者 2026-10-29："姓+中间+名 里面 每个逗号分隔 逗号分隔不一定只有一个字 现在是这样吗"）——
+       **拆分那一侧早就支持多字词**（`splitChars` 按逗号切、每段原样保留：'小暖, 阿桃' ⇒ ['小暖','阿桃']）；
+       但**校验这一侧原来写死 `s.length !== 3`** ⇒ 池子里只要有一个词是多字（中间名写「小暖」、姓写「欧阳」），
+       拼出来的名字就不是 3 个字 ⇒ 被判不合法 ⇒ `pickRandName` 反复重抽 256 次后**返回一个不合法的名字**
+       （用户看到的是"换一个换不出新的"）。这是真 BUG。
+       ⇒ 改成**按词校验**（与拆分同一把尺）：能拆成「姓池某词 + 中字池某词 + 名池某词」就算合法，
+         每个词几字都行（1/2/3 字均可）。
+       ★实现用"按池子里的词做前缀切片"，不是数学组合还原：池子 14×4×23、词最多几字，开销可忽略。 */
+    if (!s) return false;
+    for (const sur of P.surnames) {
+        if (!s.startsWith(sur)) continue;
+        const rest1 = s.slice(sur.length);
+        for (const mid of P.middles) {
+            if (!rest1.startsWith(mid)) continue;
+            const rest2 = rest1.slice(mid.length);
+            if (rest2 && P.givens.indexOf(rest2) >= 0) return true;
+        }
+    }
+    return false;
 }
 /** ★W187：把用户编辑的池子读成数组（脏数据一律丢弃） */
 function poolArr(v) {
     try { return Array.isArray(v) ? v.map(x => String(x == null ? '' : x).trim()).filter(Boolean) : []; } catch (e) { return []; }
 }
-/** ★W187：当前生效的名字池 —— 用户存过且非空就用，否则回落内置（三栏各自独立回落） */
-function activeNamePools() {
+/** ★W270：一个身份的名字池（两种模式）。
+ *  @param who `'ai'`（余小温）或 `'user'`（小火苗）
+ *  @returns {{mode:'parts'|'fixed', surnames:string[], middles:string[], givens:string[], fixed:string[]}}
+ *  ★AI 侧**老数据零迁移**：老 `randNamePool` 没有 `mode` ⇒ 读成 `'parts'`（= 改前行为逐字一致）。
+ *  ★任何一栏为空 ⇒ **各自**回落内置（三栏独立回落，与 W187 同一条纪律）；
+ *    `fixed` 为空（AI 侧老用户从没填过）⇒ 回落成"当前这个身份的名字本身"，
+ *    这样切到 fixed 模式**永远不会变成空池**（否则抽不出名字会崩）。 */
+function namePoolsOf(who) {
+    const isUser = String(who) === 'user';
     let p = null;
-    try { p = (settings.randNamePool && typeof settings.randNamePool === 'object' && !Array.isArray(settings.randNamePool)) ? settings.randNamePool : null; } catch (e) { p = null; }
-    const s = poolArr(p && p.surnames), m = poolArr(p && p.middles), g = poolArr(p && p.givens);
-    return { surnames: s.length ? s : RAND_SURNAMES, middles: m.length ? m : RAND_MIDDLES, givens: g.length ? g : RAND_GIVEN };
+    try {
+        const raw = isUser ? settings.randUserPool : settings.randNamePool;
+        p = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : null;
+    } catch (e) { p = null; }
+    const s = poolArr(p && p.surnames), m = poolArr(p && p.middles), g = poolArr(p && p.givens), fx = poolArr(p && p.fixed);
+    /* ★★W271（作者 2026-10-29）：**用户侧默认 fixed**（小火苗的默认玩法是「达芙妮」这种整名）；
+       **AI 侧默认 parts**（老行为，绝对不能变 —— 老用户的池子没有 mode 键，一变就等于改他们的名字风格）。
+       ★各自都没有显式选过（p 为 null / 没有 mode 键）时用各自默认；用户一旦自己选了就按他的。 */
+    const modeDef = isUser ? 'fixed' : 'parts';
+    const mode = (String((p && p.mode) || '') === 'fixed') ? 'fixed'
+        : (String((p && p.mode) || '') === 'parts') ? 'parts'
+            : modeDef;
+    const sDef = isUser ? RAND_USER_SURNAMES : RAND_SURNAMES;
+    const mDef = isUser ? RAND_USER_MIDDLES : RAND_MIDDLES;
+    const gDef = isUser ? RAND_USER_GIVENS : RAND_GIVEN;
+    /* fixed 的回落：用户侧内置有「达芙妮」；AI 侧没填过就用"它现在的名字"，绝不空 */
+    const fDef = isUser ? RAND_USER_FIXED : (function () {
+        const cur = String((typeof randNameSource === 'function' ? randNameSource() : '') || RAND_NAME_SRC_DEFAULT);
+        return cur ? [cur] : [RAND_NAME_SRC_DEFAULT];
+    })();
+    return {
+        mode,
+        surnames: s.length ? s : sDef,
+        middles: m.length ? m : mDef,
+        givens: g.length ? g : gDef,
+        fixed: fx.length ? fx : fDef,
+    };
+}
+/** ★W187/W270：当前生效的**AI**名字池（老调用点全部保留，行为不变） */
+function activeNamePools() { return namePoolsOf('ai'); }
+/** ★W270：当前生效的**用户**（小火苗）名字池 */
+function activeUserPools() { return namePoolsOf('user'); }
+/** ★W270：用户身份占位名（面板 settings.randUserSource；空 ⇒ 回落「小火苗」）—— 与 randNameSource 同一套口径 */
+function randUserSource() {
+    let v = '';
+    try { v = String(settings.randUserSource == null ? '' : settings.randUserSource); } catch (e) { v = ''; }
+    v = v.trim().slice(0, RAND_NAME_SRC_MAX);
+    return v || RAND_USER_SRC_DEFAULT;
 }
 /** ★W187：当前生效的诗库 */
 function activePoemPool() {
     const a = poolArr(settings.randPoemPool);
     return a.length ? a : RAND_POEM_POOL;
 }
-/** 本机已经用掉的合法名字（脏值/池外名字不参与"避开"）*/
-function usedRandNames(map) {
+/** 本机已经用掉的合法名字（脏值/池外名字不参与"避开"）
+ *  ★W270：`who` 区分身份（小火苗的池子与 AI 不同 ⇒ 合法性判断也要按对应池子） */
+function usedRandNames(map, who) {
     const out = [];
     try {
         Object.keys(map || {}).forEach((k) => {
             const v = map[k];
-            if (typeof v === 'string' && isRandNameValid(v)) out.push(v);
+            if (typeof v === 'string' && isRandNameValid(v, who)) out.push(v);
         });
     } catch (e) { }
     return out;
@@ -1809,46 +1958,71 @@ function loadRandUsedMap() {
 }
 function saveRandUsedMap(m) { try { localStorage.setItem(RAND_NAME_USED_KEY, JSON.stringify(m || {})); } catch (e) { } }
 function saveRandNameMap(m) { try { localStorage.setItem(RAND_NAME_KEY, JSON.stringify(m || {})); } catch (e) { } }
-function usedNamesForChat(cid) {
+function usedNamesForChat(cid, who) {
     const m = loadRandUsedMap();
-    const a = m[String(cid)];
-    return Array.isArray(a) ? a.filter((x) => typeof x === 'string' && isRandNameValid(x)) : [];
+    const a = m[(String(who) === 'user' ? 'u:' : '') + String(cid)];
+    return Array.isArray(a) ? a.filter((x) => typeof x === 'string' && isRandNameValid(x, who)) : [];
 }
 /** 下次发送将使用的名字（本地待用值；不合法就重抽）
  *  ★W171b（验收必修 2）：抽出来的待用名**只放内存**（`RAND_PENDING`），**不写 localStorage** ——
  *    面板重绘 / 换聊天重渲染一律不会给 `kimi_rand_names` 加键（只有**真正发送**那一关才落盘）。
- *    语义不变：这就是"下次发送将使用"的那个名字，发送时用的也一定是它。 */
-function currentRandName() {
+ *    语义不变：这就是"下次发送将使用"的那个名字，发送时用的也一定是它。
+ *  ★W270：加 `who`（`'ai'` 默认 / `'user'`）。用户侧用**独立的 localStorage 键与内存 Map**，
+ *    两边互不覆盖；老 AI 调用点一个字不用改。 */
+const RAND_USER_NAME_KEY = 'kimi_rand_user_names';        // 小火苗：{ chatId: name }
+const RAND_USER_USED_KEY = 'kimi_rand_user_names_used';   // 小火苗：{ chatId: [用过的] }
+const RAND_USER_PENDING = new Map();                      // 小火苗：内存待用名
+let RAND_USER_SEND_NAME = null;                           // 小火苗：本次发送锁住的名字
+function loadUserRandMap() {
+    try { const m = JSON.parse(localStorage.getItem(RAND_USER_NAME_KEY) || '{}'); return (m && typeof m === 'object' && !Array.isArray(m)) ? m : {}; } catch (e) { return {}; }
+}
+function saveUserRandMap(m) { try { localStorage.setItem(RAND_USER_NAME_KEY, JSON.stringify(m || {})); } catch (e) { } }
+function loadUserRandUsedMap() {
+    try { const m = JSON.parse(localStorage.getItem(RAND_USER_USED_KEY) || '{}'); return (m && typeof m === 'object' && !Array.isArray(m)) ? m : {}; } catch (e) { return {}; }
+}
+function saveUserRandUsedMap(m) { try { localStorage.setItem(RAND_USER_USED_KEY, JSON.stringify(m || {})); } catch (e) { } }
+function currentRandName(who) {
+    const isUser = String(who) === 'user';
     const cid = randChatId();
-    const map = loadRandNameMap();
+    const map = isUser ? loadUserRandMap() : loadRandNameMap();
+    const pending = isUser ? RAND_USER_PENDING : RAND_PENDING;
     const cur = map[cid];
-    if (typeof cur === 'string' && isRandNameValid(cur)) { RAND_PENDING.set(cid, cur); return cur; }
-    const mem = RAND_PENDING.get(cid);
-    if (typeof mem === 'string' && isRandNameValid(mem)) return mem;   // 本页已经抽过 ⇒ 一直是它（面板=请求）
-    const name = pickRandName(usedNamesForChat(cid).concat(usedRandNames(map)));
-    RAND_PENDING.set(cid, name);
+    if (typeof cur === 'string' && isRandNameValid(cur, who)) { pending.set(cid, cur); return cur; }
+    const mem = pending.get(cid);
+    if (typeof mem === 'string' && isRandNameValid(mem, who)) return mem;   // 本页已经抽过 ⇒ 一直是它（面板=请求）
+    const usedMap = isUser ? loadUserRandUsedMap() : loadRandUsedMap();
+    const name = pickRandName(usedNamesForChat(cid, who).concat(usedRandNames(map, who)), who);
+    pending.set(cid, name);
     return name;
 }
 /** ★W171b：按**当前** chatId 重渲染面板「下次发送将使用」——只 peek（不消费、不推进、不写盘）。
- *  面板/元素不存在就静默跳过（换聊天时设置面板可能还没建）。 */
-function refreshRandNameLabel() {
+ *  面板/元素不存在就静默跳过（换聊天时设置面板可能还没建）。
+ *  ★W270：也管小火苗那一行（`who='user'`）。 */
+function refreshRandNameLabel(who) {
     try {
-        const el = document.getElementById(extensionName + '_rand_name_val');
+        const isUser = String(who) === 'user';
+        const el = document.getElementById(extensionName + (isUser ? '_rand_user_val' : '_rand_name_val'));
         if (!el) return false;
-        if (!settings.randNameEnabled) return false;
-        el.textContent = currentRandName();
+        /* ★W273：总开关关着 ⇒ 这一行不显示值（因为根本没生效） */
+        if (!settings.randMasterEnabled) return false;
+        if (!(isUser ? settings.randUserEnabled : settings.randNameEnabled)) return false;
+        el.textContent = currentRandName(who);
         return true;
     } catch (e) { return false; }
 }
 /** 「换一个」：换掉"下次发送将使用"的那个名字（避开本聊天用过的）—— 手动动作，**立刻落盘** */
-function rerollRandName() {
+function rerollRandName(who) {
+    const isUser = String(who) === 'user';
     const cid = randChatId();
-    const map = loadRandNameMap();
-    const avoid = usedNamesForChat(cid).concat(usedRandNames(map)).concat([map[cid]]);
-    const name = pickRandName(avoid);
+    const map = isUser ? loadUserRandMap() : loadRandNameMap();
+    const pending = isUser ? RAND_USER_PENDING : RAND_PENDING;
+    const save = isUser ? saveUserRandMap : saveRandNameMap;
+    const usedMap = isUser ? loadUserRandUsedMap() : loadRandUsedMap();
+    const avoid = usedNamesForChat(cid, who).concat(usedRandNames(map, who)).concat([map[cid]]);
+    const name = pickRandName(avoid, who);
     map[cid] = name;
-    saveRandNameMap(map);
-    RAND_PENDING.set(cid, name);   // ★W171b：内存同步（面板与发送读到的是同一个）
+    save(map);
+    pending.set(cid, name);   // ★W171b：内存同步（面板与发送读到的是同一个）
     return name;
 }
 
@@ -1890,9 +2064,17 @@ function injectRandHeader(msgs) {
  *   顺序照旧：种子注入在前、随机名在后（见 applyRequestInjections 的 1) 与 1.2)）。
  *  幂等：换过之后这三处都没有「余小温」了，再调自然不动。 */
 function replaceRandNames(msgs, consume) {
-    const out = { changed: false, name: '' };
+    const out = { changed: false, name: '', userName: '' };
     try {
-        if (!Array.isArray(msgs) || !settings.randNameEnabled) return out;
+        if (!Array.isArray(msgs)) return out;
+        /* ★W270：两个身份**各自独立**（开关、占位名、池子、本次用的名字全分开）。
+           任一开关关着 ⇒ 那个身份这一步完全不参与（一个字都不碰），与改前"关着就不动"同一条纪律。
+           ★★W273（作者 2026-10-29）：外层再加一个**总开关**（`rand_master`），与内层两个勾是**与关系**：
+             总开关关 ⇒ 两个身份都不生效（内层的勾选状态**保留**，不是被清掉，下次勾开还在）。 */
+        const master = !!settings.randMasterEnabled;
+        const doAi = master && !!settings.randNameEnabled;
+        const doUser = master && !!settings.randUserEnabled;
+        if (!doAi && !doUser) return out;
         const doConsume = consume !== false;               // false = 只补名、不记账不推进（GENERATE_AFTER_DATA 的 peek）
         if (doConsume && RAND_DONE.has(msgs)) return out;   // 同一份 messages 只轮换一次
         const cid = randChatId();
@@ -1900,36 +2082,61 @@ function replaceRandNames(msgs, consume) {
         //   为什么必须锁：刷新后不选角色直接点发送时，ST 是**点了发送才创建聊天** ⇒ chatId 从 '' 变成新值，
         //   而面板是在旧桶（default）上渲染的；不锁就会出现「面板一个名、请求另一个名」。
         //   peek（GED）与 consume（READY）都用这一个 name；记账/推进仍按**发送时的真实 cid**（见下面 consume 段）。
-        const name = (typeof RAND_SEND_NAME === 'string' && isRandNameValid(RAND_SEND_NAME)) ? RAND_SEND_NAME : currentRandName();
+        const name = !doAi ? '' : ((typeof RAND_SEND_NAME === 'string' && isRandNameValid(RAND_SEND_NAME)) ? RAND_SEND_NAME : currentRandName());
         // ★W171（作者）：占位名改成读面板「AI身份」（settings.randNameSource，空 ⇒ 回落 余小温）——
         //   全工程**唯一来源**就是 randNameSource()，没有第二套常量。
-        const src = randNameSource();
+        const src = doAi ? randNameSource() : '';
+        /* ★W270：小火苗（用户身份）—— 同一套锁名/待用逻辑，只是换成它自己的键与池子 */
+        const userName = !doUser ? '' : ((typeof RAND_USER_SEND_NAME === 'string' && isRandNameValid(RAND_USER_SEND_NAME, 'user')) ? RAND_USER_SEND_NAME : currentRandName('user'));
+        const userSrc = doUser ? randUserSource() : '';
         const FIELDS = ['content', 'name', 'reasoning_content'];
         for (let i = 0; i < msgs.length; i++) {
             const m = msgs[i];
             if (!m || typeof m !== 'object') continue;
             for (let f = 0; f < FIELDS.length; f++) {
                 const key = FIELDS[f];
-                const val = m[key];
-                if (typeof val !== 'string' || val.indexOf(src) < 0) continue;
-                const next = val.split(src).join(name);
-                if (next !== val) { m[key] = next; out.changed = true; }
+                let val = m[key];
+                if (typeof val !== 'string') continue;
+                const before = val;
+                /* ★顺序很要紧：**先换小火苗、再换余小温**。
+                   理由：两个占位名天然不同（小火苗 / 余小温），顺序其实无所谓；
+                   但万一用户把两个都改成同一个字符串，先换谁都不会互相污染（split/join 是一次性完成的，
+                   不会二次替换）—— 这里定死顺序只为"结果可复现"，不是有隐藏依赖。 */
+                if (userSrc && userSrc !== src && val.indexOf(userSrc) >= 0) val = val.split(userSrc).join(userName);
+                if (src && val.indexOf(src) >= 0) val = val.split(src).join(name);
+                if (val !== before) { m[key] = val; out.changed = true; }
             }
         }
-        if (!doConsume) { out.name = name; return out; }   // peek：名字填上就走，不动 used / pending
-        // 轮换记账：本次用的进"用过"，再抽好下一次的
-        const usedMap = loadRandUsedMap();
-        const arr = Array.isArray(usedMap[cid]) ? usedMap[cid].slice() : [];
-        if (arr.indexOf(name) < 0) arr.push(name);
-        while (arr.length > 40) arr.shift();
-        usedMap[cid] = arr;
-        saveRandUsedMap(usedMap);
-        const map = loadRandNameMap();
-        map[cid] = pickRandName(arr.concat(usedRandNames(map)).concat([name]));
-        saveRandNameMap(map);                       // ★W171b：只有真正发送这一关才落盘（键 +1 就发生在这里）
-        RAND_PENDING.set(cid, map[cid]);            // 内存同步：下一轮面板显示 = 下一次真正用的
+        if (!doConsume) { out.name = name; out.userName = userName; return out; }   // peek：名字填上就走，不动 used / pending
+        /* 轮换记账（AI 侧）—— 与改前逐字一致 */
+        if (doAi) {
+            const usedMap = loadRandUsedMap();
+            const arr = Array.isArray(usedMap[cid]) ? usedMap[cid].slice() : [];
+            if (arr.indexOf(name) < 0) arr.push(name);
+            while (arr.length > 40) arr.shift();
+            usedMap[cid] = arr;
+            saveRandUsedMap(usedMap);
+            const map = loadRandNameMap();
+            map[cid] = pickRandName(arr.concat(usedRandNames(map)).concat([name]));
+            saveRandNameMap(map);                       // ★W171b：只有真正发送这一关才落盘（键 +1 就发生在这里）
+            RAND_PENDING.set(cid, map[cid]);            // 内存同步：下一轮面板显示 = 下一次真正用的
+            out.name = name;
+        }
+        /* ★W270：轮换记账（小火苗）—— 与 AI 侧**同一套规则**，只是键与 Map 各自独立 */
+        if (doUser) {
+            const uUsed = loadUserRandUsedMap();
+            const uArr = Array.isArray(uUsed[cid]) ? uUsed[cid].slice() : [];
+            if (uArr.indexOf(userName) < 0) uArr.push(userName);
+            while (uArr.length > 40) uArr.shift();
+            uUsed[cid] = uArr;
+            saveUserRandUsedMap(uUsed);
+            const uMap = loadUserRandMap();
+            uMap[cid] = pickRandName(uArr.concat(usedRandNames(uMap, 'user')).concat([userName]), 'user');
+            saveUserRandMap(uMap);
+            RAND_USER_PENDING.set(cid, uMap[cid]);
+            out.userName = userName;
+        }
         RAND_DONE.add(msgs);
-        out.name = name;
     } catch (e) { }
     return out;
 }
@@ -6339,6 +6546,47 @@ function kimiCardTitleHtml(titleKey) {
     const raw = String(t(titleKey) || '');
     return kimiCardTitleHtmlFromText(raw);
 }
+/** ★★W270：**名字池编辑器**（AI / 小火苗共用同一份结构 —— 作者要求"逻辑和余小温的池子一样"）。
+ *  @param who  `'ai'` | `'user'`（决定 DOM id 前缀与"哪一份池子"）
+ *  @param pfx  该身份在面板上的 id 前缀（`rand_name` / `rand_user`）
+ *  结构：取名方式下拉（自由组合 / 固定组合）+ 三栏（姓/中/名）+ 一整名栏（逗号分隔）；
+ *       切模式时由 JS 显隐对应那一组（见 `syncPoolModeUi`），**不用重建 DOM**（保住用户正在输入的内容）。
+ *  ★铁律 16：模板里没有反引号、没有裸 `${`（这里用普通字符串拼接）。 */
+function poolEditorHtml(who, pfx) {
+    const P = (String(who) === 'user') ? activeUserPools() : activeNamePools();
+    const partsDisplay = (P.mode === 'parts') ? '' : 'display:none';
+    const fixedDisplay = (P.mode === 'fixed') ? '' : 'display:none';
+    const row = (labelKey, id) => '<div style="display:flex;align-items:center;gap:6px;margin-top:3px">' +
+        '<label class="kimi-label" style="margin:0;flex:none">' + ocr(labelKey) + '</label>' +
+        '<input id="' + extensionName + '_' + id + '" type="text" class="text_pole" style="flex:1;min-width:0"/></div>';
+    return '<div style="display:flex;align-items:center;gap:6px;margin-top:3px">' +
+            '<label class="kimi-label" style="margin:0;flex:none">' + ocr('poolModeLabel') + '</label>' +
+            '<select id="' + extensionName + '_' + pfx + '_mode" class="text_pole" style="flex:1;min-width:0" data-pool-mode-for="' + schemeEsc(who) + '">' +
+                '<option value="parts"' + (P.mode === 'parts' ? ' selected' : '') + '>' + ocr('poolModeParts') + '</option>' +
+                '<option value="fixed"' + (P.mode === 'fixed' ? ' selected' : '') + '>' + ocr('poolModeFixed') + '</option>' +
+            '</select></div>' +
+        '<div id="' + extensionName + '_' + pfx + '_parts" style="' + partsDisplay + '">' +
+            row('poolSurname', pfx + '_pool_s') +
+            row('poolMiddle', pfx + '_pool_m') +
+            row('poolGiven', pfx + '_pool_g') +
+        '</div>' +
+        '<div id="' + extensionName + '_' + pfx + '_fixedbox" style="' + fixedDisplay + '">' +
+            row('poolFixedLabel', pfx + '_pool_f') +
+        '</div>' +
+        '<div style="margin-top:5px"><button type="button" id="' + extensionName + '_' + pfx + '_pool_ok" class="kimi-btn">' + ocr('poolOk') + '</button></div>';
+}
+/** ★W270：按下拉值显隐"自由组合 / 固定组合"两块（不重建 DOM ⇒ 不丢用户正在输入的内容） */
+function syncPoolModeUi(pfx) {
+    try {
+        const sel = document.getElementById(extensionName + '_' + pfx + '_mode');
+        const parts = document.getElementById(extensionName + '_' + pfx + '_parts');
+        const fixed = document.getElementById(extensionName + '_' + pfx + '_fixedbox');
+        if (!sel) return;
+        const mode = (String(sel.value) === 'fixed') ? 'fixed' : 'parts';
+        if (parts) parts.style.display = (mode === 'parts') ? '' : 'none';
+        if (fixed) fixed.style.display = (mode === 'fixed') ? '' : 'none';
+    } catch (e) { }
+}
 /** ★W155：给**别的模块**挂上来的卡（api-pool.js 的「API 池」/ tag-fixer.js 的「标签修复」）补同一层括号弱化 ——
  *  那两个 summary 不在本文件里，改不了字符串 ⇒ 挂载完成后在 DOM 上就地包一层。
  *  ★幂等：已经是 `.kimi-card-sub` 里的文本不再包（重复调用安全）；只动**直接子文本节点**，不碰图标/子元素。 */
@@ -7590,6 +7838,8 @@ window.__ywApplyDisplayReplace = (text) => applyReplacements(text, 'display');
 // 调试出口（CDP/控制台/自检脚本用：纯函数直测，不发真实请求）
 window.__ywDebug = {
     activeNamePools, activePoemPool, pickRandName, isRandNameValid, buildRandHeader,   // ★W187：池子编辑直测
+    /* ★W270：小火苗（用户身份）那一套的只读出口 —— 真页探针要证"面板真的能存进去、真的能抽出来" */
+    activeUserPools, randUserSource, namePoolsOf,
     msgHasThinking,   // ★W175：空回护栏直测（真页探针用）
     /* ★W163 方案切换（探针/悬浮条 W164 用）：读写内核 + 方案 CRUD + 一键切换 + 酒馆侧读取助手 */
     readPromptToggles, writePromptToggles, renderSchemeUI, openSchemeEditor, switchScheme, captureCurrentState,
@@ -9582,24 +9832,56 @@ ${t('usage3')}
 </div>
 </div>
 <div class="kimi-sep"></div>
-<div class="kimi-fold-head${foldIsOpen('rand_name', settings.randNameEnabled) ? ' open' : ''}" data-fold="rand_name">
-<input type="checkbox" id="${extensionName}_rand_name" ${settings.randNameEnabled ? 'checked' : ''}/>
+<div class="kimi-fold-head${foldIsOpen('rand_name', settings.randNameEnabled || settings.randUserEnabled) ? ' open' : ''}" data-fold="rand_name">
+${/* ★★W273（作者 2026-10-29）："在随机AI身份（防止标记）前面加上勾。这个勾是一个总开关，
+   而且这样看起来比较整齐。也就是说 只有当外面的勾和里面的勾都勾了 这一项才生效。"
+   ⇒ 外层总开关（`rand_master`）+ 内层两个勾（AI / 用户），**与关系**：
+     外层关 ⇒ 两个都不生效（但内层的勾选状态**保留**，不是被清掉）；
+     外层开 + 内层勾 ⇒ 该项生效。
+   ★总开关自己也有记忆（`settings.randMasterEnabled`），重新勾开时内层上次勾的还在。
+   ★默认：跟内层同一条口径 —— **默认不勾**（新装/升级都不主动改名字）。 */''}
+<input type="checkbox" id="${extensionName}_rand_master" ${settings.randMasterEnabled ? 'checked' : ''} title="${ocr('randMasterTitle')}"/>
 <span style="font-size:0.95em;font-weight:700;color:var(--golden-color,#e0a800);flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ocr('randNameTitle')}</span>
 <i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true"></i>
 </div>
-<div id="${extensionName}_rand_name_box" style="display:${foldIsOpen('rand_name', settings.randNameEnabled) ? '' : 'none'}">
-<label class="kimi-label" for="${extensionName}_rand_name_src" style="font-size:.85em">${ocr('randNameSourceLabel')}</label>
+<div id="${extensionName}_rand_name_box" style="display:${foldIsOpen('rand_name', settings.randNameEnabled || settings.randUserEnabled) ? '' : 'none'}">
+${/* ★★W271（作者 2026-10-29）："随机用户身份应该放在随机AI身份里面。里面有选择 AI身份 和 用户身份，
+     勾选即让这个生效；下面有 编辑AI名字库 还有 编辑用户名字库。"
+     ⇒ 一块卡、两个独立勾选（各管各的），各自下面一组设置（占位名 / 下次发送用谁 / 编辑名字库）。
+     两个勾**互不隶属**：勾 AI 只开 AI；勾用户只开用户；都勾就都换。
+     ★W273 起再加一层：**外层总开关 = 与关系**（外层关 ⇒ 两个都不生效）。 */''}
+<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0 4px">
+<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:5px">
+<input type="checkbox" id="${extensionName}_rand_name" ${settings.randNameEnabled ? 'checked' : ''}/>
+<span>${ocr('randNameSourceLabel')}</span>
+</label>
+<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:5px">
+<input type="checkbox" id="${extensionName}_rand_user" ${settings.randUserEnabled ? 'checked' : ''}/>
+<span>${ocr('randUserSourceLabel')}</span>
+</label>
+</div>
+<div id="${extensionName}_rand_ai_panel" style="margin-top:2px">
 <input id="${extensionName}_rand_name_src" type="text" class="text_pole" style="width:100%" maxlength="40" value="${schemeEsc(randNameSource())}"/>
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
 <span class="kimi-hint" style="margin:0">${ocr('randNameCurrent')}<b id="${extensionName}_rand_name_val"></b></span>
 <button type="button" id="${extensionName}_rand_name_reroll" class="menu_button" style="flex:none;white-space:nowrap">${ocr('randNameReroll')}</button>
 </div>
-<div style="margin-top:6px"><button type="button" id="${extensionName}_rand_name_edit" class="kimi-btn">${ocr('randNamePoolEdit')}</button></div>
+<div style="margin-top:6px"><button type="button" id="${extensionName}_rand_name_edit" class="kimi-btn">${ocr('randNamePoolEditAi')}</button></div>
 <div id="${extensionName}_rand_name_edit_box" style="display:none;margin-top:5px">
-<div style="display:flex;align-items:center;gap:6px;margin-top:3px"><label class="kimi-label" style="margin:0;flex:none">${ocr('poolSurname')}</label><input id="${extensionName}_rand_name_pool_s" type="text" class="text_pole" style="flex:1;min-width:0"/></div>
-<div style="display:flex;align-items:center;gap:6px;margin-top:3px"><label class="kimi-label" style="margin:0;flex:none">${ocr('poolMiddle')}</label><input id="${extensionName}_rand_name_pool_m" type="text" class="text_pole" style="flex:1;min-width:0"/></div>
-<div style="display:flex;align-items:center;gap:6px;margin-top:3px"><label class="kimi-label" style="margin:0;flex:none">${ocr('poolGiven')}</label><input id="${extensionName}_rand_name_pool_g" type="text" class="text_pole" style="flex:1;min-width:0"/></div>
-<div style="margin-top:5px"><button type="button" id="${extensionName}_rand_name_pool_ok" class="kimi-btn">${ocr('poolOk')}</button></div>
+${poolEditorHtml('ai', 'rand_name')}
+</div>
+</div>
+<div class="kimi-sep" style="margin:8px 0"></div>
+<div id="${extensionName}_rand_user_panel" style="margin-top:2px">
+<input id="${extensionName}_rand_user_src" type="text" class="text_pole" style="width:100%" maxlength="40" value="${schemeEsc(randUserSource())}"/>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
+<span class="kimi-hint" style="margin:0">${ocr('randUserNameCurrent')}<b id="${extensionName}_rand_user_val"></b></span>
+<button type="button" id="${extensionName}_rand_user_reroll" class="menu_button" style="flex:none;white-space:nowrap">${ocr('randUserNameReroll')}</button>
+</div>
+<div style="margin-top:6px"><button type="button" id="${extensionName}_rand_user_edit" class="kimi-btn">${ocr('randUserPoolEdit')}</button></div>
+<div id="${extensionName}_rand_user_edit_box" style="display:none;margin-top:5px">
+${poolEditorHtml('user', 'rand_user')}
+</div>
 </div>
 </div>
 </div>
@@ -10104,7 +10386,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
    ② 整份预设卡底部那一排（下载本预设/评论/点赞/缝入）**统一外形 + 收紧**（改前手机 360 档整排右溢出 28px）。
    ★同时升工具箱 PLUGIN_VERSION（1.46.27 → 1.46.28）：用户的自更新是拿**远端 manifest 的版本号**比本机 ——
      只升商店号、不升工具箱号，用户端就**不会**自动更新（作者今天当场踩到过）。 */
-const storeBuild = 'v2.2.114';
+const storeBuild = 'v2.2.115';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();
@@ -11256,8 +11538,11 @@ const storeBuild = 'v2.2.114';
         // ★W171b：统一走同一个入口（按**当前** chatId、只 peek、不写盘）——
         //   面板重绘 / 换聊天 / 生成结束都只更新这一行，绝不消费名字。
         const renderName = () => { refreshRandNameLabel(); };
+        /* ★W270：小火苗那一行也按同一个入口渲染（各自判断自己的开关） */
+        const renderUserName = () => { try { refreshRandNameLabel('user'); } catch (e) { } };
         { const hb = document.getElementById(extensionName + "_rand_head_box"); if (hb && hb.style.display !== 'none') renderDemo(); }   // ★W177：示例诗跟"盒是否真展开"走（折叠记忆后开关≠展开态）
-        if (settings.randNameEnabled) renderName();
+        if (settings.randMasterEnabled && settings.randNameEnabled) renderName();
+        if (settings.randMasterEnabled && settings.randUserEnabled) renderUserName();
         $headChk.on("change", function () {
             settings.randHeadEnabled = $(this).is(":checked");
             saveSettingsDebounced();                   // ★W174-A：勾选只管功能（展开/收起独立）
@@ -11265,6 +11550,15 @@ const storeBuild = 'v2.2.114';
         $nameChk.on("change", function () {
             settings.randNameEnabled = $(this).is(":checked");
             saveSettingsDebounced();
+        });
+        /* ★★W273：外层**总开关** —— 与内层两个勾是"与"关系。
+           点它只改 `randMasterEnabled`（内层两个勾**一个字不动**：关掉总开关再开回来，上次勾的还在）。
+           顺手把两行"下次发送将使用"刷一下：总开关关着时那两行本该不显示值（没生效）。 */
+        $("#" + extensionName + "_rand_master").on("change", function () {
+            settings.randMasterEnabled = $(this).is(":checked");
+            saveSettingsDebounced();
+            try { if (settings.randMasterEnabled && settings.randNameEnabled) renderName(); } catch (e) { }
+            try { if (settings.randMasterEnabled && settings.randUserEnabled) renderUserName(); } catch (e) { }
         });
         /* ★W187（作者）：两个池子编辑器 —— 点开即预填当前生效池子；确定 ⇒ 解析入库、落盘、收起（不写说明文字） */
         $("#" + extensionName + "_rand_head_edit").on("click", function () {
@@ -11281,30 +11575,82 @@ const storeBuild = 'v2.2.114';
             const d = document.getElementById(extensionName + "_rand_head_demo");
             if (d) d.textContent = buildRandHeader(false);
         });
-        $("#" + extensionName + "_rand_name_edit").on("click", function () {
-            const $b = $("#" + extensionName + "_rand_name_edit_box");
-            if ($b.is(":visible")) { $b.hide(); return; }
-            const P = activeNamePools();
-            $("#" + extensionName + "_rand_name_pool_s").val(P.surnames.join(", "));
-            $("#" + extensionName + "_rand_name_pool_m").val(P.middles.join(", "));
-            $("#" + extensionName + "_rand_name_pool_g").val(P.givens.join(", "));
-            $b.show();
-        });
-        $("#" + extensionName + "_rand_name_pool_ok").on("click", function () {
-            const splitChars = (v) => String(v || "").split(/[,，、\s]+/).map(x => x.trim()).filter(Boolean);
-            const cur = activeNamePools();
-            const s = splitChars($("#" + extensionName + "_rand_name_pool_s").val());
-            const m = splitChars($("#" + extensionName + "_rand_name_pool_m").val());
-            const g = splitChars($("#" + extensionName + "_rand_name_pool_g").val());
-            settings.randNamePool = { surnames: s.length ? s : cur.surnames, middles: m.length ? m : cur.middles, givens: g.length ? g : cur.givens };
-            saveSettingsDebounced();
-            $("#" + extensionName + "_rand_name_edit_box").hide();
-            try { refreshRandNameLabel(); } catch (e) { }
-        });
+        /* ★W187 / ★★W270：**名字池编辑器**（AI 与小火苗共用同一套逻辑，只是键前缀不同）——
+           点开即预填当前生效池子（两种模式都填）；确定 ⇒ 解析入库、落盘、收起。 */
+        const splitChars = (v) => String(v || "").split(/[,，、\s]+/).map(x => x.trim()).filter(Boolean);
+        const bindPoolEditor = (pfx, who) => {
+            const $editBtn = $("#" + extensionName + "_" + pfx + "_edit");
+            const $okBtn = $("#" + extensionName + "_" + pfx + "_pool_ok");
+            if (!$editBtn.length) return;
+            $editBtn.on("click", function () {
+                const $b = $("#" + extensionName + "_" + pfx + "_edit_box");
+                if ($b.is(":visible")) { $b.hide(); return; }
+                const P = (who === 'user') ? activeUserPools() : activeNamePools();
+                const sel = document.getElementById(extensionName + "_" + pfx + "_mode");
+                if (sel) sel.value = P.mode;
+                $("#" + extensionName + "_" + pfx + "_pool_s").val(P.surnames.join(", "));
+                $("#" + extensionName + "_" + pfx + "_pool_m").val(P.middles.join(", "));
+                $("#" + extensionName + "_" + pfx + "_pool_g").val(P.givens.join(", "));
+                $("#" + extensionName + "_" + pfx + "_pool_f").val(P.fixed.join(", "));
+                syncPoolModeUi(pfx);
+                $b.show();
+            });
+            /* 换"取名方式"⇒ 只切显隐，不重建 DOM（用户正在打的内容一个字都不丢） */
+            $("#" + extensionName + "_" + pfx + "_mode").on("change", function () { syncPoolModeUi(pfx); });
+            $okBtn.on("click", function () {
+                const cur = (who === 'user') ? activeUserPools() : activeNamePools();
+                const sel = document.getElementById(extensionName + "_" + pfx + "_mode");
+                const mode = (sel && String(sel.value) === 'fixed') ? 'fixed' : 'parts';
+                const s = splitChars($("#" + extensionName + "_" + pfx + "_pool_s").val());
+                const m = splitChars($("#" + extensionName + "_" + pfx + "_pool_m").val());
+                const g = splitChars($("#" + extensionName + "_" + pfx + "_pool_g").val());
+                const fx = splitChars($("#" + extensionName + "_" + pfx + "_pool_f").val());
+                /* ★空栏 ⇒ 各栏独立回落内置（与 W187 同一条纪律）；fixed 空 ⇒ 回落内置（小火苗那栏必有「达芙妮」）。
+                   存的是**用户实际填的原样**（没填的栏也照实写当前生效值），这样下次点开看到的就是他此刻的池子。 */
+                const next = {
+                    mode,
+                    surnames: s.length ? s : cur.surnames,
+                    middles: m.length ? m : cur.middles,
+                    givens: g.length ? g : cur.givens,
+                    fixed: fx.length ? fx : cur.fixed,
+                };
+                if (who === 'user') settings.randUserPool = next; else settings.randNamePool = next;
+                saveSettingsDebounced();
+                $("#" + extensionName + "_" + pfx + "_edit_box").hide();
+                try { refreshRandNameLabel(who === 'user' ? 'user' : undefined); } catch (e) { }
+            });
+        };
+        bindPoolEditor('rand_name', 'ai');
+        bindPoolEditor('rand_user', 'user');
         $("#" + extensionName + "_rand_name_reroll").on("click", function () {
             rerollRandName();   // 清掉本聊天的缓存 ⇒ 重新抽一个
             renderName();
         });
+        /* ★★W270：小火苗那一行 —— 开关、换一个、占位名，与 AI 侧逐个对应 */
+        const $userChk = $("#" + extensionName + "_rand_user");
+        $userChk.on("change", function () {
+            settings.randUserEnabled = $(this).is(":checked");
+            saveSettingsDebounced();
+            try { if (settings.randMasterEnabled && settings.randUserEnabled) refreshRandNameLabel('user'); } catch (e) { }
+        });
+        $("#" + extensionName + "_rand_user_reroll").on("click", function () {
+            rerollRandName('user');
+            try { refreshRandNameLabel('user'); } catch (e) { }
+        });
+        const $userSrcInput = $("#" + extensionName + "_rand_user_src");
+        if ($userSrcInput.length) {
+            $userSrcInput.val(randUserSource());
+            let tmrU = null;
+            $userSrcInput.on("input change", function () {
+                clearTimeout(tmrU);
+                const save = () => {
+                    const v = String($userSrcInput.val() == null ? '' : $userSrcInput.val()).trim().slice(0, RAND_NAME_SRC_MAX);
+                    settings.randUserSource = v;
+                    saveSettingsDebounced();
+                };
+                tmrU = setTimeout(save, 400);
+            });
+        }
         // ★W171（作者）：「AI身份」输入框（被替换的占位名；空/全空格 ⇒ 有效值回落到 余小温）
         const $srcInput = $("#" + extensionName + "_rand_name_src");
         if ($srcInput.length) {
@@ -11323,7 +11669,8 @@ const storeBuild = 'v2.2.114';
         // ★W169f（验收低优先项）：发送后「下次发送将使用」要跟着刷新（不然面板开着时显示的是刚用掉的那个）
         try {
             eventSource.on(event_types.GENERATION_ENDED, function () {
-                try { if (settings.randNameEnabled) renderName(); } catch (e) { }
+                try { if (settings.randMasterEnabled && settings.randNameEnabled) renderName(); } catch (e) { }
+                try { if (settings.randMasterEnabled && settings.randUserEnabled) renderUserName(); } catch (e) { }   // ★W270：小火苗那行同样刷新
             });
         } catch (e) { }
     })();
@@ -11415,6 +11762,8 @@ eventSource.on(event_types.GENERATION_STARTED, function () {
     // ★W171c（验收必修）：**发送那一刻就把面板上那个名字锁住**（面板读的也是 currentRandName() ⇒ 同一个值）。
     //   之后 ST 可能才创建/切换聊天（chatId 变），请求里用的仍然是这一刻锁住的名字 ⇒ 面板 == 请求。
     RAND_SEND_NAME = (() => { try { return currentRandName(); } catch (e) { return null; } })();
+    /* ★★W270：小火苗同样锁名（各自独立的一格），语义与上面逐字相同 */
+    RAND_USER_SEND_NAME = (() => { try { return currentRandName('user'); } catch (e) { return null; } })();
     try {
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const ch = ctx && Array.isArray(ctx.chat) ? ctx.chat : [];
@@ -11428,6 +11777,7 @@ eventSource.on(event_types.GENERATION_STARTED, function () {
 });
 eventSource.on(event_types.GENERATION_ENDED, function () {
     RAND_SEND_NAME = null;                 // ★W171c：这一轮用完就清，绝不残留给下一次
+    RAND_USER_SEND_NAME = null;            // ★W270：小火苗那格同样清掉
     try {
         if (!settings.enabled || !settings.rerollOnEmpty || settings.rerollPaused) { __apiFailRetry = 0; return; }
         if (manualStopClicked) { __apiFailRetry = 0; return; }   // 用户手动停的，不重试
