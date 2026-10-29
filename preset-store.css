@@ -1429,6 +1429,11 @@ body[data-theme-mode="dark"] .yws-tag-off, .dark .yws-tag-off { background: colo
    ★`.yws-rxrow` / `.yws-prow-look` 这两个类名 JS 里一直在用、CSS 里**从来没有规则**（class-check 早就报着），
      布局全靠行内 flex；这里给一条最简规则把事情钉住，免得以后主题改动又把它们挤歪。 */
 .yws-rxrow { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* ★★W252（作者："勾选后**不会像上面的条目一样有底色显示**"）—— 选中底色原来只写在 `.yws-prow` 上，
+   正则行是 `.yws-rxrow`（不带 prow）⇒ 永远没有底色。这里把同一条规则对 `.yws-rxrow` 也说一遍
+   （只认 `.yws-selrow` 这个**语义类**，不复制色值 —— 色值仍只有一份）。 */
+.yws-rxrow.yws-selrow { background: var(--yws-accent-bg); border-color: var(--yws-accent-line); }
+.yws-rxrow.yws-selrow .yws-cb { border-color: var(--yws-accent-line); background: var(--yws-accent-bg); color: var(--yws-txt); font-weight: 700; }
 .yws-rxrow > .yws-cb { flex: 0 0 auto; }
 .yws-rxrow > .yws-pname { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .yws-rxrow > .yws-ptag, .yws-rxrow > .yws-dim { flex: 0 0 auto; }

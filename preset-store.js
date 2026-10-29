@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.100';
+const VERSION = '2.2.101';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -10069,11 +10069,17 @@ function previewSrcOptionsHtml(p) {
     const localGrp = all.length
         ? '<optgroup label="本机已装">' + all.map(n => {
             const dup = cloudNames.has(n);                 // 这个名字云端也有 ⇒ 本条是"我的那份"
-            const label = dup ? (n + '（我的）') : n;
-            /* ★W208：选中态 = 名字相同 **且** 来源是本机（同名时云端那份不会再抢走选中） */
-            const src = 'local';
-            const sel = (n === pick && (pickSrc === 'local' || !dup)) ? ' selected' : '';
-            return '<option value="' + esc(n) + '" data-src="' + src + '"' + sel + '>' + esc(label) + '</option>';
+            /* ★★W252（作者 2026-10-29 截图："假设用户预设里有**两个（我的）**"）——
+               `cloudNames` 是**云端那组已经列出来的名字**，而本机组又把这些名字**再列一遍**
+               ⇒ 屏幕上同一个名字出现两次、两个都带「我的」（观察上就是"两个我的"）。
+               云端那一组列的**本来就是本机的某一份文件**（`baseLocalNameOf` 找到的本机名字）——
+               所以本机组不该再重复它。
+               ⇒ 云端组已经有的那些名字，本机组**不再列**（云端组那一份就是"我的这份"的代表）。
+               ★`dup` 仍用于两件事：① 云端组里同名那份要标「我的」（让用户知道那是本机的）；
+                 ② 选中态只在云端那份上（W208 的老坑）。 */
+            if (dup) return '';                            // 云端那组已经列过这个名字，本机组跳过
+            const sel = (n === pick && pickSrc === 'local') ? ' selected' : '';
+            return '<option value="' + esc(n) + '" data-src="local"' + sel + '>' + esc(n) + '</option>';
         }).join('') + '</optgroup>'
         : '';
     return cloudGrp + localGrp;
@@ -10472,8 +10478,12 @@ function baseOptionsHtml(w) {
            「ver」 退到**机器侧**（option 的 value / baseVersion / KV 键 / 卡上的声明），界面上不再出现。
            ★名字空（老记录 / 没带 title）才退回显示 ver —— 那时总得有个能认的东西。 */
         const label = title || ver;
+        /* ★★W252：云端那组里那份**就是本机装着的那一份**（`baseLocalNameOf` 找的就是本机名字）⇒
+           标上「（我的）」，让用户知道"这也是我机器上的文件，只是它恰好是官方那一版"。
+           ★本机组已按 W252 跳过这些名字 ⇒ 每个名字只出现一次、「我的」也只出现一次。 */
+        const labelShown = label + '（我的）';
         /* ★W217：云端那组的选中态按「版本号」判（值就是版本号，本来就不会跟本机组撞）。 */
-        return '<option value="' + esc(ver) + '" data-base-src="cloud"' + (ver === w.baseVersion ? ' selected' : '') + '>' + esc(label) + '</option>';
+        return '<option value="' + esc(ver) + '" data-base-src="cloud"' + (ver === w.baseVersion ? ' selected' : '') + '>' + esc(labelShown) + '</option>';
     }).join('');
     /* 卡上声明的版本这次清单里没有（例：编辑一张写了 V0917 的老卡，而库里只有 V0811/V0824）——
        **照旧显示出来**（声明是卡自己的事实，不许静默丢掉）。 */
@@ -10485,10 +10495,14 @@ function baseOptionsHtml(w) {
             这样「官方基准（云端）· 余温V1008」与「本机已装 · 余温V1008（我的）」一眼能分清，
             用户就知道上面那个是**云端真正的官方旧版**、下面这个是自己机器上那份。
        ★选中态仍按名字判（`n === w.baseName`）——本机组的值就是预设名，与改前一个字没变。 */
-    const localOpts = locals.map(n => {
-        const dup = cloudNames.has(n);
-        const label = dup ? (n + '（我的）') : n;
-        return '<option value="' + esc(n) + '" data-base-src="local"' + ((n === w.baseName && !w.baseVersion) ? ' selected' : '') + '>' + esc(label) + '</option>';
+    /* ★★W252（作者 2026-10-29 截图："假设用户预设里有**两个（我的）**"）——
+       `cloudNames` 是"云端那组**已经列出来**的本机名字"，而本机组把这些名字**又列了一遍**
+       ⇒ 屏幕上同一个名字出现两次、两个都可能被标「我的」。
+       云端组列的**本来就是本机的某一份文件**（`baseLocalNameOf` 找到的本机名字）——
+       所以本机组**不再重复**它；云端组那一份**就是**"我的这份"的代表（标签上标「我的」）。
+       ⇒ 每个名字在下拉里只出现一次，「我的」也只会出现一次。 */
+    const localOpts = locals.filter(n => !cloudNames.has(n)).map(n => {
+        return '<option value="' + esc(n) + '" data-base-src="local"' + ((n === w.baseName && !w.baseVersion) ? ' selected' : '') + '>' + esc(n) + '</option>';
     }).join('');
     return '<option value="">（你的条目基于哪个官方版本？不填也行）</option>' +
         ((cloud || orphan) ? '<optgroup label="官方基准（云端）" data-cloud="1">' + cloud + orphan + '</optgroup>' : '') +
@@ -11117,7 +11131,10 @@ function regexPickerInPart(w) {
            ⇒ 勾选框被撑成一大块、把名字挤到下一行。
            ⇒ 改成**与条目行同一套自绘勾选框**（`span.yws-cb`，22×22 固定 + inline-flex 居中），
              两处的视觉与对齐从此同源（条目行 entryPicker 也走 `.yws-cb`）。 */
-        return '<div class="yws-rxrow yws-prow-look" data-act="w-rxpick" data-id="' + esc(String(r.id)) + '" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--SmartThemeBorderColor,rgba(128,128,128,.2))">' +
+        /* ★★W252（作者 2026-10-29 截图："现在勾选后**不会像上面的条目一样有底色显示**"）——
+           真因：条目行选中会挂 `.yws-selrow`（CSS 给 accent 底色），而**正则行从来没挂这个类**。
+           ⇒ 补上（与条目行同一个类、同一套底色），并把勾选框的选中态也一起对上。 */
+        return '<div class="yws-rxrow yws-prow-look' + (on ? ' yws-selrow' : '') + '" data-act="w-rxpick" data-id="' + esc(String(r.id)) + '" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--SmartThemeBorderColor,rgba(128,128,128,.2))">' +
             '<span class="yws-cb yws-mark" role="checkbox" aria-checked="' + (on ? 'true' : 'false') + '" style="flex:0 0 auto">' + (on ? '☑' : '☐') + '</span>' +
             '<span class="yws-pname" style="min-width:0">' + esc(nm) + '</span>' +
             (rtag ? '<span class="yws-ptag ' + rtag.cls + '">' + esc(rtag.t) + '</span>' : '') +
