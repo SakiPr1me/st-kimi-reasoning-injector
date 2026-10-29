@@ -88,7 +88,7 @@ const EXT = 'preset_updater';
      （点它一下 = 排除，再点一下 = 收回；小标「已默认收进来 / 不要它」）；③**没点过的不同处按新版**。
      ⇒ chip 文案、结果行那句人话、正文顶上说明同步；**「按原顺序全收」那颗按钮删掉**（用途已被②整份覆盖）。
    读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md §修订；台账 §XXVIII） */
-const VERSION = '5.3.48';   // 更新器模块版本（随工具箱一起发布）
+const VERSION = '5.3.49';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -9713,7 +9713,51 @@ function storePackToPatch(pack, mine) {
     //   一条正则 = 一个完整对象（13 字段一个不许少），所以这里**整条搬**、只挑 mode。
     //   包格式（写在 r8-kernel-status.md 里，两端一致）：{ kind:'ywp-entry', scope:'regex', entries:[],
     //     regexes:[{mode:'new'|'patch'|'remove'|'switch', reg, base, next, enabled, place}], regexOrder:[…] }
-    const regexOps = (Array.isArray(pack.regexes) ? pack.regexes : []).map((r, i) => regexOpOf(r, i)).filter(Boolean);
+    /* ★★W246（作者 2026-10-29 实测：缝商店那张 `4A更新补丁包(V1028)`，**杀感叹号1/2 各出现两行**
+       —— 一行「改了内容」、一行「新版新增」，截图上就是第 44/45 位）。
+       真因：卡里那 5 条正则都是 `mode:'new'`（作者当初上传时包里就是这么写的），读侧一律翻成 `regex-add`；
+       而内核 `regex-add` 只对「14 个字段（含 id）全部一字不差」才跳过 —— 这里 **id 一样、内容不同**
+       ⇒ 当成另一条**加在末尾**（还带着同一个 id）⇒ 你的清单里就出现两条同名。
+       ⇒ 修：**包里标"新增"的正则，先在你手上按 id / 规范化名字认一遍**（与条目侧"同名 → 改你那条"同一条纪律）：
+          · 一字不差（正文与开关都一样）⇒ **一条 op 都不出**（本来就不用处理，不该占一行）；
+          · 只差开关 ⇒ `regex-switch`（就地改开关，不加新条）；
+          · 内容不同 ⇒ `regex-update`（对比页只出一行，你在那儿选 用我的 / 两条都留 / 用新版）；
+          · 认不到 ⇒ 保持 `regex-add`（真·新增，与改前一致）。
+       ★只影响「包里 mode=new 且你这边已有同 id / 同名」的情形；patch / remove / switch 一律原样。 */
+    const myRxList = (() => {
+        try { return (PM.getRegexList(mine) || []).map((x) => PM.normalizeRegexScript(x)); } catch (e) { return []; }
+    })();
+    const myRxById = new Map();
+    const myRxByName = new Map();
+    for (const x of myRxList) {
+        const k = String(x.id || '');
+        if (k && !myRxById.has(k)) myRxById.set(k, x);
+        const kk = PM.normalizeName(String(x.scriptName || ''));
+        if (kk && !myRxByName.has(kk)) myRxByName.set(kk, x);
+    }
+    const regexOps = (Array.isArray(pack.regexes) ? pack.regexes : []).map((r, i) => {
+        const op = regexOpOf(r, i);
+        if (!op || op.op !== 'regex-add') return op;
+        const reg = op.reg || null;
+        if (!reg) return op;
+        const mineRx = myRxById.get(String(reg.id || '')) || myRxByName.get(PM.normalizeName(String(reg.scriptName || ''))) || null;
+        if (!mineRx) return op;                                   // 真·新增
+        let bodySame = false;
+        try { bodySame = PM.regexBodySig(mineRx) === PM.regexBodySig(reg); } catch (e) { bodySame = false; }
+        const myDis = (mineRx.disabled === true);
+        const newDis = (reg.disabled === true);
+        const place = op.place || {};
+        if (bodySame && myDis === newDis) return null;            // 一字不差 ⇒ 不占一行
+        if (bodySame) {
+            return { op: 'regex-switch', key: String(op.key || ('store:regex-switch#' + i)), name: String(reg.scriptName || op.name || ''), base: { ...mineRx }, enabled: !newDis, place };
+        }
+        return {
+            op: 'regex-update', key: String(op.key || ('store:regex-update#' + i)),
+            name: String(reg.scriptName || op.name || ''),
+            wasName: String(mineRx.scriptName || ''),
+            base: { ...mineRx }, next: { ...reg }, rename: false, place,
+        };
+    }).filter(Boolean);
     return {
         patch: {
             kind: 'ywp-patch', v: 1, from: '商店条目', to: String(pack.title || ''), ops,
