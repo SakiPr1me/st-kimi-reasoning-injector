@@ -3425,7 +3425,20 @@ export function applyPatch({ preset, patch, decisions = {} } = {}) {
                         rec.action = 'unresolved';
                         report.unresolved.push({ key, op: 'switch', name: rec.name, why: '这条不在顺序表里（ST 里不参与注入）→ 开关没处改' });
                     } else {
-                        o.enabled = want;
+                        /* ★★W229（作者 2026-10-28："开关有变动的，一旦选了新版开关，为什么没有一起让预设改变开关状态"）
+                           这里原来**无条件** `o.enabled = want`（want = 包里的新版开关），**完全无视用户的选择**：
+                           用户点了「用我的」（`dec.enabled === 'mine'`）也照旧被改成新版的
+                           —— 那是另一个方向的不听话（"我选了保留我的，它还是给我改了"）。
+                           现在按决策走（与上面 `update` 分支、与 `patchPack` 那段 `dec.enabled` 同一套口径）：
+                             · `typeof dec.enabled === 'boolean'`（顺序页拨钮那种显式值）⇒ 照它；
+                             · `'mine'` ⇒ 保留我这边的开关；
+                             · `'next'` / 没写 ⇒ 用新版的（= 改前行为；未表态时跟新版）。
+                           ★"取消"（决策里没有 enabled）会落到最后一支 ⇒ 跟新版，与改前逐字节相同。 */
+                        const decE = dec && dec.enabled;
+                        const mineEn = (loc.entry && loc.entry.enabled !== null && loc.entry.enabled !== undefined) ? !!loc.entry.enabled : null;
+                        if (typeof decE === 'boolean') o.enabled = decE;
+                        else if (decE === 'mine' && mineEn !== null) o.enabled = mineEn;
+                        else o.enabled = want;
                         report.summary.switch++;
                     }
                 }

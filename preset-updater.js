@@ -88,7 +88,7 @@ const EXT = 'preset_updater';
      （点它一下 = 排除，再点一下 = 收回；小标「已默认收进来 / 不要它」）；③**没点过的不同处按新版**。
      ⇒ chip 文案、结果行那句人话、正文顶上说明同步；**「按原顺序全收」那颗按钮删掉**（用途已被②整份覆盖）。
    读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md §修订；台账 §XXVIII） */
-const VERSION = '5.3.43';   // 更新器模块版本（随工具箱一起发布）
+const VERSION = '5.3.44';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -6532,7 +6532,25 @@ function handleItemAction(key, act) {
         const on = which === 'mine' ? ch.mineOn : which === 'next' ? ch.nextOn : ch.bothOn;
         const source = on ? null : which;
         // ★W124-乙：从「合二为一」换到这三颗任意一颗 ⇒ 合二为一那套账**整份清掉**（`mergeSeq` + 排除账）
-        S.decisions[key] = { ...cur, source, blockDecision: {}, customText: '', customEdited: false, mergeSeq: null, mergeExcluded: null };
+        const nd = { ...cur, source, blockDecision: {}, customText: '', customEdited: false, mergeSeq: null, mergeExcluded: null };
+        /* ★★W229（作者 2026-10-28："缝入里面对于开关有变动的（单纯开关变动、或**内容变动的同时开关变动**），
+           一旦选了新版开关，为什么没有一起让当前的预设改变开关状态"）—— **真 BUG，就在这里**：
+           这一支原来只写 `source`，**从来没写 `enabled`**。
+           而内核 `itemDecided()` 的判据（preset-merge.js:1124）明确要求：正文与开关**都不同**时，
+           `d.enabled` 必须单独给值（`'mine'` / `'next'` / 布尔）—— 光有 `source` 只解决"正文取哪版"，
+           开关那一维仍然是"未拍板" ⇒ 应用补丁时开关**保持你原来的** ⇒ 作者看到"选了新版，开关没变"。
+           （一键「选新版」那条路是对的：`bulkDecision` 里有 `if (both && it.enabledDiff) out[key].enabled = s`；
+             单条点这一支漏了 —— 两条路不同源，就是差异的由来。）
+           ⇒ 现在三颗按钮**一个维度都不留**：正文/开关/名字全按点的那一版。
+             · `enabled` 只在"两边都有、且开关确实不同"时写（`enabledDiff`），否则不给（避免影响别的情形）；
+             · `both`（保存为两版）不改开关 —— 它说的是"两条都留着"，开关取谁没有共识，
+               保持"跟新版"这一内核默认（`enabledDiff` 时内核会读 `d.enabled`，这里不写 = 走默认）。
+             取消（`on` = 真）时 `source` 变 null，开关那一位也一起清掉（否则"取消勾选"后开关还挂着一个旧决定）。 */
+        if (it && it.enabledDiff) {
+            if (!on && (which === 'mine' || which === 'next')) nd.enabled = which;
+            else delete nd.enabled;
+        }
+        S.decisions[key] = nd;
         // ★v4.0 用户："单纯点这个按钮就别展开了，我需要看内容时自己点进去" → 不再自动展开
         commitItemEdit(key);
         return;
