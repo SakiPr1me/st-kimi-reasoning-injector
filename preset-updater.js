@@ -88,7 +88,7 @@ const EXT = 'preset_updater';
      （点它一下 = 排除，再点一下 = 收回；小标「已默认收进来 / 不要它」）；③**没点过的不同处按新版**。
      ⇒ chip 文案、结果行那句人话、正文顶上说明同步；**「按原顺序全收」那颗按钮删掉**（用途已被②整份覆盖）。
    读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md §修订；台账 §XXVIII） */
-const VERSION = '5.3.44';   // 更新器模块版本（随工具箱一起发布）
+const VERSION = '5.3.45';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -9595,9 +9595,24 @@ function storePackToPatch(pack, mine) {
        op.base 必须是你本机这一条的原文，否则内核拿空串去比 ⇒ 整条都算改动。
        （只有 `mine` 读得出来时才建；读不出来就退回原来的空串行为。） */
     const haveMap = new Map();
+    /* ★★W230（作者 2026-10-28："只有开关不同、内容相同，重新点入缝入的时候它会显示内容都一致、没有可缝的"，
+       并要求"内容 / 开关 / 名称 选择改变状态后缝入都要改变状态"）——
+       **这是我上一轮漏掉的一档**：`haveMap` 只记了正文，**没有记开关** ⇒ 下面 `conv()` 把包里的
+       "新增" 转成 "改这条" 时，开关（`entry.enabled`）**被整个丢掉** ⇒ 补丁里只有 update（base 与 next 一字不差）
+       ⇒ 应用出来的"新版"跟你的完全一样 ⇒ 界面当然显示"内容都一致、没有可缝的"。
+       ⇒ 补一张 规范名 → 本机开关 的表，让 `conv()` 能判"开关是否真的不同"。 */
+    const haveEn = new Map();
     try { for (const e of PM.indexPreset(mine).entries) have.add(PM.normalizeName(e.name)); } catch (e) { /* 读不了就当"没有同名" */ }
     try { for (const e of PM.indexPreset(mine).entries) { const k = PM.normalizeName(e.name); if (k && !haveMap.has(k)) haveMap.set(k, String(e.text ?? '')); } } catch (e) { /* 同上 */ }
+    try {
+        for (const e of PM.indexPreset(mine).entries) {
+            const k = PM.normalizeName(e.name);
+            /* 只认明确布尔（内核 `indexPreset().enabled` 是 `null` = 这条不在任何顺序表里 ⇒ 判不了就不判） */
+            if (k && !haveEn.has(k) && typeof e.enabled === 'boolean') haveEn.set(k, e.enabled);
+        }
+    } catch (e) { /* 同上 */ }
     const haveText = (nk) => (haveMap.has(nk) ? haveMap.get(nk) : null);
+    const haveEnabled = (nk) => (haveEn.has(nk) ? haveEn.get(nk) : null);
     const sameName = [];
     const conv = (e, i) => {
         if (!e || typeof e !== 'object') return null;
@@ -9606,7 +9621,20 @@ function storePackToPatch(pack, mine) {
         // 同名 → 按"改你那条"（★名字为空的不算，空名字定位不到，交给内核的 add 走锚点）
         if (mode === 'add' && PM.normalizeName(nm) && have.has(PM.normalizeName(nm))) { mode = 'update'; sameName.push(nm); }
         const key = 'store:' + mode + ':' + PM.normalizeName(nm) + '#' + i;    // 稳定 key（逐条决策/逐处挑都用它）
-        if (mode === 'update' && e.mode === 'patch') return { op: 'update', key, name: nm, wasName: nm, base: String(e.base ?? ''), next: String(e.next ?? ''), place: e.place || {} };
+        /* ★★W230：**开关差异必须单独出一条 `switch` op** —— 见 `haveEn` 那段注释。
+           判据：包里这条的开关（在 `entry.enabled` 上，那才是能穿过服务端 `sanitizeEntry` 的位置）
+             与本机同名那条的开关**都拿得到、且不同** ⇒ 补一条 switch。
+           ★`base` 用本机原文（内核 switch 分支只在 'mine' 时读它，但给对了总没坏处）。 */
+        const nk = PM.normalizeName(nm);
+        const packEn = (e.entry && typeof e.entry.enabled === 'boolean') ? e.entry.enabled
+            : (typeof e.enabled === 'boolean' ? e.enabled : null);
+        const myEn = haveEnabled(nk);
+        const enDiff = (packEn !== null && myEn !== null && packEn !== myEn);
+        const swOp = () => ({ op: 'switch', key: key + '#switch', name: nm, wasName: nm, enabled: packEn, base: String(haveText(nk) ?? ''), place: e.place || {} });
+        if (mode === 'update' && e.mode === 'patch') {
+            const u = { op: 'update', key, name: nm, wasName: nm, base: String(e.base ?? ''), next: String(e.next ?? ''), place: e.place || {} };
+            return enDiff ? [u, swOp()] : [u];
+        }
         /* ★★W197（作者报：从本预设抽出来的条目上传，缝入时那几条仍显示"改了内容"，而且展开是
            「旧（你那份里没有这段）/新（这段会被去掉）」）——**真 BUG 在这里**：
            上一行把"同名"的 add 强行改成 update（正确的意图：别重复加一条），但 `base` 给了**空串** ⇒
@@ -9615,9 +9643,10 @@ function storePackToPatch(pack, mine) {
            ⇒ 老侧改用**你本机这一条的原文**（`haveText` 里按规范化名字查），查不到才退回空串。 */
         if (mode === 'update') {
             const mineText = haveText(PM.normalizeName(nm));
-            return { op: 'update', key, name: nm, wasName: nm, base: (mineText != null ? mineText : ''), next: String((e.entry && e.entry.content) ?? e.next ?? ''), place: e.place || {}, entry: e.entry || null };
+            const u = { op: 'update', key, name: nm, wasName: nm, base: (mineText != null ? mineText : ''), next: String((e.entry && e.entry.content) ?? e.next ?? ''), place: e.place || {}, entry: e.entry || null };
+            return enDiff ? [u, swOp()] : [u];
         }
-        if (mode === 'remove') return { op: 'remove', key, name: nm, base: String(e.base ?? ''), place: e.place || {} };
+        if (mode === 'remove') return [{ op: 'remove', key, name: nm, base: String(e.base ?? ''), place: e.place || {} }];
         /* ★★D2（2026-09-22 · **保真 BUG**）：改前这里**写死 `enabled: true`** ⇒ 上传方"关着"的条目
            到收方变成**开着**（无声改了他的设定）—— 上传侧 `stFields()` 现在会把真实开关装进包里。
            口径：**有就随、没有就按老行为 true**（老包一个字都没带过开关 ⇒ 行为与改前**逐字一样**）。
@@ -9628,20 +9657,31 @@ function storePackToPatch(pack, mine) {
              （`preset-merge.js` 里那两处），它一直认这个字段。 */
         const en = (e.entry && typeof e.entry.enabled === 'boolean') ? e.entry.enabled
             : (typeof e.enabled === 'boolean' ? e.enabled : true);
-        return { op: 'add', key, name: nm, entry: (e.entry && typeof e.entry === 'object') ? e.entry : { name: nm, content: '' }, enabled: en, place: e.place || {} };
+        return [{ op: 'add', key, name: nm, entry: (e.entry && typeof e.entry === 'object') ? e.entry : { name: nm, content: '' }, enabled: en, place: e.place || {} }];
     };
     if (kind === 'ywp-patch') {
-        const ops = (Array.isArray(pack.ops) ? pack.ops : []).map((op, i) => {
-            if (!op || typeof op !== 'object' || op.op !== 'add' || !PM.normalizeName(String(op.name || '')) || !have.has(PM.normalizeName(String(op.name || '')))) return op;
+        /* ★★W230：这一支同样要补 `switch` —— 与 `conv()` 里那条注释同一个理由（开关差异不进补丁
+           ⇒ 内容一样时界面显示"没有可缝的"，开关那件事永远做不到）。 */
+        const ops = (Array.isArray(pack.ops) ? pack.ops : []).flatMap((op, i) => {
+            if (!op || typeof op !== 'object' || op.op !== 'add' || !PM.normalizeName(String(op.name || '')) || !have.has(PM.normalizeName(String(op.name || '')))) return [op];
             sameName.push(String(op.name || ''));                        // 同一个口径：新增撞名 → 改你那条
-            { const _nk = PM.normalizeName(String(op.name || '')); const _mt = haveText(_nk);
-              return { op: 'update', key: String(op.key || ('store:update#' + i)), name: String(op.name || ''), wasName: String(op.name || ''), base: (_mt != null ? _mt : ''), next: String((op.entry && op.entry.content) ?? op.next ?? ''), place: op.place || {}, entry: op.entry || null }; }
+            const _nk = PM.normalizeName(String(op.name || ''));
+            const _mt = haveText(_nk);
+            const u = { op: 'update', key: String(op.key || ('store:update#' + i)), name: String(op.name || ''), wasName: String(op.name || ''), base: (_mt != null ? _mt : ''), next: String((op.entry && op.entry.content) ?? op.next ?? ''), place: op.place || {}, entry: op.entry || null };
+            const packEn = (op.entry && typeof op.entry.enabled === 'boolean') ? op.entry.enabled : (typeof op.enabled === 'boolean' ? op.enabled : null);
+            const myEn = haveEnabled(_nk);
+            if (packEn !== null && myEn !== null && packEn !== myEn) {
+                return [u, { op: 'switch', key: String(op.key || ('store:update#' + i)) + '#switch', name: String(op.name || ''), wasName: String(op.name || ''), enabled: packEn, base: String(_mt ?? ''), place: op.place || {} }];
+            }
+            return [u];
         });
         return { patch: { ...pack, ops }, sameName };
     }
     if (kind !== 'ywp-entry') throw new Error('这个包不是能缝进来的类型（kind=' + (kind || '没写') + '）');
     const list = Array.isArray(pack.entries) ? pack.entries : [];
-    const ops = list.map(conv).filter(Boolean);
+    /* ★★W230：`conv` 现在**可能同时产两条 op**（内容改了 + 开关也改了 ⇒ update + switch），
+       所以这里必须 flatMap（改前是 map，会把数组当成一条 op 塞进 ops ⇒ 整条链当场不可用）。 */
+    const ops = list.flatMap(conv).filter(Boolean);
     // ★R8：`scope:"regex"` 的店包（与 single / multi / full 并列的新一类）→ 翻成 regexOps。
     //   一条正则 = 一个完整对象（13 字段一个不许少），所以这里**整条搬**、只挑 mode。
     //   包格式（写在 r8-kernel-status.md 里，两端一致）：{ kind:'ywp-entry', scope:'regex', entries:[],
