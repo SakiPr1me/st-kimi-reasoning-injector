@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.145'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.146'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -369,6 +369,15 @@ const defaultSettings = {
     nameModes: ["reasoning_content", "partial"], // name 应用到哪些注入分支（可多选）
     autoStopEnabled: true,           // 自动截断：检测到标记即停止生成（省token）
     autoStopMarker: '<mutter>',    // 自动截断标记（可自定义，如 <mutter>）
+    /* ★★W275（作者 2026-10-29）：起始标记**必须是一对完整的标签**才算数 ——
+       现在默认的起始标记是 `</content>,<talk>`（只查**闭**标签）；而模型把思维写进正文时，
+       思维链里可能先出现一个孤立的 `</content>`（没有对应的 `<content>`），之后一看到 `<mutter>` 就截断。
+       作者原话："前面在思维链里 出现了</content> 然后再看到<mutter> 就截断了。
+       我觉得是否追加一个勾选 检测的是标签对 前面要有完整的<content>和</content>或者完整的<talk>和</talk> 再检测到<mutter>就截断"
+       ⇒ 勾上时：锚点必须"开标签…闭标签"**成对出现且顺序正确**（开在前、闭在后），之后才武装。
+       ★默认 **true**（作者要求"新用户或者更新工具箱的用户 自动把勾选选上"）。
+       ★只有锚点是"可配对的标签形状"时才走配对检查；用户填了非标签锚点（如 `---`）⇒ 自动退回旧口径。 */
+    autoStopNeedPair: true,
     autoStopFrom: '</content>,<talk>', // ★W113：截断的「起始标记」——支持**多值**（英文逗号分隔，如 </content>,<talk>）；新装默认两个都填（任一出现即算过起点；留空 = 全文检测/旧行为）
     rerollPaused: false,             // 暂停自动重roll（横幅按钮/设置开关控制）
     rerollLockOn: false,             // ★W105b：一键锁住重roll（6 个勾选暂存在 rerollLockSnap，按钮一键还原；★W138 起含「正文出现以下内容即重roll」）
@@ -523,7 +532,13 @@ const UI = {
         miscLabel: "其他功能", keepScrollLabel: "生成完成保持滚动位置", keepScrollHint: "ST 生成完成会重建消息 DOM 导致滚动条跳到楼层顶部，开启后保持你正在看的位置（流式结束时恢复）",
         reasoningTimerLabel: "思维链实时计时（思考中显示秒数）", reasoningTimerHint: "原生思维链思考中显示「思考中 Xs」实时跳动，思考结束定格精确秒（ST 默认只精确到分钟）",
         autoStopLabel: "检测到结束标记自动截断",
-        autoStopMarkerLabel: "截断标记", autoStopFromLabel: "起始标记", autoStopFromPh: "留空＝全文检测；多个用英文逗号分隔", autoStopFromTips: "可填多个，用英文逗号分隔（任一出现即算过起点）；留空＝全文检测", autoStopOr: "或", autoStopExplainOne: "工具箱会检测到{a}标记后的「{b}」时帮你截断。roll 10 次有个别次数扣费正常。MUV 卡自行修改世界书，将模块确保生成在截断标记之前。", autoStopExplainTwo: "工具箱会检测到「{b}」时帮你截断（未填起始标记＝全文检测）。roll 10 次有个别次数扣费正常。MUV 卡自行修改世界书，将模块确保生成在截断标记之前。", autostopFailTip: "截断失败率高？试试：① 把下方「流式帧速率」拉到 30 以下（如 10，自行尝试）；② 将预设里碎碎念（截断）模块改 3000 字以上。", streamingFpsLabel: "流式帧速率",
+        autoStopMarkerLabel: "截断标记", autoStopFromLabel: "起始标记",
+        /* ★W275：标签对勾选（作者 2026-10-29） */
+        autoStopNeedPairLabel: "防止误截断，收紧判定，得是标签对才截断",
+        autoStopNeedPairTips: "勾上后：必须在正文里见到完整的 <content>…</content> 或 <talk>…</talk>（开标签在前、闭标签在后），之后出现截断标记才截断。可避免思维链里孤立的 </content> 造成误截断。起始标记不是标签形状时此项自动失效。", autoStopFromPh: "留空＝全文检测；多个用英文逗号分隔", autoStopFromTips: "可填多个，用英文逗号分隔（任一出现即算过起点）；留空＝全文检测", autoStopOr: "或", autoStopExplainOne: "工具箱会检测到{a}标记后的「{b}」时帮你截断。roll 10 次有个别次数扣费正常。MUV 卡自行修改世界书，将模块确保生成在截断标记之前。",
+        /* ★W277（作者 2026-10-29）：勾了"得是标签对才截断"时，说明也要跟着改口径（否则文案还写着旧规则） */
+        autoStopExplainPairOne: "工具箱要看到{a}这组标签完整成对（开标签在前、闭标签在后）之后，再检测到「{b}」才帮你截断。roll 10 次有个别次数扣费正常。MUV 卡自行修改世界书，将模块确保生成在截断标记之前。",
+        autoStopExplainPairTwo: "工具箱会检测到「{b}」时帮你截断（未填起始标记＝全文检测，此时「标签对」这项不起作用）。roll 10 次有个别次数扣费正常。MUV 卡自行修改世界书，将模块确保生成在截断标记之前。", autoStopExplainTwo: "工具箱会检测到「{b}」时帮你截断（未填起始标记＝全文检测）。roll 10 次有个别次数扣费正常。MUV 卡自行修改世界书，将模块确保生成在截断标记之前。", autostopFailTip: "截断失败率高？试试：① 把下方「流式帧速率」拉到 30 以下（如 10，自行尝试）；② 将预设里碎碎念（截断）模块改 3000 字以上。", streamingFpsLabel: "流式帧速率",
         foldTitle: "自动修正正文换行 &amp; Name 注入", fixLabel: "自动修正正文换行", fixHint: "如果出现只有单换行的情况(没有空行)，插件为其自动补上。可自定义，用逗号分隔。", fixMarkerLabel: "正文修正标记：", fixNow: "修正当前楼层", fixRevert: "修正回退",
         nameLabel: "Name 注入（不知道有没有用总之试试）：", nameEnabled: "启用 Name 注入", nameValueLabel: "Name 值：", nameScopeLabel: "应用到分支：",
         wordEnabled: "启用（生成后自动应用）", wordAdd: "+ 添加规则",
@@ -587,7 +602,11 @@ const UI = {
         thinkingLive: "Thinking {s}", thinkingDone: "Thought for {s}", reasoningTimerLabel: "Live reasoning timer (seconds while thinking)", reasoningTimerHint: "Shows \"Thinking Xs\" live during native reasoning, then freezes at exact seconds (ST only shows minutes)",
         miscLabel: "Other", keepScrollLabel: "Keep scroll position after generation", keepScrollHint: "ST rebuilds message DOM on finish which snaps the scrollbar to the top; enable to keep your current reading position (restored when streaming ends)",
         autoStopLabel: "Auto-Stop on End Marker",
-        autoStopMarkerLabel: "Stop Marker", autoStopFromLabel: "Start Marker", autoStopFromPh: "Empty = whole text; separate multiple with commas", autoStopFromTips: "Multiple values allowed, separated by commas (any one counts as the start); empty = whole-text check", autoStopOr: " or ", autoStopExplainOne: "The toolbox cuts the reply when it sees 「{b}」 after {a}. Occasional charges within 10 auto-rolls are normal. For the MUV card, edit the world book yourself so the module is generated before the stop marker.", autoStopExplainTwo: "The toolbox cuts the reply when it sees 「{b}」 (no start marker set = whole-text check). Occasional charges within 10 auto-rolls are normal. For the MUV card, edit the world book yourself so the module is generated before the stop marker.", autostopFailTip: "High truncation failure rate? Try: ① pull the \"Streaming FPS\" slider below to under 30 (e.g. 10, experiment); ② set the mutter (truncation) module in the preset to output 3000+ characters.", streamingFpsLabel: "Streaming FPS",
+        autoStopMarkerLabel: "Stop Marker", autoStopFromLabel: "Start Marker",
+        autoStopNeedPairLabel: "Prevent false truncation: only cut on a complete tag pair",
+        autoStopNeedPairTips: "When ticked: the reply must contain a complete <content>…</content> or <talk>…</talk> (opening tag first, closing tag after) before the stop marker triggers. Prevents a stray </content> inside the thinking from truncating too early. Ignored when the start marker is not tag-shaped.", autoStopFromPh: "Empty = whole text; separate multiple with commas", autoStopFromTips: "Multiple values allowed, separated by commas (any one counts as the start); empty = whole-text check", autoStopOr: " or ", autoStopExplainPairOne: "The toolbox only cuts when it sees a **complete pair** of {a} (opening tag first, closing tag after) and then 「{b}」. Occasional charges within 10 auto-rolls are normal. For the MUV card, edit the world book yourself so the module is generated before the stop marker.",
+        autoStopExplainPairTwo: "The toolbox cuts the reply when it sees 「{b}」 (no start marker set = whole-text check; the tag-pair option does not apply). Occasional charges within 10 auto-rolls are normal. For the MUV card, edit the world book yourself so the module is generated before the stop marker.",
+        autoStopExplainOne: "The toolbox cuts the reply when it sees 「{b}」 after {a}. Occasional charges within 10 auto-rolls are normal. For the MUV card, edit the world book yourself so the module is generated before the stop marker.", autoStopExplainTwo: "The toolbox cuts the reply when it sees 「{b}」 (no start marker set = whole-text check). Occasional charges within 10 auto-rolls are normal. For the MUV card, edit the world book yourself so the module is generated before the stop marker.", autostopFailTip: "High truncation failure rate? Try: ① pull the \"Streaming FPS\" slider below to under 30 (e.g. 10, experiment); ② set the mutter (truncation) module in the preset to output 3000+ characters.", streamingFpsLabel: "Streaming FPS",
         foldTitle: "Body Line-Fix &amp; Name Injection", fixLabel: "Auto-fix body line breaks", fixHint: "If only single newlines appear (no blank line), the plugin adds them automatically. Customize with comma-separated values.", fixMarkerLabel: "Body Fix Marker: ", fixNow: "Fix Current Message", fixRevert: "Revert Fix",
         nameLabel: "Name Injection (uncertain, trying anyway): ", nameEnabled: "Enable Name Injection", nameValueLabel: "Name Value: ", nameScopeLabel: "Apply to: ",
         wordEnabled: "Enable (auto-apply after generation)", wordAdd: "+ Add Rule",
@@ -651,7 +670,11 @@ const UI = {
         thinkingLive: "사고 중 {s}", thinkingDone: "사고 {s}", reasoningTimerLabel: "사고 실시간 타이머(초 표시)", reasoningTimerHint: "네이티브 사고 중 \"사고 중 Xs\"를 실시간 표시, 끝나면 정확한 초로 고정(ST는 분 단위만)",
         miscLabel: "기타 기능", keepScrollLabel: "생성 완료 후 스크롤 위치 유지", keepScrollHint: "ST는 완료 시 메시지 DOM을 재구성해 스크롤바가 맨 위로 튑니다. 켜면 보고 있던 위치를 유지합니다 (스트리밍 종료 시 복원)",
         autoStopLabel: "종료 마커 감지 시 자동 중단",
-        autoStopMarkerLabel: "중단 마커", autoStopFromLabel: "시작 마커", autoStopFromPh: "비우면 전문 검사; 여러 개는 쉼표로 구분", autoStopFromTips: "여러 개 입력 가능, 쉼표로 구분 (하나라도 나오면 시작점 통과); 비우면 전문 검사", autoStopOr: " 또는 ", autoStopExplainOne: "툴박스가 {a} 마커 뒤의 「{b}」를 감지하면 잘라 줍니다. 10회 롤 중 일부가 과금되는 것은 정상입니다. MUV 카드는 월드북을 직접 수정해 모듈이 중단 마커보다 먼저 생성되게 하세요.", autoStopExplainTwo: "툴박스가 「{b}」를 감지하면 잘라 줍니다(시작 마커 비어 있음＝전문 검사). 10회 롤 중 일부가 과금되는 것은 정상입니다. MUV 카드는 월드북을 직접 수정해 모듈이 중단 마커보다 먼저 생성되게 하세요.", autostopFailTip: "차단 실패율이 높은가요? 이렇게 해보세요: ① 아래 「스트리밍 FPS」를 30 미만(예: 10, 직접 시험)으로 낮추기; ② 프리셋의 중얼거림(차단) 모듈을 3000자 이상으로 설정.", streamingFpsLabel: "스트리밍 FPS",
+        autoStopMarkerLabel: "중단 마커", autoStopFromLabel: "시작 마커",
+        autoStopNeedPairLabel: "오탐 방지: 완전한 태그 쌍일 때만 자르기",
+        autoStopNeedPairTips: "체크하면 <content>…</content> 또는 <talk>…</talk> (여는 태그가 먼저, 닫는 태그가 뒤) 가 본문에 완전히 나타난 뒤에만 중단 표시가 작동합니다. 사고 과정에 홀로 있는 </content> 때문에 일찍 잘리는 것을 막습니다. 시작 표시가 태그 형태가 아니면 이 항목은 무시됩니다.", autoStopFromPh: "비우면 전문 검사; 여러 개는 쉼표로 구분", autoStopFromTips: "여러 개 입력 가능, 쉼표로 구분 (하나라도 나오면 시작점 통과); 비우면 전문 검사", autoStopOr: " 또는 ", autoStopExplainPairOne: "툴박스는 {a} 가 **완전한 태그 쌍**(여는 태그 먼저, 닫는 태그 뒤)으로 나타난 뒤 「{b}」를 감지해야 자릅니다. 10회 롤 중 일부가 과금되는 것은 정상입니다. MUV 카드는 월드북을 직접 수정해 모듈이 중단 마커보다 먼저 생성되게 하세요.",
+        autoStopExplainPairTwo: "툴박스가 「{b}」를 감지하면 잘라 줍니다(시작 마커 비어 있음＝전문 검사, 이때 태그 쌍 항목은 작동하지 않습니다). 10회 롤 중 일부가 과금되는 것은 정상입니다. MUV 카드는 월드북을 직접 수정해 모듈이 중단 마커보다 먼저 생성되게 하세요.",
+        autoStopExplainOne: "툴박스가 {a} 마커 뒤의 「{b}」를 감지하면 잘라 줍니다. 10회 롤 중 일부가 과금되는 것은 정상입니다. MUV 카드는 월드북을 직접 수정해 모듈이 중단 마커보다 먼저 생성되게 하세요.", autoStopExplainTwo: "툴박스가 「{b}」를 감지하면 잘라 줍니다(시작 마커 비어 있음＝전문 검사). 10회 롤 중 일부가 과금되는 것은 정상입니다. MUV 카드는 월드북을 직접 수정해 모듈이 중단 마커보다 먼저 생성되게 하세요.", autostopFailTip: "차단 실패율이 높은가요? 이렇게 해보세요: ① 아래 「스트리밍 FPS」를 30 미만(예: 10, 직접 시험)으로 낮추기; ② 프리셋의 중얼거림(차단) 모듈을 3000자 이상으로 설정.", streamingFpsLabel: "스트리밍 FPS",
         foldTitle: "본문 줄바꿈 보정 &amp; Name 주입", fixLabel: "본문 줄바꿈 자동 보정", fixHint: "단일 줄바꿈만 있는 경우(빈 줄 없음) 자동으로 보충. 쉼표로 구분해 커스터마이즈 가능.", fixMarkerLabel: "본문 보정 마커: ", fixNow: "현재 메시지 보정", fixRevert: "보정 되돌리기",
         nameLabel: "Name 주입 (효과 불확실, 일단 시도): ", nameEnabled: "Name 주입 활성화", nameValueLabel: "Name 값: ", nameScopeLabel: "적용 분기: ",
         wordEnabled: "활성화 (생성 후 자동 적용)", wordAdd: "+ 규칙 추가",
@@ -1163,6 +1186,7 @@ if (settings.nameValue === undefined) settings.nameValue = defaultSettings.nameV
 if (!Array.isArray(settings.nameModes)) settings.nameModes = Array.isArray(defaultSettings.nameModes) ? defaultSettings.nameModes.slice() : ['reasoning_content', 'partial'];
 if (settings.autoStopEnabled === undefined) settings.autoStopEnabled = true;
 if (settings.autoStopMarker === undefined) settings.autoStopMarker = '<mutter>';
+if (settings.autoStopNeedPair === undefined) settings.autoStopNeedPair = true;   // ★W275（铁律 32）：默认 true ⇒ **新装与所有升级用户都自动勾上**（作者要求）
 // ★W105b：这栏是 W105 才有的 ⇒ 用"初始化旗"兜三种历史落盘（首次见到这栏时**只补空位、不动已填的值**）：
 //   ① 老版本落盘：根本没有这栏（undefined）⇒ 补新装默认；
 //   ② 过渡版（内部 1.46.15，从未对外分发）把**空串**落过盘 ⇒ 也补（作者本机就是这样，2026-10-06 深夜当场发现）；
@@ -2792,11 +2816,56 @@ function autoStopAnchors(raw) {
  *  ★W113 **多值**（作者 2026-10-07 日间）：锚点可按英文逗号填多个（如 `</content>,<talk>`）——**任一出现过 ⇒ 过起点**；
  *    截断标记的命中判定 = "出现在**任一个**已出现锚点之后的文本里"（每个已出现锚点各取"其后区段"，
  *    任一段里命中即算命中；`at` 取**最早**的那个命中，供日志定位）。没有逗号 = 与 W105 逐字相同。
- *  返回：{ on=是否已过起始点, hit=是否命中, at=命中在原文里的下标(-1=无), region, anchor=开武装/命中的那个锚点 }。 */
-function autoStopHitIn(text, markerOpt, anchorOpt) {
+ *  返回：{ on=是否已过起始点, hit=是否命中, at=命中在原文里的下标(-1=无), region, anchor=开武装/命中的那个锚点 }。
+ *
+ *  ★★W275（作者 2026-10-29）：**起始标记必须配成一对完整标签**（`settings.autoStopNeedPair`，默认 true）。
+ *    要解决的事（作者原话）：
+ *      "前面在思维链里 出现了</content> 然后再看到<mutter> 就截断了。
+ *       我觉得是否追加一个勾选 检测的是标签对 前面要有完整的<content>和</content>",
+ *       或者完整的<talk>和</talk> 再检测到<mutter>就截断"
+ *    为什么原来会误截：默认锚点是 `</content>,<talk>`（**只查闭标签**）。模型把思维写进正文时，
+ *      思维链里可能先冒出一个**孤立的** `</content>`（它压根没写过 `<content>`），这一下就"武装"了，
+ *      之后正文之前一看到 `<mutter>` ⇒ 截断。
+ *    ⇒ 勾上时，把每个锚点按"标签形状"补成**一对**再找：
+ *      · 锚点是**闭标签**（如 `</content>`）⇒ 必须找到配对的**开标签**（`<content>`）在前，取"开…闭"整段作为武装点；
+ *      · 锚点是**开标签**（如 `<talk>`）⇒ 必须找到配对的**闭标签**（`</talk>`）在后，取"开…闭"整段作为武装点；
+ *      · 锚点不是标签形状（用户自定义成 `---` 之类）⇒ **原样退回旧口径**（不做配对，绝不能把自定义锚点搞坏）。
+ *    ★顺序也严格：必须"开在前、闭在后"。只有闭标签（没有开标签）⇒ 这一段不算武装（正是要消灭的误截断）。 */
+/** ★W275：锚点 → 配对的标签对（`{open, close, mode}`）；不是标签形状 ⇒ null（调用方退回旧口径）。 */
+function autoStopTagPairOf(anchor) {
+    const a = String(anchor || '').trim();
+    const mClose = /^<\/\s*([A-Za-z][\w:-]*)\s*>$/.exec(a);   // </content>
+    if (mClose) return { open: '<' + mClose[1] + '>', close: '</' + mClose[1] + '>', mode: 'close' };
+    const mOpen = /^<([A-Za-z][\w:-]*)\s*>$/.exec(a);          // <talk>
+    if (mOpen) return { open: '<' + mOpen[1] + '>', close: '</' + mOpen[1] + '>', mode: 'open' };
+    return null;
+}
+/** ★W275：在文本里找"**完整标签对**"的武装点。
+ *  @returns {{at:number, end:number}|null}  `at` = 该对里**闭标签结束**的下标（= 之后才开始找截断标记）、
+ *                                          `end` = 闭标签结束位置；拿不到完整对 ⇒ null。
+ *  ★闭合优先取**最近的**那个闭标签（`<content>正文</content>` 里正文可能还带别的标签）。 */
+function autoStopPairArmedAt(t, pair) {
+    const open = pair.open, close = pair.close;
+    let from = 0;
+    for (let guard = 0; guard < 500; guard++) {
+        const oi = t.indexOf(open, from);
+        if (oi < 0) return null;
+        const ci = t.indexOf(close, oi + open.length);
+        if (ci < 0) return null;                    // 有开没闭 ⇒ 这一对还不完整（继续找下一个开标签也没意义，直接不武装）
+        /* ★嵌套保护：如果开标签之后、闭标签之前又出现了同一个开标签，说明第一个开没闭合
+           （如 `<content>...<content>...</content>`）⇒ 从**后一个**开标签重来，避免拿错配对的闭标签。 */
+        const oi2 = t.indexOf(open, oi + open.length);
+        if (oi2 >= 0 && oi2 < ci) { from = oi2; continue; }
+        return { at: ci + close.length, end: ci + close.length };
+    }
+    return null;
+}
+function autoStopHitIn(text, markerOpt, anchorOpt, needPairOpt) {
     const t = String(text || '');
     const marker = (markerOpt === undefined) ? String(settings.autoStopMarker || '') : String(markerOpt || '');
     const rawAnchor = (anchorOpt === undefined) ? String(settings.autoStopFrom || '') : String(anchorOpt || '');
+    /* ★W275：默认读设置；探针可以显式传第 4 个参数覆盖（纯判据，无副作用） */
+    const needPair = (needPairOpt === undefined) ? (settings.autoStopNeedPair !== false) : (needPairOpt !== false);
     const anchors = autoStopAnchors(rawAnchor);
     if (!anchors.length) {
         const i = marker ? t.indexOf(marker) : -1;
@@ -2804,16 +2873,31 @@ function autoStopHitIn(text, markerOpt, anchorOpt) {
     }
     let on = false, hit = false, at = -1, region = '', armed = '', armedAt = -1, win = '';
     for (const a of anchors) {
-        const ai = t.indexOf(a);              // 每个锚点只看**第一次出现**（与单值口径一致）
-        if (ai < 0) continue;
+        /* ★W275：先算"武装点" —— 勾了配对且锚点是标签形状 ⇒ 必须找到**完整的一对**；
+           否则退回旧口径（只看锚点自身第一次出现）。 */
+        let armPos = -1;                       // 武装点之后才允许出现截断标记（= 锚点或配对里闭标签的**结束**位置）
+        let armLabel = a;
+        const pair = needPair ? autoStopTagPairOf(a) : null;
+        if (pair) {
+            const got = autoStopPairArmedAt(t, pair);
+            if (!got) continue;                // 没有完整标签对 ⇒ 这个锚点**不算武装**（W275 的核心）
+            armPos = got.at;
+            armLabel = pair.open + '…' + pair.close;
+        } else {
+            const ai = t.indexOf(a);           // 旧口径：只看第一次出现
+            if (ai < 0) continue;
+            armPos = ai + a.length;
+        }
         on = true;
-        if (armedAt < 0 || ai < armedAt) { armedAt = ai; armed = a; }   // 最早出现的那个（无命中时 region/anchor 用它）
+        /* "最早武装"的判定：配对模式下用**闭标签结束**的位置（`armPos`），旧口径用锚点起点 —— 两者都取最小 */
+        const startForOrder = pair ? (armPos - pair.close.length) : (armPos - a.length);
+        if (armedAt < 0 || startForOrder < armedAt) { armedAt = startForOrder; armed = armLabel; }
         if (!marker) continue;
-        const seg = t.slice(ai + a.length);
+        const seg = t.slice(armPos);
         const ri = seg.indexOf(marker);
         if (ri < 0) continue;
-        const abs = ai + a.length + ri;
-        if (at < 0 || abs < at) { hit = true; at = abs; region = seg; win = a; }   // ★命中位置取**最早**
+        const abs = armPos + ri;
+        if (at < 0 || abs < at) { hit = true; at = abs; region = seg; win = armLabel; }   // ★命中位置取**最早**
     }
     if (!on) return { on: false, hit: false, at: -1, region: '', anchor: '' };
     return { on: true, hit: hit, at: hit ? at : -1, region: hit ? region : t.slice(armedAt + armed.length), anchor: hit ? win : armed };
@@ -3864,7 +3948,14 @@ function updateAutoStopExplain() {
     if (!el) return;
     const anchors = autoStopAnchors(settings.autoStopFrom);          // ★W113：按英文逗号拆（去空白、丢空项）
     const mk = String(settings.autoStopMarker || '').trim() || '<NG_scene>';
-    const tpl = anchors.length ? t('autoStopExplainOne') : t('autoStopExplainTwo');
+    /* ★W277：勾了"得是标签对才截断"、且**至少有一个锚点是标签形状** ⇒ 换成标签对口径的文案
+       （锚点全不是标签形状时，配对检查自动失效 ⇒ 文案也不能说"要成对"） */
+    const pairOn = (settings.autoStopNeedPair !== false);
+    const hasTagAnchor = anchors.some(a => !!autoStopTagPairOf(a));
+    const usePair = pairOn && hasTagAnchor;
+    const tpl = anchors.length
+        ? t(usePair ? 'autoStopExplainPairOne' : 'autoStopExplainOne')
+        : t(usePair ? 'autoStopExplainPairTwo' : 'autoStopExplainTwo');
     const fromView = anchors.map(a => '「' + a + '」').join(String(t('autoStopOr') || ' 或 '));
     el.textContent = String(tpl).replace('{a}', fromView).replace('{b}', mk);
 }
@@ -10018,6 +10109,11 @@ ${t('mutterSound')}
 <input id="${extensionName}_autostop_marker" type="text" class="text_pole" style="flex:1 1 auto;min-width:90px;width:auto;box-sizing:border-box" value="${autoStopMarkerHtml}"/>
 </span>
 </div>
+<!-- ★★W275（作者 2026-10-29）：**起始标记必须是一对完整标签**（防止思维链里孤立的 </content> 误武装） -->
+<label class="checkbox_label" style="margin-top:4px" title="${t('autoStopNeedPairTips')}">
+<input id="${extensionName}_autostop_needpair" type="checkbox" ${settings.autoStopNeedPair !== false ? 'checked' : ''}/>
+${t('autoStopNeedPairLabel')}
+</label>
 <p class="kimi-hint" id="${extensionName}_autostop_explain" style="margin-top:2px"></p>
 <!-- v1.37.37 截断失败自查：提示 + 官方流式帧速率滑条的镜像（值与官方同一：初始即官方当前值，拖动=拖官方滑条，插件不改任何参数） -->
 <p class="kimi-hint" style="margin-top:6px;color:var(--golden-color,#e0a800)">${t('autostopFailTip')}</p>
@@ -10386,7 +10482,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
    ② 整份预设卡底部那一排（下载本预设/评论/点赞/缝入）**统一外形 + 收紧**（改前手机 360 档整排右溢出 28px）。
    ★同时升工具箱 PLUGIN_VERSION（1.46.27 → 1.46.28）：用户的自更新是拿**远端 manifest 的版本号**比本机 ——
      只升商店号、不升工具箱号，用户端就**不会**自动更新（作者今天当场踩到过）。 */
-const storeBuild = 'v2.2.115';
+const storeBuild = 'v2.2.116';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();
@@ -10982,6 +11078,12 @@ const storeBuild = 'v2.2.115';
         settings.autoStopEnabled = $(this).is(":checked");
         saveSettingsDebounced();
     });
+        /* ★★W275（作者 2026-10-29）：起始标记要不要"必须配成一对完整标签" —— 只管判据，不动任何别的东西 */
+        $("#" + extensionName + "_autostop_needpair").on("change", function () {
+            settings.autoStopNeedPair = $(this).is(":checked");
+            saveSettingsDebounced();
+            try { updateAutoStopExplain(); } catch (e) { }   // ★W277：文案跟着口径换
+        });
     $("#" + extensionName + "_autostop_marker").on("input", function () {
         settings.autoStopMarker = $(this).val();
         saveSettingsDebounced();
