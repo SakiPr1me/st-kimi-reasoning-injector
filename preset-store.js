@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.101';
+const VERSION = '2.2.102';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -8455,7 +8455,20 @@ function previewRows(pack, mine) {
             /* ★W206：标签优先级 = 删/改（包明确声明）→ 没有这条（新增）→ **开关变了（打开了/关闭了）** → 正文变了（改这条）→ 一致。 */
             const tag = (function () {
                 if (mode === 'remove') return '删这条';
-                if (mode === 'patch') return '改变';
+                /* ★★★W253（作者："我是在**编辑**里面的，按理说应该重新上传（但没上传），
+                   而我**预览里应该看起来像是上传之后的比对**"）—— **真 BUG，且是 W218 只修了一半**：
+                   这一行原来 `if (mode === 'patch') return '改变';` —— 只要包里 mode 是 patch 就**无条件**标「改变」，
+                   **完全不看当前对比那份是否真的一样**。
+                   而 `mode:'patch'` 是**上传那一刻**相对"上一版包"算出来的（W232/W248 加的）；
+                   编辑场景里"包"= 本机当前内容、对比那份也 = 本机同一份 ⇒ **本来就该「一致」**。
+                   这也是 W251 那个假「空行」的同一根因（假"改变" + 替换内容相同 ⇒ 被当成空行差异）。
+                   ★修法与**条目侧 W218 逐条同口径**（那次也是"patch 无条件标改变"）：
+                     没有这条 ⇒「新增」；只差开关 ⇒「打开了/关闭了」；正文一样 ⇒「一致」；真不一样才「改变」。 */
+                if (mode === 'patch') {
+                    if (!old) return '新增';
+                    if (rxSwitchDiff) return rxWantOn ? '打开了' : '关闭了';
+                    return rxBodySame(old, reg) ? '一致' : '改变';
+                }
                 if (mode === 'switch') return rxWantOn ? '打开了' : '关闭了';
                 if (!old) return '新增';
                 if (rxSwitchDiff) return rxWantOn ? '打开了' : '关闭了';
