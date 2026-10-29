@@ -1424,6 +1424,22 @@ body[data-theme-mode="dark"] .yws-tag-off, .dark .yws-tag-off { background: colo
     color: var(--yws-txt);
 }
 .yws-basehint.yws-basehint-bad .yws-btn { margin: 0 2px; }
+/* ★★W251（作者 2026-10-29："选正则列表里**勾选和名字错位**"）—— 正则那一行改用与条目行同一套自绘勾选框
+   （`span.yws-cb`），这里只补两件它自己需要的东西：**不许被压缩**、以及名字过长时省略而不是把行撑破。
+   ★`.yws-rxrow` / `.yws-prow-look` 这两个类名 JS 里一直在用、CSS 里**从来没有规则**（class-check 早就报着），
+     布局全靠行内 flex；这里给一条最简规则把事情钉住，免得以后主题改动又把它们挤歪。 */
+.yws-rxrow { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.yws-rxrow > .yws-cb { flex: 0 0 auto; }
+.yws-rxrow > .yws-pname { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yws-rxrow > .yws-ptag, .yws-rxrow > .yws-dim { flex: 0 0 auto; }
+/* ★W251：预览里"只有空行差异"那一块（`diffPairsHtml` 的 blankOnly 分支）—— JS 里一直在用 `.yws-dl-blank`，
+   CSS 里没有规则；给一条中性描边就够（它是提示、不是错误）。 */
+.yws-dlb > .yws-dl.yws-dl-blank {
+    border: 1px dashed color-mix(in srgb, var(--yws-line) 80%, transparent);
+    border-radius: var(--yws-r-md);
+    padding: 6px 9px; margin: 4px 0;
+    color: var(--yws-txt-2);
+}
 /* ★★W13（作者第 22 批 §FU #6 · 2026-09-24）：上传第一步那两个下拉的**行位置 + 长度 + 徽标位置**
    按作者本意重排（上一版是 W6-A8 的"只统一宽度"）。作者原话：「"_从哪份挑_怎么在筛选后边了` ⇒
    **把它放下来**」；「把后面这两个下拉选框的长度进行**对齐**，可以**稍微长一点**（这样能看到预设的

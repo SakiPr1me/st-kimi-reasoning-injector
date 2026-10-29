@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.99';
+const VERSION = '2.2.100';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -8266,6 +8266,12 @@ function diffPairsHtml(pairs, more) {
     const hasText = (s) => String(s ?? '').split('\n').some(l => l.trim() !== '');
     const blankOnly = (p) => {
         const a = String(p.mine ?? ''), b = String(p.next ?? '');
+        /* ★★W251（作者 2026-10-29 截图：编辑已上传条目、跟同名同源的 `余温V1028` 比，`杀感叹号1`
+           明明只改了 findRegex，却显示成**两条「空行 / 空行位置变了」**）——
+           真因就在下面第一行：判据是"去掉空行后相同"，而**两边完全一样**的字符串也满足它
+           （`sa === sb` 恒真）⇒ 正则那对的「替换内容」两边都是 `$1@@@` ⇒ 被判成"空行位置变了"。
+           ⇒ 补一句：**完全相同的一组根本不是差异**（更不是空行差异）。 */
+        if (a === b) return false;
         if (!hasText(a) || !hasText(b)) return false;
         const sa = a.split('\n').filter(l => l.trim() !== '').join('\n');
         const sb = b.split('\n').filter(l => l.trim() !== '').join('\n');
@@ -8279,7 +8285,11 @@ function diffPairsHtml(pairs, more) {
     };
     const side = (cls, k, txt, empty) => '<div class="yws-dl ' + cls + '"><span class="yws-dl-k">' + k + '</span><span class="yws-dl-t' +
         (txt ? '' : ' yws-dl-none') + '">' + esc(txt || empty) + '</span></div>';
-    return '<div class="yws-diffbox">' + pairs.map(p => {
+    /* ★★W251：**两边完全相同的那几对根本不是差异，不要列出来**（原来的 else 分支会画成「旧 X / 新 X」）。
+       正则行的 pairs 固定是两对（findRegex + 替换内容），只改 findRegex 时替换那对两边都是 `$1@@@` ⇒ 会多出一个假块。 */
+    const live = pairs.filter(p => String(p.mine ?? '') !== String(p.next ?? ''));
+    if (!live.length) return '<div class="yws-diffbox"><div class="yws-verdict yws-same">跟你的那份一字不差</div></div>';
+    return '<div class="yws-diffbox">' + live.map(p => {
         if (blankOnly(p)) {
             return '<div class="yws-dlb"><div class="yws-dl yws-dl-blank" style="opacity:.9">' +
                 '<span class="yws-dl-k">空行</span><span class="yws-dl-t">' + esc(blankWord(p)) +
@@ -11101,9 +11111,15 @@ function regexPickerInPart(w) {
         })();
         /* ★W193（作者：正则区连点几次选不中）—— **别用 .yws-prow**：那个类会被'拖刷涂选'接管（按下 preventDefault、改成拖刷），
            点一下常常既没勾上、又把后面的 click 吞掉。正则区用自己的类，点击走普通 click。 */
+        /* ★★W251（作者 2026-10-29 截图："编辑已上传条目，选正则列表里**勾选和名字错位**"）——
+           真因：这一行用的是**原生 `<input type="checkbox">` 且没给任何尺寸**，
+           而酒馆主题给 input 设了宽度/内边距（我们 CSS 里 `input[type="checkbox"]` 一条规则都没有）
+           ⇒ 勾选框被撑成一大块、把名字挤到下一行。
+           ⇒ 改成**与条目行同一套自绘勾选框**（`span.yws-cb`，22×22 固定 + inline-flex 居中），
+             两处的视觉与对齐从此同源（条目行 entryPicker 也走 `.yws-cb`）。 */
         return '<div class="yws-rxrow yws-prow-look" data-act="w-rxpick" data-id="' + esc(String(r.id)) + '" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--SmartThemeBorderColor,rgba(128,128,128,.2))">' +
-            '<input type="checkbox" ' + (on ? 'checked' : '') + ' style="pointer-events:none;accent-color:var(--SmartThemeQuoteColor);" />' +
-            '<span class="yws-pname">' + esc(nm) + '</span>' +
+            '<span class="yws-cb yws-mark" role="checkbox" aria-checked="' + (on ? 'true' : 'false') + '" style="flex:0 0 auto">' + (on ? '☑' : '☐') + '</span>' +
+            '<span class="yws-pname" style="min-width:0">' + esc(nm) + '</span>' +
             (rtag ? '<span class="yws-ptag ' + rtag.cls + '">' + esc(rtag.t) + '</span>' : '') +
             (dis ? '<span class="yws-dim">（关着）</span>' : '') + '</div>';
     }).join('');
