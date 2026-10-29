@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.92';
+const VERSION = '2.2.93';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -9187,6 +9187,11 @@ async function startEdit(id) {
            把整排标签全挡掉（作者 2026-10-28 报的正是这个）。
            ★老包（没这一位）⇒ `undefined` ⇒ 走原来那条判断，行为零变化。 */
         baseIsCloud: pack.baseIsCloud === true, baseCloudPreset: null,
+        /* ★★W226：**这张卡上一版包里带的正则**（原样存着）——
+           重新上传时用它跟"现在这条"比：内容变了就走 `patch`（= 改用户本地那条），
+           不变就还是 `new`（读侧一字不差会跳过）。没有这一位 ⇒ 用户缝入时会**多出一条同名正则**。
+           ★只存正则，不存整包（包太大、而且这里只需要它）；老卡包里没有正则 ⇒ 空数组。 */
+        rxBase: (Array.isArray(pack.regexes) ? pack.regexes : []),
         /* ★★E1：编辑一张已声明过基准的卡 ⇒ 把声明**照原样带回来**（不预填 = 这次更新会**静默丢掉**它）；
            `buildPayload` 里另有一道"这台后端支不支持"的闸（老后端不带，见 `baseVerOk()`）。 */
         baseVersion: baseVerOf(pack.baseVersion),
@@ -11562,6 +11567,26 @@ function buildPayload() {
            统一按**字符串**比（两边都 String()）。 */
         const pickedRx = rxAll.filter(r => rxWant.has(String(r.id)));
         if (pickedRx.length) {
+            /* ★★W226（作者 2026-10-28："我之前已经上传到商店了，现在点重新编辑并上传，
+               用户那边再缝入会是我的新版正则吗？"）—— 实测答案是**一半对一半错**：
+                 · 「编辑并更新」时正则会自动勾回（W211）⇒ 包里确实是**新**内容；
+                 · 但这里原来把每条都写死成 `mode:'new'` ⇒ 读侧翻成 `regex-add` ⇒ 内核见到
+                   "你这份里有同名但内容不同的一条" 时，**只有一字不差才跳过**，内容不同就**再加一条**
+                   ⇒ 用户缝完之后本地会**多出一条同名正则**（旧的还在用，新的排在后面）——
+                   那正是最坏的结果：他以为改了，实际两条都在跑。
+               ⇒ 修法：作者是**改自己那张卡**（`S.editId` 非空）时，把包里每条正则跟**上一版包里那条**比
+                 （同一张卡 = `/pack` 读回来的 `S.wiz.rxBase`）：
+                   · 内容一样（除 id 外的 12 个字段）⇒ 仍是 `new`（读侧会"一字不差就跳过"，不会加重复）；
+                   · 内容不一样 ⇒ 写成 **`patch`**（带 `base` = 上一版那条、`next` = 现在这条）
+                     ⇒ 读侧翻成 `regex-update` ⇒ 内核**改用户本地那条**，不会多出一条。
+                 · 新上传（`S.editId` 为空）没有"上一版"可比 ⇒ 保持 `new`，行为与改前逐字节相同。 */
+            const rxBaseList = (S.wiz && Array.isArray(S.wiz.rxBase)) ? S.wiz.rxBase : null;
+            const rxBaseByName = new Map();
+            if (rxBaseList) for (const it of rxBaseList) {
+                const reg = (it && (it.reg || it.next)) || null;
+                const nm = PM.normalizeName(String((reg && reg.scriptName) || ''));
+                if (nm && !rxBaseByName.has(nm)) rxBaseByName.set(nm, reg);
+            }
             out.regexes = pickedRx.map(r => {
                 const i = rxAll.findIndex(x => String(x.id) === String(r.id));
                 const prev = (i > 0) ? rxAll[i - 1] : null;
@@ -11569,7 +11594,17 @@ function buildPayload() {
                 const place = pv
                     ? { afterId: String(pv.id || ''), afterName: PM.normalizeName(pv.scriptName || ''), afterFind: PM.normalizeText(pv.findRegex || '').slice(0, 200), afterIndex: i - 1 }
                     : { afterId: '', afterName: '', afterFind: '', afterIndex: null };
-                return { mode: 'new', reg: { ...r.script, disabled: !rxOnOf(w, r) }, place };
+                const next = { ...r.script, disabled: !rxOnOf(w, r) };
+                /* 编辑自己那张卡 ⇒ 跟上一版比；不同就走 patch（= 改用户本地那条） */
+                const old = rxBaseByName.get(PM.normalizeName(String(next.scriptName || ''))) || null;
+                if (old) {
+                    let sameBody = false;
+                    try { sameBody = PM.regexBodySig(old) === PM.regexBodySig(next); } catch (e) { sameBody = false; }
+                    if (!sameBody) {
+                        return { mode: 'patch', base: { ...old }, next: { ...next }, place };
+                    }
+                }
+                return { mode: 'new', reg: next, place };
             });
             out.regexOrder = rxAll.map(r => String(r.id || '')).filter(Boolean);
         }
