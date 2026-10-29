@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.111';
+const VERSION = '2.2.112';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -8393,6 +8393,24 @@ function previewRows(pack, mine) {
     /* 包里**所有**条目名（含新名字）——"旧名字在包里没出现"是第④档的硬条件 */
     const packNames = new Set(((pack && pack.entries) || []).map(x => PM.normalizeName(String((x.entry && x.entry.name) || x.name || ''))).filter(Boolean));
     const findMineBy = (name, id, wasName, text) => {
+        /* ★★W263（作者 2026-10-29 截图：「和你的余温V1008（云端2026-10-09）比」，`😺尾部2·Gmn4/3.8(择1)`
+           写着**「一致」/「跟你的那份一字不差」**，可它明明是改了名的）——
+
+           **真因：两侧认人的优先级不一样**（我 W257/W262 只顾着补档位，没对齐顺序）。
+             · 缝入侧（`storePackToPatch` 的 `conv()`）：**`wasName` 优先** —— 包里说"我原来是 Gmn3.8"
+               ⇒ 按 Gmn3.8 找 ⇒ 认作"把 Gmn3.8 就地改名成 Gmn4/3.8"（实测产出 `update`+`switch`）。
+             · 预览侧（这里）：**名字/id 优先** —— 名字 `Gmn4/3.8` 在 10-09 里**恰好也存在**
+               （10-09 里两条都有：Gmn3.8 关着 + Gmn4/3.8 开着）⇒ 按新名字命中 ⇒ 名字"没变"
+               ⇒ `renamedFrom` 空 ⇒ 正文一样、开关一样 ⇒ 「一致」。**实测就是这么复现的。**
+           ⇒ 修：**把 `wasName` 提到最前**，与缝入侧**同一个优先级**。
+             包里明确说了"我原来是 X"、而我手上**真有 X**、且 X ≠ 当前名字 ⇒ 这就是改名，
+             不必再管"新名字是否也恰好存在"（那是另一条同名条目，不是这一对的关系）。
+           ★安全边界不变：`wasName` 与我手上那条**必须真的存在**才认（exists 才用），名字相同就当没改名。 */
+        const w0 = String(wasName || '');
+        if (w0 && PM.normalizeName(w0) !== PM.normalizeName(String(name || ''))) {
+            const byWas0 = byName.get(PM.normalizeName(w0)) || (byId.get(w0) || null);
+            if (byWas0) return { e: byWas0, renamedFrom: w0 };
+        }
         const hit = findMine(name, id);
         /* ★★W262（作者 2026-10-29："和你的余温V1008（云端2026-10-09）比，为什么改了名字的还显示一致？"）——
            **真因在这里**：`findMine()` 先按 **identifier** 找。改名时酒馆**不改内部 id**
@@ -8405,11 +8423,7 @@ function previewRows(pack, mine) {
             const sameName = PM.normalizeName(String(hit.name || '')) === PM.normalizeName(String(name || ''));
             return { e: hit, renamedFrom: sameName ? '' : String(hit.name || '') };
         }
-        const w = String(wasName || '');
-        if (w && PM.normalizeName(w) !== PM.normalizeName(String(name || ''))) {
-            const byWas = byName.get(PM.normalizeName(w)) || (byId.get(w) || null);
-            if (byWas) return { e: byWas, renamedFrom: w };
-        }
+        /* ★W263：原来这里还有一段 `wasName` 判断 —— 已提到函数最前面（与缝入侧同优先级），此处删掉，不留第二份。 */
         /* ★★W261 第④档：按正文完全相同认改名 */
         const t = PM.normalizeText(String(text || ''));
         const cand = (t && t.trim()) ? (byText.get(t) || null) : null;
