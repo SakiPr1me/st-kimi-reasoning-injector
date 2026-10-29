@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.141'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.142'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -396,6 +396,10 @@ const defaultSettings = {
        activeSchemeId = 最近一次「切换」成功的方案 id（没切过 = null；只作标记，不参与判定）。 */
     schemes: [],                     // 方案列表（新装首次启动补 3 个默认方案，见下方一次性初始化那段）
     activeSchemeId: null,            // 当前生效的方案 ID
+    /* ★★W266：最近一次「覆盖」把**当前实时状态**写进了哪个方案（方案 id；没覆盖过 = null）。
+       只在 `switchScheme()` 里用一次：离开当前方案时，如果这个记号指向**别的**方案，就不抓当前方案的开关快照
+       —— 保证"给另一个方案做准备"不会把当前方案也改成同一套（作者 2026-10-29 报的 BUG）。 */
+    liveClaimedBy: null,
     psnapShowFloat: true,            // 整合悬浮条入口（悬浮条设置卡控制内部显隐）
     floatBarEnabled: true,           // 悬浮窗总开关：关闭则悬浮条整体隐藏
     floatShowTagFix: true,           // 悬浮条功能区：一键修复标签（直接执行）
@@ -922,6 +926,7 @@ function schemeBrandIcon(key) {
 if (settings.schemes === undefined) settings.schemes = defaultSettings.schemes;      // ★W163（铁律 32）：同一个来源（defaultSettings）
 if (!Array.isArray(settings.schemes)) settings.schemes = [];                          // 脏数据兜底（与 promptSnapshots 同款口径）
 if (settings.activeSchemeId === undefined) settings.activeSchemeId = defaultSettings.activeSchemeId;
+if (settings.liveClaimedBy === undefined) settings.liveClaimedBy = defaultSettings.liveClaimedBy;   // ★W266（铁律 32 同一个来源）
 if (settings.flamePauseOnCollapse === undefined) settings.flamePauseOnCollapse = defaultSettings.flamePauseOnCollapse;
 if (settings.schemesInitV1 !== true) {
     settings.schemesInitV1 = true;
@@ -4424,6 +4429,12 @@ function overwriteScheme(scheme) {
     scheme.presetName = cap.presetName;
     scheme.toggles = scheme.presetName ? cap.toggles : null;
     scheme.api = cap.api;
+    /* ★★W266（作者 2026-10-29："改了开关和 api，覆盖另一个方案，结果开关也覆盖到了我当前这个方案"）——
+       打个记号：**当前这份实时状态现在归这个方案了**。
+       `switchScheme()` 在离开当前方案时本来会抓一次开关快照（那是 W172b 要的行为）——
+       但只要这个记号指向别的方案，那次抓取就跳过 ⇒ 刚分好的两份不会被抓成一样。
+       ★覆盖**当前方案自己**时记的就是它自己 ⇒ 抓不抓都是同一套值，没有任何副作用。 */
+    settings.liveClaimedBy = String(scheme.id || '');
     saveSettingsDebounced();
     return scheme;
 }
@@ -4477,6 +4488,26 @@ async function switchScheme(scheme) {
     if (is_send_press) { notice(t('schemeGenerating'), 'schemeTitle'); return false; }
     let stepResults = [];
     let __profileMissing = false;
+
+    /* ★★W266（作者 2026-10-29 报的 BUG）：**离开当前方案之前，抓一次它的开关快照**。
+       为什么放在这里（而不是像 W172b-A 那样每拨一次开关就抓）：
+         · 拨完就切走 ⇒ 切之前抓一次 ⇒ 切回来还是你拨过的样子（W172b 要的好处一个字没少）；
+         · 只是想给**另一个**方案做准备（改开关 → 覆盖那份，**不切走**）⇒ 当前方案**一个字都不动**（本 BUG 修掉）。
+       ★例外（`settings.liveClaimedBy`）：刚用「覆盖」把当前实时状态写进了**另一个**方案 ⇒ 这次**不抓**，
+         否则刚分好的两份又会被抓成一样。抓完就清掉这个记号。
+       ★只在"当前方案绑的就是此刻在用的预设"时才抓（开关只随预设存在，W163c 同一条不变式）。 */
+    try {
+        const __actId = String(settings.activeSchemeId || '');
+        const __act = __actId ? schemeById(__actId) : null;
+        const __claimed = String(settings.liveClaimedBy || '');
+        if (__act && String(__act.id) !== String(scheme.id)
+            && __act.presetName && __act.presetName === getCurrentPresetName()
+            && (!__claimed || __claimed === String(__act.id))) {
+            const __cur = readPromptToggles();
+            if (__cur && typeof __cur === 'object') __act.toggles = __cur;
+        }
+        settings.liveClaimedBy = null;
+    } catch (e) { /* 抓快照失败绝不能挡住切换本身 */ }
 
     // ① 先切预设 —— ★W166k（作者报「切到火山、聊天补全来源还是 Google」）：
     //   酒馆的「对话补全预设」里**带着 chat_completion_source / reverse_proxy / proxy_password / 各家模型名**
@@ -4882,20 +4913,14 @@ function inlineInsToggleSave(ev) {
         const tog = tgt.closest('#' + INLINE_INS_LIST_ID + ' .prompt-manager-toggle-action');
         if (!tog) return;
         if (!inlineInsSaveOn()) return;
-        /* ★W172b-A：活动方案（绑的就是当前预设）的开关快照跟着这次拨动更新 —— 同步做，读的就是拨完的新值 */
-        try {
-            const li = tog.closest('li.completion_prompt_manager_prompt');
-            const pid = li ? li.getAttribute('data-pm-identifier') : null;
-            const sc = (settings.activeSchemeId && typeof schemeById === 'function') ? schemeById(settings.activeSchemeId) : null;
-            if (pid && sc && sc.presetName && oai_settings && sc.presetName === oai_settings.preset_settings_openai) {
-                const cur = (typeof readPromptToggles === 'function') ? readPromptToggles() : null;   // 酒馆 handleToggle 已跑完 ⇒ 这里就是拨完的新状态
-                if (cur && typeof cur === 'object') {
-                    if (!sc.toggles || typeof sc.toggles !== 'object' || Array.isArray(sc.toggles)) sc.toggles = cur;   // null ⇒ 抓全量（保持"开关只随预设存在"）
-                    else sc.toggles[pid] = cur[pid];
-                    saveSettingsDebounced();
-                }
-            }
-        } catch (e) { /* 方案快照更新失败绝不影响写盘本身 */ }
+        /* ★★W266（作者 2026-10-29 报："预设方案切换时…我改变了开关 和 api，点击覆盖了另一个方案，
+           结果条目的开关直接同时也覆盖到了我目前所处的这个方案"）——
+           W172b-A 原来**在这里**做"每拨一次开关就把活动方案的开关快照同步更新"。
+           本意是修"拨完立刻切走 / 切回来被旧快照盖回去"，但副作用是：
+           **当前方案时刻跟着实时状态走** ⇒ 你想给**另一个**方案做准备（改开关 → 覆盖那份）时，
+           当前这份也被一起改成同一套 ⇒ 两份方案变得一模一样，「覆盖」等于白做。
+           ⇒ 这次同步**已挪到"离开这个方案的那一刻"**（`switchScheme()` 开头那一小段，切走之前抓一次）。
+             这里一个字节都不再写方案数据 —— 拨开关只负责"拨开关 + 存预设文件"。 */
         if (inlineInsTogTimer) clearTimeout(inlineInsTogTimer);
         inlineInsTogTimer = setTimeout(() => {
             inlineInsTogTimer = 0;
