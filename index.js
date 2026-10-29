@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.116'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.117'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -715,6 +715,7 @@ const OC_RELAY_I18N = {
         keyLabel: 'OpenCode Key',
         keyPh: 'oc_sk_...',
         apply: '确定',
+        cfgScopeNote: '这两格只用于「一键配置」。实际生效的中转在酒馆的「API 设置」里。',
         copied: '已复制',
         copyTip: '点一下复制',
         copyFail: '复制失败：手动选中那行复制',
@@ -763,6 +764,7 @@ const OC_RELAY_I18N = {
         keyPh: 'oc_sk_...',
         ocSectionTitle: 'Opencode config:',
         apply: 'OK',
+        cfgScopeNote: 'These two boxes only drive the one-click setup. The relay actually in use lives in the API settings of Tavern itself.',
         copied: 'Copied',
         copyTip: 'Click to copy',
         copyFail: 'Copy failed: select the line and copy manually',
@@ -811,6 +813,7 @@ const OC_RELAY_I18N = {
         keyPh: 'oc_sk_...',
         ocSectionTitle: 'Opencode 설정:',
         apply: '확인',
+        cfgScopeNote: '이 두 칸은 「간편 설정」에만 쓰입니다. 실제로 적용되는 중계는 술집의 「API 설정」에 있습니다.',
         copied: '복사됨',
         copyTip: '클릭하여 복사',
         copyFail: '복사 실패: 그 줄을 직접 선택해 복사하세요',
@@ -9425,6 +9428,10 @@ ${t('usage3')}
 <button type="button" id="${extensionName}_oc_relay_apply" class="menu_button" style="flex:none;white-space:nowrap">${ocr('apply')}</button>
 <span id="${extensionName}_oc_relay_status" class="kimi-hint" style="margin:0"></span>
 </div>
+<!-- ★★W228（用户反馈"配置串和 Key 填了删不掉"）：这两格以前既没有自己的保存、也会去读酒馆当前值
+     ⇒ 删掉框里的字，下次打开又被填回来（看着像"删不掉"）。现在只显示插件自己记的那份 + 失焦即写回。
+     这句小字说清"这两格 ≠ 实际生效的中转"，免得用户以为清空就等于把中转关了。 -->
+<div class="kimi-hint" style="margin-top:4px;opacity:.8">${ocr('cfgScopeNote')}</div>
 </div>
 <div class="kimi-sep"></div>
 <!-- ★W174-A（作者："只要勾选就必须展开有点蠢 这样吧 任何时候展开关闭都是可选的"）：
@@ -9996,7 +10003,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
    ② 整份预设卡底部那一排（下载本预设/评论/点赞/缝入）**统一外形 + 收紧**（改前手机 360 档整排右溢出 28px）。
    ★同时升工具箱 PLUGIN_VERSION（1.46.27 → 1.46.28）：用户的自更新是拿**远端 manifest 的版本号**比本机 ——
      只升商店号、不升工具箱号，用户端就**不会**自动更新（作者今天当场踩到过）。 */
-const storeBuild = 'v2.2.93';
+const storeBuild = 'v2.2.94';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();
@@ -10364,9 +10371,44 @@ const storeBuild = 'v2.2.93';
         const $status = $("#" + extensionName + "_oc_relay_status");
         if (!$cfg.length) return;
         const say = (m, bad) => { $status.text(m).css("color", bad ? "#e57373" : ""); };
-        if (settings.ocRelayUrl) $cfg.val("ywoc1:" + settings.ocRelayUrl);
-        else if (oai_settings.reverse_proxy) $cfg.val(oai_settings.reverse_proxy);
-        try { if (oai_settings.proxy_password) $key.val(oai_settings.proxy_password); } catch (e) { }
+        /* ★★W228（用户反馈"配置串和 Key 填了删不掉"）—— **这两行就是病根**，改前：
+             `if (settings.ocRelayUrl) ... else if (oai_settings.reverse_proxy) $cfg.val(...)`
+             `if (oai_settings.proxy_password) $key.val(...)`
+           两个问题：① 插件没记过 ⇒ 就去读**酒馆当前值**填上；② Key **永远**读酒馆当前密码、根本不看插件自己那份。
+           ⇒ 用户把框删空、下次打开又被填回来（"删不掉"）；而且会把"用户自己手配的反代"误当成 OpenCode 中转记下来。
+           现在：**只显示插件自己记的那份**（`settings.ocRelayUrl` / `settings.ocRelayKey`），空就是空。
+           ★不碰酒馆的反代/密码 —— 那两格归酒馆自己管，用户要停用中转去「API 设置」里关。 */
+        $cfg.val(settings.ocRelayUrl ? ("ywoc1:" + settings.ocRelayUrl) : "");
+        $key.val(String(settings.ocRelayKey || ""));
+        /* ★W228：**失焦即写回** —— 用户清空 ⇒ 把插件记的那份也清掉（下次打开就是空的）；
+           填了值、但不想点「确定」⇒ 也记下来（顺手修好"填了不点按钮就不生效"）。
+           只动插件自己的两项，**不碰 oai_settings**（见上一条注释）。
+           ★"确定"那颗按钮仍然负责"真正配好"（写酒馆反代/密码/来源/模型），语义没变。 */
+        (function bindOcPersist() {
+            const persist = () => {
+                try {
+                    let raw = String($cfg.val() || "").trim();
+                    if (raw.startsWith("ywoc1:")) raw = raw.slice(6).trim();
+                    raw = raw.replace(/\/+$/, "");
+                    let url = "";
+                    if (raw) {
+                        try {
+                            const u = new URL(raw);
+                            if (/^https?:$/.test(u.protocol)) url = u.toString().replace(/\/+$/, "");
+                        } catch (e) { /* 不是合法 URL ⇒ 不记地址（框里留着原字，让用户自己改） */ }
+                    }
+                    const key = String($key.val() || "").trim();
+                    const sameUrl = String(settings.ocRelayUrl || "") === url;
+                    const sameKey = String(settings.ocRelayKey || "") === key;
+                    if (sameUrl && sameKey) return;                       // 没变 ⇒ 不写盘（省一次 saveSettings）
+                    settings.ocRelayUrl = url;
+                    settings.ocRelayKey = key;
+                    saveSettingsDebounced();
+                } catch (e) { }
+            };
+            $cfg.on("blur", persist);
+            $key.on("blur", persist);
+        })();
         async function copyPlain(text) {
             try { await navigator.clipboard.writeText(text); return true; } catch (e) { }
             try {
