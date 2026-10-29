@@ -1038,7 +1038,14 @@ export function analyze({ mine, next, base, unpairKeys = [] }) {
         total: items.length,
         hiddenSkipped: hiddenSkipped.length,      // 两份顺序表里都没有 → 没列进来的条数（v4.0）
         same: items.filter(i => i.status === STATUS.SAME).length,
-        needDecide: items.filter(i => needsDecision(i.status)).length,
+        /* ★★W231（作者 2026-10-28："明明**预设条目里开关有变化**，但是只默认展开了正则"）——
+           这里原来用 `needsDecision(i.status)`，而它**只看 status、不看 enabledDiff / renamed**：
+             needsDecision(status) = status===BOTH_CHANGED || status===MINE_ONLY_CHANGED_2WAY
+           ⇒ "正文一字未改、只有开关不同"（或只改名字）的条目 status 恰好是 `SAME` ⇒ **不被计入**
+           ⇒ 界面判"条目这摊没有要你拍板的" ⇒ 收起条目区、只摊开正则（正是作者看到的）。
+           ⇒ 改用与 UI 同一把尺 `needsChoice(item)`（它内含 `enabledDiff || renamed`，见那个函数）。
+             两种判据必须同源，否则"界面说不用管、列表里又列着要管"（本函数上面那句注释也写着这条纪律）。 */
+        needDecide: items.filter(i => needsChoice(i)).length,
         onlyMine: items.filter(i => i.status === STATUS.ONLY_MINE).length,
         onlyNext: items.filter(i => i.status === STATUS.ONLY_NEXT).length,
         authorOnly: items.filter(i => i.status === STATUS.AUTHOR_ONLY_CHANGED).length,
@@ -1372,6 +1379,26 @@ export function matchRegexScripts(mineIdx, nextIdx) {
         const ms = mineIdx.byName.get(n.nk) || [];
         const ns = nextIdx.byName.get(n.nk) || [];
         if (ms.length === 1 && ns.length === 1) push(ms[0], n, 90, '名字一样（"' + n.name + '"）');
+    }
+    /* ★★W231（作者 2026-10-28 实测："不发送余小温本体聊天 这个正则出现了两个 —— 只有我有 + 新版新增"）——
+       真因：他那份预设里这条**存了 2 份，id 还完全相同**（`dd6f7b11-…`，一个 disabled=true 一个 false）。
+       于是：`byId` 用 `!has` 只留第一条；`byName` 下变成 2 条 ⇒ 上面那条"名字唯一才算配对"**整条失效**
+       ⇒ 两条谁都没配上 ⇒ 一条进 onlyMine、一条进 onlyNext ⇒ 界面显示两行（作者看到的就是这个）。
+       ⇒ 补一级**同 id 去重配对**：id 相同、且两边各有若干条同名时，按**顺序**一一对应。
+         · 只处理"id 相同"这一种（证据最强、不会误配别的正则）；
+         · 已经配上的跳过（`usedMine/usedNext` 在最后统一裁，这里只追加候选，
+           与既有三级阶梯同样的"候选 + 最后去重"机制）；
+         · conf 给 85：低于"名字唯一"的 90、高于"findRegex 一模一样"的 70 ——
+           "同一个 id"其实是最硬的证据，但它发生在"名字重复"这种脏数据上，所以不压过干净的名字配对。 */
+    for (const n of nextIdx.entries) {
+        if (!n.idKey) continue;
+        /* 同 id 的同胞（mine 侧与 next 侧各按清单先后排）—— `byId` 只存了第一条，所以从 `entries` 里捞全集 */
+        const mSame = mineIdx.entries.filter((e) => e.idKey === n.idKey).sort((a, b) => a.index - b.index);
+        const nSame = nextIdx.entries.filter((e) => e.idKey === n.idKey).sort((a, b) => a.index - b.index);
+        /* 干净数据（两边各就一条）由上面三级处理，这一级只兜"重复存了多份"的脏数据 */
+        if (mSame.length <= 1 && nSame.length <= 1) continue;
+        const pos = nSame.findIndex((x) => x.key === n.key);
+        if (pos >= 0 && mSame[pos]) push(mSame[pos], n, 85, 'id 一样（同名重复 ' + mSame.length + '/' + nSame.length + ' 条，按顺序配对）');
     }
     for (const n of nextIdx.entries) {
         if (!n.findKey) continue;
