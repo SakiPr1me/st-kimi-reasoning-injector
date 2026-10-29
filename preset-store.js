@@ -250,7 +250,8 @@ const VERSION = '2.2.117';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-const BUILD = 'v2.2.87';
+/* ★W279a（2026-10-29 · 收口补救）：BUILD 从 v2.2.87 追平 VERSION=2.2.117（W211 起多波只升 VERSION/storeBuild 漏了 BUILD；纯显示对齐，逻辑零改动） */
+const BUILD = 'v2.2.117';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：

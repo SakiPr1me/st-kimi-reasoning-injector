@@ -10318,7 +10318,8 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
         /* ★W124-修订 收口（2026-10-08）：v5.3.38 → **v5.3.39**（验收支两条"悄悄丢内容"⇒ 合二为一的结果改成"永远是一条完整正文"：
            点过的片按点击顺序 + 没被点走的同文段默认收进原位 + 没点过的不同处按新版；「按原顺序全收」删掉（用途被覆盖）；
            内核改动仍为 0；与 preset-updater.js 的 VERSION/BUILD 成对升） */
-        const updaterBuild = 'v5.3.50';
+        /* ★W279a（2026-10-29 · 收口补救）：v5.3.50 → **v5.3.54**（W256/W260/W261/W263 四波只升了 preset-updater.js 的 VERSION、漏了本戳 ⇒ ?b= 不变 = 用户浏览器可能一直吃旧缓存；本波把戳追平到更新器现值，业务逻辑零改动；与 preset-updater.js 的 VERSION/BUILD 成对升） */
+        const updaterBuild = 'v5.3.54';
     import('./preset-updater.js?b=' + updaterBuild)
         .then(mod => {
             // 卡片插在「不常用」那张卡之前（和以前静态 HTML 的位置一致）
