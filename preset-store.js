@@ -149,7 +149,8 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.117';
+/* ★W279b（2026-10-29）：2.2.117 → **2.2.118**（随 W279a BUILD 对齐一起发版；与 index.js storeBuild 成对） */
+const VERSION = '2.2.118';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -250,8 +251,8 @@ const VERSION = '2.2.117';
    只改两件：① 卡片上那颗「💬 评论 N 条」删掉「评论」两个字（留 emoji + 条数；`commentBtnHtml` +
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
-/* ★W279a（2026-10-29 · 收口补救）：BUILD 从 v2.2.87 追平 VERSION=2.2.117（W211 起多波只升 VERSION/storeBuild 漏了 BUILD；纯显示对齐，逻辑零改动） */
-const BUILD = 'v2.2.117';
+/* ★W279a（2026-10-29 · 收口补救）：BUILD 从 v2.2.87 追平（W211 起多波只升 VERSION/storeBuild 漏了 BUILD；纯显示对齐，逻辑零改动）；★W279b 随发版升 v2.2.118 */
+const BUILD = 'v2.2.118';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
