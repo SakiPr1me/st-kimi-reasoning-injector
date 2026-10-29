@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.142'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.143'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -4545,8 +4545,23 @@ async function switchScheme(scheme) {
                 __profileMissing = true;
                 stepResults.push(t('schemeBindProfile') + ' ✗');
             } else {
-                // ★W166l：timeout 0 = 只等"配置已应用"，不等"连接建立"（后者最多干等 5 秒，正是切起来卡的原因）
-                await cmd.callback({ await: 'true', timeout: '0' }, scheme.profileName);
+                /* ★★W267（作者 2026-10-29："切别的方案都快，切到填写反代的那个就慢几秒，而且不会自动帮我点连接。
+                   没必要啊 别的都不会去连 直接切换API配置 然后将文本覆盖 点一次连接 没有这么慢 中间一定有问题"）
+                   —— **中间确实有问题，而且是两个慢点，都在酒馆自己的 `CC_COMMANDS` 顺序里**（读源码查实的）：
+                     ① `api` 命令：来源变了 ⇒ 它**自己点一次 Connect**，紧跟着
+                        `await waitUntilCondition(() => online_status !== 'no_connection', 5000, 100)`
+                        ⇒ **干等最多 5 秒**（`scripts/slash-commands.js:305`）。**这就是你感觉到的"慢几秒"。**
+                     ② `proxy` 命令 ⇒ `setProxyPreset()` ⇒ **`reconnectOpenAi()`** ⇒ **又点一次 Connect**
+                        （`scripts/openai.js:6526 / 6188`）。
+                   ★上一版传的 `timeout:'0'` 只关掉了 `/profile` **自己**那一道等待，关不掉上面这两道
+                     —— 所以那次只修了一半。
+                   ⇒ 现在**传 `await:false`**：`/profile` 不再等 `CONNECTION_PROFILE_LOADED`，
+                     `profiles.dispatchEvent('change')` 派发后立刻返回 ⇒ **界面不再被那 5 秒卡住**；
+                     配置照样一条不少地被应用（change 处理器在后台自己跑完 api/preset/url/model/…）。
+                   ★"自动帮你点连接"这件事**已经在做** —— 就是那个 `api` 命令替我们点的；
+                     以前它点完之后界面干等 5 秒，看起来像"没反应/没帮我连"。
+                     现在立刻返回，连接在后台完成，切完就能用。 */
+                await cmd.callback({ await: 'false', timeout: '0' }, scheme.profileName);
                 stepResults.push(t('schemeBindProfile') + ' ✓');
             }
         } catch (e) { stepResults.push(t('schemeBindProfile') + ' ✗'); }
