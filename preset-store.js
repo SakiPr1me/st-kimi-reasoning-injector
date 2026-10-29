@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.98';
+const VERSION = '2.2.99';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -9244,28 +9244,40 @@ async function startEdit(id) {
         · 但这里（`startEdit`）初始写的是 `baseCloudPreset: null` ⇒ 刚进来 base = 本机那份
           ⇒ 条目名一样 ⇒ **算不出原名** ⇒ wasName 不上传。
         · 用户看到的是"下拉里已经选着云端旧版"，实际没生效（要**手动重选一次**才会异步拉）。
-       ⇒ 修：**进来就按包里记的 baseVersion / baseName 主动拉一次云端那份**（与 `w-base` 分支同一套降级：
-         拉不到就静默保持本机那份，绝不阻断）。拉到了重算 base + 预选 + 重绘。
+          ⇒ 修：**进来就按包里记的 baseVersion / baseName 主动拉一次云端那份**。拉到了重算 base + 预选 + 重绘。
+       ★★W250（作者拍板："就一定得是**编辑时选择的那份云端旧版**"）：拉不到**不再退回本机那份**
+         —— 那是"比错对象"，界面还看不出。现在拉不到就记 `baseCloudState='failed'`，
+         界面明说"没取到官方旧版、暂不能提交"，并给一颗「重试」；只有真拿到云端那份才能提交。
        ★只在 `pack.baseIsCloud === true` 时才拉 —— 老包/没声明过云端的，一个字节都不动。 */
     if (w.baseIsCloud === true && String(w.baseName || '')) {
         (function () {
             const wantBase = String(w.baseName || '');
             const wantVer = String(w.baseVersion || baseVerOf(w.baseName) || '');
+            w.baseCloudState = 'loading';
+            const fail = (why) => {
+                if (!S.wiz || String(S.wiz.baseName || '') !== wantBase) return;
+                S.wiz.baseCloudState = 'failed';
+                S.wiz.baseCloudWhy = String(why || '没取到');
+                S.wiz.baseCloudPreset = null;              // ★不许留旧的（换过基准就是脏数据）
+                loadWizardPreset(); renderAll();
+            };
             try {
-                if (!wantVer) return;                       // 没有版本号 ⇒ 无从拉（静默）
+                if (!wantVer) { fail('包里没记版本号'); return; }
                 api.basePack(wantVer).then(r => {
                     if (!S.wiz || String(S.wiz.baseName || '') !== wantBase) return;   // 期间换过 ⇒ 丢弃
                     const preset = (r && r.preset) ? r.preset : (r && r.pack && r.pack.preset ? r.pack.preset : null);
-                    if (!preset || !Array.isArray(preset.prompts)) return;
+                    if (!preset || !Array.isArray(preset.prompts)) { fail('这一版没进基准库'); return; }
                     S.wiz.baseCloudPreset = preset;
+                    S.wiz.baseCloudState = 'ok';
+                    S.wiz.baseCloudWhy = '';
                     loadWizardPreset();                     // 用云端那份重算 base（wasName 从此算得出来）
                     try {
                         const pre2 = preselectFromPack(pack, S.w.entries, S.w.hiddenNames);
                         if (pre2 && pre2.picked && pre2.picked.length) S.wiz.picked = pre2.picked;
                     } catch (e) { /* 预选失败不影响上传 */ }
                     renderAll();
-                }).catch(() => { /* 静默降级：保持本机那份 */ });
-            } catch (e) { /* 同上 */ }
+                }).catch((e2) => fail((e2 && e2.message) || '网络没通'));
+            } catch (e) { fail((e && e.message) || '发起失败'); }
         })();
     }
     renderAll();
@@ -9484,15 +9496,30 @@ function loadWizardPreset() {
          ③ 名字相同**且不是从云端选的** ⇒ 仍然不比（原来那条"自己跟自己比"的毛病还在，不能放它进来）。 */
     if (w.baseName && (w.baseIsCloud || w.baseName !== w.srcName)) {
         try {
-            /* ★W217：从云端基准那组选的 ⇒ 用**云端那一版**的 preset（`S.w.baseCloudPreset`，由下拉分支异步取好）；
-               还没取到（首次渲染/离线）就退回本机同名那份 —— 至少比"什么都没有"强，而且不会白屏。 */
-            const src = (w.baseIsCloud && w.baseCloudPreset) ? w.baseCloudPreset : readPreset(w.baseName);
-            S.w.base = PM.indexPreset(src);
-            /* ★★W218：**把 base 的原文也留一份** —— 内核 `indexPreset()` 只给 entries，**不给 regexes**，
-               而上传界面的正则行要靠"跟官方旧版里同名那条比开关/正文"才画得出「打开了 / 关闭了」。
-               `PM.getRegexList(preset)` 需要 preset 原文，所以在这里存一次（纯内存、只读）。 */
-            S.w.basePreset = src;
-        } catch (e) { /* 忽略 */ }
+            /* ★★★W250（作者 2026-10-29 拍板："**不要这样** 就一定得是**编辑时选择的那份云端旧版**"）——
+               原来这里在云端那份还没到时 `readPreset(w.baseName)` **退回本机同名那份**。
+               作者否掉了这个降级：拿本机那份当基准 = **比错对象**（本机那份可能早就被自己改过），
+               算出来的"原名/wasName/差异"全是错的，而界面上一点提示都没有 —— 比报错更糟。
+               ⇒ 现在三档，**只有本机那份被明确选中的情形才读本机**：
+                 · `baseIsCloud` ⇒ **必须**用 `w.baseCloudPreset`；没到/没拉到 ⇒ base 留 null +
+                   记状态（`S.w.baseCloud = 'loading' | 'failed'`）⇒ 界面明说 + 不给"可以提交"的假象；
+                 · 名字不同（本机组）⇒ 读本机那份（改前行为，一个字节没变）；
+                 · 同名且非云端 ⇒ 不比（原防线）。 */
+            let src = null;
+            if (w.baseIsCloud) {
+                if (w.baseCloudPreset) { src = w.baseCloudPreset; S.w.baseCloud = 'ok'; }
+                else { S.w.baseCloud = (w.baseCloudState === 'failed') ? 'failed' : 'loading'; }
+            } else {
+                src = readPreset(w.baseName);
+            }
+            if (src) {
+                S.w.base = PM.indexPreset(src);
+                /* ★★W218：**把 base 的原文也留一份** —— 内核 `indexPreset()` 只给 entries，**不给 regexes**，
+                   而上传界面的正则行要靠"跟官方旧版里同名那条比开关/正文"才画得出「打开了 / 关闭了」。
+                   `PM.getRegexList(preset)` 需要 preset 原文，所以在这里存一次（纯内存、只读）。 */
+                S.w.basePreset = src;
+            }
+        } catch (e) { S.w.base = null; S.w.basePreset = null; if (w.baseIsCloud) S.w.baseCloud = 'failed'; }
     }
 }
 /** ★§21 D13：版权提醒 —— 作者给了**新文案并指定位置**（第一步页面最上方、比"提交前"更靠前更醒目），
@@ -10469,13 +10496,29 @@ function baseOptionsHtml(w) {
 function baseCloudNoteHtml(w) {
     if (!w || w.scope !== 'part') return '';
     const ver = String(w.baseVersion || '');
+    /* ★★W250（作者拍板："就一定得是**编辑时选择的那份云端旧版**"）——
+       选了云端那版却**没取到**时，必须在界面上**明说**（原来这里静默、还悄悄用本机那份顶替）。
+       三档：loading（取…）/ failed（取不到 + 重试 + 说明不能提交）/ ok（一句话确认）。 */
+    if (w.baseIsCloud) {
+        if (!w.baseCloudPreset) {
+            if (w.baseCloudState === 'failed') {
+                return '<div class="yws-basehint yws-basehint-bad">⚠ 没取到云端那份官方旧版（' + esc(String(w.baseCloudWhy || '原因不明')) + '）。' +
+                    '这一步**必须**拿它当基准，暂不能提交 —— ' +
+                    '<button type="button" class="yws-btn yws-mini yws-ghost" data-act="base-retry">重试</button>' +
+                    '<br>一直取不到多半是：那版没进基准库 / 当前离线。也可以回第①步换一份「官方旧版」。</div>';
+            }
+            return '<div class="yws-basehint">正在取云端那份官方旧版…（还没到之前不能提交）</div>';
+        }
+        const nm0 = String((baseItemOf(ver) || {}).title || '').trim() || ver || w.baseName || '';
+        return '<div class="yws-basehint">已用<b>云端那份</b>官方旧版' + (nm0 ? '「' + esc(nm0) + '」' : '') + '做基准（就是编辑时选的那份）。</div>';
+    }
     if (!ver) return '';                                // ★W1：没选版本 ⇒ 静默（三支灰字整块删除）
     const bits = [];
     /* ★★W19-B：这句给用户看的话里也换成**预设名**（下拉里显示的也是名字 —— 两处必须指同一个东西）。 */
     const nm = String((baseItemOf(ver) || {}).title || '').trim() || ver;
     if (baseVerOk()) bits.push('提交时会写明"这条基于 ' + esc(nm) + '"');
     if (!S.w.base) bits.push('本机没有这一版 ⇒ 条目的落点只能手动指定（挑完条目下面会给入口）');
-    return '<div class="yws-basehint">已选「<b>' + esc(ver) + '</b>」' + (bits.length ? '：' + bits.join('；') : '') + '。</div>';
+    return '<div class="yws-basehint">已选「<b>' + esc(ver) + '」' + (bits.length ? '：' + bits.join('；') : '') + '。</div>';
 }
 
 function viewUpload() {
@@ -11847,6 +11890,20 @@ function placeFor(idx, identifier, baseIdx, override) {
 /** 这条 entry 的 place（`baseIdx` = 「官方旧版」的 indexPreset()；`override` = 手动指定） */
 function placeOf(entry, w, baseIdx, override) { return placeFor(PM.indexPreset(w.preset), entry.identifier, baseIdx, override); }
 async function submitPayload() {
+    /* ★★W250（作者拍板："就一定得是**编辑时选择的那份云端旧版**"）——
+       选了云端基准、但那份**还没取到 / 取不到**时，**不许提交**：
+       当时 base 是 null（不再是"悄悄用本机那份"），算出来的原名/差异全是空的 ——
+       照常提交就等于"拿错的基准出一份看着没问题的包"，比报错糟得多。
+       这里明说 + 指到重试位置。 */
+    (function () {
+        const w = S.wiz || {};
+        if (w.baseIsCloud && !w.baseCloudPreset) {
+            const why = (w.baseCloudState === 'failed') ? ('没取到：' + (w.baseCloudWhy || '原因不明')) : '还在取…';
+            throw new Error('你选了「官方基准（云端）」的那一版，但**还没取到它**（' + why + '）—— ' +
+                '这一步必须拿真正的云端旧版做基准，不能拿本机同名那份顶替。' +
+                '请稍等，或回到第①步重新选一次「官方旧版」；一直取不到多半是那版没进基准库 / 离线。');
+        }
+    })();
     let pack;
     try { pack = buildPayload(); } catch (e) { toast('error', e.message); return null; }
     /* ★F29（作者台账）：**编辑并更新** —— 向导是从「我的 → ✎ 编辑并更新」进来的（`S.editId` 非空）
@@ -14347,6 +14404,31 @@ function onClick(m, ev) {
            以前是 `(S.w.entries||[]).map(…)` = 全部 149 条，搜出 10 行点全选却选了 149 条（会传错内容）。 */
         case 'w-all': S.wiz.picked = shownEntries(S.wiz).map(e => e.identifier); syncPickUi(m); renderAll(); break;
         case 'w-none': S.wiz.picked = []; syncPickUi(m); renderAll(); break;
+        /* ★W250（作者："就一定得是编辑时选择的那份云端旧版"）：取不到时的「重试」——
+           重新走一次 `api.basePack`，成功就用云端那份重算 base，失败就继续显示失败态。 */
+        case 'base-retry': {
+            const w0 = S.wiz || {};
+            const ver0 = String(w0.baseVersion || baseVerOf(w0.baseName) || '');
+            if (!ver0) { toast('warning', '这一格没有版本号，没法取云端那份 —— 请回第①步重新选一次「官方旧版」。'); break; }
+            w0.baseCloudState = 'loading'; w0.baseCloudWhy = ''; renderAll();
+            try {
+                api.basePack(ver0).then((r) => {
+                    if (!S.wiz || String(S.wiz.baseVersion || '') !== ver0) return;
+                    const preset = (r && r.preset) ? r.preset : (r && r.pack && r.pack.preset ? r.pack.preset : null);
+                    if (!preset || !Array.isArray(preset.prompts)) {
+                        S.wiz.baseCloudState = 'failed'; S.wiz.baseCloudWhy = '这一版没进基准库'; renderAll(); return;
+                    }
+                    S.wiz.baseCloudPreset = preset;
+                    S.wiz.baseCloudState = 'ok'; S.wiz.baseCloudWhy = '';
+                    loadWizardPreset();
+                    if (S.prev && S.prev.open) computePreview();
+                    renderAll();
+                }).catch((e2) => { S.wiz.baseCloudState = 'failed'; S.wiz.baseCloudWhy = String((e2 && e2.message) || '网络没通'); renderAll(); });
+            } catch (e) {
+                w0.baseCloudState = 'failed'; w0.baseCloudWhy = String((e && e.message) || '发起失败'); renderAll();
+            }
+            break;
+        }
         /* ★W191（作者）：部分上传里的正则区 —— 勾上「正则」显示/隐藏；点正则行勾选；全选/取消正则。 */
         case 'w-rxshow': {
             S.wiz.rxShow = !S.wiz.rxShow;
@@ -14751,24 +14833,36 @@ function onChange(m, ev) {
             S.wiz.baseName = baseLocalNameOf(S.wiz.baseVersion);  // 本机有就顺手当坐标系；没有 = 空串（不撒谎）
             if (!S.wiz.baseName) warn('本机没有「' + S.wiz.baseVersion + '」这一版：只声明版本，落点得手动指定');
             /* ★W217：**异步把云端那一版的整份拉下来**（`GET /base/pack?ver=`），拿到后用它当"官方旧版"的坐标系。
-               拉不到（离线 / 老后端 / 这版没进基准库）⇒ 保持 null，`loadWizardPreset` 会退回本机同名那份
-               —— 界面照常可用，绝不因为这一发网络失败就卡住上传（与全仓库同一条降级纪律）。 */
+               ★★W250（作者拍板）：拉不到**不再退回本机那份**（那是比错对象、界面还看不出）——
+                 记 `baseCloudState='failed'`，界面明说 + 拦住提交（可重试）。 */
             (function () {
                 const wantVer = S.wiz.baseVersion;
+                S.wiz.baseCloudState = 'loading';
+                const fail = (why) => {
+                    if (!S.wiz || S.wiz.baseVersion !== wantVer) return;
+                    S.wiz.baseCloudState = 'failed';
+                    S.wiz.baseCloudWhy = String(why || '没取到');
+                    S.wiz.baseCloudPreset = null;
+                    loadWizardPreset(); renderAll();
+                };
                 try {
                     api.basePack(wantVer).then(r => {
                         if (!S.wiz || S.wiz.baseVersion !== wantVer) return;      // 期间又换了一格 ⇒ 丢弃
                         const preset = (r && r.preset) ? r.preset : (r && r.pack && r.pack.preset ? r.pack.preset : null);
-                        if (!preset || !Array.isArray(preset.prompts)) return;
+                        if (!preset || !Array.isArray(preset.prompts)) { fail('这一版没进基准库'); return; }
                         S.wiz.baseCloudPreset = preset;
+                        S.wiz.baseCloudState = 'ok';
+                        S.wiz.baseCloudWhy = '';
                         loadWizardPreset();                                        // 用云端那一版重算 base
                         if (S.prev && S.prev.open && !S.prev.pick) computePreview();
                         renderAll();
-                    }).catch(() => { /* 静默降级：退回本机那份 */ });
-                } catch (e) { /* 同上 */ }
+                    }).catch((e2) => fail((e2 && e2.message) || '网络没通'));
+                } catch (e) { fail((e && e.message) || '发起失败'); }
             })();
         } else {                                                  // 本机组（值 = 预设名，语义与今天一致）
             S.wiz.baseName = v;
+            S.wiz.baseCloudState = '';                            // 本机组 ⇒ 不涉及云端状态
+            S.wiz.baseCloudWhy = '';
             const cv = baseVerOf(v);
             S.wiz.baseVersion = (baseVerOk() && cv && baseItemOf(cv)) ? cv : '';
         }

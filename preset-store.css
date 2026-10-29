@@ -1416,6 +1416,14 @@ body[data-theme-mode="dark"] .yws-tag-off, .dark .yws-tag-off { background: colo
     padding: 7px 10px; margin: 8px 0 0; font-size: var(--yws-fs-sm); line-height: 1.6;
     color: var(--yws-txt-2); background: color-mix(in srgb, var(--yws-accent) 8%, transparent);
 }
+/* ★W250（作者："就一定得是编辑时选择的那份云端旧版"）：**取不到云端基准**时的警示态 ——
+   独立色相（--yws-dl-old，与"旧/危险"一族同源），只描边+淡底，不新增圆角/字号刻度。 */
+.yws-basehint.yws-basehint-bad {
+    border-color: color-mix(in srgb, var(--yws-dl-old) 52%, transparent);
+    background: color-mix(in srgb, var(--yws-dl-old) 10%, transparent);
+    color: var(--yws-txt);
+}
+.yws-basehint.yws-basehint-bad .yws-btn { margin: 0 2px; }
 /* ★★W13（作者第 22 批 §FU #6 · 2026-09-24）：上传第一步那两个下拉的**行位置 + 长度 + 徽标位置**
    按作者本意重排（上一版是 W6-A8 的"只统一宽度"）。作者原话：「"_从哪份挑_怎么在筛选后边了` ⇒
    **把它放下来**」；「把后面这两个下拉选框的长度进行**对齐**，可以**稍微长一点**（这样能看到预设的
