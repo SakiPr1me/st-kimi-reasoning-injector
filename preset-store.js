@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.110';
+const VERSION = '2.2.111';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -8394,7 +8394,17 @@ function previewRows(pack, mine) {
     const packNames = new Set(((pack && pack.entries) || []).map(x => PM.normalizeName(String((x.entry && x.entry.name) || x.name || ''))).filter(Boolean));
     const findMineBy = (name, id, wasName, text) => {
         const hit = findMine(name, id);
-        if (hit) return { e: hit, renamedFrom: '' };
+        /* ★★W262（作者 2026-10-29："和你的余温V1008（云端2026-10-09）比，为什么改了名字的还显示一致？"）——
+           **真因在这里**：`findMine()` 先按 **identifier** 找。改名时酒馆**不改内部 id**
+           （改名 ≠ 换条目），所以按 id 一命中就直接返回，`renamedFrom` 留空 ⇒ **名字变化被整个丢掉**
+           ⇒ 正文一样、开关一样 ⇒ 界面上就是「一致」。（实测：包里带 identifier、名字变了、正文一字不动 ⇒ 输出 `["一致"]`。）
+           ⇒ 修：**按 id 命中时也要比名字**；名字不同 ⇒ 这一对同样是"改了名"。
+              口径与按名字/按正文两档完全一致（`renamedFrom` = 我手上那条的旧名字）。
+           ★注意：`findMine` 按**名字**命中时名字当然相同 ⇒ 那一支不必再判。 */
+        if (hit) {
+            const sameName = PM.normalizeName(String(hit.name || '')) === PM.normalizeName(String(name || ''));
+            return { e: hit, renamedFrom: sameName ? '' : String(hit.name || '') };
+        }
         const w = String(wasName || '');
         if (w && PM.normalizeName(w) !== PM.normalizeName(String(name || ''))) {
             const byWas = byName.get(PM.normalizeName(w)) || (byId.get(w) || null);
