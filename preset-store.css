@@ -561,14 +561,10 @@
    名字不再进这一行（走 `title` + 详情里的 `.yws-sewnfull`），DOM 里一个字节都不剩，留着就是孤儿规则。
    ★口径变更：`e2e/tmp/au3-bd4.js` 里断言"行内是 `已缝入（预设名）`"、"`.yws-sewn-n` 有 ellipsis"
    那几条按 §AU7-② **作废**（作者改了显示形式，不是我们做漏了）。 */
-/* ★★AU7-②：**详情里**那一行完整的「已缝入：〈预设名〉」（不受宽度限制 —— 卡片行里只有三个字）。
-   与卡片上那三个字**同一份记账**（`stitchedRec`），字号/颜色降到"说明行"档（与 `.yws-card-src` 同族），
-   名字 `font-weight: 700` + 主文字色（对比度由 `applyAutoInk` 兜底），**不截断**（换行，一个字都不丢）。 */
-.yws-sewnfull {
-    font-size: var(--yws-fs-xs); color: var(--yws-txt-2);
-    margin-bottom: var(--yws-s2); overflow-wrap: anywhere;
-}
-.yws-sewnfull-n { font-weight: 700; color: var(--yws-txt); }
+/* ★★W264（作者 2026-10-29："缝入记录里面已经记录有了 下面就没必要这一句了"）——
+   `.yws-sewnfull` / `.yws-sewnfull-n` **两条规则整块删除**：详情里那句「已缝入：X（时间，当时第 N 版）」
+   已经整块下线（`sewnFullHtml()` 返回空串），DOM 里不再有这两个类 ⇒ 留着就是孤儿规则。
+   ★同一份事实仍在卡片的「更新记录 / 缝入记录」小面板里（`histSewnLinesOf()`），一个字都没丢。 */
 /* ★★W（AR3）+ 的 `.yws-card-badges`（卡片下沿那行徽标）**整条规则删除** ——
    ★BD4 把「已缝入」搬回元信息行（更新日期后面）之后，卡片下沿那一行**在 DOM 里已经不存在**：
    留着规则就是孤儿，而且会让人以为"徽标行还在"。`r10-store-ui` / `aa-store-ui` 里那几条

@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.112';
+const VERSION = '2.2.113';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -8819,21 +8819,17 @@ function previewRows(pack, mine) {
     }
     return [{ key: 'x', name: '不认识的包', tag: '?', cls: '', stat: '这个包的类型不认识（可能是商店版本太新）—— 刷新一下再试', pairs: [] }];
 }
-/** ★★AU7-②（作者第十四批 · 2026-09-22，§AU7-②）：**点开卡片后**（详情里）那一行**完整**的
- *  「已缝入：〈预设名〉」—— 作者原话："预设名走 tooltip（鼠标移上去能看到），**点开卡片后在下面显示完整的
- *  已缝入：〈预设名〉**（不受宽度限制）"。所以这里是**第二个落点**，与卡片行里那三个字是**同一份记账**
- *  （`stitchedRec`），不新造字段、不编历史：名字 + （记账里有的话）什么时候缝的 / 当时第几版。
- *  ★名字**不截断**（这里不受那一行的宽度限制：`overflow-wrap:anywhere` 让它换行，一个字符都不丢）。 */
+/** ★★W264（作者 2026-10-29 截图："缝入记录里面已经记录有了 下面就没必要这一句了：
+ *  `已缝入：余温V1008（云端2026-10-09）(2026/10/29 09:23:00 缝的，当时第 3 版)`"）——
+ *  **整块下线**（保住函数名，调用点与调试出口不用改；返回空串 ⇒ 那一行一个字都不画）。
+ *
+ *  为什么可以删：卡片的「更新记录 / 缝入记录」小面板（`histSewnLinesOf()`，点更新日期即开）
+ *  已经写着「10月29号 第 3 版 已缝入 · 余温V1008（云端 2026-10-09）」——**同一份记账、同一个事实**，
+ *  在展开体里再写一遍（还多一串"什么时候缝的、当时第几版"的噪音）就是作者点名的那句重复话。
+ *  ★卡片**行里**那三个字「已缝入」（`sewnTagHtml`）**不动** —— 它是收起态的快速识别，不是这段说明。
+ *  ★原实现留在 git 历史里（W264 之前的 `sewnFullHtml`）；要回滚直接 revert 本批。 */
 function sewnFullHtml(c) {
-    const rec = stitchedRec(c && c.id);
-    if (!rec) return '';
-    const nm = String(mdPlain((rec && rec.name) || '') || '').replace(/\s+/g, ' ').trim();
-    const at = Number(rec.at) > 0 ? new Date(Number(rec.at)).toLocaleString() : '';
-    const rev = Number(rec.rev) > 0 ? Number(rec.rev) : 0;
-    return '<div class="yws-sewnfull">已缝入：' +
-        (nm ? '<b class="yws-sewnfull-n">' + esc(nm) + '</b>' : '<span class="yws-dim">（这次缝入没记下预设名）</span>') +
-        (at ? '<span class="yws-dim">（' + esc(at) + ' 缝的' + (rev ? '，当时第 ' + rev + ' 版' : '') + '）</span>' : '') +
-    '</div>';
+    return '';
 }
 /** 展开态本体：出处（§9 的"快照即真相"）+ 一行总评 + 每条一行 + 末尾一个「去缝」 */
 function cardBodyHtml(c) {
@@ -8905,14 +8901,18 @@ function cardBodyHtml(c) {
         inner +
         /* ★S1-3（人性化评审 §A ⑦「勾错设为官方无法挽回」）：审核者（本机填过审核密钥的人）在这里能
            **撤销「设为官方」**。只对**官方卡** + **有密钥的人**渲染 —— 普通用户一个字都看不到
-           （判据与「🔑 待审」那颗入口同一个 `reviewKey`）。 */
+           （判据与「🔑 待审」那颗入口同一个 `reviewKey`）。
+           ★★W264（作者 2026-10-29 截图："撤销官方标前面的说明可以删掉"）—— 原来这颗按钮前面还有一句
+           「这张卡带着「官方」标」⇒ **整句删掉**（按钮上本来就写着"撤销官方标"，前面那句是重复）。
+           只删说明、**按钮与判据一个字不动**。 */
         (c.official && String(getSettings().reviewKey || '').trim()
-            ? '<div class="yws-card-bf"><span class="yws-dim">这张卡带着「官方」标</span>' +
-                '<button class="yws-btn yws-mini" data-act="rv-unoffi" data-id="' + esc(c.id) + '" title="改错了？把官方标撤下来（卡片还留在线上，只是不再是官方条目）">撤销官方标</button></div>'
+            ? '<div class="yws-card-bf"><button class="yws-btn yws-mini" data-act="rv-unoffi" data-id="' + esc(c.id) + '" title="改错了？把官方标撤下来（卡片还留在线上，只是不再是官方条目）">撤销官方标</button></div>'
             : '') +
         /* ★A7（作者台账）：用户卡片里曾经出现**两个「缝入」**（左边一个右边一个）→ **只留一个**。
-           唯一那一颗是卡片右下角（`.yws-card-f` 里）那颗；展开态这里只留一句只读说明，不再放第二颗按钮。 */
-        '<div class="yws-card-bf"><span class="yws-dim">只读预览 · 红=你的原文 / 蓝=这条带来的 · 要缝就点下面那颗「缝入」</span></div>' +
+           唯一那一颗是卡片右下角（`.yws-card-f` 里）那颗；展开态这里**不再放第二颗按钮、也不再放说明**。
+           ★★W264（作者 2026-10-29："然后删掉这句：只读预览 · 红=你的原文 / 蓝=这条带来的 · 要缝就点下面那颗「缝入」"）——
+           这一整行**删掉**（红蓝哪边是谁、去哪儿缝，界面上自己就看得出来）。
+           ★保留 `.yws-card-bf` 这个**容器类**给「撤销官方标」那一支用（上面那段），此处不再另起一个空盒子。 */
     '</div>';
 }
 
@@ -9570,7 +9570,12 @@ async function startEdit(id) {
         })();
     }
     renderAll();
-    toast('info', '这是「编辑并更新」：改完提交会覆盖原来那张卡（编号不变），缝过它的人会看到「有更新」。');
+    /* ★★W264（作者 2026-10-29："这些多余的说明删掉"）—— 这里原来还有一条 toast：
+       「这是「编辑并更新」：改完提交会覆盖原来那张卡（编号不变），缝过它的人会看到「有更新」。」
+       它与横幅里那句是**同一件事说两遍** ⇒ **撤掉**（进编辑态时横幅本来就写着"正在编辑并更新：哪张卡"，
+       不用再弹一个窗把机制讲一遍）。
+       ★注意：**提交完成后**那条结果提示（`st === 'approved'` 时"…缝过它的人会看到「有更新」"）
+         **必须留** —— 那说的是"这次的结果"，不是预览前的多余说明。 */
 }
 /** ★AU-④（作者第九批 §AQ 第 2 条）：「编辑并更新」的**预勾选阶梯**（纯函数，探针直接喂假包调它）。
  *  口径：**内核的条目身份**（`preset-merge.js` 的 `entryFp` / `identifier` / `normalizeName`），三级：
@@ -9874,7 +9879,11 @@ function editBanner(w) {
     const r = (S.myList || []).find(x => String(x.id) === String(S.editId)) ||
         (getSettings().creds || []).find(x => String(x.id) === String(S.editId)) || {};
     return '<div class="yws-editbar" role="status">✎ 正在<b>编辑并更新</b>：<b class="yws-pname">' + esc(clip(String(r.serverTitle || r.title || S.editId), 48)) + '</b>' +
-        '<span class="yws-dim">（编号不变、上线状态不变；提交后这张卡的版本号 +1，缝过它的人会看到「有更新」）</span>' +
+        /* ★★W264（作者 2026-10-29 截图："这些多余的说明删掉"）—— 原来这里那句
+           「（编号不变、上线状态不变；提交后这张卡的版本号 +1，缝过它的人会看到「有更新」）」
+           **整句删掉**（"正在编辑并更新：哪张卡"这几个字已经说清在干什么）。
+           ★"会看到有更新"这件事**没有丢**：它本来就在卡片的更新记录 / 预览卡的版本说明里如实写着，
+             而且提交后版本号真的 +1 —— 只是不再在横幅里预先把机制讲一遍。 */
         preLine(w) +
         /* ★A4（文案二次评审 M-06 · 2026-09-23）：这一族（6 颗按钮）挂的是**同一个** `case 'edit-cancel'`：
            行为 = 清掉 `editId`/`resubFrom`，**留在向导里**、按一次普通的新上传提交（已经挑好的条目、
@@ -9890,9 +9899,12 @@ function editBanner(w) {
 function preLine(w) {
     const p = w && w.pre;
     if (!p) return '';
-    if (p.n > 0) {
-        return '<span class="yws-dim">已勾回 <b>' + numOf(p.n) + '</b> 条：这几条是从你上传的那版里勾回来的；<b>新增的条目请手动再挑</b>。</span>' + hidLine(w);
-    }
+    /* ★★W264（作者 2026-10-29："这些多余的说明删掉"）—— 原来这一支写的是
+       「已勾回 16 条：这几条是从你上传的那版里勾回来的；新增的条目请手动再挑。」
+       作者点名这句多余 ⇒ **整句删掉**（勾回了几条界面上另有呈现：勾选框本身就是勾上的）。
+       ★`hidLine()` 必须留 —— 它说的是"老包里那几条已隐藏的条目这次不再带出"，是**另一个事实**，
+         不说会像丢了东西。`p.n === 0` 那一支（没能勾回来）**照旧保留**：那是必须说的告警，不是多余说明。 */
+    if (p.n > 0) return hidLine(w);
     return '<span class="yws-dim">这次<b>没能</b>自动勾回你上传的那几条（多半是条目改了名、或者「从哪份挑」换了一份预设）—— <b>请手动再挑一次</b>。</span>' + hidLine(w);
 }
 /** ★★D2（2026-09-22）：老包里的**幽灵条目**（= 你文件里还留着、但 ST 界面上一行都不画、列表里已经没有的那些）。
@@ -10192,9 +10204,12 @@ function previewHtml(w) {
                 const why = String((p && p.err) || '');
                 if (why) return '<div class="yws-basehint">还没算出对比：' + esc(clip(why, 120)) + '</div>';
                 if (!nm) return '';
-                /* ★W255：原文案里带了 `**真比对**` —— 这是**纯 HTML**（不是 Markdown）⇒ 星号会原样印在屏幕上
-                   （A3 文案评审立过规矩：toast/纯 HTML 一律不写星号）。去掉星号，语义不变。 */
-                return '<div class="yws-basehint yws-pvtag">正在跟 <b>' + esc(clip(nm, 40)) + '</b> 比（就是这份预设现在的样子）—— 下面每一行都是真比对的结果。</div>';
+                /* ★★W264（作者 2026-10-29："这些多余的说明删掉"）—— 原来这一行是
+                   「正在跟 X 比（就是这份预设现在的样子）—— 下面每一行都是真比对的结果。」
+                   ⇒ **只留"正在跟 X 比"这半句**（那是 W254 作者点名要的"明说在跟谁比"，必须留），
+                     后面那串解释（"就是这份预设现在的样子" / "下面每一行都是真比对的结果"）**删掉**。
+                   ★W255 那条"纯 HTML 不写星号"的规矩仍然有效（这行是 innerHTML）。 */
+                return '<div class="yws-basehint yws-pvtag">正在跟 <b>' + esc(clip(nm, 40)) + '</b> 比</div>';
             })() +
             /* ★K2L（§DY 第 4 条裁定的**同一枚门禁**，口径与 baseHintHtml / baseCloudNoteHtml / 上面那句
                「会写明：基于 X」完全一致）：「官方旧版」这件事**只属于「部分上传」那一档** —— 整份档第一步
@@ -10228,8 +10243,12 @@ function previewHtml(w) {
                     if (!rx.length) return '';
                     const names = rx.map(r => String((r.reg && r.reg.scriptName) || r.name || '（未命名）'));
                     const head = names.slice(0, 2).join('、') + (names.length > 2 ? ' 等' : '');
+                    /* ★★W264（作者 2026-10-29："这些多余的说明删掉"）—— 原来末尾还有
+                       「（逐条详情点卡片展开看）」，**删掉**（卡片就在下面，点不点自己会判断）。
+                       ★"这次会带上 N 条正则 + 名字"这个信息**必须留**：W202 是作者亲自要的
+                         （不写的话用户以为正则没带上）。 */
                     return '<div class="yws-basehint yws-pvtag">这次会一起带上 <b>' + numOf(rx.length) + ' 条正则</b>：' +
-                        esc(clip(head, 60)) + '（逐条详情点卡片展开看）</div>';
+                        esc(clip(head, 60)) + '</div>';
                 } catch (e) { return ''; }
             })() +
             '<div class="yws-pvcard">' + previewCardHtml(card) + '</div>' +
