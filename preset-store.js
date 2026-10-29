@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.103';
+const VERSION = '2.2.104';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -9926,7 +9926,9 @@ function previewHtml(w) {
                 const why = String((p && p.err) || '');
                 if (why) return '<div class="yws-basehint">还没算出对比：' + esc(clip(why, 120)) + '</div>';
                 if (!nm) return '';
-                return '<div class="yws-basehint yws-pvtag">正在跟 <b>' + esc(clip(nm, 40)) + '</b> 比（就是这份预设现在的样子）—— 下面每一行都是**真比对**的结果。</div>';
+                /* ★W255：原文案里带了 `**真比对**` —— 这是**纯 HTML**（不是 Markdown）⇒ 星号会原样印在屏幕上
+                   （A3 文案评审立过规矩：toast/纯 HTML 一律不写星号）。去掉星号，语义不变。 */
+                return '<div class="yws-basehint yws-pvtag">正在跟 <b>' + esc(clip(nm, 40)) + '</b> 比（就是这份预设现在的样子）—— 下面每一行都是真比对的结果。</div>';
             })() +
             /* ★K2L（§DY 第 4 条裁定的**同一枚门禁**，口径与 baseHintHtml / baseCloudNoteHtml / 上面那句
                「会写明：基于 X」完全一致）：「官方旧版」这件事**只属于「部分上传」那一档** —— 整份档第一步
@@ -10061,7 +10063,19 @@ function previewTargetDefault() {
  *  @param p `S.prev`（读它的 `pick` 决定谁 selected） */
 function previewSrcOptionsHtml(p) {
     const all = listPresetNames();
-    const pick = String((p && p.pick) || '');
+    /* ★★W255（作者 2026-10-29 截图：下面写着「和你的 **余温V1028** 比」，上面这个下拉显示的却是**别的预设**）——
+       病根两条：
+         ① 选中态原来要**「名字 + 来源」都对上**（W208 为"同名出现在两组"做的），可 `pickSrc` 只在**用户手点**
+            下拉时才有值；`previewTargetDefault()` 自动挑出来的默认值是**空串** ⇒ 本机组那一项永远不写
+            `selected`（它要求 `pickSrc === 'local'`）⇒ 浏览器只好显示第一项 ⇒ 下拉写着一个名字、真正比的
+            是另一个。
+         ② W252 把"云端组已列过的名字"从本机组剔掉之后，万一手点的来源是 local、而这名字只在云端组出现，
+            那一份也拿不到 `selected` ⇒ 又退回"没有选中项"。
+       ★W252 之后**每个名字在下拉里只出现一次**（两组不再重叠）⇒ 选中态可以**纯按名字判**，不再需要来源那一半；
+         并且以 `p.mineName`（**真正拿来比的那一份**，`computePreview()` 写进去的）为准
+         ⇒ 下拉里显示的名字必然等于「和你的 X 比」里的那个 X。
+       ★`data-src` 仍保留（`case 'prev-src'` 会读它记 `pickSrc`），只是不再参与选中判定。 */
+    const pick = String((p && (p.mineName || p.pick)) || '');
     const cloud = [], seen = new Set();
     try {
         for (const it of baseItems()) {
@@ -10074,13 +10088,12 @@ function previewSrcOptionsHtml(p) {
         }
     } catch (e) { warn('「假设用户预设」里那组云端基准没排出来（不影响下面那些）', e); }
     /* ★W208（作者报：选了标注「（我的）」那一项，结果跳到别的去了、不能真实选择）——
-       根因：云端组与本机组**同名** ⇒ 两个 option 的 `value` 一模一样，而 selected 原来只按名字判
-       ⇒ 重绘时"云端那一份"又被打上 selected，你看点的那一项就"跳走"了。
-       修：option 带 `data-src`（cloud / local），选中态按「名字 + 来源」一起判；
-       用户点了哪一组就记住哪一组（`pickSrc`）。名字仍是唯一 value（数据上就是同一份预设文件）。 */
-    const pickSrc = String((p && p.pickSrc) || '');
+       那一版的病根是"云端组与本机组同名 ⇒ 两个 option 的 value 一模一样，只按名字判会让云端那份抢走 selected"。
+       当时用 `data-src` + `pickSrc` 解决。★W255：W252 已让两组**不再重叠**（每个名字只列一次），
+       同名的坑不复存在 ⇒ 选中态回到**纯按名字判**（见函数头注释那条 ①/②）；`data-src` 只是留给
+       `case 'prev-src'` 记来源，不参与判定。 */
     const opt = (name, label, src) => '<option value="' + esc(name) + '" data-src="' + esc(src || 'cloud') + '"' +
-        ((name === pick && String(src || 'cloud') === (pickSrc || 'cloud')) ? ' selected' : '') + '>' + esc(label || name) + '</option>';
+        ((name === pick) ? ' selected' : '') + '>' + esc(label || name) + '</option>';
     /* ★W202（作者报：云端有了 V1008 之后，本机那份同名的在「假设用户预设」里找不到了）——
        原来这里是**去重**：云端那组先占名字，本机组就用 `!seen.has(n)` 把它排掉 ⇒ 本机已装里看不到
        自己那份（虽然功能上在云端组能选，但看起来就是"我的预设不见了"）。
@@ -10090,6 +10103,11 @@ function previewSrcOptionsHtml(p) {
          所以 **selected 只给云端组那一份**（本机组同名的那个不写 selected）—— 默认仍落在云端基准上。 */
     const cloudNames = new Set(cloud.map(x => x.name));
     const cloudGrp = cloud.length ? '<optgroup label="官方基准（云端）" data-cloud="1">' + cloud.map(x => opt(x.name, x.label, 'cloud')).join('') + '</optgroup>' : '';
+    /* ★W255 兜底：`pick` 一个 option 都没命中（本机那份读不出来 / 名字变了）⇒ 这里**临时补一条**
+       —— 下拉上显示的必须就是"真正在比的那一份"，不能退回显示第一项（那正是作者这次截图看到的矛盾）。 */
+    const pickHit = all.includes(pick) || cloudNames.has(pick);
+    const pickOrphan = (pick && !pickHit)
+        ? '<option value="' + esc(pick) + '" data-src="local" selected>' + esc(pick) + '（按名字没找到这份文件）</option>' : '';
     /* ★W206（作者：假设用户预设里，本机那份和云端那份**同名**时，本机项后面加「（我的）」）——
        纯显示区分，`value` 仍是原名（选中逻辑一个字没变）；已选中的仍是云端那一份。 */
     const localGrp = all.length
@@ -10104,11 +10122,12 @@ function previewSrcOptionsHtml(p) {
                ★`dup` 仍用于两件事：① 云端组里同名那份要标「我的」（让用户知道那是本机的）；
                  ② 选中态只在云端那份上（W208 的老坑）。 */
             if (dup) return '';                            // 云端那组已经列过这个名字，本机组跳过
-            const sel = (n === pick && pickSrc === 'local') ? ' selected' : '';
+            /* ★W255：本机组也**纯按名字**判选中（不再是 `pickSrc === 'local'` 才选）—— 见函数头那条 ①。 */
+            const sel = (n === pick) ? ' selected' : '';
             return '<option value="' + esc(n) + '" data-src="local"' + sel + '>' + esc(n) + '</option>';
         }).join('') + '</optgroup>'
         : '';
-    return cloudGrp + localGrp;
+    return (pickHit ? (cloudGrp + localGrp) : (pickOrphan + cloudGrp + localGrp));
 }
 function openPseudoDetail() {
     const w = S.wiz;
@@ -10172,6 +10191,12 @@ function computePreview() {
         if (pick && names.includes(pick)) { const _pp = readPreset(pick, { raw: true }); mine = { name: pick, preset: _pp, idx: PM.indexPreset(_pp) }; }   // ★W203/W204：带 preset 原文，且**只读文件原样**（不吃内存覆盖）
     } catch (e) { warn('预览：读不到那份预设（照旧显示卡片预览）', e); }
     S.prev.mineName = mine ? mine.name : '';
+    /* ★★W255：把"到底拿哪一份比"**写回 `S.prev.pick`** —— 这里原本只写 `mineName`，而 `S.prev.pick` 一直是
+       进入第二步那一刻的旧值（甚至是空串）⇒ 同一个界面上有三个地方各算一次"拿哪份比"（下拉的选中态、
+       那句「和你的 X 比」、伪缝入 `openPseudoDetail` 里的 `pick`），很自然就对不上号。
+       ⇒ 现在 `pick` 只有一个来源：`computePreview()` 挑定的这一份，其余全部读它。
+         写回之后下拉的 `selected`（`previewSrcOptionsHtml` 读 `mineName`）与伪缝入的目标必然一致。 */
+    if (mine) S.prev.pick = mine.name;
     S.prev.rowsBase = rowsVsBase(pack, w);        // ★C20③：与官方旧版的对比（没填官方旧版就是空数组）
     for (const r of S.prev.rowsBase) S.openRows['pv:' + r.key] = true;   // 差异块**默认摊开**（要的就是"看见对比"）
     try {
