@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.97';
+const VERSION = '2.2.98';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -9236,6 +9236,38 @@ async function startEdit(id) {
             if (back.length) { w.pickedRegex = back; w.rxShow = true; }
         }
     } catch (e) { warn('预选正则失败（照旧能手动勾）', e); }
+    /* ★★W249（作者 2026-10-29："我点击**编辑修改**，里面也让我选了云端基准旧版，这时候会上传 wasName 吗？"）
+       —— **答案原本是不一定**，这是个可用性坑：
+        · `buildPayload()` 算"原名"（`entry.wasName`）用的是 `S.w.base`；
+        · 而 `loadWizardPreset()` 建 base 时只有 `w.baseCloudPreset` **非空**才用**云端那份**，
+          否则退回 `readPreset(w.baseName)` = **本机同名那份**；
+        · 但这里（`startEdit`）初始写的是 `baseCloudPreset: null` ⇒ 刚进来 base = 本机那份
+          ⇒ 条目名一样 ⇒ **算不出原名** ⇒ wasName 不上传。
+        · 用户看到的是"下拉里已经选着云端旧版"，实际没生效（要**手动重选一次**才会异步拉）。
+       ⇒ 修：**进来就按包里记的 baseVersion / baseName 主动拉一次云端那份**（与 `w-base` 分支同一套降级：
+         拉不到就静默保持本机那份，绝不阻断）。拉到了重算 base + 预选 + 重绘。
+       ★只在 `pack.baseIsCloud === true` 时才拉 —— 老包/没声明过云端的，一个字节都不动。 */
+    if (w.baseIsCloud === true && String(w.baseName || '')) {
+        (function () {
+            const wantBase = String(w.baseName || '');
+            const wantVer = String(w.baseVersion || baseVerOf(w.baseName) || '');
+            try {
+                if (!wantVer) return;                       // 没有版本号 ⇒ 无从拉（静默）
+                api.basePack(wantVer).then(r => {
+                    if (!S.wiz || String(S.wiz.baseName || '') !== wantBase) return;   // 期间换过 ⇒ 丢弃
+                    const preset = (r && r.preset) ? r.preset : (r && r.pack && r.pack.preset ? r.pack.preset : null);
+                    if (!preset || !Array.isArray(preset.prompts)) return;
+                    S.wiz.baseCloudPreset = preset;
+                    loadWizardPreset();                     // 用云端那份重算 base（wasName 从此算得出来）
+                    try {
+                        const pre2 = preselectFromPack(pack, S.w.entries, S.w.hiddenNames);
+                        if (pre2 && pre2.picked && pre2.picked.length) S.wiz.picked = pre2.picked;
+                    } catch (e) { /* 预选失败不影响上传 */ }
+                    renderAll();
+                }).catch(() => { /* 静默降级：保持本机那份 */ });
+            } catch (e) { /* 同上 */ }
+        })();
+    }
     renderAll();
     toast('info', '这是「编辑并更新」：改完提交会覆盖原来那张卡（编号不变），缝过它的人会看到「有更新」。');
 }
