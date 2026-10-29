@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.109';
+const VERSION = '2.2.110';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -8372,30 +8372,42 @@ function previewRows(pack, mine) {
     const byName = new Map(), byId = new Map();
     if (mine) for (const e of mine.idx.entries) { byName.set(PM.normalizeName(e.name), e); byId.set(String(e.identifier), e); }
     const findMine = (name, id) => (id && byId.get(String(id))) || byName.get(PM.normalizeName(name)) || null;
-    /* ★★W257（作者 2026-10-29："在编辑预览界面里面就不能是显示「新增」而是「改名」；而且不只是编辑预览界面，
-       上架商店后的预览界面也应该是这样写 —— 你以后修改预览界面要两个预览界面都同步，
-       这里看到的就应该是商店里看到的，这里看到的标识就应该是点击缝入后看到的"）——
+    /* ★★W261（作者 2026-10-29 截图："我对比的是 余温V1008（云端 2026-10-08），😺尾部2·Gmn3.8(择1) 我预设里有这个，
+       但是点开预览还是显示 新增 而不是 改名 和 打开了"，截图里「旧」侧写着"（你的预设里没有这一条 → 新增）"）——
+       **这是「部分上传」（ywp-entry）路径上的最后一个缺口**：
+       W257 给它加了第③档「按包里带回来的旧名字找」，但**那条线索只有在"上传时选了官方旧版"时包里才带**
+       （`entry.wasName`，W234 加的）。作者这次是**从自己预设抽条目上传**、带上来的名字就是新名字
+       （`Gmn4/3.8`）⇒ 包里没有 `wasName` ⇒ 只有名字/旧名字两档可查 ⇒ 都查不到 ⇒ 判「新增」。
+       而整份预设路径（W258）与「跟官方旧版比」（W259）早就补上了第④档「**按正文完全相同认改名**」——
+       唯独这条路径漏了。这就是"改了四处、还是有一处会漏"的最后一块。
 
-       **为什么以前显示「新增」**：`findMine()` 只按「名字 / identifier」找。包里那条改了名 ⇒ 名字对不上
-       ⇒ `cur` 为空 ⇒ 落到「新增」分支。而缝入侧（`preset-updater.js` 的 `conv()`）拿到的是包里**带回来的旧名字**
-       （`entry.wasName`，W234 加的）⇒ 它能认出"这是同一条改了名"。**两套尺子、两个结论** —— 与 W218/W253 同源。
-
-       **修**：`findMine` 增加第三档「按包里带回来的旧名字找」（与缝入侧**同一条线索、同一个优先级**）。
-       找到之后，标签按"名字变了没有 / 正文变了没有 / 开关变了没有"三个维度组合，**一条记录可以带多枚标签**
-       （作者明说：允许两个或多个标识）。
-
-       ★银行家的边界（宁可不标也不标错）：
-         · 只在包里**明确带了** `wasName` 时才走这一档 —— 没带就是没线索，不许猜（猜错 = 把别人的条目当你的）；
-         · `wasName` 与当前名字**规范化后相同** ⇒ 等于没改名，不产生「改名」标签；
-         · 三档都找不到才是真「新增」。 */
-    const findMineBy = (name, id, wasName) => {
+       ⇒ 补第④档（与那两处**同一判据、同一安全边界**）：
+           正文规范化后**完全一致**（不做相似度，0.99 都不行）+ 正文非空 + 名字不同
+           + 我手上那条的旧名字**在包里确实没出现**（否则那是"新增的另一条"）⇒ 认作改名。
+       ★这条线索不依赖任何上传时的必填项，所以**自己抽条目上传**也能认出来。 */
+    const byText = new Map();
+    if (mine) for (const e of mine.idx.entries) {
+        const t = PM.normalizeText(String(e.text || ''));
+        if (t && t.trim() && !byText.has(t)) byText.set(t, e);
+    }
+    /* 包里**所有**条目名（含新名字）——"旧名字在包里没出现"是第④档的硬条件 */
+    const packNames = new Set(((pack && pack.entries) || []).map(x => PM.normalizeName(String((x.entry && x.entry.name) || x.name || ''))).filter(Boolean));
+    const findMineBy = (name, id, wasName, text) => {
         const hit = findMine(name, id);
         if (hit) return { e: hit, renamedFrom: '' };
         const w = String(wasName || '');
-        if (!w) return { e: null, renamedFrom: '' };
-        if (PM.normalizeName(w) === PM.normalizeName(String(name || ''))) return { e: null, renamedFrom: '' };  // 等于没改名
-        const byWas = byName.get(PM.normalizeName(w)) || (byId.get(w) || null);
-        return byWas ? { e: byWas, renamedFrom: w } : { e: null, renamedFrom: '' };
+        if (w && PM.normalizeName(w) !== PM.normalizeName(String(name || ''))) {
+            const byWas = byName.get(PM.normalizeName(w)) || (byId.get(w) || null);
+            if (byWas) return { e: byWas, renamedFrom: w };
+        }
+        /* ★★W261 第④档：按正文完全相同认改名 */
+        const t = PM.normalizeText(String(text || ''));
+        const cand = (t && t.trim()) ? (byText.get(t) || null) : null;
+        if (cand && PM.normalizeName(cand.name) !== PM.normalizeName(String(name || ''))
+            && !packNames.has(PM.normalizeName(cand.name))) {
+            return { e: cand, renamedFrom: String(cand.name || '') };
+        }
+        return { e: null, renamedFrom: '' };
     };
     /* 一行可以挂多枚标签（W257）：`tags` 是数组，`tag/cls` 仍保留 = 第一枚（老渲染/老契约逐字兼容）。 */
     const add = (o) => {
@@ -8425,10 +8437,15 @@ function previewRows(pack, mine) {
     if (pack.kind === 'ywp-entry') {
         for (const e of (pack.entries || [])) {
             const nm = String((e.entry && e.entry.name) || e.name || '（未命名）');
-            /* ★W257：三档找"我手上那条" —— 名字/identifier → **包里带回来的旧名字**（`wasName`，与缝入侧同一条线索）。
+            /* ★W257：找"我手上那条" —— 名字/identifier → 包里带回来的旧名字（`wasName`）→ **按正文完全相同**（W261）。
                `renamedFrom` 非空 = 这一条是**改了名的同一条**（不是新增）。 */
             const wasNameIn = String((e.entry && e.entry.wasName) || e.wasName || '');
-            const found = findMineBy(nm, e.entry && e.entry.identifier, wasNameIn);
+            /* ★W261：正文按**这条实际会写进预设的正文**取（patch 用 next、new 用 entry.content），
+               与后面算差异用的是同一份，绝不让"认人"和"比内容"看到两个不同的正文。 */
+            const bodyForLookup = (e.mode === 'patch')
+                ? String(e.next || '')
+                : String((e.entry && e.entry.content) || e.next || '');
+            const found = findMineBy(nm, e.entry && e.entry.identifier, wasNameIn, bodyForLookup);
             const cur = found.e;
             const renamedFrom = found.renamedFrom;
             const renTag = renamedFrom ? [T_RENAMED(renamedFrom, nm)] : [];   // 改名这枚标签（有才加）
@@ -8629,10 +8646,14 @@ function previewRows(pack, mine) {
         for (const op of (pack.ops || [])) {
             const nm = String(op.name || '（未命名）');
             if (op.op === 'add') {
-                const cur = findMine(nm, op.entry && op.entry.identifier);
-                add({ key: 'a:' + nm, name: nm, tag: '新增条目', cls: 'yws-tag-new',
-                    stat: cur ? '你已有一条同名的 —— 缝的时候会问你要哪条' : '',
-                    pairs: [{ mine: '（你的预设里没有这一条 → 新增）', next: String((op.entry && op.entry.content) || op.next || '') }] });
+                /* ★W261：`add` 也要走四档找（含"按正文认改名"）—— 否则"改了名的条目"在这条路径上还是新增 */
+                const f0 = findMineBy(nm, op.entry && op.entry.identifier, '',
+                    String((op.entry && op.entry.content) || op.next || ''));
+                const cur = f0.e;
+                const ren0 = f0.renamedFrom ? [{ t: '改名', cls: 'yws-tag-renamed', note: '原名「' + f0.renamedFrom + '」→ 现在叫「' + nm + '」' }] : [];
+                add({ key: 'a:' + nm, name: nm, tags: ren0.length ? ren0 : [{ t: '新增条目', cls: 'yws-tag-new' }],
+                    stat: cur ? (ren0.length ? '' : '你已有一条同名的 —— 缝的时候会问你要哪条') : '',
+                    pairs: [{ mine: cur ? String(cur.text || '') : '（你的预设里没有这一条 → 新增）', next: String((op.entry && op.entry.content) || op.next || '') }] });
             } else if (op.op === 'update') {
                 const cur = findMine(nm, op.entry && op.entry.identifier);
                 const nextTxt = String(op.next || '');

@@ -88,7 +88,7 @@ const EXT = 'preset_updater';
      （点它一下 = 排除，再点一下 = 收回；小标「已默认收进来 / 不要它」）；③**没点过的不同处按新版**。
      ⇒ chip 文案、结果行那句人话、正文顶上说明同步；**「按原顺序全收」那颗按钮删掉**（用途已被②整份覆盖）。
    读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md §修订；台账 §XXVIII） */
-const VERSION = '5.3.52';   // 更新器模块版本（随工具箱一起发布）
+const VERSION = '5.3.53';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -9617,6 +9617,29 @@ function storePackToPatch(pack, mine) {
     } catch (e) { /* 同上 */ }
     const haveText = (nk) => (haveMap.has(nk) ? haveMap.get(nk) : null);
     const haveEnabled = (nk) => (haveEn.has(nk) ? haveEn.get(nk) : null);
+    /* ★★W261（作者 2026-10-29 截图："我对比的是 余温V1008（云端 2026-10-08），😺尾部2·Gmn3.8(择1) 我预设里有这个，
+       但是点开预览还是显示 新增 而不是 改名 和 打开了"）——
+
+       **预览侧已经能按"正文完全相同"认出改名了，缝入侧也必须能 —— 否则两边又对不上**
+       （作者要的口径："这里看到的就应该是点击缝入后看到的"）。
+
+       现状：本函数认改名**只靠 `wasName`**（W234 加的），而那个字段只在"上传时选了官方旧版"时包里才带；
+       从自己预设抽条目上传时包里没有 ⇒ 缝入会把它当成一条**新增**（多出一条、旧的还在）。
+       ⇒ 补一张「正文 → 本机条目」表，作为 `wasName` 之后、同名之前的第一档兜底。
+       ★安全边界（与预览侧那一档**逐字同一套**）：
+         · 正文规范化后**完全一致**（不做相似度 —— 0.99 都不行，那会吞掉"新写的一条很像的"）；
+         · 正文非空；
+         · 名字确实不同；
+         · 我手上那条的**旧名字在包里确实没出现**（否则那是"新增的另一条"，不许抢）。 */
+    const haveByText = new Map();
+    try {
+        for (const e of PM.indexPreset(mine).entries) {
+            const t = PM.normalizeText(String(e.text || ''));
+            if (t && t.trim() && !haveByText.has(t)) haveByText.set(t, String(e.name || ''));
+        }
+    } catch (e) { /* 建不起来就不兜（不影响主流程） */ }
+    /* 包里所有条目名（含新名字）——"旧名字在包里没出现"是上面那条兜底的硬条件 */
+    const packEntryNames = new Set(((kind === 'ywp-entry' ? (pack.entries || []) : [])).map(x => PM.normalizeName(String((x.entry && x.entry.name) || x.name || ''))).filter(Boolean));
     const sameName = [];
     const conv = (e, i) => {
         if (!e || typeof e !== 'object') return null;
@@ -9632,6 +9655,19 @@ function storePackToPatch(pack, mine) {
             /* 改名 + 你手上有旧名字那条 ⇒ 就地改（名字跟着变），不新增 */
             mode = 'update';
             renamedFrom = wasNameIn;
+        }
+        /* ★★W261：包里**没带旧名字**时的兜底 —— 按「正文完全相同」认改名（与预览侧那一档同一套边界）。
+           这一步必须排在"同名"之前：改名后的新名字本来就不在我手上，同名那一档根本不会命中。 */
+        if (mode === 'add' && !renamedFrom) {
+            const _t = PM.normalizeText(String((e.entry && e.entry.content) ?? e.next ?? ''));
+            const _candName = (_t && _t.trim()) ? (haveByText.get(_t) || '') : '';
+            if (_candName
+                && PM.normalizeName(_candName) !== PM.normalizeName(nm)
+                && !packEntryNames.has(PM.normalizeName(_candName))) {
+                mode = 'update';
+                renamedFrom = _candName;
+                console.info('[预设更新器] 「' + nm + '」按正文认出是「' + _candName + '」改了名（包里没带旧名字）—— 就地改名，不新增');
+            }
         }
         // 同名 → 按"改你那条"（★名字为空的不算，空名字定位不到，交给内核的 add 走锚点）
         if (mode === 'add' && PM.normalizeName(nm) && have.has(PM.normalizeName(nm))) { mode = 'update'; sameName.push(nm); }
