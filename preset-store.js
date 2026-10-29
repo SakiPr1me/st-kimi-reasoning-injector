@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.102';
+const VERSION = '2.2.103';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -9915,6 +9915,19 @@ function previewHtml(w) {
                不进 innerText）⇒ 预览卡与那句错在「部分上传 / 整份 / 正则」三档都**看不见**。
                补回闭合标签之后，预览块才真的画在屏幕上（四档几何照旧全过）。 */
             '</select></label>' +
+            /* ★★W254（作者 2026-10-29："假设用户预设这里 应该**默认选择的是自己当前的预设**，然后**自动进行一次对比**
+               而不是**静默**；修改时在上一步点下一步就该拉取对比；上传时填完标题和说明就该拉取对比"）——
+               下拉只是静静选中一个名字，用户不知道"到底在跟谁比、比过没有"。
+               ⇒ 这里补一行**明说**：比的是谁 + 算没算出来（没算出来就说原因）。
+                 文案随后续重算自动跟着换（`syncPreviewNow()` 每次都重画这一块）。 */
+            (function () {
+                if (isTextScope(w.scope)) return '';
+                const nm = String((p && p.mineName) || '');
+                const why = String((p && p.err) || '');
+                if (why) return '<div class="yws-basehint">还没算出对比：' + esc(clip(why, 120)) + '</div>';
+                if (!nm) return '';
+                return '<div class="yws-basehint yws-pvtag">正在跟 <b>' + esc(clip(nm, 40)) + '</b> 比（就是这份预设现在的样子）—— 下面每一行都是**真比对**的结果。</div>';
+            })() +
             /* ★K2L（§DY 第 4 条裁定的**同一枚门禁**，口径与 baseHintHtml / baseCloudNoteHtml / 上面那句
                「会写明：基于 X」完全一致）：「官方旧版」这件事**只属于「部分上传」那一档** —— 整份档第一步
                根本不画那个下拉（`viewUpload()` 那颗三元），整份包也没有"逐处缝入位置"这回事。
