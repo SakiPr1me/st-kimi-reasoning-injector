@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.107';
+const VERSION = '2.2.108';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -8303,6 +8303,12 @@ function diffPairsHtml(pairs, more) {
         (more > 0 ? '<div class="yws-dlmore">还有 ' + numOf(more) + ' 处没列出来 —— 到更新器里看全部</div>' : '') +
     '</div>';
 }
+/** ★★W257/W259：「改名」这枚标签的**唯一构造口**（老名字 → 新名字 + 悬停说明）。
+ *  ★必须是模块级：`previewRows()`（三条路径）与 `rowsVsBase()`（跟官方旧版比）都要用它 —— 
+ *    作者的要求是"这里看到的标识就应该是点击缝入后看到的"，那就只能有一枚「改名」。 */
+function T_RENAMED(wasName, nm) {
+    return { t: '改名', cls: 'yws-tag-renamed', note: '原名「' + wasName + '」→ 现在叫「' + nm + '」' };
+}
 /** ★★W257：**一行上的标识**（唯一渲染口）。
  *  作者 2026-10-29 的硬要求："这里看到的标识就应该是点击缝入后看到的；允许两个或多个标识在两个预览界面看到"。
  *  ⇒ 所以这枚函数被**三个预览界面共用**：电商卡片的展开态（`togglePreviewCard` 那一块）、
@@ -8359,7 +8365,7 @@ function previewRows(pack, mine) {
         rows.push(Object.assign({ tag: '', cls: '', tags, stat: '', pairs: [], more: 0, body: '', kind: 'text' }, o,
             { tags, tag: tags.length ? tags[0].t : '', cls: tags.length ? tags[0].cls : '' }));
     };
-    const T_RENAMED = (wasName, nm) => ({ t: '改名', cls: 'yws-tag-renamed', note: '原名「' + wasName + '」→ 现在叫「' + nm + '」' });
+    /* ★W259：`T_RENAMED` 已提升到模块级（`rowsVsBase` 也要用它 —— 同一枚「改名」标签） */
     if (!pack || !pack.kind) return rows;
     /* ★★W22（W2b）：**小剧场包** —— 它不是「没有条目」，是**这一档本来就没有条目**。
        不给这一支的话，预览 / 待审会走到最后那句「这个包里没有条目。」—— 对剧场是**假话**（§D21 批过同族）。
@@ -10368,7 +10374,18 @@ function computePreview() {
 }
 /** ★C20③：**与官方旧版的对比** —— 逐条算"挑的这几条跟官方旧版哪里不一样"（新增 / 改写）。
  *  口径：按 identifier（退化成规范化名字）跟「官方旧版」那份配对；**跟旧版一字不差的条目不占地方**。
- *  没填官方旧版（或读不到那份）→ 返回**空数组**（调用方一个字都不渲染 → 不留空盒子）。纯只读。 */
+ *  没填官方旧版（或读不到那份）→ 返回**空数组**（调用方一个字都不渲染 → 不留空盒子）。纯只读。
+ *  ★★W259（作者 2026-10-29："还是预览的时候 改了名字改了开关的这个条目 在外面只显示新增"）——
+    **这就是"外面"那一块**：上传向导里的「跟官方旧版 <X> 比：」。
+    它原来只按 `identifier` / **名字**去官方旧版里找对应条目 ⇒ **改名之后按名字找不到 ⇒ 直接标「新增」**，
+    哪怕正文一字不差（实测：`Gmn3.8` → `Gmn4/3.8`，两条都是 342 字、逐字节相同）。
+    而且旧版那条**开关变了**也一个字都不说。
+    ⇒ 与 W257/W258 用**同一套判据**（作者：条目和正则、各预览界面都必须是同一把尺）：
+       ① 先按 id / 名字找；
+       ② 找不到就**按正文完全相同**在旧版里找一条（正文一样、名字不同 = 同一条改了名），
+          且要求"旧版里那条的名字在我挑的这批里确实没出现"（否则那是新增的另一条）；
+       ③ 找到之后再分：改名 ⇒ 「改名」；开关不同 ⇒ 「打开了/关闭了」；正文不同 ⇒ 「改写」；可**多枚并存**。
+    ★安全边界：正文必须非空且规范化后完全一致（不做相似度 —— 那会把"新写的一条很像的"吞掉）。 */
 function rowsVsBase(pack, w) {
     const out = [];
     if (!w || !w.baseName || !S.w.base) return out;
@@ -10376,20 +10393,51 @@ function rowsVsBase(pack, w) {
     try { picked = (w.picked || []).map(id => (S.w.byId || new Map()).get(id)).filter(Boolean); } catch (e) { return out; }
     const byId = new Map(S.w.base.entries.map(e => [String(e.identifier), e]));
     const byName = new Map(S.w.base.entries.map(e => [PM.normalizeName(e.name), e]));
+    /* ★W259：正文 → 官方旧版条目（用于"改名了但内容一模一样"这一档） */
+    const byText = new Map();
+    for (const e of S.w.base.entries) {
+        const t = PM.normalizeText(String(e.text || ''));
+        if (t && t.trim() && !byText.has(t)) byText.set(t, e);
+    }
+    /* 我挑的这批里**出现过的名字**（用来排除"旧版那条其实就是新增的另一条"） */
+    const pickedNames = new Set(picked.map(e => PM.normalizeName(String(e.name || ''))));
+    const pickedTexts = new Set(picked.map(e => PM.normalizeText(String(e.text || ''))).filter(t => t && t.trim()));
     for (const e of picked) {
-        const old = byId.get(String(e.identifier)) || byName.get(PM.normalizeName(e.name)) || null;
+        let old = byId.get(String(e.identifier)) || byName.get(PM.normalizeName(e.name)) || null;
+        /* ★W259 第二档：按正文认（改名场景）—— 只在按名字找不到时才走 */
+        let renamedFrom = '';
+        if (!old) {
+            const t = PM.normalizeText(String(e.text || ''));
+            const cand = (t && t.trim()) ? (byText.get(t) || null) : null;
+            if (cand && PM.normalizeName(cand.name) !== PM.normalizeName(e.name)
+                && !pickedNames.has(PM.normalizeName(cand.name))) {
+                old = cand;
+                renamedFrom = String(cand.name || '');
+            }
+        }
         if (!old) {
             out.push({
-                key: 'b:n:' + e.name, name: e.name, tag: '新增', cls: 'yws-tag-new', stat: '官方旧版里没有这条',
+                key: 'b:n:' + e.name, name: e.name, tags: [{ t: '新增', cls: 'yws-tag-new' }], tag: '新增', cls: 'yws-tag-new',
+                stat: '官方旧版里没有这条',
                 pairs: [{ mine: '（官方旧版里没有这一条 → 新增）', next: e.text }], more: 0,
             });
             continue;
         }
+        const renTag = renamedFrom ? [T_RENAMED(renamedFrom, String(e.name || ''))] : [];
+        /* 开关：我手上这条 vs 官方旧版那条（两边都拿得到明确布尔才判） */
+        const enMine = (typeof e.enabled === 'boolean') ? e.enabled : null;
+        const enOld = (typeof old.enabled === 'boolean') ? old.enabled : null;
+        const swDiff = (enMine !== null && enOld !== null && enMine !== enOld);
+        const swTag = swDiff ? [{ t: (enMine ? '打开了' : '关闭了'), cls: (enMine ? 'yws-tag-on' : 'yws-tag-off') }] : [];
         const d = changeBlocks(old.text, e.text, 6);
-        if (!d.total) continue;                       // 跟旧版一字不差 → 不占地方
+        /* ★W259：改名 / 改开关也算"有变化"，不能因为正文一字不差就整条跳过（以前就是被 continue 掉） */
+        if (!d.total && !renTag.length && !swTag.length) continue;    // 真的什么都没变 → 不占地方
+        const tags = renTag.concat(swTag.length ? swTag : (d.total ? [{ t: '改写', cls: 'yws-tag-patch' }] : []));
         out.push({
-            key: 'b:u:' + e.name, name: e.name, tag: '改写', cls: 'yws-tag-patch',
-            stat: '有 ' + numOf(d.total) + ' 处跟官方旧版不一样', pairs: d.blocks, more: d.more,
+            key: 'b:u:' + e.name, name: e.name, tags,
+            tag: tags.length ? tags[0].t : '', cls: tags.length ? tags[0].cls : '',   // 老形状兼容
+            stat: d.total ? ('有 ' + numOf(d.total) + ' 处跟官方旧版不一样') : '',
+            pairs: d.total ? d.blocks : [], more: d.total ? d.more : 0,
         });
     }
     return out;
@@ -15663,6 +15711,9 @@ export function initStoreDebug() {
         /* ★★W257：标签的**唯一渲染口**也出口（真页探针要证"屏幕上真写着「改名」"，
            必须走产品自己那枚函数，不能在探针里再拼一份 HTML —— 那就测了个假的）。 */
         rowTagsHtml,
+        /* ★★W259：`rowsVsBase`（跟官方旧版比那一块）也出口 —— 真页探针要证"屏幕上这一块画的是什么标签"，
+           必须调产品自己那枚函数，不能在探针里另写一份判定。 */
+        rowsVsBase,
         loadMine, loadPending, credImport, dateText, getOfficialPreset, getCardPreset,
         /* ★★W25A（第 9 条 + 协调者追加）：凭据的**唯一出口** = `credValue()`（就是那一串有效值）。
            ★`credsJson` 这个名字**留一个兼容别名**（指同一个函数）：历史探针/文档里到处是它，
