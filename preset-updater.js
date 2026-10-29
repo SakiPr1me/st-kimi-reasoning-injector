@@ -88,7 +88,7 @@ const EXT = 'preset_updater';
      （点它一下 = 排除，再点一下 = 收回；小标「已默认收进来 / 不要它」）；③**没点过的不同处按新版**。
      ⇒ chip 文案、结果行那句人话、正文顶上说明同步；**「按原顺序全收」那颗按钮删掉**（用途已被②整份覆盖）。
    读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md §修订；台账 §XXVIII） */
-const VERSION = '5.3.47';   // 更新器模块版本（随工具箱一起发布）
+const VERSION = '5.3.48';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -9617,9 +9617,30 @@ function storePackToPatch(pack, mine) {
     const conv = (e, i) => {
         if (!e || typeof e !== 'object') return null;
         const nm = String((e.entry && e.entry.name) || e.name || '');
+        /* ★★W234（作者："所以商店缝入不会改名字？啊？"）—— 包里带了**旧名字**（`wasName`，
+           由上传侧 W234 写入）= 这是"同一条改了名"。此时按**旧名字**去你手上找那一条，
+           找到了就走 update（就地改名 + 改内容），**绝不当成新增**（那会让你多出一条、旧的还在）。 */
+        const wasNameIn = String((e.entry && e.entry.wasName) || e.wasName || '');
+        const nkWas = wasNameIn ? PM.normalizeName(wasNameIn) : '';
         let mode = e.mode === 'patch' ? 'update' : (e.mode === 'remove' ? 'remove' : 'add');
+        let renamedFrom = '';
+        if (mode === 'add' && nkWas && have.has(nkWas)) {
+            /* 改名 + 你手上有旧名字那条 ⇒ 就地改（名字跟着变），不新增 */
+            mode = 'update';
+            renamedFrom = wasNameIn;
+        }
         // 同名 → 按"改你那条"（★名字为空的不算，空名字定位不到，交给内核的 add 走锚点）
         if (mode === 'add' && PM.normalizeName(nm) && have.has(PM.normalizeName(nm))) { mode = 'update'; sameName.push(nm); }
+        /* ★★W238（作者 W237 提的方案，我实现了、然后**验证发现不能用**，已撤回）：
+           他曾问"能否以这条目之外的内容进行比对，比如往前和往后比对几个，高度可信就知道它就是这一条"。
+           实现后实测（`e2e/w238-no-misfire.js`）：
+             · 「改名后的 C」与「全新写的一条、恰好也插在 B 后面」**邻居信息一字不差**
+               （after=条目B / afterText=条目B的正文 / indexInAuthor 相同）⇒ **无法区分**；
+             · 于是"真·新增"会被误判成"改 C"⇒ **悄悄覆盖用户手上那条 C**（比多一条严重得多：那是毁数据）。
+           ⇒ **撤回**：邻居信息只用来决定"插在哪"，**绝不用来认人**。
+           认人只能靠**上传时就已知的旧名字**（W234 的 `wasName`：上传时选了「官方旧版」才有），
+           或者整份预设上传（全部条目都在，能正常配对）。
+           ★这条结论已进纪律：**定位（插在哪）与认人（是哪一条）是两件事，绝不能拿前者当后者。** */
         const key = 'store:' + mode + ':' + PM.normalizeName(nm) + '#' + i;    // 稳定 key（逐条决策/逐处挑都用它）
         /* ★★W230：**开关差异必须单独出一条 `switch` op** —— 见 `haveEn` 那段注释。
            判据：包里这条的开关（在 `entry.enabled` 上，那才是能穿过服务端 `sanitizeEntry` 的位置）
@@ -9628,11 +9649,16 @@ function storePackToPatch(pack, mine) {
         const nk = PM.normalizeName(nm);
         const packEn = (e.entry && typeof e.entry.enabled === 'boolean') ? e.entry.enabled
             : (typeof e.enabled === 'boolean' ? e.enabled : null);
-        const myEn = haveEnabled(nk);
+        /* ★W234：改名场景要按**旧名字**去查你手上那条的开关（用新名字查不到 ⇒ 以为"判不了" ⇒ 不产 switch） */
+        const myEn = haveEnabled(renamedFrom ? PM.normalizeName(renamedFrom) : nk);
         const enDiff = (packEn !== null && myEn !== null && packEn !== myEn);
-        const swOp = () => ({ op: 'switch', key: key + '#switch', name: nm, wasName: nm, enabled: packEn, base: String(haveText(nk) ?? ''), place: e.place || {} });
+        const swOp = () => ({
+            op: 'switch', key: key + '#switch', name: nm, wasName: (renamedFrom || nm), enabled: packEn,
+            base: String(haveText(renamedFrom ? PM.normalizeName(renamedFrom) : nk) ?? ''), place: e.place || {},
+        });
         if (mode === 'update' && e.mode === 'patch') {
-            const u = { op: 'update', key, name: nm, wasName: nm, base: String(e.base ?? ''), next: String(e.next ?? ''), place: e.place || {} };
+            /* ★W234：`wasName` 优先用包里带回来的旧名字（改名场景），内核 `locate()` 会先按它找你手上那条 */
+            const u = { op: 'update', key, name: nm, wasName: (renamedFrom || nm), base: String(e.base ?? ''), next: String(e.next ?? ''), place: e.place || {} };
             return enDiff ? [u, swOp()] : [u];
         }
         /* ★★W197（作者报：从本预设抽出来的条目上传，缝入时那几条仍显示"改了内容"，而且展开是
@@ -9642,8 +9668,9 @@ function storePackToPatch(pack, mine) {
            思维链·Gmn 1970 字，三条全是 changed≥1；把 base 换成你本机原文后 changed=0）。
            ⇒ 老侧改用**你本机这一条的原文**（`haveText` 里按规范化名字查），查不到才退回空串。 */
         if (mode === 'update') {
-            const mineText = haveText(PM.normalizeName(nm));
-            const u = { op: 'update', key, name: nm, wasName: nm, base: (mineText != null ? mineText : ''), next: String((e.entry && e.entry.content) ?? e.next ?? ''), place: e.place || {}, entry: e.entry || null };
+            /* ★W234：改名场景按**旧名字**取你本机那条的原文（mkName 用 nm 会取不到 ⇒ base 空 ⇒ 整条算改动） */
+            const mineText = haveText(renamedFrom ? PM.normalizeName(renamedFrom) : PM.normalizeName(nm));
+            const u = { op: 'update', key, name: nm, wasName: (renamedFrom || nm), base: (mineText != null ? mineText : ''), next: String((e.entry && e.entry.content) ?? e.next ?? ''), place: e.place || {}, entry: e.entry || null };
             return enDiff ? [u, swOp()] : [u];
         }
         if (mode === 'remove') return [{ op: 'remove', key, name: nm, base: String(e.base ?? ''), place: e.place || {} }];

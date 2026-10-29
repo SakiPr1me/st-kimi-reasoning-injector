@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.95';
+const VERSION = '2.2.96';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -11528,16 +11528,27 @@ function buildPayload() {
     const baseByName = new Map(baseIdx ? baseIdx.entries.map(e => [PM.normalizeName(e.name), e]) : []);
     const entries = picked.map(e => {
         const old = baseById.get(e.identifier) || baseByName.get(PM.normalizeName(e.name)) || null;
+        /* ★★W234（作者 2026-10-28："所以商店缝入不会改名字？啊？"）—— 查出来的真问题：
+           **只改名字、正文一字不动**时，包里带的是新名字，而用户手上是旧名字 ⇒ 缝入侧按名字找不到
+           ⇒ 当成"新增" ⇒ **用户那边多出一条、旧的还在**（违反作者"都不能是新增"的要求）。
+           （"改名同时改了正文"那种能蒙对，是因为内核 `locate()` 名字不中时会按**正文相似度**兜底；
+             只改名时正文一字不差、这一步兜底也能配上 —— 但**包里 mode==='new' 时压根不走 locate**，
+             走的是 add ⇒ 必多一条。）
+           ⇒ 修：**把「官方旧版里它原来叫什么」一起写进包**（`entry.wasName`），
+             缝入侧据此认出"这是改名，不是新条目"，就地改名。
+           ★只在"官方旧版里有这条、且名字确实变了"时才写；没有官方旧版/没改名 ⇒ 键不存在（老包形状逐字节不变）。 */
+        const oldName = (old && String(old.name || '') && PM.normalizeName(old.name) !== PM.normalizeName(e.name))
+            ? String(old.name) : '';
         /* ★★W（AR4/§AV）：place 走**双向就近 + 映射回官方旧版**那一套（见 placeFor 的大注释）——
            `S.w.base` = 第一步选的「官方旧版」；`w.afterPick` = 用户手动指定的"插在哪条后面"。 */
         const place = placeOf(e, S.w, S.w.base, (w.afterPick || {})[String(e.identifier)] ? { name: (w.afterPick || {})[String(e.identifier)] } : null);
         if (old && PM.normalizeText(old.text) !== PM.normalizeText(e.text)) {
-            return { mode: 'patch', entry: { name: e.name }, base: old.text, next: e.text, place };
+            return { mode: 'patch', entry: Object.assign({ name: e.name }, oldName ? { wasName: oldName } : {}), base: old.text, next: e.text, place };
         }
         // ★修 ①：新增条目按 §4.1 原样搬**源条目的 8 个真实字段**（stFields 与缝入写盘共用同一份口径）
         // ★★D2：第二个实参 = **顺序表里的真实开关**（e.enabled；幽灵进不来、这里不会是 null）——
         //   有了它，"关着"的条目传出去在对方那边**还是关着**（收侧 preset-updater.js 的 conv() 已改成跟随）。
-        return { mode: 'new', entry: Object.assign({ name: e.name, content: e.text }, stFields(e.prompt, e.enabled)), place };
+        return { mode: 'new', entry: Object.assign({ name: e.name, content: e.text }, stFields(e.prompt, e.enabled), oldName ? { wasName: oldName } : {}), place };
     });
     const out = { kind: 'ywp-entry', v: 1, title, why: whyRaw, author, scope, entries, src: { presetName: w.srcName, presetFingerprint: null } };
     /* ★★W219（作者 2026-10-28："修改已经上传的内容的时候，选择条目里没有那些标识"）——
