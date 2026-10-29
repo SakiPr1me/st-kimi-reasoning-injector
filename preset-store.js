@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.108';
+const VERSION = '2.2.109';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -8309,6 +8309,44 @@ function diffPairsHtml(pairs, more) {
 function T_RENAMED(wasName, nm) {
     return { t: '改名', cls: 'yws-tag-renamed', note: '原名「' + wasName + '」→ 现在叫「' + nm + '」' };
 }
+/** ★★W260（作者 2026-10-29："明明点击缝入 里面能看到多标签显示，但是在预览里却只能显示一个标签。
+ *  标签直接与缝入时的内部标签同步不就行了？不管是商店的点开卡片预览还是编辑上传时的预览，
+ *  所有参数与缝入的时候对齐"）
+ *
+ *  **这是本问题的正解，也是我之前一直没照做的做法**：预览**不再自己判"有哪些维度变了"**，
+ *  直接把内核 `PM.changeTags(item)` 的结论翻译成本页的标签数组（`dim` 是稳定的机器键）。
+ *
+ *  ★为什么以前只显示一枚：我写的是 `renTag.concat(swTag.length ? swTag : [改变])` ——
+ *    `改开关` 会**替换** `改了内容`，所以最多一枚。缝入页那边是**逐枚并排**（名字 / 内容 / 开关各一枚）。
+ *  ⇒ 现在两处**同一序列、同一条数**，差异只在文案（预览用「改名/改变/打开了」，缝入用「改了名字/改了内容/改了开关」）。
+ *
+ *  @param {object} it 内核 `analyze()` 的 item（必须带 status/renamed/enabledDiff）
+ *  @param {object} opts `{ wasName, name }`（给「改名」那枚补上"原名 → 新名"的悬停说明）
+ *  @returns {Array<{t,cls,note?}>} 可直接交给 `rowTagsHtml()`
+ */
+function tagsFromKernel(it, opts) {
+    const tags = [];
+    let list = [];
+    try { list = PM.changeTags(it) || []; } catch (e) { list = []; }
+    for (const x of list) {
+        if (x.dim === 'name') {
+            tags.push(T_RENAMED(String((opts && opts.wasName) || '（原名未知）'), String((opts && opts.name) || '')));
+            continue;
+        }
+        if (x.dim === 'switch') {
+            /* 方向（打开了/关闭了）由内核的 `on` 给；拿不到就退「改了开关」（宁可少说，不猜） */
+            if (typeof x.on === 'boolean') tags.push({ t: (x.on ? '打开了' : '关闭了'), cls: (x.on ? 'yws-tag-on' : 'yws-tag-off') });
+            else tags.push({ t: '改了开关', cls: 'yws-tag-on' });
+            continue;
+        }
+        /* body 这一维 */
+        if (x.text === '改了内容') { tags.push({ t: '改变', cls: 'yws-tag-patch' }); continue; }
+        if (x.text === '两边一样') { tags.push({ t: '一致', cls: 'yws-tag-same' }); continue; }
+        if (x.text === '新版新增') { tags.push({ t: '新增', cls: 'yws-tag-new' }); continue; }
+        if (x.text === '只有我有') { tags.push({ t: '只有我有', cls: 'yws-tag-old' }); continue; }
+    }
+    return tags;
+}
 /** ★★W257：**一行上的标识**（唯一渲染口）。
  *  作者 2026-10-29 的硬要求："这里看到的标识就应该是点击缝入后看到的；允许两个或多个标识在两个预览界面看到"。
  *  ⇒ 所以这枚函数被**三个预览界面共用**：电商卡片的展开态（`togglePreviewCard` 那一块）、
@@ -8417,12 +8455,18 @@ function previewRows(pack, mine) {
                     const enMineP = (cur.enabled === null || cur.enabled === undefined) ? null : !!cur.enabled;
                     const enDiffP = (enWantP !== null && enMineP !== null && enWantP !== enMineP);
                     const swTagP = enDiffP ? [{ t: (enWantP ? '打开了' : '关闭了'), cls: (enWantP ? 'yws-tag-on' : 'yws-tag-off') }] : [];
-                    if (!d.total) {
-                        const rest = swTagP.length ? swTagP : (renTag.length ? [] : [{ t: '一致', cls: 'yws-tag-same' }]);
-                        add({ key: 'p:' + nm, name: nm, tags: renTag.concat(rest), stat: '', pairs: [] });
+                    /* ★★W260：**多维并存**（作者："标签直接与缝入时的内部标签同步"）——
+                       缝入页是「改了名字 / 改了内容 / 改了开关」**逐枚并排**；这里同理：
+                       名字 + 内容 + 开关各一枚，不再用开关把内容顶掉。
+                       ★只有"什么都没变"才退灰色「一致」（且已改名时不额外挂「一致」—— 改名才是重点）。 */
+                    const bodyTagP = d.total ? [{ t: '改变', cls: 'yws-tag-patch' }] : [];
+                    const tagsP = renTag.concat(bodyTagP, swTagP);
+                    if (!tagsP.length) {
+                        add({ key: 'p:' + nm, name: nm, tags: [{ t: '一致', cls: 'yws-tag-same' }], stat: '', pairs: [] });
+                    } else if (!d.total) {
+                        add({ key: 'p:' + nm, name: nm, tags: tagsP, stat: '', pairs: [] });
                     } else {
-                        add({ key: 'p:' + nm, name: nm,
-                            tags: renTag.concat(swTagP.length ? swTagP : [{ t: '改变', cls: 'yws-tag-patch' }]),
+                        add({ key: 'p:' + nm, name: nm, tags: tagsP,
                             stat: '有 ' + numOf(d.total) + ' 处不一样',
                             pairs: d.blocks, more: d.more });
                     }
@@ -8449,14 +8493,17 @@ function previewRows(pack, mine) {
                     const enMine = (cur.enabled === null || cur.enabled === undefined) ? null : !!cur.enabled;
                     const enDiff = (enWant !== null && enMine !== null && enWant !== enMine);
                     const swTag = enDiff ? [{ t: (enWant ? '打开了' : '关闭了'), cls: (enWant ? 'yws-tag-on' : 'yws-tag-off') }] : [];
-                    if (!d.total) {
-                        /* 改名 + 开关变 ⇒ 两枚都要（作者要的"多标识"）；只改名 ⇒ 只给「改名」；
-                           都没变 ⇒ 灰色「一致」（W205 立的口径）。 */
-                        const rest = swTag.length ? swTag : (renTag.length ? [] : [{ t: '一致', cls: 'yws-tag-same' }]);
-                        add({ key: 'n:' + nm, name: nm, tags: renTag.concat(rest), stat: '', pairs: [] });
+                    /* ★★W260：**多维并存**（名字 + 内容 + 开关各一枚，与缝入页同一序列同一条数）。
+                       ★"什么都没变"才退灰色「一致」（已改名时不额外挂「一致」）。 */
+                    const bodyTag = d.total ? [{ t: '改变', cls: 'yws-tag-patch' }] : [];
+                    const tagsN = renTag.concat(bodyTag, swTag);
+                    if (!tagsN.length) {
+                        /* ★W205（作者）：一字不差的条目也要有**灰色「一致」**标识（原来什么都不显示）。 */
+                        add({ key: 'n:' + nm, name: nm, tags: [{ t: '一致', cls: 'yws-tag-same' }], stat: '', pairs: [] });
+                    } else if (!d.total) {
+                        add({ key: 'n:' + nm, name: nm, tags: tagsN, stat: '', pairs: [] });
                     } else {
-                        add({ key: 'u:' + nm, name: nm,
-                            tags: renTag.concat(swTag.length ? swTag : [{ t: '改变', cls: 'yws-tag-patch' }]),
+                        add({ key: 'u:' + nm, name: nm, tags: tagsN,
                             stat: '有 ' + numOf(d.total) + ' 处不一样', pairs: d.blocks, more: d.more });
                     }
                 }
@@ -8531,39 +8578,40 @@ function previewRows(pack, mine) {
                （上传侧一律写 'new'），完全不看你手上有没有这条 ⇒ 自己上传的东西全被标成新增。
                改成与条目侧同一口径：先看 mode（删/改/开关是包明确声明的）；new 再看本地有没有同名/同查找式：
                有且内容一致 ⇒ 不标标签；有但内容不同 ⇒ 改这条；真的没有 ⇒ 新增。 */
-            /* ★W206：标签优先级 = 删/改（包明确声明）→ 没有这条（新增）→ **开关变了（打开了/关闭了）** → 正文变了（改这条）→ 一致。 */
-            const tag = (function () {
-                if (mode === 'remove') return '删这条';
-                /* ★★★W253（作者："我是在**编辑**里面的，按理说应该重新上传（但没上传），
-                   而我**预览里应该看起来像是上传之后的比对**"）—— **真 BUG，且是 W218 只修了一半**：
-                   这一行原来 `if (mode === 'patch') return '改变';` —— 只要包里 mode 是 patch 就**无条件**标「改变」，
-                   **完全不看当前对比那份是否真的一样**。
-                   而 `mode:'patch'` 是**上传那一刻**相对"上一版包"算出来的（W232/W248 加的）；
-                   编辑场景里"包"= 本机当前内容、对比那份也 = 本机同一份 ⇒ **本来就该「一致」**。
-                   这也是 W251 那个假「空行」的同一根因（假"改变" + 替换内容相同 ⇒ 被当成空行差异）。
-                   ★修法与**条目侧 W218 逐条同口径**（那次也是"patch 无条件标改变"）：
-                     没有这条 ⇒「新增」；只差开关 ⇒「打开了/关闭了」；正文一样 ⇒「一致」；真不一样才「改变」。 */
-                if (mode === 'patch') {
-                    if (!old) return '新增';
-                    if (rxSwitchDiff) return rxWantOn ? '打开了' : '关闭了';
-                    return rxBodySame(old, reg) ? '一致' : '改变';
-                }
-                if (mode === 'switch') return rxWantOn ? '打开了' : '关闭了';
-                if (!old) return '新增';
-                if (rxSwitchDiff) return rxWantOn ? '打开了' : '关闭了';
-                return rxBodySame(old, reg) ? '一致' : '改变';
+            /* ★★W260（作者："标签直接与缝入时的内部标签同步"）—— **正则是同一把尺**：
+               原来这里返回**单个** `tag`（开关会顶掉「改变」）⇒ 最多一枚。
+               现在按**维度**给（名字 / 内容 / 开关各一枚，与缝入页同序），由下面拼成数组。 */
+            const dims = (function () {
+                const o = { name: !!rxRenamed, body: false, sw: false };
+                if (mode === 'remove') return { removed: true, o };
+                if (!old) return { added: true, o };                      // 我手上真没有 ⇒ 新增
+                /* 正文（regexBodySig，10 个字段）与开关（disabled）**各判各的**，互不顶替 */
+                o.body = !rxBodySame(old, reg);
+                o.sw = rxSwitchDiff;
+                return { o };
             })();
-            /* ★W205（作者）：一字不差的正则也要有**灰色**标识；开关变化标「打开了 / 关闭了」。 */
-            const finalTag = tag;   // ★W206：开关标签已在上面的 tag 里判完（不再二次覆盖）
+            /* 兼容：老探针/老代码可能读 `tag`/`cls` —— 给第一枚（与改前"单枚"语义一致） */
+            const finalTag = dims.removed ? '删这条'
+                : dims.added ? '新增'
+                    : (dims.o.name ? '改名'
+                        : (dims.o.sw ? (rxWantOn ? '打开了' : '关闭了')
+                            : (dims.o.body ? '改变' : '一致')));
             const clsOf = (t) => t === '删这条' ? 'yws-tag-old'
                 : (t === '改变' ? 'yws-tag-patch'
                     : (t === '一致' ? 'yws-tag-same'
-                        : (t === '关闭了' ? 'yws-tag-off' : (t === '打开了' ? 'yws-tag-on' : 'yws-tag-new'))));
-            /* ★★W257：**正则侧也允许两枚标签并存**（与条目侧同一个口径、同一个 `rowTagsHtml()` 出口）——
-               「改名」+「改变」/「改名」+「打开了」都要看得见。只改名（正文与开关都没动）时
-               主标签就是「改名」，不再给「一致」（"叫另一个名字"才是这条的重点）。 */
-            const rxTags = (rxRenamed ? [T_RENAMED(rxRenamed, nm)] : []).concat(
-                (finalTag === '一致' && rxRenamed) ? [] : [{ t: finalTag, cls: clsOf(finalTag) }]);
+                        : (t === '关闭了' ? 'yws-tag-off' : (t === '打开了' ? 'yws-tag-on'
+                            : (t === '改名' ? 'yws-tag-renamed' : 'yws-tag-new')))));
+            /* ★★W260：**逐维并排**（名字 → 内容 → 开关，与缝入页 W108/R22 同序） */
+            const rxTags = (function () {
+                if (dims.removed) return [{ t: '删这条', cls: clsOf('删这条') }];
+                if (dims.added) return [{ t: '新增', cls: clsOf('新增') }];
+                const out = [];
+                if (rxRenamed) out.push(T_RENAMED(rxRenamed, nm));
+                if (dims.o.body) out.push({ t: '改变', cls: clsOf('改变') });
+                if (dims.o.sw) out.push({ t: (rxWantOn ? '打开了' : '关闭了'), cls: clsOf(rxWantOn ? '打开了' : '关闭了') });
+                if (!out.length) out.push({ t: '一致', cls: clsOf('一致') });
+                return out;
+            })();
             add({
                 key: 'rx:' + nm, name: nm, tags: rxTags,
                 /* ★W204（作者：这些说明大可不必）—— 正则行只留标签本身，后面不缀解释句。 */
@@ -8668,14 +8716,17 @@ function previewRows(pack, mine) {
                         nameChanged = true;
                     }
                 }
-                const renTag = nameChanged ? [T_RENAMED(wasName || '（原名未知）', nm)] : [];
+                /* ★★W260：改名那一枚**由内核的 tagsFromKernel 统一给**（不再自己拼 renTag）——
+                   见 `tagsFromKernel()` 的注释：预览与缝入页必须同一序列、同一条数。 */
+                const renTag = (nameChanged || it.renamed === true)
+                    ? [T_RENAMED(wasName || '（原名未知）', nm)] : [];
                 const swTag = (it.enabledDiff === true)
                     ? [{ t: ((it.next && it.next.enabled !== false) ? '打开了' : '关闭了'),
                         cls: ((it.next && it.next.enabled !== false) ? 'yws-tag-on' : 'yws-tag-off') }] : [];
                 /* ① 真·新增：内核说这条只在新版里有、而且不是改名认领过的 */
                 if (!it.mine && !nameChanged) {
                     added++;
-                    otherRows.push({ key: 'a:' + nm, name: nm, tags: [{ t: '新增', cls: 'yws-tag-new' }],
+                    otherRows.push({ key: 'a:' + nm, name: nm, tags: tagsFromKernel(it, { wasName, name: nm }),
                         stat: '你的预设里没有这条', pairs: [{ mine: '（新增）', next: String(it.next.text || '') }] });
                     continue;
                 }
@@ -8688,10 +8739,14 @@ function previewRows(pack, mine) {
                     } else { same++; }
                     continue;
                 }
-                /* ③ 有实质变化（改正文 / 改开关）—— 改名可与它们并存，且**优先排前面** */
+                /* ③ 有实质变化（改正文 / 改开关）—— **多维并存**（W260：以前 `swTag` 会把「改变」替换掉，
+                   所以最多一枚；现在全部来自内核 changeTags，名字/内容/开关各一枚都能同时出现） */
                 changed++;
+                const kTags = tagsFromKernel(it, { wasName, name: nm });
+                /* ★兜底认出来的改名，内核 item 上可能没有 `renamed` 位 ⇒ 保证「改名」那枚不丢 */
+                if (renTag.length && !kTags.some(t => t.t === '改名')) kTags.unshift(renTag[0]);
                 const row = { key: 'u:' + nm, name: nm,
-                    tags: renTag.concat(swTag.length ? swTag : [{ t: '改变', cls: 'yws-tag-patch' }]),
+                    tags: kTags.length ? kTags : [{ t: '改变', cls: 'yws-tag-patch' }],
                     stat: d.total ? ('有 ' + numOf(d.total) + ' 处不一样') : '',
                     pairs: d.total ? d.blocks : [], more: d.total ? d.more : 0 };
                 if (renTag.length) { renamedCnt++; renamedRows.push(row); }   // ★W258：带改名的也算进 renamedCnt（摘要要报）
@@ -15711,6 +15766,9 @@ export function initStoreDebug() {
         /* ★★W257：标签的**唯一渲染口**也出口（真页探针要证"屏幕上真写着「改名」"，
            必须走产品自己那枚函数，不能在探针里再拼一份 HTML —— 那就测了个假的）。 */
         rowTagsHtml,
+        /* ★★W260：预览侧把内核结论翻译成标签的那枚函数也出口 ——
+           真页探针要证"屏幕上真的画出三枚"，必须走产品自己这枚（不在探针里再拼一份）。 */
+        tagsFromKernel,
         /* ★★W259：`rowsVsBase`（跟官方旧版比那一块）也出口 —— 真页探针要证"屏幕上这一块画的是什么标签"，
            必须调产品自己那枚函数，不能在探针里另写一份判定。 */
         rowsVsBase,

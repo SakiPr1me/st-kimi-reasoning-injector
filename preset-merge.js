@@ -117,6 +117,40 @@ export function normalizeText(s) {
         .replace(/^\s+/, '');
 }
 
+/** ★★W260（作者 2026-10-29："明明点击缝入 里面能看到多标签显示，但是在预览里（不管是商店的点开卡片预览
+ *  还是编辑上传时的预览）却只能显示一个标签。标签直接与缝入时的内部标签同步不就行了？")
+ *
+ *  作者判对了病根：**缝入页的标签与预览的标签是两套写法**。
+ *  缝入页 `preset-updater.js` 的 `statusLabels(it)` 读内核 item 的三个维度、**逐枚并排**：
+ *      改了名字 / 改了内容 / 改了开关   （顺序：名字 → 内容 → 开关，W108/R22 裁定）
+ *  而预览侧我一直在自己写 `renTag.concat(swTag.length ? swTag : [{t:'改变'}])` ——
+ *  `switch` **替换**了 `改变` ⇒ 只可能有一枚。
+ *
+ *  ⇒ 修法（作者原话"直接同步"）：把这份判定**搬进内核**，作为**唯一来源**；
+ *    缝入页与预览（四个判定口）全部读它，谁都不许再自己拼。
+ *  @returns {Array<{dim:'name'|'body'|'switch', text:string, delta:'+'|'-'|'?'}>}
+ *    `dim` 是稳定的机器可读键（预览映射到自己的 CSS 类用）；`text` 是人话（与缝入页逐字一致）。
+ *  ★纯读 item，不碰任何别的状态；`item` 为空 ⇒ 空数组。 */
+export function changeTags(item) {
+    if (!item) return [];
+    const out = [];
+    /* 只有一方有：这是"新增/只有我有"，不拆维度（与缝入页 statusLabels 同一口径） */
+    if (!item.mine || !item.next) {
+        out.push({ dim: 'body', text: item.status === STATUS.ONLY_NEXT ? '新版新增' : '只有我有', delta: item.status === STATUS.ONLY_NEXT ? '+' : '-' });
+        return out;
+    }
+    const MERGE = [STATUS.AUTHOR_ONLY_CHANGED, STATUS.MINE_ONLY_CHANGED, STATUS.BOTH_CHANGED, STATUS.MINE_ONLY_CHANGED_2WAY];
+    if (item.renamed) out.push({ dim: 'name', text: '改了名字', delta: '?' });
+    if (MERGE.indexOf(item.status) >= 0) out.push({ dim: 'body', text: '改了内容', delta: '?' });
+    if (item.enabledDiff) {
+        /* 方向能判就带上（预览要写「打开了 / 关闭了」） */
+        const on = !!(item.next && item.next.enabled !== false);
+        out.push({ dim: 'switch', text: '改了开关', delta: '?', on });
+    }
+    if (!out.length) out.push({ dim: 'body', text: '两边一样', delta: '=' });
+    return out;
+}
+
 /** 是不是"空条目/纯分隔符"：空、只有空白、或只有横线/等号/竖线之类的分隔符
  *  （预设里常拿 '---'、'════' 这种条目当视觉分隔，它们不承载内容，
  *    对比时不该被当成"内容变了"来打扰用户） */

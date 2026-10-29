@@ -88,7 +88,7 @@ const EXT = 'preset_updater';
      （点它一下 = 排除，再点一下 = 收回；小标「已默认收进来 / 不要它」）；③**没点过的不同处按新版**。
      ⇒ chip 文案、结果行那句人话、正文顶上说明同步；**「按原顺序全收」那颗按钮删掉**（用途已被②整份覆盖）。
    读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md §修订；台账 §XXVIII） */
-const VERSION = '5.3.51';   // 更新器模块版本（随工具箱一起发布）
+const VERSION = '5.3.52';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -2116,19 +2116,23 @@ function installEscShield() {
  *  顺序 = **名字 → 内容 → 开关**（★W108 按 R22 ①-2 裁定改成"与图例/筛选同序"——
  *  同一维度全站一个次序；原"内容→名字"那个顺序作废，连带测试台的按字断言同步）。 */
 function statusLabels(it) {
-    const S2 = PM.STATUS;
-    const MERGE = [S2.AUTHOR_ONLY_CHANGED, S2.MINE_ONLY_CHANGED, S2.BOTH_CHANGED, S2.MINE_ONLY_CHANGED_2WAY];
     const out = [];
     if (!it) return out;
-    if (!it.mine || !it.next) {
-        out.push(it.status === S2.ONLY_NEXT ? { text: '新版新增', cls: 'ywpu-st-onlyNext' } : { text: '只有我有', cls: 'ywpu-st-onlyMine' });
-        return out;
+    /* ★★W260（作者 2026-10-29："明明点击缝入 里面能看到多标签显示，但是在预览里却只能显示一个标签。
+       标签直接与缝入时的内部标签同步不就行了？"）——
+       这份判定的**唯一来源已搬到内核** `PM.changeTags(item)`，缝入页与预览（四处判定口）全都读它，
+       谁都不许再自己拼。这里只负责把内核给的 `dim` 映射成本页的 CSS 类；
+       **文案逐字不变**（改了名字 / 改了内容 / 改了开关 / 两边一样 / 新版新增 / 只有我有），老断言零影响。
+       ★顺序也由内核给（名字 → 内容 → 开关，W108/R22 裁定），这里不再自己排。 */
+    const tags = PM.changeTags(it);
+    for (const t of tags) {
+        if (t.dim === 'name') { out.push({ text: '改了名字', cls: 'ywpu-st-renamed' }); continue; }
+        if (t.dim === 'switch') { out.push({ text: '改了开关', cls: 'ywpu-st-switch' }); continue; }
+        if (t.text === '改了内容') { out.push({ text: '改了内容', cls: 'ywpu-st-both' }); continue; }
+        if (t.text === '两边一样') { out.push({ text: '两边一样', cls: 'ywpu-st-same' }); continue; }
+        if (t.text === '新版新增') { out.push({ text: '新版新增', cls: 'ywpu-st-onlyNext' }); continue; }
+        out.push({ text: '只有我有', cls: 'ywpu-st-onlyMine' });
     }
-    /* ★W108-①-2：推入序 = 名字 → 内容 → 开关（与图例/筛选同序；R22 裁定） */
-    if (it.renamed) out.push({ text: '改了名字', cls: 'ywpu-st-renamed' });
-    if (MERGE.indexOf(it.status) >= 0) out.push({ text: '改了内容', cls: 'ywpu-st-both' });
-    if (it.enabledDiff) out.push({ text: '改了开关', cls: 'ywpu-st-switch' });
-    if (!out.length) out.push({ text: '两边一样', cls: 'ywpu-st-same' });
     return out;
 }
 /** 兼容壳：`badge` / `cls` = **第一枚**徽标（顺序页与条目面板那两处照旧只挂一枚 ——
