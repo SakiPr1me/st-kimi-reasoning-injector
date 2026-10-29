@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.96';
+const VERSION = '2.2.97';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -11621,7 +11621,17 @@ function buildPayload() {
                     const oldDis = (old.disabled === true);
                     const newDis = (next.disabled === true);
                     if (!sameBody) {
-                        return { mode: 'patch', base: { ...old }, next: { ...next }, place };
+                        /* ★★W248（作者 2026-10-29："以后有什么问题你要**同时修复正则和条目**，不能修一半"）——
+                           **这一行原来发的是 `{ mode:'patch', base, next }`，没有 `reg`**，
+                           而服务端 `sanitizeRegexPack()` 第一道就是
+                           `if (!it.reg || typeof it.reg !== 'object') return { error: '第 N 条正则缺 reg' }`
+                           ⇒ **整个上传 400 被拒**（实测：真 worker 回 400「正则部分不合法：第 1 条正则缺 reg」）。
+                           也就是说：W226 之后只要"改了正则内容 + 点编辑并更新"，**上传直接失败** —— 比重复更严重。
+                           ⇒ 修：**`reg` 永远带上**（内容用新的，语义仍是"改原来那条"），另把旧内容放在 `base` 里
+                             （读侧 `regexOpOf` 的 patch 分支本来就读 `r.next || r.reg`，`base` 用来做三方对比）。
+                           ★与条目侧对齐：条目那边 `mode:'patch'` 发的是 `{ entry:{name}, base, next }`，
+                             服务端对条目走的是**另一套**校验（允许带 base/next），所以条目一直没炸。 */
+                        return { mode: 'patch', base: { ...old }, next: { ...next }, reg: { ...next }, place };
                     }
                     if (oldDis !== newDis) {
                         return { mode: 'switch', reg: { ...next }, enabled: !newDis, place };
@@ -11629,6 +11639,26 @@ function buildPayload() {
                 }
                 return { mode: 'new', reg: next, place };
             });
+            /* ★★W247（作者："**除了正则，条目也不会出现这个 BUG 吧**？以后有问题要同时修复正则和条目"）——
+               **正则改名也要像条目那样带上旧名字**（条目的 `entry.wasName` 是 W234 加的，正则这一侧以前漏了）。
+               场景：作者把「杀感叹号1」改了个名字再上传 ⇒ 用户那边按新名字找不到 ⇒ 当成新增 ⇒ **多一条**。
+               ⇒ 按"上一版包里同名 / 同 id 的那条"补 `wasName`（只在名字确实变了时写）。
+               ★服务端 `sanitizeRegexReg()` 对**未知字段原样保留** ⇒ `reg.wasName` 能穿过（已用真 worker 验过）。 */
+            try {
+                const byIdBase = new Map();
+                for (const it of (Array.isArray(S.wiz && S.wiz.rxBase) ? S.wiz.rxBase : [])) {
+                    const rg = (it && (it.reg || it.next)) || null;
+                    if (rg && rg.id) byIdBase.set(String(rg.id), rg);
+                }
+                for (const one of out.regexes) {
+                    if (!one || one.mode !== 'new' || !one.reg) continue;
+                    const rg = one.reg;
+                    const prev = byIdBase.get(String(rg.id || '')) || null;
+                    const oldNm = (prev && String(prev.scriptName || '') && PM.normalizeName(prev.scriptName) !== PM.normalizeName(rg.scriptName))
+                        ? String(prev.scriptName) : '';
+                    if (oldNm) one.reg = Object.assign({}, rg, { wasName: oldNm });
+                }
+            } catch (e) { warn('正则补 wasName 失败（照旧上传）', e); }
             out.regexOrder = rxAll.map(r => String(r.id || '')).filter(Boolean);
         }
     } catch (e) { warn('带上正则失败（照旧上传条目）', e); }

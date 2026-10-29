@@ -88,7 +88,7 @@ const EXT = 'preset_updater';
      （点它一下 = 排除，再点一下 = 收回；小标「已默认收进来 / 不要它」）；③**没点过的不同处按新版**。
      ⇒ chip 文案、结果行那句人话、正文顶上说明同步；**「按原顺序全收」那颗按钮删掉**（用途已被②整份覆盖）。
    读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md §修订；台账 §XXVIII） */
-const VERSION = '5.3.49';   // 更新器模块版本（随工具箱一起发布）
+const VERSION = '5.3.50';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -9740,6 +9740,20 @@ function storePackToPatch(pack, mine) {
         if (!op || op.op !== 'regex-add') return op;
         const reg = op.reg || null;
         if (!reg) return op;
+        /* ★★W247（作者："以后有什么问题你要**同时修复正则和条目**，不能修一半"）——
+           **正则改名**：包里带了旧名字（`reg.wasName`，由上传侧 W247 写入）= 这是同一条改了名。
+           此时按**旧名字**去找你手上那条（条目侧 W234/W240 就是这么干的），找到 ⇒ 走 update 就地改名，**不新增**。
+           ★服务端 `sanitizeRegexReg()` 对未知字段原样保留 ⇒ `reg.wasName` 能穿过。 */
+        const wasNm = String((reg && reg.wasName) || '');
+        const byWas = wasNm ? (myRxByName.get(PM.normalizeName(wasNm)) || null) : null;
+        if (byWas && PM.normalizeName(byWas.scriptName) !== PM.normalizeName(String(reg.scriptName || ''))) {
+            return {
+                op: 'regex-update', key: String(op.key || ('store:regex-update#' + i)),
+                name: String(reg.scriptName || op.name || ''),
+                wasName: String(byWas.scriptName || ''),
+                base: { ...byWas }, next: { ...reg }, rename: !(PM.regexBodySig(byWas) === PM.regexBodySig(reg)), place: op.place || {},
+            };
+        }
         const mineRx = myRxById.get(String(reg.id || '')) || myRxByName.get(PM.normalizeName(String(reg.scriptName || ''))) || null;
         if (!mineRx) return op;                                   // 真·新增
         let bodySame = false;
