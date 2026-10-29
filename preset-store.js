@@ -149,7 +149,7 @@ const EXT = 'preset_store';
       两颗 + 一行"当前在推什么（时间）"。推 / 取消 = `POST /notice`（`x-review-key`，与 `/card/del` 同一套闸）；
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
-const VERSION = '2.2.116';
+const VERSION = '2.2.117';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -8807,9 +8807,57 @@ function previewRows(pack, mine) {
                 else { if (shownChg >= MAXB) continue; shownChg++; }
                 add(r);
             }
+            /* ★★W278（作者 2026-10-29 报："我用余温V1028 自己更新了一个正则（杀感叹号1），然后把它修改更新到
+               已经上传的整份预设V1028；然后用另一个预设 余温V1028（1）（名字后面多个1、正则没改）点开商店里这份预设的预览，
+               下面显示**完全一样**，但点缝入之后又是正常的"）——**真 BUG**：这一支原来**只比条目、压根没比正则**
+               （整份包的正则就躺在 `pack.preset.extensions.regex_scripts` 里，一直读得到，只是没人比）。
+               ⇒ 而缝入侧（`storePackToPatch` / 更新器）是**比正则的** ⇒ 两套尺子、两个结论，正是作者看到的矛盾。
+               ★这里补上：按**名字**配对（正则的身份就是名字），逐条判"新增 / 改变 / 一致"，红蓝用内核权威 `regexBodySig`
+                 （10 个字段，与更新器同一把尺）；开关差异标「打开了/关闭了」（与条目侧同口径，W206 立的）。
+               ★正则行**排在条目行之后**（作者的口径是"条目是主角"），同样受 MAXB 预算约束；
+                 但**只列有差异的**（一致的不占地方，与条目侧一致）。 */
+            try {
+                const minePresetForRx = readPreset(mine.name, { raw: true });
+                const mineRxList = (PM.getRegexList(minePresetForRx) || []).map(x => PM.normalizeRegexScript(x));
+                const nextRxList = (PM.getRegexList(p) || []).map(x => PM.normalizeRegexScript(x));
+                const myRxByName = new Map();
+                for (const r of mineRxList) myRxByName.set(PM.normalizeName(String(r.scriptName || '')), r);
+                let rxAdd = 0, rxChg = 0, rxSame = 0, rxShown = 0;
+                const rxBodySame = (a, b) => {
+                    if (!a || !b) return false;
+                    try { return PM.regexBodySig(a) === PM.regexBodySig(b); } catch (e) { return false; }
+                };
+                for (const reg of nextRxList) {
+                    const nm2 = String(reg.scriptName || '（没名字的正则）');
+                    const old2 = myRxByName.get(PM.normalizeName(nm2)) || null;
+                    if (!old2) {
+                        rxAdd++;
+                        if (rxShown < MAXB) { rxShown++; add({ key: 'rx:a:' + nm2, name: nm2,
+                            tags: [{ t: '新增', cls: 'yws-tag-new' }], stat: '你的预设里没有这条正则',
+                            pairs: [{ mine: '（你的预设里没有这条正则）', next: String(reg.findRegex || '') }] }); }
+                        continue;
+                    }
+                    const swDiff2 = (!(old2.disabled === true)) !== (!(reg.disabled === true));
+                    const bodySame2 = rxBodySame(old2, reg);
+                    if (bodySame2 && !swDiff2) { rxSame++; continue; }   // 一字不差、开关也没动 ⇒ 不占地方
+                    rxChg++;
+                    if (rxShown >= MAXB) continue;
+                    rxShown++;
+                    const wantOn2 = !(reg.disabled === true);
+                    const tags2 = swDiff2
+                        ? [{ t: (wantOn2 ? '打开了' : '关闭了'), cls: (wantOn2 ? 'yws-tag-on' : 'yws-tag-off') }]
+                        : [{ t: '改变', cls: 'yws-tag-patch' }];
+                    add({ key: 'rx:u:' + nm2, name: nm2, tags: tags2,
+                        stat: bodySame2 ? '' : '查找式/替换内容跟你的不一样',
+                        pairs: bodySame2 ? [] : [{ mine: String(old2.findRegex || ''), next: String(reg.findRegex || '') },
+                            { mine: String(old2.replaceString || ''), next: String(reg.replaceString || '') }] });
+                }
+                if (rxAdd || rxChg) rows.rxSummary = '正则：多了 ' + numOf(rxAdd) + ' 条、改了 ' + numOf(rxChg) + ' 条、' + numOf(rxSame) + ' 条一样';
+            } catch (eRx) { warn('整份预设的正则对比算不出来（条目那块照旧）', eRx); }
             if (!rows.length) rows.push({ key: 'p', name: '整份预设', tag: '整份', cls: '', kind: 'text', stat: '跟你的那份一样（缝了没变化）', pairs: [] });
             rows.summary = '这是作者上传的一整份预设（' + countText(n, '个条目') + '）：比你的那份多了 ' + numOf(added) + ' 个条目、改了 ' + numOf(changed) + ' 条' +
                 (renamedCnt ? ('、' + numOf(renamedCnt) + ' 条只改了名字') : '') + '、' + numOf(same) + ' 条一样';
+            if (rows.rxSummary) rows.summary = String(rows.summary) + '；' + rows.rxSummary;   // ★W278：正则那摊也要报
             return rows;
         } catch (e) {
             warn('整份预设的初步对比算不出来（照旧能给更新器）', e);
