@@ -843,6 +843,60 @@ export function matchPresets(mineIdx, nextIdx, { unpairKeys = [] } = {}) {
         }
     }
 
+    /* ★★W256（作者 2026-10-29："我缝入 余温V1008（云端 2026-10-08)，发现仅仅是改名的文件 它变成 新增"）——
+       实况（用作者的三份真实文件复现，`😺尾部2·Gmn4/3.8(择1)` / `😺尾部2·Gmn3.8(择1)`，正文**都是 342 字且一字不差**）：
+         · 我手上/对比的那份（10-08）里只有 **Gmn3.8**
+         · 包里那版（10-09）里**两条都在**：`Gmn3.8`（旧的那条没删、关着）+ `Gmn4/3.8`（缝进来的、开着）
+         · 第①级按名字把 `Gmn3.8` ↔ `Gmn3.8` 配走了（正确，它们确实是同一条）
+         · 于是第②级「按正文完全一致认作改名」**没有机会**：它只在"两侧都还没配上"的剩余里找
+         ⇒ `Gmn4/3.8` 落进 `onlyNext` ⇒ 界面上就是「新版新增」，而它其实只是把旁边那条**改了个名字**。
+       ★为什么不能在 ② 之前处理：那会破坏"按名字配上是最高优先级"（同名同内容的两条必须配在一起）。
+         ⇒ 修在**配对全部结束之后**补一层"校正"：一条 `onlyNext` 的正文如果与**某个已配上那一对的 next 侧**
+           一字不差，说明它是那一条的**改名分身**（同一份内容在包里出现了两次，一次叫旧名一次叫新名）。
+           这时把它认作改名、与那一对里**我的那一侧**配成一对（`renamedKind='exact'`）。
+       ★安全边界（宁可不配也不配错）：
+         · 只认**归一化后完全一致**的正文（`normalizeText`），不做相似度（0.99 都不行 —— 那会把"新写的一条很像的"吞掉）；
+         · 空正文/纯空白不参与（`isEmptyEntry`）—— 空条目之间本来就无从证明是同一份；
+         · 同名的那一对**必须是我这份里也存在的名字**（否则等于拿你手上没有的东西去改名）；
+         · 一条 `onlyNext` 只能认领一对，一对也只能被认领一次（`consumed` 集合）。
+       作者要的口径："仅仅是改名的文件，不该变成新增"。 */
+    {
+        const consumed = new Set();                 // 已被认领过的 matched 对（防一条 next 抢多对）
+        const leftoverNext = nextIdx.entries.filter(x => !usedNext.has(x.key) && !isEmptyEntry(x.text));
+        if (leftoverNext.length) {
+            const byText = new Map();               // 归一化正文 → [matched 下标]
+            matched.forEach((p, i) => {
+                const t = normalizeText(p && p.next ? p.next.text : '');
+                if (!t || isEmptyEntry(t)) return;
+                if (!byText.has(t)) byText.set(t, []);
+                byText.get(t).push(i);
+            });
+            for (const ne of leftoverNext) {
+                if (usedNext.has(ne.key)) continue;
+                const t = normalizeText(ne.text);
+                if (!t || isEmptyEntry(t)) continue;
+                const cands = byText.get(t) || [];
+                const i = cands.find(k => !consumed.has(k));
+                if (i === undefined) continue;
+                const p = matched[i];
+                /* 只在"名字确实不同"时才认改名（同名的那一对本来就已经配上了，走不到这里）。 */
+                if (!p || !p.mine || !p.next) continue;
+                if (normalizeName(p.mine.name) === normalizeName(ne.name)) continue;
+                consumed.add(i);
+                usedNext.add(ne.key);
+                /* 就地换上：我的那一侧保持不变，新版那一侧换成这条改名分身。
+                   ★原配对 `p.next` 的 key 从 `matched` 里消失 ⇒ 下面 `onlyNext` 不会再把它算进新增
+                     （`usedNext` 里仍留着它 —— 它已作为"旧名字那条"被这一对吸收了，不该再单独冒出来）。
+                   ★`bothNames` 记下"这一对其实是两个名字在打架"，UI 侧可以把旧名字也告诉用户。 */
+                matched[i] = {
+                    mine: p.mine, next: ne, key: p.key, renamed: true, renamedKind: 'exact', similarity: 1,
+                    bothNames: [String(p.next.name || ''), String(ne.name || '')],
+                };
+                notice.push('「' + p.next.name + '」与「' + ne.name + '」内容一模一样（包里两条同名分身）—— 已按**改名**处理，不是新增');
+            }
+        }
+    }
+
     const onlyMine = mineIdx.entries.filter(me => !matched.some(p => p.mine === me));
     const onlyNext = nextIdx.entries.filter(x => !usedNext.has(x.key));
     return { matched, onlyMine, onlyNext, renamedPairs: matched.filter(m => m.renamed), likelyRenamed: likely, similarHints: hints, notice };
