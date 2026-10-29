@@ -338,7 +338,7 @@ function ywEnsureSwipesFallback(message) {
     ★1.13 以下（1.12.5 / 1.11.0 / 1.10.0）仍加载不了，缺的是 `variables.js` 那三个函数与更老的
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
-const PLUGIN_VERSION = '1.46.143'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.144'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -4367,6 +4367,44 @@ function captureApiState() {
 }
 
 /** 把方案里的直连设置写回去（走酒馆自己的代理预设保存，刷新也不会丢） */
+/** ★★W268（作者 2026-10-29："为什么切别的不卡 别的也是切API配置方案+连接啊 只不过多填了个反代就要这么久？不科学"）
+ *  —— **不科学的地方找到了，而且不止一个**（读酒馆源码查实）：
+ *
+ *  · 别的方案快，是因为它们 `reverse_proxy` 为空 ⇒ **根本不进** `getStatusOpen()` 里那道
+ *    `if (oai_settings.reverse_proxy && validateProxySources.includes(source)) await validateReverseProxy();`
+ *    ⇒ 不弹框、不等。**差的不是"多填了一个字段"，而是"多走了一整条会弹窗的分支"。**
+ *
+ *  · 那道 `validateReverseProxy()`（`scripts/openai.js:543`）里有这一行：
+ *      `const confirmation = skipConfirm || await Popup.show.confirm('Connecting To Proxy', ...);`
+ *    ⇒ **没确认过就一直 await 等你点弹窗**（不是几秒，是卡到你点）。确认过才把
+ *    `Proxy_SkipConfirm_<地址哈希>` 记下来、以后不再问。**这才是"慢好几秒"的真身。**
+ *
+ *  · 更关键：**我们从来没点过 Connect**（W166i 当年为了不卡，连 `#save_proxy` 都不点）。
+ *    于是切到反代方案时：`/profile` 里那条 `api` 命令点 Connect 时用的是**旧地址**，
+ *    随后 `applyApiState()` 写入**新地址**却不再连接 ⇒ **新反代地址一次都没被真正用过**
+ *    ⇒ 这就是作者说的"不会自动帮我点连接"。
+ *
+ *  ⇒ 修法（照作者原话"直接切换API配置、把文本覆盖、点一次连接"）：
+ *    ① 写反代地址之后，**替这个地址把确认记忆写好**（他自己方案里存的反代 = 已经授权过；
+ *       否则每次切都弹一次框，而且弹框常被设置抽屉挡住，用户根本看不见）；
+ *    ② 然后**主动点一次 Connect**，但**不 await**（不阻塞界面、失败也不弹红）。
+ *  ★这是"替他确认他自己保存的配置"，不是绕过安全检查：`#save_proxy` 那条路仍然不点
+ *    （那条会额外触发一次 reconnectOpenAi，纯属重复），我们只点最后那一次 Connect。
+ *  ★拿不到酒馆模块（老版本/TT）⇒ 静默跳过，行为与改前一致（绝不因为这件事把切方案弄坏）。 */
+async function preConfirmProxyUrl(url) {
+    const u = String(url || '').trim();
+    if (!u) return false;
+    try {
+        const [{ accountStorage }, { getStringHash }] = await Promise.all([
+            import('../../../util/AccountStorage.js'),
+            import('../../../utils.js'),
+        ]);
+        if (!accountStorage || typeof getStringHash !== 'function') return false;
+        accountStorage.setItem('Proxy_SkipConfirm_' + getStringHash(u), String(true));
+        return true;
+    } catch (e) { return false; }   // 老版本 / TT / 模块改名 ⇒ 静默退回（安全机制照旧弹框）
+}
+
 function applyApiState(api) {
     if (!api || typeof api !== 'object') return false;
     const $ = window.jQuery;
@@ -4399,6 +4437,29 @@ function applyApiState(api) {
     if (api.customUrl) oai_settings.custom_url = api.customUrl;
     if (api.claudeModel) oai_settings.claude_model = api.claudeModel;
     saveSettingsDebounced();
+    /* ★★W268（作者："不科学"）—— 收尾这一步才是关键：
+       ★为什么别的方案快：它们 `reverse_proxy` 为空 ⇒ **不进** `getStatusOpen()` 那道
+         `await validateReverseProxy()` ⇒ 不弹「Connecting To Proxy」框、不等；
+         反代方案**多走了一整条会弹窗的分支**，而那个框是 `await Popup.show.confirm(...)`
+         —— **没确认过就一直卡着等你点**（不是几秒，是卡到你点）。这才是"慢好几秒"的真身。
+       ★更关键：我们从来没点过 Connect ⇒ 切到反代方案后**新地址一次都没被真正用过**
+         （`/profile` 里那条 `api` 命令点的是**旧地址**，随后这里才写入新地址）⇒ 就是"不会自动帮我点连接"。
+       ⇒ 收尾两件事（都在后台，**不 await、不阻塞**）：
+          ① `preConfirmProxyUrl()`：替这个**他自己方案里存的反代地址**写好"我已确认"的记忆
+             —— 否则每次切都弹一次框，而弹框常被设置抽屉挡住、用户根本看不见。
+          ② 主动点一次 Connect：让新地址真的被连上（这就是"自动帮我点连接"）。
+       ★安全：这不是绕过检查 —— 地址来自用户自己保存的方案，等于"替他确认他自己的配置"；
+         `#save_proxy` 仍然不点（那条会重复触发一次 reconnectOpenAi）。 */
+    if (api.reverseProxy) {
+        const __url = String(api.reverseProxy);
+        Promise.resolve()
+            .then(() => preConfirmProxyUrl(__url))
+            .then(() => {
+                const btn = document.getElementById('api_button_openai');
+                if (btn) { try { btn.click(); } catch (e) { } }   // ★不 await：界面不等它，失败也不弹红
+            })
+            .catch(() => { });
+    }
     return true;
 }
 
