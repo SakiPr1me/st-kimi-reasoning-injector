@@ -75,7 +75,7 @@ export const NSFW_FIELDS = [
     { id: 'aOpening', group: '后穴', label: '外口状态', type: 'text', core: true },
     { id: 'colonState', group: '后穴', label: '结肠口状态', type: 'text', core: true },
     { id: 'aFluid', group: '后穴', label: '后穴内', type: 'text', core: true },
-    { id: 'keyPointState', group: '后穴', label: '关键点状态', type: 'text', core: false },
+    { id: 'keyPointState', group: '后穴', label: '后穴G点状态', type: 'text', core: false },
 
     /* 开发 */
     { id: 'devMouthLv', group: '开发', label: '口·等级', type: 'num', min: 0, max: 10, core: true },
@@ -117,24 +117,24 @@ export const NSFW_FIELDS = [
     { id: 'scene', group: '状态', label: '互动情境', type: 'text', core: true , hideInCard: true},
 
     /* ── 静态参数（建档填一次；不要求 AI 每轮输出） ── */
-    { id: 'stChestSize', group: '静态-胸部', tab: '胸', label: '罩杯/胸肌', type: 'text', static: true },
-    { id: 'stChestShape', group: '静态-胸部', tab: '胸', label: '胸型', type: 'text', static: true },
-    { id: 'stNippleLen', group: '静态-胸部', tab: '胸', label: '乳头长', type: 'text', static: true },
-    { id: 'stNippleWid', group: '静态-胸部', tab: '胸', label: '乳头宽', type: 'text', static: true },
-    { id: 'stAreolaDia', group: '静态-胸部', tab: '胸', label: '乳晕直径', type: 'text', static: true },
-    { id: 'stAreolaShape', group: '静态-胸部', tab: '胸', label: '乳晕形态', type: 'text', static: true },
-    { id: 'stAreolaColor', group: '静态-胸部', tab: '胸', label: '乳晕色泽', type: 'text', static: true },
-    { id: 'stClitLen', group: '静态-前穴', tab: '前穴', label: '阴蒂长度', type: 'text', sex: 'female', static: true },
-    { id: 'stClitSize', group: '静态-前穴', tab: '前穴', label: '阴蒂大小', type: 'text', sex: 'female', static: true },
+    { id: 'stChestSize', group: '静态-胸部', tab: '胸', label: '罩杯/胸肌', type: 'text', static: true, after: 'milkMl' },
+    { id: 'stChestShape', group: '静态-胸部', tab: '胸', label: '胸型', type: 'text', static: true, after: 'milkMl' },
+    { id: 'stNippleLen', group: '静态-胸部', tab: '胸', label: '乳头长', type: 'text', static: true, after: 'nippleState' },
+    { id: 'stNippleWid', group: '静态-胸部', tab: '胸', label: '乳头宽', type: 'text', static: true, after: 'nippleState' },
+    { id: 'stAreolaDia', group: '静态-胸部', tab: '胸', label: '乳晕直径', type: 'text', static: true, after: 'areolaNow' },
+    { id: 'stAreolaShape', group: '静态-胸部', tab: '胸', label: '乳晕形态', type: 'text', static: true, after: 'areolaNow' },
+    { id: 'stAreolaColor', group: '静态-胸部', tab: '胸', label: '乳晕色泽', type: 'text', static: true, after: 'areolaNow' },
+    { id: 'stClitLen', group: '静态-前穴', tab: '前穴', label: '阴蒂长度', type: 'text', sex: 'female', static: true, after: 'vulvaShape' },
+    { id: 'stClitSize', group: '静态-前穴', tab: '前穴', label: '阴蒂大小', type: 'text', sex: 'female', static: true, after: 'vulvaShape' },
     { id: 'stPenisLen', group: '静态-后穴', tab: '后穴', label: '阴茎长度', type: 'text', sex: 'male', static: true },
     { id: 'stPenisGirth', group: '静态-后穴', tab: '后穴', label: '阴茎粗度', type: 'text', sex: 'male', static: true },
     { id: 'stPenisLook', group: '静态-后穴', tab: '后穴', label: '阴茎外观', type: 'text', sex: 'male', static: true },
-    { id: 'stGDepth', group: '静态-前穴', tab: '前穴', label: 'G点深度', type: 'text', sex: 'female', static: true },
-    { id: 'stCervixDepth', group: '静态-前穴', tab: '前穴', label: '子宫口深度', type: 'text', sex: 'female', static: true },
-    { id: 'stAnusShape', group: '静态-后穴', tab: '后穴', label: '肛门形态', type: 'text', static: true },
-    { id: 'stRectumLoose', group: '静态-后穴', tab: '后穴', label: '后庭松弛度', type: 'text', static: true },
-    { id: 'stKeyDepth', group: '静态-后穴', tab: '后穴', label: '前列腺深度', type: 'text', static: true },
-    { id: 'stColonDepth', group: '静态-后穴', tab: '后穴', label: '结肠口深度', type: 'text', static: true },
+    { id: 'stGDepth', group: '静态-前穴', tab: '前穴', label: 'G点深度', type: 'text', sex: 'female', static: true, after: 'gState' },
+    { id: 'stCervixDepth', group: '静态-前穴', tab: '前穴', label: '子宫口深度', type: 'text', sex: 'female', static: true, after: 'cervixState' },
+    { id: 'stAnusShape', group: '静态-后穴', tab: '后穴', label: '肛门形态', type: 'text', static: true, after: 'aOpening' },
+    { id: 'stRectumLoose', group: '静态-后穴', tab: '后穴', label: '后庭松弛度', type: 'text', static: true, after: 'aOpening' },
+    { id: 'stKeyDepth', group: '静态-后穴', tab: '后穴', label: '前列腺深度', type: 'text', static: true, after: 'keyPointState' },
+    { id: 'stColonDepth', group: '静态-后穴', tab: '后穴', label: '结肠口深度', type: 'text', static: true, after: 'colonState' },
     { id: 'stEroZones', group: '静态-其他', tab: '状态', label: '敏感带', type: 'list', static: true },
     { id: 'stMouthDepth', group: '静态-其他', tab: '状态', label: '口部耐受深度', type: 'text', static: true },
     { id: 'stFavPose', group: '静态-其他', tab: '状态', label: '惯用体位', type: 'text', static: true },
@@ -524,6 +524,28 @@ function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+/** 一页的行：动态行 + 静态档案按 after 内联（不再单列「档案·固定」） */
+function tabRowsHtml(profile, grp, byGroup) {
+    const rows = [];
+    activeFields(profile).forEach((f) => {
+        if (f.hideInCard) return;
+        if (f.group !== grp) return;
+        const cell = (profile.stats || {})[f.id];
+        if (!cell || !fmtVal(f, cell)) return;
+        rows.push({ id: f.id, html: rowHtml(f, cell) });
+    });
+    const extra = {};
+    nsfwStaticFields(profile).forEach((f) => {
+        if ((f.tab || '状态') !== grp) return;
+        const v = String((profile.static || {})[f.id] || '').trim();
+        if (!v) return;
+        const html = rowHtml(f, { value: v, comment: '' });
+        const at = f.after ? rows.findIndex((r) => r.id === f.after) : -1;
+        if (at >= 0) { const off = extra[f.after] || 0; rows.splice(at + 1 + off, 0, { id: 'st:' + f.id, html: html }); extra[f.after] = off + 1; }
+        else rows.push({ id: 'st:' + f.id, html: html });
+    });
+    return rows.map((r) => r.html).join('');
+}
 /** 开发度表格：部位 × 等级/经验/敏感度/技能 */
 function devTableHtml(profile) {
     const parts = [ ['口', 'Mouth'], ['胸', 'Chest'], ['前', 'Front'], ['后', 'Back'], ['最深', 'Deep'] ];
@@ -580,13 +602,6 @@ export function nsfwRenderCard(name, profile) {
         + '<span class="kv yw-nsfw-preg">怀孕 ' + preg.risk + '%</span>';
     wrap.appendChild(head);
 
-    const staticByTab = {};
-    nsfwStaticFields(profile).forEach((f) => {
-        const v = String((profile.static || {})[f.id] || '').trim();
-        if (!v) return;
-        const tab = f.tab || '状态';
-        (staticByTab[tab] = staticByTab[tab] || []).push(rowHtml(f, { value: v, comment: '' }));
-    });
     const byGroup = {};
     activeFields(profile).forEach((f) => {
         if (f.hideInCard) return;
@@ -602,10 +617,7 @@ export function nsfwRenderCard(name, profile) {
 
     const tabs = [];
     GROUP_ORDER.forEach((grp) => {
-        let live = (byGroup[grp] && byGroup[grp].length) ? byGroup[grp].join('') : '';
-        if (grp === '开发') live = devTableHtml(profile);
-        const stc = (staticByTab[grp] && staticByTab[grp].length) ? ('<div class=\"yw-nsfw-sub\">档案 · 固定</div>' + staticByTab[grp].join('')) : '';
-        const html = live + stc;
+        const html = (grp === '开发') ? devTableHtml(profile) : tabRowsHtml(profile, grp, byGroup);
         if (html) tabs.push({ id: grp, label: grp, html: html });
     });
     const viewRows = NSFW_DESC_FIELDS.map((d) => (profile.desc && profile.desc[d.id] ? { label: d.label, text: profile.desc[d.id].text } : null)).filter(Boolean);
