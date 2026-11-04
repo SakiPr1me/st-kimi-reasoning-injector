@@ -20,21 +20,23 @@ const NL = String.fromCharCode(10);
 /* ────────────────────────── 字段定义 ────────────────────────── */
 
 export const NSFW_FIELDS = [
-    /* 精神 */
-    { id: 'sanity', group: '精神', label: '理智', type: 'num', min: 0, max: 100, core: true },
-    { id: 'compliance', group: '精神', label: '配合度', type: 'num', min: 0, max: 100, core: true },
-    { id: 'shame', group: '精神', label: '羞耻心', type: 'num', min: 0, max: 100, core: true },
-    { id: 'libido', group: '精神', label: '欲望', type: 'num', min: 0, max: 100, core: true },
-    { id: 'stamina', group: '精神', label: '体力', type: 'num', min: 0, max: 100, core: true },
-    { id: 'fatigue', group: '精神', label: '疲劳', type: 'num', min: 0, max: 100, core: true },
-    { id: 'menstrual', group: '精神', label: '生理周期', type: 'text', core: true },
-    { id: 'voice', group: '精神', label: '发声状态', type: 'text', core: true },
-    { id: 'brands', group: '精神', label: '心理烙印', type: 'list', core: true },
-    { id: 'bottomline', group: '精神', label: '崩塌底线', type: 'text', core: false },
-    { id: 'bladder', group: '精神', label: '尿意', type: 'num', min: 0, max: 100, core: false },
-    { id: 'pain', group: '精神', label: '疼痛度', type: 'num', min: 0, max: 100, core: false },
-    { id: 'exposure', group: '精神', label: '暴露度', type: 'num', min: 0, max: 100, core: false },
-    { id: 'pregnancy', group: '精神', label: '怀孕状态', type: 'text', core: false },
+    /* 状态 */
+    { id: 'stamina', group: '状态', label: '体力', type: 'num', min: 0, max: 100, core: true },
+    { id: 'sanity', group: '状态', label: '理智', type: 'num', min: 0, max: 100, core: true },
+    { id: 'libido', group: '状态', label: '欲望', type: 'num', min: 0, max: 100, core: true },
+    { id: 'compliance', group: '状态', label: '配合度', type: 'num', min: 0, max: 100, core: true },
+    { id: 'shame', group: '状态', label: '羞耻心', type: 'num', min: 0, max: 100, core: true },
+    { id: 'menstrual', group: '状态', label: '生理周期', type: 'text', core: true },
+    { id: 'eggState', group: '状态', label: '卵子状态', type: 'text', core: true },
+    { id: 'milkState', group: '状态', label: '积乳状态', type: 'text', core: true },
+    { id: 'milkMl', group: '状态', label: '积乳量', type: 'num', min: 0, max: 2000, core: true },
+    { id: 'voice', group: '状态', label: '发声状态', type: 'text', core: true },
+    { id: 'brands', group: '状态', label: '心理烙印', type: 'list', core: true },
+    { id: 'bottomline', group: '状态', label: '崩塌底线', type: 'text', core: false },
+    { id: 'bladder', group: '状态', label: '尿意', type: 'num', min: 0, max: 100, core: false },
+    { id: 'pain', group: '状态', label: '疼痛度', type: 'num', min: 0, max: 100, core: false },
+    { id: 'exposure', group: '状态', label: '暴露度', type: 'num', min: 0, max: 100, core: false },
+    { id: 'pregnancy', group: '状态', label: '怀孕状态', type: 'text', core: false },
 
     /* 体态 */
     { id: 'pose', group: '体态', label: '当前体位', type: 'text', core: true },
@@ -48,6 +50,12 @@ export const NSFW_FIELDS = [
     { id: 'sweat', group: '体态', label: '出汗量', type: 'text', core: false },
     { id: 'breath', group: '体态', label: '呼吸喘息', type: 'text', core: false },
     { id: 'scent', group: '体态', label: '体味气味', type: 'text', core: false },
+
+    /* 胸 */
+    { id: 'chestTouch', group: '胸', label: '胸部触感', type: 'text', core: true },
+    { id: 'nippleState', group: '胸', label: '乳头状态', type: 'text', core: true },
+    { id: 'areolaNow', group: '胸', label: '乳晕状态', type: 'text', core: true },
+    { id: 'lactationNow', group: '胸', label: '泌乳状态', type: 'text', core: true },
 
     /* 穿搭 */
     { id: 'outer', group: '穿搭', label: '外衣', type: 'text', core: true },
@@ -63,7 +71,8 @@ export const NSFW_FIELDS = [
     { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', sex: 'female', core: true },
     { id: 'cervixDesc', group: '前穴', label: '子宫口描写', type: 'text', sex: 'female', core: true },
     { id: 'uterusInner', group: '前穴', label: '子宫内部', type: 'text', sex: 'female', core: true },
-    { id: 'vFluid', group: '前穴', label: '装载液体', type: 'text', sex: 'female', core: true },
+    { id: 'vFluid', group: '前穴', label: '阴道内', type: 'text', sex: 'female', core: true },
+    { id: 'uterusFluid', group: '前穴', label: '子宫内', type: 'text', sex: 'female', core: true },
     { id: 'gState', group: '前穴', label: 'G点状态', type: 'text', sex: 'female', core: false },
     { id: 'vulvaColorNow', group: '前穴', label: '外阴色泽', type: 'text', sex: 'female', core: false },
 
@@ -73,13 +82,15 @@ export const NSFW_FIELDS = [
     { id: 'aOpeningDesc', group: '后穴', label: '外口描写', type: 'text', core: true },
     { id: 'colonState', group: '后穴', label: '结肠口状态', type: 'text', core: true },
     { id: 'colonDesc', group: '后穴', label: '结肠口描写', type: 'text', core: true },
-    { id: 'aFluid', group: '后穴', label: '装载液体', type: 'text', core: true },
+    { id: 'aFluid', group: '后穴', label: '后穴内', type: 'text', core: true },
     { id: 'keyPointState', group: '后穴', label: '关键点状态', type: 'text', core: false },
 
-    /* 液量 */
-    { id: 'fluidPressure', group: '液量', label: '积压反馈', type: 'text', core: true },
-    { id: 'leakAlert', group: '液量', label: '漏液警报', type: 'text', core: true },
-    { id: 'injected', group: '液量', label: '本次注入', type: 'text', core: true },
+    /* 开发 */
+    { id: 'devMouth', group: '开发', label: '口(M)', type: 'text', core: true },
+    { id: 'devChest', group: '开发', label: '胸(B)', type: 'text', core: true },
+    { id: 'devFront', group: '开发', label: '前(G)', type: 'text', core: true },
+    { id: 'devBack', group: '开发', label: '后(P)', type: 'text', core: true },
+    { id: 'devDeep', group: '开发', label: '最深(S)', type: 'text', core: true },
 
     /* 经验（永久统计） */
     { id: 'expMasturbation', group: '经验', label: '自慰次数', type: 'num', min: 0, max: 99999, core: true },
@@ -92,6 +103,7 @@ export const NSFW_FIELDS = [
     { id: 'expACumCount', group: '经验', label: '后穴中出次数', type: 'num', min: 0, max: 99999, core: true },
 
     /* 本次性爱 */
+    { id: 'injected', group: '本次', label: '本次注入', type: 'text', core: true },
     { id: 'condom', group: '本次', label: '避孕套', type: 'text', core: true },
     { id: 'condomCount', group: '本次', label: '避孕套个数', type: 'num', min: 0, max: 99, core: true },
     { id: 'cumV', group: '本次', label: '前穴中出', type: 'text', core: true },
@@ -115,6 +127,11 @@ export const NSFW_FIELDS = [
     { id: 'stAreolaShape', group: '静态-胸部', label: '乳晕形态', type: 'text', static: true },
     { id: 'stAreolaColor', group: '静态-胸部', label: '乳晕色泽', type: 'text', static: true },
     { id: 'stLactation', group: '静态-胸部', label: '泌乳', type: 'text', static: true },
+    { id: 'stClitLen', group: '静态-前穴', label: '阴蒂长度', type: 'text', sex: 'female', static: true },
+    { id: 'stClitSize', group: '静态-前穴', label: '阴蒂大小', type: 'text', sex: 'female', static: true },
+    { id: 'stPenisLen', group: '静态-后穴', label: '阴茎长度', type: 'text', sex: 'male', static: true },
+    { id: 'stPenisGirth', group: '静态-后穴', label: '阴茎粗度', type: 'text', sex: 'male', static: true },
+    { id: 'stPenisLook', group: '静态-后穴', label: '阴茎外观', type: 'text', sex: 'male', static: true },
     { id: 'stVulvaShape', group: '静态-前穴', label: '外阴形态', type: 'text', sex: 'female', static: true },
     { id: 'stVulvaColor', group: '静态-前穴', label: '外阴色泽', type: 'text', sex: 'female', static: true },
     { id: 'stVDepth', group: '静态-前穴', label: '常态深度', type: 'text', sex: 'female', static: true },
@@ -152,13 +169,15 @@ export const NSFW_DEFAULT_RULES = [
     { id: 'r3', text: '配合度：只能缓慢上升，单轮不超过 5，且必须与剧情一致。', enabled: true, builtin: true },
     { id: 'r4', text: '羞耻心：需要“适应类事件”才能下降；欲望随刺激上升、随冷却下降。', enabled: true, builtin: true },
     { id: 'r5', text: '生理周期按「月经期 → 卵泡期 → 排卵期 → 黄体期」循环推进，只在时间推进时换期，不要随意跳期。', enabled: true, builtin: true },
-    { id: 'r6', text: '怀孕几率由插件按「周期 + 是否避孕 + 前穴是否中出」即时计算，你不要自己写这个值；但要把「生理周期 / 避孕套 / 前穴中出」三个输入写准。', enabled: true, builtin: true },
+    { id: 'r6', text: '怀孕几率由插件按「周期 + 是否避孕 + 前穴是否中出」即时计算（基础很低：月经1/卵泡2/排卵10/黄体4，中出+6，避孕×0.05），你不要自己写这个值；但要把「生理周期 / 卵子状态 / 避孕套 / 前穴中出」三个输入写准。', enabled: true, builtin: true },
     { id: 'r7', text: '经验是永久统计：自慰/口交/前穴/前穴中出/后穴/后穴中出 只增不减；「经验人数」在首次与新的对象发生关系时 +1；「最近性经验对象」写最近一次的对象名。', enabled: true, builtin: true },
     { id: 'r8', text: '本次性爱：避孕套（是/否）、避孕套个数、前穴中出（是/否）、高潮次数——每轮按本轮实际发生重写；换场景时清零。', enabled: true, builtin: true },
-    { id: 'r9', text: '液体量不得超过静态的「极限容纳量」；超了改写为外溢/喷溅，并写清楚漏液警报。前穴与后穴各自独立计量。', enabled: true, builtin: true },
+    { id: 'r9', text: '液体分别记录：阴道内 / 子宫内 / 后穴内，各自写 ml 与液体种类（精液/爱液/肠液/润滑油）；单个通道不得超过静态的「极限容纳量」，超了改写为外溢。', enabled: true, builtin: true },
     { id: 'r10', text: '深度不得超过静态的「极限拉伸深度」；超了写“撕裂/极限”。', enabled: true, builtin: true },
     { id: 'r11', text: '所有数值钳制在字段范围内；缺字段沿用上一轮的值，不要重置。', enabled: true, builtin: true },
-    { id: 'r12', text: '每个字段的值后面必须跟一句官能评述（括号内），评述要与数值一致；评述只描述身体与感官，不写剧情推进。', enabled: true, builtin: true }
+    { id: 'r12', text: '每个字段的值后面必须跟一句官能评述（括号内），评述要与数值一致；评述只描述身体与感官，不写剧情推进。', enabled: true, builtin: true },
+    { id: 'r13', text: '积乳：泌乳体质每轮按时间与刺激累积「积乳量 ml」，被吸出/挤出后下降；未到量时写胀痛感。', enabled: true, builtin: true },
+    { id: 'r14', text: '卵子状态随生理周期变化：卵泡期「未成熟」、排卵期「成熟待排/已排出」、黄体期「已排出·黄体期」、月经期「新一轮」。', enabled: true, builtin: true }
 ];
 
 /* ────────────────────────── 存储 ────────────────────────── */
@@ -227,7 +246,7 @@ export function nsfwRemove(chatId, name) {
 
 /* ────────────────────────── 字段工具 ────────────────────────── */
 
-const GROUP_ORDER = ['精神', '体态', '穿搭', '前穴', '后穴', '液量', '经验', '本次'];
+const GROUP_ORDER = ['状态', '体态', '穿搭', '胸', '前穴', '后穴', '开发', '经验', '本次'];
 
 function fieldById(id) { return NSFW_FIELDS.find((f) => f.id === id) || null; }
 function fieldByLabel(label) {
@@ -261,15 +280,15 @@ export function calcPregRisk(profile) {
         const st = (profile && profile.stats) || {};
         const val = (id) => String(((st[id] || {}).value) == null ? '' : (st[id].value));
         const phase = val('menstrual');
-        let base = 8;
-        if (phase.indexOf('月经') >= 0) base = 3;
-        else if (phase.indexOf('卵泡') >= 0) base = 10;
-        else if (phase.indexOf('排卵') >= 0) base = 45;
-        else if (phase.indexOf('黄体') >= 0) base = 18;
+        let base = 2;
+        if (phase.indexOf('月经') >= 0) base = 1;
+        else if (phase.indexOf('卵泡') >= 0) base = 2;
+        else if (phase.indexOf('排卵') >= 0) base = 10;
+        else if (phase.indexOf('黄体') >= 0) base = 4;
         const condom = val('condom');
         const cumV = val('cumV');
         let risk = base;
-        if (cumV.indexOf('是') >= 0 || cumV.indexOf('有') >= 0) risk += 30;
+        if (cumV.indexOf('是') >= 0 || cumV.indexOf('有') >= 0) risk += 6;
         if (condom.indexOf('是') >= 0 || condom.indexOf('有') >= 0) risk = risk * 0.05;
         risk = Math.max(0, Math.min(100, Math.round(risk)));
         let why = phase || '周期未知';
