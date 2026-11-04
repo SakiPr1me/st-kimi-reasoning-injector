@@ -10,6 +10,7 @@ import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 
 
@@ -341,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.149'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.150'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -456,6 +457,12 @@ const defaultSettings = {
     inlineInsertDelBtn: true,        // ★W84 行内「删除」按钮（C；默认**开** —— 管那颗垃圾桶 + 点它先弹我们的确认框）
     inlineInsertSavePreset: true,    // ★W115（作者 2026-10-08 拍板）：保存条目的同时保存预设（B；默认**开** —— 与新装一致；老用户按值一次性升级，见下面那段迁移）
     dblEditInPlace: true,            // ★W135（作者 2026-10-13 拍板）：双击正文 · 就地改字（默认**开** —— 与新装一致；关 ⇒ 双击完全不响应 = 恢复原生双击选词）
+    /* ★W290（作者 2026-11-04）：NSFW 状态栏（默认**关** —— 老用户零变化，开了才注入才画卡） */
+    nsfwEnabled: false,              // 总开关
+    nsfwFullCount: 2,                // 每轮注入几个「在场」角色的完整状态（1-3）
+    nsfwShowAllFields: false,        // 是否注入扩展字段（默认只注入核心组，省 token）
+    nsfwRules: null,                 // 自定义规则数组；null = 用内置 NSFW_DEFAULT_RULES
+    nsfwPin: null                    // 常驻全量的角色名（null=按最近登场）
 };
 
 // ===== 双模式三语预设 =====
@@ -577,6 +584,13 @@ const UI = {
         apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效。切换会同步改写 URL、密钥、模型名 三项，预置/采样等其它参数一概不动；命中 limit/quota/rate 即触发。",
         dblSave: "保存",
         dblEditLabel: "双击正文直接改字",
+        nsfwTitle: "状态栏（NSFW）", nsfwEnable: "启用状态栏（每轮注入 + 正文画卡）",
+        nsfwHint: "开启后：每轮把「在场角色状态 + 更新规则 + 输出协议」注入提示词，AI 在正文末尾回两段（数值带官能评述 + 他人视线），插件解析后把原文剥掉、在消息里画成卡片。默认关。",
+        nsfwFullCount: "在场全量人数：", nsfwAllFields: "注入全部字段（更细但更费 token）",
+        nsfwRoster: "角色名册", nsfwNewName: "角色名", nsfwAdd: "＋ 建档", nsfwRemove: "删",
+        nsfwRules: "更新规则（每行一条，注入时按顺序发出）", nsfwPreview: "预览本轮注入",
+        nsfwNoChars: "还没有角色，先在上面建档。",
+        nsfwSexF: "女", nsfwSexM: "男", nsfwSexO: "其他", nsfwRoleB: "受", nsfwRoleT: "攻", nsfwRoleS: "双",
         },
     en: {
         pluginName: "🔥 Yu Wen Toolkit (Inject / Reroll / Replace / API-pool / Fix-tags)", enabled: "Plugin Toggle",
@@ -645,6 +659,13 @@ const UI = {
         apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections. Switching syncs three fields: URL, key and model name - presets/sampling untouched. Triggers on limit/quota/rate.",
         dblSave: "Save",
         dblEditLabel: "Double-click message text to edit it in place",
+        nsfwTitle: "Status Panel (NSFW)", nsfwEnable: "Enable status panel (inject + in-message card)",
+        nsfwHint: "When on: every turn injects the in-scene character states + update rules + output protocol; the AI replies with two blocks at the end (values with sensory notes + outsider views); the plugin parses them, strips the raw text and renders a card in the message. Off by default.",
+        nsfwFullCount: "Full-state characters: ", nsfwAllFields: "Inject all fields (finer, more tokens)",
+        nsfwRoster: "Characters", nsfwNewName: "Name", nsfwAdd: "＋ Add", nsfwRemove: "Del",
+        nsfwRules: "Update rules (one per line, injected in order)", nsfwPreview: "Preview injection",
+        nsfwNoChars: "No characters yet - add one above.",
+        nsfwSexF: "F", nsfwSexM: "M", nsfwSexO: "Other", nsfwRoleB: "Bottom", nsfwRoleT: "Top", nsfwRoleS: "Switch",
         },
     ko: {
         pluginName: "🔥 위온 툴킷 (주입 / 재롤 / 치환 / API풀 / 태그수정)", enabled: "플러그인 스위치",
@@ -713,6 +734,13 @@ const UI = {
         apiHint: "키는 로컬 settings.json에 평문 저장됨 - 파일 공유 금지. Custom(OpenAI 호환) 연결에서만 동작. 전환 시 URL·키·모델명 세 항목을 함께 변경, 프리셋/샘플링은 불변. limit/quota/rate 에서 트리거.",
         dblSave: "저장",
         dblEditLabel: "메시지 본문을 두 번 클릭하면 그 자리에서 바로 수정",
+        nsfwTitle: "상태 패널 (NSFW)", nsfwEnable: "상태 패널 사용 (매 턴 주입 + 본문 카드)",
+        nsfwHint: "켜면 매 턴 등장 캐릭터 상태 + 갱신 규칙 + 출력 프로토콜을 주입하고, AI가 본문 끝에 두 블록(수치+관능 평가 / 타인 시선)을 출력하며, 플러그인이 이를 파싱해 원문을 지우고 메시지에 카드로 그립니다. 기본 꺼짐.",
+        nsfwFullCount: "전체 상태 인원: ", nsfwAllFields: "모든 필드 주입 (더 자세하지만 토큰 소모 큼)",
+        nsfwRoster: "캐릭터 목록", nsfwNewName: "이름", nsfwAdd: "＋ 추가", nsfwRemove: "삭제",
+        nsfwRules: "갱신 규칙 (한 줄에 하나, 순서대로 주입)", nsfwPreview: "이번 턴 주입 미리보기",
+        nsfwNoChars: "아직 캐릭터가 없습니다. 위에서 추가하세요.",
+        nsfwSexF: "여", nsfwSexM: "남", nsfwSexO: "기타", nsfwRoleB: "수", nsfwRoleT: "공", nsfwRoleS: "스위치",
         }
 };
 // 按当前语言取文案；缺 key 时回退中文
@@ -1160,6 +1188,13 @@ if (settings.inlineInsSaveInit !== true) {
 /* ★W135（作者 2026-10-13 拍板 · 铁律 32：升级态必须与新装态一致）：双击正文就地改字（新键）——
    缺键（老用户/首次升级）就按 `defaultSettings` **同一个来源**补默认（开）；他自己关过的 `false` 永远尊重。 */
 if (settings.dblEditInPlace === undefined) settings.dblEditInPlace = defaultSettings.dblEditInPlace;
+/* ★W290（铁律 32）：NSFW 状态栏的新键 —— 缺键就按 defaultSettings 补（默认关），用户自己开过的永远尊重 */
+if (settings.nsfwEnabled === undefined) settings.nsfwEnabled = defaultSettings.nsfwEnabled;
+if (settings.nsfwFullCount === undefined) settings.nsfwFullCount = defaultSettings.nsfwFullCount;
+if (settings.nsfwShowAllFields === undefined) settings.nsfwShowAllFields = defaultSettings.nsfwShowAllFields;
+if (settings.nsfwRules === undefined) settings.nsfwRules = defaultSettings.nsfwRules;
+if (settings.nsfwPin === undefined) settings.nsfwPin = defaultSettings.nsfwPin;
+try { nsfwInit({ t, getSettings: () => settings, save: () => saveSettingsDebounced() }); } catch (e) { }
 /* ★W84：**一颗开关拆成两颗**的迁移 —— 口径选的是"**两颗新键都以老键的值为初值**"：
      · 老键没写过（undefined / true）⇒ 两颗都 true ⇒ 与升级前**一模一样**（老用户不会突然看不到按钮）；
      · 老键是 false（他自己关过）⇒ 两颗都 false ⇒ 也是他当初的选择（现在起他能一颗一颗单独开回来）。
@@ -2253,6 +2288,26 @@ function applyRequestInjections(bodyObj) {
         if (settings.enabled && msgs) {
             const __randWrap = applyRandAndWrapInPlace(msgs);
             if (__randWrap.changed) changed = true;
+        }
+
+        // 1.3) ★W290：NSFW 状态栏注入（规则 + 在场全量 + 其余摘要 + 输出协议）
+        //      幂等：本批消息里已经有「【状态栏 · 更新规则】」就不再插第二次
+        if (settings.enabled && settings.nsfwEnabled && msgs && msgs.length) {
+            try {
+                const nsfwText = nsfwBuildInjection(nsfwChatId(), { fullCount: settings.nsfwFullCount });
+                if (nsfwText) {
+                    const already = msgs.some((m) => m && typeof m.content === 'string' && m.content.indexOf('【状态栏 · 更新规则】') >= 0);
+                    if (!already) {
+                        let sys = null;
+                        for (let i = 0; i < msgs.length; i++) {
+                            if (msgs[i] && msgs[i].role === 'system' && typeof msgs[i].content === 'string') { sys = msgs[i]; break; }
+                        }
+                        if (sys) sys.content = nsfwText + String.fromCharCode(10, 10) + sys.content;
+                        else msgs.unshift({ role: 'system', content: nsfwText });
+                        changed = true;
+                    }
+                }
+            } catch (e) { /* 状态栏失败绝不拖垮注入 */ }
         }
 
         // 1.5) 历史 assistant <content> 单换行补双换行
@@ -6403,6 +6458,7 @@ const KIMI_CARD_DEFS = [
     { key: 'word', ico: 'fa-broom', titleKey: 'wordTitle' },
     { key: 'tag', ico: 'fa-tag', titleKey: 'tagTitle' },
     { key: 'api', ico: 'fa-plug', titleKey: 'apiTitle' },
+    { key: 'nsfw', ico: 'fa-heart-pulse', titleKey: 'nsfwTitle' },   // ★W290：NSFW 状态栏
     { key: 'fix', ico: 'fa-wrench', titleKey: 'fixTitle' },
 ];
 let _kimiCardFloating = null;   // 浮窗 DOM
@@ -8890,12 +8946,124 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id, type) => {
     }
     showTpsForMessage(id);
     });
-eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => { showTpsForMessage(id); });
+/* ★W290：NSFW 状态栏 —— 解析本楼的两段（机器段 + 官能段）→ 落档案 → 把原文从 mes 剥掉 → 重渲染 → 画卡 */
+const nsfwParsedKeys = new Set();
+eventSource.on(event_types.MESSAGE_RECEIVED, async (id) => {
+    try {
+        if (!settings.enabled || !settings.nsfwEnabled) return;
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        const msg = ctx && ctx.chat ? ctx.chat[id] : null;
+        if (!msg || msg.is_user || msg.is_system) return;
+        const mes = String(msg.mes || '');
+        if (mes.indexOf('<nsfw') < 0) { try { nsfwMountToMessage(id); } catch (e) { } return; }
+        const key = id + '|' + (typeof msg.swipe_id === 'number' ? msg.swipe_id : -1) + '|' + mes.length;
+        if (nsfwParsedKeys.has(key)) return;
+        const parsed = nsfwParse(mes);
+        if (!parsed.hasAny) { try { nsfwMountToMessage(id); } catch (e) { } return; }
+        nsfwParsedKeys.add(key);
+        if (nsfwParsedKeys.size > 500) nsfwParsedKeys.clear();
+        nsfwApply(nsfwChatId(ctx), parsed);
+        /* 剥块：mes 与当前 swipe 槽都改（否则切分支回来又能看到原始块） */
+        msg.mes = parsed.stripped;
+        try {
+            if (Array.isArray(msg.swipes) && typeof msg.swipe_id === 'number' && msg.swipes[msg.swipe_id] != null) {
+                msg.swipes[msg.swipe_id] = parsed.stripped;
+            }
+        } catch (e) { }
+        try { if (ctx.saveChat) await ctx.saveChat(); } catch (e) { }
+        await reRenderMessage(id);
+        setTimeout(() => { try { nsfwMountToMessage(id); } catch (e) { } }, 80);
+    } catch (e) { /* 状态栏失败静默，绝不影响聊天 */ }
+});
+/** 重渲染后补挂状态卡（swipe/编辑/角色渲染共用） */
+function nsfwHook(id) { try { if (settings.nsfwEnabled) nsfwMountToMessage(id); } catch (e) { } }
+
+/* ★W290：状态栏（NSFW）设置卡的事件绑定（面板整体重建 ⇒ 每次重建后重绑；幂等） */
+function bindNsfwCard() {
+    const $en = $("#" + extensionName + "_nsfw_enabled");
+    if (!$en.length) return;
+    const chatId = () => nsfwChatId();
+    const esc2 = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    const renderRoster = () => {
+        const box = document.getElementById(extensionName + "_nsfw_roster");
+        if (!box) return;
+        let list = [];
+        try { list = nsfwList(chatId()); } catch (e) { list = []; }
+        if (!list.length) { box.innerHTML = '<div class="kimi-hint">' + t('nsfwNoChars') + '</div>'; return; }
+        box.innerHTML = list.map((c) => {
+            const sex = c.sex === 'male' ? t('nsfwSexM') : (c.sex === 'other' ? t('nsfwSexO') : t('nsfwSexF'));
+            const role = c.role === 'top' ? t('nsfwRoleT') : (c.role === 'switch' ? t('nsfwRoleS') : t('nsfwRoleB'));
+            return '<div class="kimi-nsfw-item" style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px dashed var(--SmartThemeBorderColor)">'
+                + '<b>' + esc2(c.name) + '</b>'
+                + '<span style="opacity:.7;font-size:.85em">' + role + ' · ' + sex + '</span>'
+                + '<span style="margin-left:auto;opacity:.5;font-size:.8em">' + (c.updatedAt ? new Date(c.updatedAt).toLocaleString() : '—') + '</span>'
+                + '<button class="kimi-btn" data-nsfw-del="' + esc2(c.name) + '" style="padding:0 6px;font-size:.8em">' + t('nsfwRemove') + '</button>'
+                + '</div>';
+        }).join('');
+    };
+
+    const renderRules = () => {
+        const ta = document.getElementById(extensionName + "_nsfw_rules");
+        if (!ta) return;
+        const rules = (Array.isArray(settings.nsfwRules) && settings.nsfwRules.length) ? settings.nsfwRules : NSFW_DEFAULT_RULES;
+        ta.value = rules.filter((r) => r && r.text).map((r) => r.text).join(String.fromCharCode(10));
+    };
+
+    $en.on("change", function () {
+        settings.nsfwEnabled = $(this).is(":checked");
+        saveSettingsDebounced();
+        try { if (settings.nsfwEnabled) nsfwReattachAll(); } catch (e) { }
+    });
+    $("#" + extensionName + "_nsfw_fullcount").on("change", function () {
+        settings.nsfwFullCount = Math.max(1, Math.min(3, Number($(this).val()) || 2));
+        saveSettingsDebounced();
+    });
+    $("#" + extensionName + "_nsfw_allfields").on("change", function () {
+        settings.nsfwShowAllFields = $(this).is(":checked");
+        saveSettingsDebounced();
+    });
+    $("#" + extensionName + "_nsfw_add").on("click", function () {
+        const name = String($("#" + extensionName + "_nsfw_new_name").val() || '').trim();
+        if (!name) return;
+        const sex = String($("#" + extensionName + "_nsfw_new_sex").val() || 'female');
+        const role = String($("#" + extensionName + "_nsfw_new_role").val() || 'bottom');
+        try { nsfwEnsure(chatId(), name, sex, role); } catch (e) { }
+        $("#" + extensionName + "_nsfw_new_name").val('');
+        renderRoster();
+    });
+    $("#" + extensionName + "_nsfw_roster").off("click.kimiNsfwDel").on("click.kimiNsfwDel", "[data-nsfw-del]", function () {
+        const n = String($(this).attr('data-nsfw-del') || '');
+        if (!n) return;
+        try { nsfwRemove(chatId(), n); } catch (e) { }
+        renderRoster();
+    });
+    $("#" + extensionName + "_nsfw_rules").off("change.kimiNsfwRules").on("change.kimiNsfwRules", function () {
+        const lines = String($(this).val() || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+        settings.nsfwRules = lines.length ? lines.map((text, i) => ({ id: 'u' + i, text: text, enabled: true })) : null;
+        saveSettingsDebounced();
+    });
+    $("#" + extensionName + "_nsfw_preview").off("click.kimiNsfwPrev").on("click.kimiNsfwPrev", function () {
+        const box = document.getElementById(extensionName + "_nsfw_preview_box");
+        if (!box) return;
+        if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+        let text = '';
+        try { text = nsfwBuildInjection(chatId(), { fullCount: settings.nsfwFullCount }); } catch (e) { text = ''; }
+        box.textContent = text || '（当前没有可注入的内容：先建档，或打开总开关）';
+        box.style.display = 'block';
+    });
+
+    renderRoster();
+    renderRules();
+}
+
+
+eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => { showTpsForMessage(id); nsfwHook(id); });
 
 // v1.12.3：手动 swipe / 编辑 / 删除后的重渲染不触发 CHARACTER_MESSAGE_RENDERED，
 // tps 会丢失 → 补刷新钩子
-eventSource.on(event_types.MESSAGE_SWIPED, (id) => { showTpsForMessage(id); try { judgeDisplayedBranch(id); } catch (e) { } }); // v1.37.54 切分支后判定这条分支
-eventSource.on(event_types.MESSAGE_EDITED, (id) => { showTpsForMessage(id); try { judgeDisplayedBranch(id); } catch (e) { } }); // v1.37.54
+eventSource.on(event_types.MESSAGE_SWIPED, (id) => { showTpsForMessage(id); nsfwHook(id); try { judgeDisplayedBranch(id); } catch (e) { } }); // v1.37.54 切分支后判定这条分支
+eventSource.on(event_types.MESSAGE_EDITED, (id) => { showTpsForMessage(id); nsfwHook(id); try { judgeDisplayedBranch(id); } catch (e) { } }); // v1.37.54
 eventSource.on(event_types.MESSAGE_DELETED, () => {
 deleteGuardUntil = Date.now() + 3000; judgedBranchKey = ''; // v1.37.55 删除消息 → 3 秒内不做重roll判定
     // 删除后 ST 重渲染全部消息：逐个补 tps
@@ -9191,6 +9359,8 @@ document.addEventListener('click', (e) => {
 eventSource.on(event_types.CHAT_CHANGED, () => {
     isDryRun = false;
     dryRunSince = 0;
+    /* ★W290：换聊天 → 状态卡按新聊天的档案重画 */
+    setTimeout(() => { try { if (settings.nsfwEnabled) nsfwReattachAll(); } catch (e) { } }, 400);
     judgedBranchKey = '';   // ★W71：换聊天 ⇒ 清掉「这条分支已判过」的账（作者要求：每个聊天重新判定）
     displayReplaceMap.clear();
     origMesMap.clear();
@@ -10164,6 +10334,39 @@ ${renderWordReplaceRows()}
 <!-- ═══ API 池（额度轮换）★W155：与「标签修复」互换（原 W150 把它放在标签修复之上）═══ -->
 <div id="${extensionName}_api_slot"></div>
 
+<!-- ═══ 状态栏（NSFW）★W290（作者 2026-11-04）：每轮注入角色状态 + 正文画卡 ═══ -->
+<details class="kimi-card" data-card="nsfw">
+<summary><i class="fa-solid fa-heart-pulse kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('nsfwTitle')}</summary>
+<div class="kimi-card-body">
+<label class="checkbox_label"><input id="${extensionName}_nsfw_enabled" type="checkbox" ${settings.nsfwEnabled ? 'checked' : ''}/><span>${t('nsfwEnable')}</span></label>
+<div class="kimi-hint">${t('nsfwHint')}</div>
+<div class="kimi-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
+    <label class="kimi-label" style="margin:0">${t('nsfwFullCount')}</label>
+    <select id="${extensionName}_nsfw_fullcount" class="text_pole" style="width:auto">
+        <option value="1" ${Number(settings.nsfwFullCount) === 1 ? 'selected' : ''}>1</option>
+        <option value="2" ${Number(settings.nsfwFullCount) === 2 ? 'selected' : ''}>2</option>
+        <option value="3" ${Number(settings.nsfwFullCount) === 3 ? 'selected' : ''}>3</option>
+    </select>
+    <label class="checkbox_label" style="margin:0"><input id="${extensionName}_nsfw_allfields" type="checkbox" ${settings.nsfwShowAllFields ? 'checked' : ''}/><span>${t('nsfwAllFields')}</span></label>
+</div>
+<div class="kimi-label" style="margin-top:8px">${t('nsfwRoster')}</div>
+<div id="${extensionName}_nsfw_roster" class="kimi-nsfw-roster"></div>
+<div class="kimi-row" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px">
+    <input id="${extensionName}_nsfw_new_name" type="text" class="text_pole" style="flex:1;min-width:100px" placeholder="${t('nsfwNewName')}"/>
+    <select id="${extensionName}_nsfw_new_sex" class="text_pole" style="width:auto">
+        <option value="female">${t('nsfwSexF')}</option><option value="male">${t('nsfwSexM')}</option><option value="other">${t('nsfwSexO')}</option>
+    </select>
+    <select id="${extensionName}_nsfw_new_role" class="text_pole" style="width:auto">
+        <option value="bottom">${t('nsfwRoleB')}</option><option value="top">${t('nsfwRoleT')}</option><option value="switch">${t('nsfwRoleS')}</option>
+    </select>
+    <button id="${extensionName}_nsfw_add" class="kimi-btn">${t('nsfwAdd')}</button>
+</div>
+<div class="kimi-label" style="margin-top:8px">${t('nsfwRules')}</div>
+<textarea id="${extensionName}_nsfw_rules" class="text_pole" rows="7" style="width:100%;box-sizing:border-box;font-size:0.9em"></textarea>
+<div class="kimi-row" style="margin-top:6px"><button id="${extensionName}_nsfw_preview" class="kimi-btn">${t('nsfwPreview')}</button></div>
+<pre id="${extensionName}_nsfw_preview_box" style="display:none;max-height:40vh;overflow:auto;white-space:pre-wrap;font-size:0.85em;margin-top:6px"></pre>
+</div>
+</details>
 
 
 <!-- 其他功能已拆分：显示tps →「思维链」卡，保持滚动位置 →「不常用」卡 -->
@@ -11844,6 +12047,8 @@ const storeBuild = 'v2.2.118';
     if (typeof stTagMountSettings === 'function') stTagMountSettings();
     // API 池（额度轮换）卡（独立模块，随面板重建重挂）
     try { mountApiPoolCard('#kimi_reasoning_injector_api_slot'); } catch (e) { console.warn('[余温工具箱] API池卡挂载失败:', e); }
+    // ★W290：状态栏（NSFW）卡的绑定（面板会整体重建 ⇒ 每次重建后重新绑）
+    try { bindNsfwCard(); } catch (e) { console.warn('[余温工具箱] 状态栏卡绑定失败:', e); }
     // 所有卡挂载完毕后统一恢复展开记忆（含标签卡/API卡）
     if (typeof bindCardMemory === 'function') bindCardMemory();
     // ★W155（作者 2026-10-23 第 3 条）：给"别的模块挂上来的卡"（API 池 / 标签修复）补同款括号弱化 ——
