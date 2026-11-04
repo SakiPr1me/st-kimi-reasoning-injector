@@ -40,15 +40,13 @@ export const NSFW_FIELDS = [
     /* 体态 */
     { id: 'pose', group: '体态', label: '当前体位', type: 'text', core: true },
     { id: 'temp', group: '体态', label: '体温', type: 'text', core: true },
+    { id: 'sweat', group: '体态', label: '出汗量', type: 'text', core: false },
     { id: 'organFlush', group: '体态', label: '器官充血', type: 'text', core: true },
     { id: 'wearLevel', group: '体态', label: '损耗度', type: 'text', core: true },
     { id: 'bodyMarks', group: '体态', label: '体表痕迹', type: 'list', core: true },
     { id: 'selfJuice', group: '体态', label: '自身体液', type: 'text', core: true },
     { id: 'extJuice', group: '体态', label: '外部液体', type: 'text', core: true },
     { id: 'belly', group: '体态', label: '腹部外观', type: 'text', core: true },
-    { id: 'sweat', group: '体态', label: '出汗量', type: 'text', core: false },
-    { id: 'breath', group: '体态', label: '呼吸喘息', type: 'text', core: false },
-    { id: 'scent', group: '体态', label: '体味气味', type: 'text', core: false },
 
     /* 胸 */
     { id: 'nippleState', group: '胸', label: '乳头状态', type: 'text', core: true },
@@ -64,21 +62,18 @@ export const NSFW_FIELDS = [
     /* 前穴（女） */
     { id: 'vDepthNow', group: '前穴', label: '当前深度（受撑）', type: 'text', sex: 'female', core: true },
     { id: 'vOpening', group: '前穴', label: '外口状态', type: 'text', sex: 'female', core: true },
-    { id: 'vOpeningDesc', group: '前穴', label: '外口描写', type: 'text', sex: 'female', core: true },
     { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', sex: 'female', core: true },
-    { id: 'cervixDesc', group: '前穴', label: '子宫口描写', type: 'text', sex: 'female', core: true },
     { id: 'uterusInner', group: '前穴', label: '子宫内部', type: 'text', sex: 'female', core: true },
     { id: 'vFluid', group: '前穴', label: '阴道内', type: 'text', sex: 'female', core: true },
     { id: 'uterusFluid', group: '前穴', label: '子宫内', type: 'text', sex: 'female', core: true },
     { id: 'gState', group: '前穴', label: 'G点状态', type: 'text', sex: 'female', core: false },
-    { id: 'vulvaColorNow', group: '前穴', label: '外阴色泽', type: 'text', sex: 'female', core: false },
+    { id: 'vulvaColorNow', group: '前穴', label: '外阴色泽', type: 'text', sex: 'female', core: true },
+    { id: 'vulvaShape', group: '前穴', label: '外阴形态', type: 'text', sex: 'female', core: true },
 
     /* 后穴（男女通用） */
     { id: 'aDepthNow', group: '后穴', label: '当前深度（受撑）', type: 'text', core: true },
     { id: 'aOpening', group: '后穴', label: '外口状态', type: 'text', core: true },
-    { id: 'aOpeningDesc', group: '后穴', label: '外口描写', type: 'text', core: true },
     { id: 'colonState', group: '后穴', label: '结肠口状态', type: 'text', core: true },
-    { id: 'colonDesc', group: '后穴', label: '结肠口描写', type: 'text', core: true },
     { id: 'aFluid', group: '后穴', label: '后穴内', type: 'text', core: true },
     { id: 'keyPointState', group: '后穴', label: '关键点状态', type: 'text', core: false },
 
@@ -124,34 +119,22 @@ export const NSFW_FIELDS = [
     /* ── 静态参数（建档填一次；不要求 AI 每轮输出） ── */
     { id: 'stChestSize', group: '静态-胸部', tab: '胸', label: '罩杯/胸肌', type: 'text', static: true },
     { id: 'stChestShape', group: '静态-胸部', tab: '胸', label: '胸型', type: 'text', static: true },
-    { id: 'stChestFeel', group: '静态-胸部', tab: '胸', label: '胸部触感温度', type: 'text', static: true },
     { id: 'stNippleLen', group: '静态-胸部', tab: '胸', label: '乳头长', type: 'text', static: true },
     { id: 'stNippleWid', group: '静态-胸部', tab: '胸', label: '乳头宽', type: 'text', static: true },
     { id: 'stAreolaDia', group: '静态-胸部', tab: '胸', label: '乳晕直径', type: 'text', static: true },
     { id: 'stAreolaShape', group: '静态-胸部', tab: '胸', label: '乳晕形态', type: 'text', static: true },
     { id: 'stAreolaColor', group: '静态-胸部', tab: '胸', label: '乳晕色泽', type: 'text', static: true },
-    { id: 'stLactation', group: '静态-胸部', tab: '胸', label: '泌乳', type: 'text', static: true },
     { id: 'stClitLen', group: '静态-前穴', tab: '前穴', label: '阴蒂长度', type: 'text', sex: 'female', static: true },
     { id: 'stClitSize', group: '静态-前穴', tab: '前穴', label: '阴蒂大小', type: 'text', sex: 'female', static: true },
     { id: 'stPenisLen', group: '静态-后穴', tab: '后穴', label: '阴茎长度', type: 'text', sex: 'male', static: true },
     { id: 'stPenisGirth', group: '静态-后穴', tab: '后穴', label: '阴茎粗度', type: 'text', sex: 'male', static: true },
     { id: 'stPenisLook', group: '静态-后穴', tab: '后穴', label: '阴茎外观', type: 'text', sex: 'male', static: true },
-    { id: 'stVulvaShape', group: '静态-前穴', tab: '前穴', label: '外阴形态', type: 'text', sex: 'female', static: true },
-    { id: 'stVulvaColor', group: '静态-前穴', tab: '前穴', label: '外阴基础色泽', type: 'text', sex: 'female', static: true },
-    { id: 'stVDepth', group: '静态-前穴', tab: '前穴', label: '前·常态深度', type: 'text', sex: 'female', static: true },
-    { id: 'stVMaxDepth', group: '静态-前穴', tab: '前穴', label: '前·极限拉伸深度', type: 'text', sex: 'female', static: true },
     { id: 'stGDepth', group: '静态-前穴', tab: '前穴', label: 'G点深度', type: 'text', sex: 'female', static: true },
     { id: 'stCervixDepth', group: '静态-前穴', tab: '前穴', label: '子宫口深度', type: 'text', sex: 'female', static: true },
-    { id: 'stVSafeCap', group: '静态-前穴', tab: '前穴', label: '前·安全容纳量', type: 'text', sex: 'female', static: true },
-    { id: 'stVMaxCap', group: '静态-前穴', tab: '前穴', label: '前·极限容纳量', type: 'text', sex: 'female', static: true },
     { id: 'stAnusShape', group: '静态-后穴', tab: '后穴', label: '肛门形态', type: 'text', static: true },
     { id: 'stRectumLoose', group: '静态-后穴', tab: '后穴', label: '后庭松弛度', type: 'text', static: true },
-    { id: 'stADepth', group: '静态-后穴', tab: '后穴', label: '后·常态深度', type: 'text', static: true },
-    { id: 'stAMaxDepth', group: '静态-后穴', tab: '后穴', label: '后·极限拉伸深度', type: 'text', static: true },
     { id: 'stKeyDepth', group: '静态-后穴', tab: '后穴', label: '前列腺深度', type: 'text', static: true },
     { id: 'stColonDepth', group: '静态-后穴', tab: '后穴', label: '结肠口深度', type: 'text', static: true },
-    { id: 'stASafeCap', group: '静态-后穴', tab: '后穴', label: '后·安全容纳量', type: 'text', static: true },
-    { id: 'stAMaxCap', group: '静态-后穴', tab: '后穴', label: '后·极限容纳量', type: 'text', static: true },
     { id: 'stEroZones', group: '静态-其他', tab: '状态', label: '敏感带', type: 'list', static: true },
     { id: 'stMouthDepth', group: '静态-其他', tab: '状态', label: '口部耐受深度', type: 'text', static: true },
     { id: 'stFavPose', group: '静态-其他', tab: '状态', label: '惯用体位', type: 'text', static: true },
@@ -182,7 +165,8 @@ export const NSFW_DEFAULT_RULES = [
     { id: 'r13', text: '积乳：泌乳体质每轮按时间与刺激累积「积乳量 ml」，被吸出/挤出后下降；未到量时写胀痛感。', enabled: true, builtin: true },
     { id: 'r14', text: '卵子状态随生理周期变化：卵泡期「未成熟」、排卵期「成熟待排/已排出」、黄体期「已排出·黄体期」、月经期「新一轮」。', enabled: true, builtin: true },
     { id: 'r15', text: '开发度按五个部位（口/胸/前/后/最深）各写四列：等级（1-10）、经验（当前/下一级）、敏感度、已解锁技能（逗号分隔）；没有的技能不要编。', enabled: true, builtin: true },
-    { id: 'r16', text: '【档案·固定】里的静态参数（罩杯、乳头尺寸、乳晕、通道常态深度、极限拉伸深度、子宫口深度、前列腺深度、结肠口深度、阴蒂/阴茎尺寸）由用户建档填写，你只读不改，也不要每轮重复输出。', enabled: true, builtin: true }
+    { id: 'r16', text: '【档案·固定】里的静态参数（罩杯、乳头尺寸、乳晕、通道常态深度、极限拉伸深度、子宫口深度、前列腺深度、结肠口深度、阴蒂/阴茎尺寸）由用户建档填写，你只读不改，也不要每轮重复输出。', enabled: true, builtin: true },
+    { id: 'r17', text: '「外口状态」「子宫口状态」「结肠口状态」这三个字段的括号评述里要写一句白话描写（原来单独的外口描写/子宫口描写已并入这里）。', enabled: true, builtin: true }
 ];
 
 /* ────────────────────────── 存储 ────────────────────────── */
@@ -540,6 +524,25 @@ function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+/** 开发度表格：部位 × 等级/经验/敏感度/技能 */
+function devTableHtml(profile) {
+    const parts = [ ['口', 'Mouth'], ['胸', 'Chest'], ['前', 'Front'], ['后', 'Back'], ['最深', 'Deep'] ];
+    const cell = (id) => {
+        const c = (profile.stats || {})[id];
+        if (!c) return '';
+        return fmtVal(fieldById(id), c);
+    };
+    const rows = parts.map((pp) => {
+        const lv = cell('dev' + pp[1] + 'Lv');
+        const exp = cell('dev' + pp[1] + 'Exp');
+        const sense = cell('dev' + pp[1] + 'Sense');
+        const skill = cell('dev' + pp[1] + 'Skill');
+        if (!lv && !exp && !sense && !skill) return '';
+        return '<tr><th>' + esc(pp[0]) + '</th><td class="lv">' + esc(lv) + '</td><td>' + esc(exp) + '</td><td>' + esc(sense) + '</td><td class="sk">' + esc(skill) + '</td></tr>';
+    }).join('');
+    if (!rows) return '';
+    return '<table class="yw-nsfw-dev"><thead><tr><th>部位</th><th>等级</th><th>经验</th><th>敏感度</th><th>技能</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
 function rowHtml(f, cell) {
     if (!cell) return '';
     const val = fmtVal(f, cell);
@@ -599,7 +602,8 @@ export function nsfwRenderCard(name, profile) {
 
     const tabs = [];
     GROUP_ORDER.forEach((grp) => {
-        const live = (byGroup[grp] && byGroup[grp].length) ? byGroup[grp].join('') : '';
+        let live = (byGroup[grp] && byGroup[grp].length) ? byGroup[grp].join('') : '';
+        if (grp === '开发') live = devTableHtml(profile);
         const stc = (staticByTab[grp] && staticByTab[grp].length) ? ('<div class=\"yw-nsfw-sub\">档案 · 固定</div>' + staticByTab[grp].join('')) : '';
         const html = live + stc;
         if (html) tabs.push({ id: grp, label: grp, html: html });
@@ -671,6 +675,12 @@ const CSS = [
     '.yw-nsfw-viewrow{padding:3px 2px;font-size:.86em;line-height:1.55;font-style:italic;opacity:.9}',
     '.yw-nsfw-viewrow .lbl{opacity:.55;font-style:normal;margin-right:6px}',
     '.yw-nsfw-empty{padding:10px;opacity:.6;font-size:.86em}',
+    '.yw-nsfw-dev{width:100%;border-collapse:collapse;font-size:.84em;margin:2px 0}',
+    '.yw-nsfw-dev th,.yw-nsfw-dev td{padding:3px 4px;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent);text-align:left}',
+    '.yw-nsfw-dev thead th{opacity:.55;font-weight:500;font-size:.95em}',
+    '.yw-nsfw-dev tbody th{width:2.6em;opacity:.8;font-weight:600}',
+    '.yw-nsfw-dev td.lv{width:2.2em;text-align:right;font-variant-numeric:tabular-nums}',
+    '.yw-nsfw-dev td.sk{opacity:.85}',
     '.yw-nsfw-sub{margin:6px 2px 2px;font-size:.76em;opacity:.5;letter-spacing:.5px}',
     '.yw-nsfw--compact .yw-nsfw-row{padding:0 2px;line-height:1.3}',
     '.yw-nsfw--compact .yw-nsfw-row .k{font-size:.78em}',
