@@ -32,15 +32,15 @@ export const NSFW_FIELDS = [
     { id: 'voice', group: '状态', label: '发声状态', type: 'text', core: true },
     { id: 'brands', group: '状态', label: '心理烙印', type: 'list', core: true },
     { id: 'bottomline', group: '状态', label: '崩塌底线', type: 'text', core: false },
-    { id: 'bladder', group: '状态', label: '尿意', type: 'num', min: 0, max: 100, core: false },
-    { id: 'pain', group: '状态', label: '疼痛度', type: 'num', min: 0, max: 100, core: false },
-    { id: 'exposure', group: '状态', label: '暴露度', type: 'num', min: 0, max: 100, core: false },
+    { id: 'bladder', group: '状态', label: '尿意', type: 'num', min: 0, max: 100, core: false, core: true },
+    { id: 'pain', group: '状态', label: '疼痛度', type: 'num', min: 0, max: 100, core: false, core: true },
+    { id: 'exposure', group: '状态', label: '暴露度', type: 'num', min: 0, max: 100, core: false, core: true },
     { id: 'pregnancy', group: '状态', label: '怀孕状态', type: 'text', core: false },
 
     /* 体态 */
     { id: 'pose', group: '体态', label: '当前体位', type: 'text', core: true },
     { id: 'temp', group: '体态', label: '体温', type: 'text', core: true },
-    { id: 'sweat', group: '体态', label: '出汗量', type: 'text', core: false },
+    { id: 'sweat', group: '体态', label: '出汗量', type: 'text', core: false, core: true },
     { id: 'organFlush', group: '体态', label: '器官充血', type: 'text', core: true },
     { id: 'wearLevel', group: '体态', label: '损耗度', type: 'text', core: true },
     { id: 'bodyMarks', group: '体态', label: '体表痕迹', type: 'list', core: true },
@@ -56,23 +56,25 @@ export const NSFW_FIELDS = [
     { id: 'outer', group: '穿搭', label: '外衣', type: 'text', core: true },
     { id: 'inner', group: '穿搭', label: '内衣', type: 'text', core: true },
     { id: 'accessories', group: '穿搭', label: '配饰', type: 'list', core: true },
-    { id: 'clothState', group: '穿搭', label: '衣物状态', type: 'text', core: false },
-    { id: 'insertItem', group: '穿搭', label: '插入物', type: 'text', core: false },
+    { id: 'clothState', group: '穿搭', label: '衣物状态', type: 'text', core: false, core: true },
+    { id: 'insertItem', group: '穿搭', label: '插入物', type: 'text', core: false, core: true },
 
     /* 前穴（女） */
     { id: 'vLoose', group: '前穴', label: '松弛度', type: 'text', sex: 'female', core: true, ord: 40 },
-    { id: 'vDepthNow', group: '前穴', label: '当前深度（受撑）', type: 'text', sex: 'female', core: true, ord: 30 },
+    { id: 'vDepthNow', group: '前穴', label: '当前深度（受撑）', type: 'num', min: 0, max: 100, unit: 'cm', sex: 'female', core: true, ord: 30 },
     { id: 'vulvaState', group: '前穴', label: '外阴状态', type: 'text', sex: 'female', core: true, ord: 80 },
     { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', sex: 'female', core: true, ord: 50, options: ['紧闭', '受迫变形', '微开', '全开'] },
-    { id: 'vFluid', group: '前穴', label: '阴道液体状况', type: 'text', sex: 'female', core: true, ord: 60 },
-    { id: 'uterusFluid', group: '前穴', label: '子宫液体状况', type: 'text', sex: 'female', core: true, ord: 70 },
+    { id: 'vFluidMl', group: '前穴', label: '阴道液体量', type: 'num', min: 0, max: 2000, unit: 'ml', sex: 'female', core: true, ord: 60 },
+    { id: 'vFluidKind', group: '前穴', label: '阴道液体种类', type: 'text', sex: 'female', core: true, ord: 61 },
+    { id: 'uterusFluidMl', group: '前穴', label: '子宫液体量', type: 'num', min: 0, max: 2000, unit: 'ml', sex: 'female', core: true, ord: 70 },
 
     /* 后穴（男女通用） */
     { id: 'aLoose', group: '后穴', label: '松弛度', type: 'text', core: true, ord: 40 },
-    { id: 'aDepthNow', group: '后穴', label: '当前深度（受撑）', type: 'text', core: true, ord: 30 },
+    { id: 'aDepthNow', group: '后穴', label: '当前深度（受撑）', type: 'num', min: 0, max: 100, unit: 'cm', core: true, ord: 30 },
     { id: 'aAnusState', group: '后穴', label: '肛门状态', type: 'text', core: true, ord: 80 },
     { id: 'colonState', group: '后穴', label: '结肠口状态', type: 'text', core: true, ord: 50, options: ['紧闭', '受迫变形', '微开', '全开'] },
-    { id: 'aFluid', group: '后穴', label: '后穴液体状况', type: 'text', core: true, ord: 60 },
+    { id: 'aFluidMl', group: '后穴', label: '后穴液体量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 60 },
+    { id: 'aFluidKind', group: '后穴', label: '后穴液体种类', type: 'text', core: true, ord: 61 },
     { id: 'keyPointState', group: '后穴', label: '后穴G点状态', type: 'text', core: false, ord: 70 },
 
     /* 开发 */
@@ -460,7 +462,7 @@ export function parseMachineBody(body) {
         if (eq > 0) {
             const key = s.slice(0, eq).trim().split(/\s+/)[0];
             const rest = s.slice(eq + 1).trim();
-            const f = all.find((x) => !x.static && x.id === key) || fieldByLabel(key);
+            const f = all.find((x) => x.id === key) || fieldByLabel(key);
             if (!f) return;
             const sv = splitValueComment(rest);
             out[f.id] = { value: sv.value, comment: sv.comment };
@@ -542,6 +544,12 @@ export function nsfwApply(chatId, parsed) {
             Object.keys(mm).forEach((id) => {
                 const f = fieldById(id);
                 if (!f) return;
+                /* 静态档案：只在还没填时接受 AI 的首次填写 */
+                if (f.static) {
+                    if (!rec.static) rec.static = {};
+                    if (!rec.static[id]) rec.static[id] = String((mm[id] || {}).value || '').trim();
+                    return;
+                }
                 if (!allow[id]) return;   /* ★只收当前启用字段（非核心字段即使 AI 写了也不入库） */
                 const item = mm[id] || {};
                 let value = item.value;
@@ -590,8 +598,8 @@ export function buildCharBlock(name, profile) {
     const stLines = nsfwStaticFields(profile)
         .map((f) => ({ f: f, v: String((profile.static || {})[f.id] || '').trim() }))
         .filter((x) => x.v)
-        .map((x) => x.f.label + ': ' + x.v);
-    if (stLines.length) lines.unshift('【档案·固定】');
+        .map((x) => x.f.id + '=' + x.v);
+    if (stLines.length) lines.unshift('【档案·固定·只读】');
     if (stLines.length) stLines.forEach((x) => lines.push(x));
     const preg = calcPregRisk(profile);
     if (preg.why) lines.push('怀孕几率: ' + preg.risk + '%（插件计算，不要改写）');
@@ -742,7 +750,7 @@ function rowHtml(f, cell) {
         const max = typeof f.max === 'number' ? f.max : 100;
         const pct = Math.max(0, Math.min(100, (n / max) * 100));
         return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
-            + '<td class="v"><span class="num">' + esc(val) + '</span><span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span></td>'
+            + '<td class="v"><span class="num">' + esc(val) + (f.unit ? ' ' + esc(f.unit) : '') + '</span><span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span></td>'
             + c + '</tr>';
     }
     return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
@@ -947,11 +955,11 @@ export function nsfwFillDemo(chatId, name) {
         set('accessories', '猫尾肛塞', '还在震');
         set('milkMl', '38', '积了快一天'); set('nippleState', '硬挺凸起 · 极度敏感', '碰一下整个人就弹');
         set('areolaNow', '茶托状微扩 · 色沉加深', '');
-        set('vDepthNow', '12 → 18cm', '被撑到极限'); set('vLoose', '松弛失守 · 合不拢', '肌肉失去弹性，从外面能看到内壁');
-        set('cervixState', '未开 · 充血红肿', '每一下都撞在那'); set('vFluid', '58ml · 爱液', '顺着大腿往下');
-        set('uterusFluid', '0ml', '还没灌进去'); set('vulvaState', '小阴唇微张外翻 · 暗红充血', '被磨得发亮');
-        set('aDepthNow', '10 → 14cm', '被塞子撑开'); set('aLoose', '微张 · 边缘泛红', '拔出来会合不拢');
-        set('colonState', '紧闭', '顶到就发酸'); set('aFluid', '32ml · 润滑油', '被堵在里面');
+        set('vDepthNow', '18', '被撑到极限'); set('vLoose', '松弛失守 · 合不拢', '肌肉失去弹性，从外面能看到内壁');
+        set('cervixState', '未开 · 充血红肿', '每一下都撞在那'); set('vFluidMl', '58', '顺着大腿往下'); set('vFluidKind', '爱液', '');
+        set('uterusFluidMl', '0', '还没灌进去'); set('vulvaState', '小阴唇微张外翻 · 暗红充血', '被磨得发亮');
+        set('aDepthNow', '14', '被塞子撑开'); set('aLoose', '微张 · 边缘泛红', '拔出来会合不拢');
+        set('colonState', '紧闭', '顶到就发酸'); set('aFluidMl', '32', '被堵在里面'); set('aFluidKind', '润滑油', '');
         set('keyPointState', '前列腺 · 充血', '一顶就腿软'); set('aAnusState', '紧致 · 边缘泛红', '');
         set('devMouthLv', '3', ''); set('devMouthExp', '180/300', ''); set('devMouthSense', '中等', ''); set('devMouthSkill', '深喉、抗呕吐', '');
         set('devChestLv', '4', ''); set('devChestExp', '420/500', ''); set('devChestSense', '极度敏感', ''); set('devChestSkill', '常态激凸、微量溢乳', '');
