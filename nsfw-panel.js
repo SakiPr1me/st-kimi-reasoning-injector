@@ -60,22 +60,20 @@ export const NSFW_FIELDS = [
     { id: 'insertItem', group: '穿搭', label: '插入物', type: 'text', core: false },
 
     /* 前穴（女） */
-    { id: 'vDepthNow', group: '前穴', label: '当前深度（受撑）', type: 'text', sex: 'female', core: true },
-    { id: 'vOpening', group: '前穴', label: '外口状态', type: 'text', sex: 'female', core: true },
-    { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', sex: 'female', core: true },
-    { id: 'uterusInner', group: '前穴', label: '子宫内部', type: 'text', sex: 'female', core: true },
-    { id: 'vFluid', group: '前穴', label: '阴道内', type: 'text', sex: 'female', core: true },
-    { id: 'uterusFluid', group: '前穴', label: '子宫内', type: 'text', sex: 'female', core: true },
-    { id: 'gState', group: '前穴', label: 'G点状态', type: 'text', sex: 'female', core: false },
-    { id: 'vulvaColorNow', group: '前穴', label: '外阴色泽', type: 'text', sex: 'female', core: true },
-    { id: 'vulvaShape', group: '前穴', label: '外阴形态', type: 'text', sex: 'female', core: true },
+    { id: 'vLoose', group: '前穴', label: '松弛度', type: 'text', sex: 'female', core: true, ord: 40 },
+    { id: 'vDepthNow', group: '前穴', label: '当前深度（受撑）', type: 'text', sex: 'female', core: true, ord: 30 },
+    { id: 'vulvaState', group: '前穴', label: '外阴状态', type: 'text', sex: 'female', core: true, ord: 80 },
+    { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', sex: 'female', core: true, ord: 50 },
+    { id: 'vFluid', group: '前穴', label: '阴道液体状况', type: 'text', sex: 'female', core: true, ord: 60 },
+    { id: 'uterusFluid', group: '前穴', label: '子宫液体状况', type: 'text', sex: 'female', core: true, ord: 70 },
 
     /* 后穴（男女通用） */
-    { id: 'aDepthNow', group: '后穴', label: '当前深度（受撑）', type: 'text', core: true },
-    { id: 'aOpening', group: '后穴', label: '外口状态', type: 'text', core: true },
-    { id: 'colonState', group: '后穴', label: '结肠口状态', type: 'text', core: true },
-    { id: 'aFluid', group: '后穴', label: '后穴内', type: 'text', core: true },
-    { id: 'keyPointState', group: '后穴', label: '后穴G点状态', type: 'text', core: false },
+    { id: 'aLoose', group: '后穴', label: '松弛度', type: 'text', core: true, ord: 40 },
+    { id: 'aDepthNow', group: '后穴', label: '当前深度（受撑）', type: 'text', core: true, ord: 30 },
+    { id: 'aAnusState', group: '后穴', label: '肛门状态', type: 'text', core: true, ord: 80 },
+    { id: 'colonState', group: '后穴', label: '结肠口状态', type: 'text', core: true, ord: 50 },
+    { id: 'aFluid', group: '后穴', label: '后穴液体状况', type: 'text', core: true, ord: 60 },
+    { id: 'keyPointState', group: '后穴', label: '后穴G点状态', type: 'text', core: false, ord: 70 },
 
     /* 开发 */
     { id: 'devMouthLv', group: '开发', label: '口·等级', type: 'num', min: 0, max: 10, core: true },
@@ -124,17 +122,15 @@ export const NSFW_FIELDS = [
     { id: 'stAreolaDia', group: '静态-胸部', tab: '胸', label: '乳晕直径', type: 'text', static: true, after: 'areolaNow' },
     { id: 'stAreolaShape', group: '静态-胸部', tab: '胸', label: '乳晕形态', type: 'text', static: true, after: 'areolaNow' },
     { id: 'stAreolaColor', group: '静态-胸部', tab: '胸', label: '乳晕色泽', type: 'text', static: true, after: 'areolaNow' },
-    { id: 'stClitLen', group: '静态-前穴', tab: '前穴', label: '阴蒂长度', type: 'text', sex: 'female', static: true, after: 'vulvaShape' },
-    { id: 'stClitSize', group: '静态-前穴', tab: '前穴', label: '阴蒂大小', type: 'text', sex: 'female', static: true, after: 'vulvaShape' },
+    { id: 'stClitLen', group: '静态-前穴', tab: '前穴', label: '阴蒂长度', type: 'text', sex: 'female', static: true, after: 'vulvaShape', ord: 90 },
+    { id: 'stClitSize', group: '静态-前穴', tab: '前穴', label: '阴蒂大小', type: 'text', sex: 'female', static: true, after: 'vulvaShape', ord: 100 },
     { id: 'stPenisLen', group: '静态-后穴', tab: '后穴', label: '阴茎长度', type: 'text', sex: 'male', static: true },
     { id: 'stPenisGirth', group: '静态-后穴', tab: '后穴', label: '阴茎粗度', type: 'text', sex: 'male', static: true },
     { id: 'stPenisLook', group: '静态-后穴', tab: '后穴', label: '阴茎外观', type: 'text', sex: 'male', static: true },
-    { id: 'stGDepth', group: '静态-前穴', tab: '前穴', label: 'G点深度', type: 'text', sex: 'female', static: true, after: 'gState' },
-    { id: 'stCervixDepth', group: '静态-前穴', tab: '前穴', label: '子宫口深度', type: 'text', sex: 'female', static: true, after: 'cervixState' },
-    { id: 'stAnusShape', group: '静态-后穴', tab: '后穴', label: '肛门形态', type: 'text', static: true, after: 'aOpening' },
-    { id: 'stRectumLoose', group: '静态-后穴', tab: '后穴', label: '后庭松弛度', type: 'text', static: true, after: 'aOpening' },
-    { id: 'stKeyDepth', group: '静态-后穴', tab: '后穴', label: '前列腺深度', type: 'text', static: true, after: 'keyPointState' },
-    { id: 'stColonDepth', group: '静态-后穴', tab: '后穴', label: '结肠口深度', type: 'text', static: true, after: 'colonState' },
+    { id: 'stGDepth', group: '静态-前穴', tab: '前穴', label: 'G点深度', type: 'text', sex: 'female', static: true, after: 'gState', ord: 10 },
+    { id: 'stCervixDepth', group: '静态-前穴', tab: '前穴', label: '子宫口深度', type: 'text', sex: 'female', static: true, after: 'cervixState', ord: 20 },
+    { id: 'stKeyDepth', group: '静态-后穴', tab: '后穴', label: '前列腺深度', type: 'text', static: true, after: 'keyPointState', ord: 10 },
+    { id: 'stColonDepth', group: '静态-后穴', tab: '后穴', label: '结肠口深度', type: 'text', static: true, after: 'colonState', ord: 20 },
     { id: 'stEroZones', group: '静态-其他', tab: '状态', label: '敏感带', type: 'list', static: true },
     { id: 'stMouthDepth', group: '静态-其他', tab: '状态', label: '口部耐受深度', type: 'text', static: true },
     { id: 'stFavPose', group: '静态-其他', tab: '状态', label: '惯用体位', type: 'text', static: true },
@@ -166,7 +162,7 @@ export const NSFW_DEFAULT_RULES = [
     { id: 'r14', text: '卵子状态随生理周期变化：卵泡期「未成熟」、排卵期「成熟待排/已排出」、黄体期「已排出·黄体期」、月经期「新一轮」。', enabled: true, builtin: true },
     { id: 'r15', text: '开发度按五个部位（口/胸/前/后/最深）各写四列：等级（1-10）、经验（当前/下一级）、敏感度、已解锁技能（逗号分隔）；没有的技能不要编。', enabled: true, builtin: true },
     { id: 'r16', text: '【档案·固定】里的静态参数（罩杯、乳头尺寸、乳晕、通道常态深度、极限拉伸深度、子宫口深度、前列腺深度、结肠口深度、阴蒂/阴茎尺寸）由用户建档填写，你只读不改，也不要每轮重复输出。', enabled: true, builtin: true },
-    { id: 'r17', text: '「外口状态」「子宫口状态」「结肠口状态」这三个字段的括号评述里要写一句白话描写（原来单独的外口描写/子宫口描写已并入这里）。', enabled: true, builtin: true }
+    { id: 'r17', text: '「松弛度」「子宫口状态」「结肠口状态」这三个字段的括号评述里要写一句白话描写（原来单独的外口描写/子宫口描写已并入这里）。', enabled: true, builtin: true }
 ];
 
 /* ────────────────────────── 存储 ────────────────────────── */
@@ -532,18 +528,15 @@ function tabRowsHtml(profile, grp, byGroup) {
         if (f.group !== grp) return;
         const cell = (profile.stats || {})[f.id];
         if (!cell || !fmtVal(f, cell)) return;
-        rows.push({ id: f.id, html: rowHtml(f, cell) });
+        rows.push({ ord: (typeof f.ord === 'number' ? f.ord : 9999), html: rowHtml(f, cell) });
     });
-    const extra = {};
     nsfwStaticFields(profile).forEach((f) => {
         if ((f.tab || '状态') !== grp) return;
         const v = String((profile.static || {})[f.id] || '').trim();
         if (!v) return;
-        const html = rowHtml(f, { value: v, comment: '' });
-        const at = f.after ? rows.findIndex((r) => r.id === f.after) : -1;
-        if (at >= 0) { const off = extra[f.after] || 0; rows.splice(at + 1 + off, 0, { id: 'st:' + f.id, html: html }); extra[f.after] = off + 1; }
-        else rows.push({ id: 'st:' + f.id, html: html });
+        rows.push({ ord: (typeof f.ord === 'number' ? f.ord : 9999), html: rowHtml(f, { value: v, comment: '' }) });
     });
+    rows.sort((a, b) => a.ord - b.ord);
     return rows.map((r) => r.html).join('');
 }
 /** 开发度表格：部位 × 等级/经验/敏感度/技能 */
