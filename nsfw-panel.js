@@ -1063,6 +1063,36 @@ export function nsfwEnsureStyle() {
     } catch (e) { }
 }
 
+/* ────────────────────────── 每楼快照 ────────────────────────── */
+const SNAP_KEY = 'kimi_nsfw_snaps';
+export function nsfwSaveSnap(chatId, msgId) {
+    try {
+        const { bucket } = nsfwBucket(chatId);
+        const raw = localStorage.getItem(SNAP_KEY);
+        const all = raw ? (JSON.parse(raw) || {}) : {};
+        const cid = String(chatId || 'default');
+        if (!all[cid] || typeof all[cid] !== 'object') all[cid] = {};
+        const snap = {};
+        Object.keys(bucket.chars || {}).forEach((n) => {
+            const rec = bucket.chars[n];
+            if (!rec || !rec.updatedAt) return;
+            snap[n] = { sex: rec.sex, role: rec.role, stats: JSON.parse(JSON.stringify(rec.stats || {})), desc: JSON.parse(JSON.stringify(rec.desc || {})) };
+        });
+        all[cid][String(msgId)] = snap;
+        const keys = Object.keys(all[cid]);
+        if (keys.length > 300) { keys.sort((a, b) => Number(a) - Number(b)); keys.slice(0, keys.length - 300).forEach((k) => { delete all[cid][k]; }); }
+        localStorage.setItem(SNAP_KEY, JSON.stringify(all));
+        return true;
+    } catch (e) { return false; }
+}
+export function nsfwSnapOf(chatId, msgId) {
+    try {
+        const raw = localStorage.getItem(SNAP_KEY);
+        const all = raw ? (JSON.parse(raw) || {}) : {};
+        const cid = String(chatId || 'default');
+        return (all[cid] && all[cid][String(msgId)]) || null;
+    } catch (e) { return null; }
+}
 /* ────────────────────────── 消息挂载 ────────────────────────── */
 
 export function nsfwMountToMessage(messageId) {
@@ -1080,10 +1110,12 @@ export function nsfwMountToMessage(messageId) {
         nsfwEnsureStyle();
         mesEl.querySelectorAll('.yw-nsfw').forEach((n) => n.remove());
 
+        const snap = nsfwSnapOf(chatId, messageId);
+        const pick = (n) => (snap && snap[n]) ? snap[n] : bucket.chars[n];
         let show = names.filter((n) => String(msg.mes || '').includes(n));
         if (!show.length) show = [names[names.length - 1]];
         show.slice(0, 3).forEach((n) => {
-            const card = nsfwRenderCard(n, bucket.chars[n]);
+            const card = nsfwRenderCard(n, pick(n));
             card.dataset.mesid = String(messageId);
             const anchor = mesEl.querySelector('.mes_text') || mesEl;
             if (anchor.parentNode) anchor.parentNode.insertBefore(card, anchor.nextSibling);
