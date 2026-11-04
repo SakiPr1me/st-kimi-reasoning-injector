@@ -10,7 +10,7 @@ import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
-import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 
 
@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.168'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.169'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -2296,6 +2296,14 @@ function applyRequestInjections(bodyObj) {
         //      幂等：本批消息里已经有「【状态栏 · 更新规则】」就不再插第二次
         if (settings.enabled && settings.nsfwEnabled && msgs && msgs.length) {
             try {
+                /* ★W315：历史楼层里的数据块不进请求（状态只由下面的【CURRENT STATE】承载） */
+                for (let i = 0; i < msgs.length; i++) {
+                    const mm0 = msgs[i];
+                    if (!mm0 || typeof mm0.content !== 'string') continue;
+                    if (mm0.content.indexOf('data-nsfw') < 0 && mm0.content.indexOf('<nsfw') < 0) continue;
+                    const stripped = nsfwStripBlocks(mm0.content);
+                    if (stripped !== mm0.content) { mm0.content = stripped; changed = true; }
+                }
                 const nsfwText = nsfwBuildInjection(nsfwChatId(), { fullCount: settings.nsfwFullCount });
                 if (nsfwText) {
                     const already = msgs.some((m) => m && typeof m.content === 'string' && m.content.indexOf('【状态栏 · 更新规则】') >= 0);
@@ -8956,10 +8964,24 @@ eventSource.on(event_types.MESSAGE_RECEIVED, async (id) => {
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const msg = ctx && ctx.chat ? ctx.chat[id] : null;
         if (!msg || msg.is_user || msg.is_system) return;
-        const mes = String(msg.mes || '');
+        let mes = String(msg.mes || '');
         if (mes.indexOf('<nsfw') < 0) { try { nsfwMountToMessage(id); } catch (e) { } return; }
         const key = id + '|' + (typeof msg.swipe_id === 'number' ? msg.swipe_id : -1) + '|' + mes.length;
         if (nsfwParsedKeys.has(key)) return;
+        /* ★W315：只换外壳（<nsfw> → <div data-nsfw>），值全部留在楼层里；
+           显示层由 CSS 隐藏，小铅笔打开能看到并手改 */
+        const wrapped = nsfwWrapBlocks(mes);
+        if (wrapped !== mes) {
+            msg.mes = wrapped;
+            try {
+                if (Array.isArray(msg.swipes) && typeof msg.swipe_id === 'number' && msg.swipes[msg.swipe_id] != null) {
+                    msg.swipes[msg.swipe_id] = wrapped;
+                }
+            } catch (e) { }
+            try { if (ctx.saveChat) await ctx.saveChat(); } catch (e) { }
+            try { await reRenderMessage(id); } catch (e) { }
+            mes = wrapped;
+        }
         const parsed = nsfwParse(mes);
         if (!parsed.hasAny) { try { nsfwMountToMessage(id); } catch (e) { } return; }
         nsfwParsedKeys.add(key);
@@ -8967,20 +8989,23 @@ eventSource.on(event_types.MESSAGE_RECEIVED, async (id) => {
         nsfwApply(nsfwChatId(ctx), parsed);
         try { nsfwMarkMentions(nsfwChatId(ctx), parsed.stripped, id); } catch (e) { }
         try { nsfwSaveSnap(nsfwChatId(ctx), id); } catch (e) { }
-        /* 剥块：mes 与当前 swipe 槽都改（否则切分支回来又能看到原始块） */
-        msg.mes = parsed.stripped;
-        try {
-            if (Array.isArray(msg.swipes) && typeof msg.swipe_id === 'number' && msg.swipes[msg.swipe_id] != null) {
-                msg.swipes[msg.swipe_id] = parsed.stripped;
-            }
-        } catch (e) { }
-        try { if (ctx.saveChat) await ctx.saveChat(); } catch (e) { }
-        await reRenderMessage(id);
+        /* ★W315：块不再从 mes 里剥掉 —— 状态就长在楼层里：
+           · 小铅笔打开能看到并手改（下一轮注入读的就是它）
+           · 重roll / 新分支各生成各的块，互不覆盖
+           · 删楼就连块一起没了
+           显示层由 nsfwHideRaw 隐藏原始块，卡片从这条消息自己的块解析。 */
         setTimeout(() => { try { nsfwMountToMessage(id); } catch (e) { } }, 80);
     } catch (e) { /* 状态栏失败静默，绝不影响聊天 */ }
 });
 /** 重渲染后补挂状态卡（swipe/编辑/角色渲染共用） */
-function nsfwHook(id) { try { if (settings.nsfwEnabled) nsfwMountToMessage(id); } catch (e) { } }
+function nsfwSyncChat() {
+    try {
+        if (!settings.nsfwEnabled) return;
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+        if (ctx) nsfwRebuildFromChat(nsfwChatId(ctx), ctx.chat);
+    } catch (e) { }
+}
+function nsfwHook(id, rebuild) { try { if (!settings.nsfwEnabled) return; if (rebuild) nsfwSyncChat(); nsfwMountToMessage(id); } catch (e) { } }
 
 /* ★W290：状态栏（NSFW）设置卡的事件绑定（面板整体重建 ⇒ 每次重建后重绑；幂等） */
 function bindNsfwCard() {
@@ -8993,7 +9018,7 @@ function bindNsfwCard() {
         const box = document.getElementById(extensionName + "_nsfw_roster");
         if (!box) return;
         let list = [];
-        try { list = nsfwList(chatId()); } catch (e) { list = []; }
+        try { nsfwSyncChat(); list = nsfwList(chatId()); } catch (e) { list = []; }
         if (!list.length) { box.innerHTML = '<div class="kimi-hint">' + t('nsfwNoChars') + '</div>'; return; }
         box.innerHTML = list.map((c) => {
             const sex = c.sex === 'male' ? t('nsfwSexM') : (c.sex === 'other' ? t('nsfwSexO') : t('nsfwSexF'));
@@ -9208,8 +9233,8 @@ eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => { showTpsForMessa
 
 // v1.12.3：手动 swipe / 编辑 / 删除后的重渲染不触发 CHARACTER_MESSAGE_RENDERED，
 // tps 会丢失 → 补刷新钩子
-eventSource.on(event_types.MESSAGE_SWIPED, (id) => { showTpsForMessage(id); nsfwHook(id); try { judgeDisplayedBranch(id); } catch (e) { } }); // v1.37.54 切分支后判定这条分支
-eventSource.on(event_types.MESSAGE_EDITED, (id) => { showTpsForMessage(id); nsfwHook(id); try { judgeDisplayedBranch(id); } catch (e) { } }); // v1.37.54
+eventSource.on(event_types.MESSAGE_SWIPED, (id) => { showTpsForMessage(id); nsfwHook(id, true); try { judgeDisplayedBranch(id); } catch (e) { } }); // v1.37.54 切分支后判定这条分支
+eventSource.on(event_types.MESSAGE_EDITED, (id) => { showTpsForMessage(id); nsfwHook(id, true); try { judgeDisplayedBranch(id); } catch (e) { } }); // v1.37.54
 eventSource.on(event_types.MESSAGE_DELETED, () => {
 deleteGuardUntil = Date.now() + 3000; judgedBranchKey = ''; // v1.37.55 删除消息 → 3 秒内不做重roll判定
     // 删除后 ST 重渲染全部消息：逐个补 tps
@@ -9219,6 +9244,8 @@ deleteGuardUntil = Date.now() + 3000; judgedBranchKey = ''; // v1.37.55 删除�
             showTpsForMessage(Number(mesid));
         }
     });
+    /* ★W315：删楼 ⇒ 用剩下的楼层块重建"当前状态"，再全量重画 */
+    try { nsfwSyncChat(); nsfwReattachAll(); } catch (e) { }
 });
 // v1.37.56：删「分支」走的是 MESSAGE_SWIPE_DELETED（ST 1.19 script.js 9389 发 SWIPE_DELETED，
 // 随后 deleteSwipe 用 source=DELETE 重新显示相邻分支 → 会再发 MESSAGE_SWIPED），不是 MESSAGE_DELETED。
@@ -9506,7 +9533,7 @@ eventSource.on(event_types.CHAT_CHANGED, () => {
     isDryRun = false;
     dryRunSince = 0;
     /* ★W290：换聊天 → 状态卡按新聊天的档案重画 */
-    setTimeout(() => { try { if (settings.nsfwEnabled) nsfwReattachAll(); } catch (e) { } }, 400);
+    setTimeout(() => { try { if (settings.nsfwEnabled) { nsfwSyncChat(); nsfwReattachAll(); } } catch (e) { } }, 400);
     judgedBranchKey = '';   // ★W71：换聊天 ⇒ 清掉「这条分支已判过」的账（作者要求：每个聊天重新判定）
     displayReplaceMap.clear();
     origMesMap.clear();

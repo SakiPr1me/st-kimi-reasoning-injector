@@ -179,6 +179,9 @@ export function nsfwInit(opts) {
         if (opts && typeof opts.t === 'function') _t = opts.t;
         if (opts && typeof opts.getSettings === 'function') _getSettings = opts.getSettings;
         if (opts && typeof opts.save === 'function') _save = opts.save;
+        /* ★W315：样式随模块一起装（不必等第一张卡挂上才隐藏楼层里的块） */
+        const st0 = _getSettings && _getSettings();
+        if (st0) nsfwEnsureStyle();
     } catch (e) { }
 }
 
@@ -224,6 +227,7 @@ export function nsfwEnsure(chatId, name, sex, role) {
     if (!bucket.chars[n]) bucket.chars[n] = { sex: sex || 'female', role: role || 'bottom', stats: {}, desc: {}, static: {}, updatedAt: 0 };
     if (sex) bucket.chars[n].sex = sex;
     if (role) bucket.chars[n].role = role;
+    bucket.chars[n].manual = true;   /* ★W315：面板手工建的 ⇒ 楼层重建时保留 */
     if (bucket.order.indexOf(n) < 0) bucket.order.push(n);
     all[key] = bucket;
     writeAll(all);
@@ -475,35 +479,65 @@ export function parseMachineBody(body) {
     return out;
 }
 
+/** 取一个属性值（双引号 / 单引号 / 无引号都吃） */
+function attrVal(raw, key) {
+    const re = new RegExp(key + '\\s*=\\s*(?:"([^"]*)"|([^\\s>]+))', 'i');
+    const m = re.exec(String(raw || ''));
+    if (!m) return '';
+    return (m[1] != null ? m[1] : (m[2] || ''));
+}
+/** ★W315：把 AI 写的 <nsfw> 外壳换成酒馆净化器会保留的 <div>（内容一字不动）
+ *  原因：酒馆显示层用 DOMPurify，未知标签 <nsfw> 会被剥掉 ⇒ 原始行露在正文里。
+ *  div + data-nsfw 能活下来，用 CSS 隐藏 ⇒ 楼层里有值（小铅笔可看可改），正文里看不见。 */
+export function nsfwWrapBlocks(text) {
+    let s = String(text || '');
+    if (s.indexOf('<nsfw') < 0) return s;
+    s = s.replace(/<nsfwdesc\s+([^>]*)>/gi, (m0, attrs) => {
+        const name = attrVal(attrs, 'name');
+        return '<div class="yw-nsfw-block" data-nsfw="d"' + (name ? ' data-name="' + name + '"' : '') + '>';
+    });
+    s = s.replace(/<nsfw\s+([^>]*)>/gi, (m0, attrs) => {
+        const name = attrVal(attrs, 'name');
+        const sex = attrVal(attrs, 'sex');
+        const role = attrVal(attrs, 'role');
+        let out = '<div class="yw-nsfw-block" data-nsfw="m"';
+        if (name) out += ' data-name="' + name + '"';
+        if (sex) out += ' data-sex="' + sex + '"';
+        if (role) out += ' data-role="' + role + '"';
+        return out + '>';
+    });
+    s = s.split('</nsfwdesc>').join('</div>');
+    s = s.split('</nsfw>').join('</div>');
+    return s;
+}
 export function nsfwParse(text) {
-    const src = String(text || '');
+    const src = nsfwWrapBlocks(String(text || ''));
     const chars = {};
     const ensure = (name) => {
         const n = String(name || '').trim();
         if (!chars[n]) chars[n] = { machine: {}, desc: {} };
         return chars[n];
     };
-    const reM = /<nsfw\s+([^>]*)>([\s\S]*?)<\/nsfw>/gi;
-    const attrOf = (raw, key) => {
-        const mm = new RegExp(key + '\\s*=\\s*"([^"]*)"', 'i').exec(raw || '');
-        return mm ? mm[1] : '';
-    };
+    const reM = /<div\s+([^>]*\bdata-nsfw\s*=\s*"m"[^>]*)>([\s\S]*?)<\/div>/gi;
+    const attrOf = (raw, key) => attrVal(raw, key);
     let m;
     while ((m = reM.exec(src))) {
         const attrs = m[1] || '';
-        const name = attrOf(attrs, 'name').trim();
+        const name = (attrOf(attrs, 'data-name') || attrOf(attrs, 'name')).trim();
         if (!name) continue;
         const c = ensure(name);
         c.meta = {
-            sex: attrOf(attrs, 'sex'),
-            role: attrOf(attrs, 'role')
+            sex: attrOf(attrs, 'data-sex') || attrOf(attrs, 'sex'),
+            role: attrOf(attrs, 'data-role') || attrOf(attrs, 'role')
         };
         const parsed = parseMachineBody(m[2]);
         Object.keys(parsed).forEach((k) => { c.machine[k] = parsed[k]; });
     }
-    const reD = /<nsfwdesc\s+name\s*=\s*"([^"]+)"\s*>([\s\S]*?)<\/nsfwdesc>/gi;
+    const reD = /<div\s+([^>]*\bdata-nsfw\s*=\s*"d"[^>]*)>([\s\S]*?)<\/div>/gi;
     while ((m = reD.exec(src))) {
-        const c = ensure(m[1]);
+        const dn = attrVal(m[1] || '', 'data-name') || attrVal(m[1] || '', 'name');
+        if (!dn) continue;
+        const c = ensure(dn);
         String(m[2] || '').split(/\r?\n/).forEach((line) => {
             const s = line.trim();
             if (!s) return;
@@ -521,47 +555,93 @@ export function nsfwParse(text) {
     return { chars, stripped, hasAny: Object.keys(chars).length > 0 };
 }
 
+/** ★W315：发请求前把消息里的数据块剥掉（状态改由【CURRENT STATE】注入段承载，避免重复/旧值） */
+export function nsfwStripBlocks(text) {
+    const s = String(text || '');
+    if (s.indexOf('data-nsfw') < 0 && s.indexOf('<nsfw') < 0) return s;
+    try { return nsfwParse(s).stripped; } catch (e) { return s; }
+}
+function applyParsedTo(bucket, parsed) {
+    const names = Object.keys((parsed && parsed.chars) || {});
+    names.forEach((name) => {
+        if (!bucket.chars[name]) {
+            const meta = (parsed.chars[name] && parsed.chars[name].meta) || {};
+            const sex = (meta.sex === 'm' || meta.sex === 'male') ? 'male' : (meta.sex === 'o' || meta.sex === 'other' ? 'other' : 'female');
+            const role = (meta.role === 'top') ? 'top' : (meta.role === 'switch' ? 'switch' : 'bottom');
+            bucket.chars[name] = { sex: sex, role: role, stats: {}, desc: {}, static: {}, updatedAt: 0 };
+            if (bucket.order.indexOf(name) < 0) bucket.order.push(name);
+        }
+        const rec = bucket.chars[name];
+        const mm = parsed.chars[name].machine || {};
+        const allow = {};
+        activeFields(rec).forEach((f) => { allow[f.id] = 1; });
+        Object.keys(mm).forEach((id) => {
+            const f = fieldById(id);
+            if (!f) return;
+            if (!allow[id]) return;   /* ★只收当前启用字段 */
+            const item = mm[id] || {};
+            let value = item.value;
+            if (f.type === 'num') {
+                const n = clampNum(f, value);
+                if (n === null) return;
+                value = n;
+            }
+            if (f.type === 'list') {
+                value = String(value || '').split(/[,，、]/).map((x) => x.trim()).filter(Boolean);
+            }
+            rec.stats[id] = { value: value, comment: item.comment || '', at: Date.now() };
+        });
+        const dd = parsed.chars[name].desc || {};
+        Object.keys(dd).forEach((id) => { rec.desc[id] = { text: dd[id], at: Date.now() }; });
+        rec.updatedAt = Date.now();
+        bucket.order = bucket.order.filter((n) => n !== name);
+        bucket.order.push(name);
+    });
+    return names;
+}
 export function nsfwApply(chatId, parsed) {
     try {
         const { all, bucket, key } = nsfwBucket(chatId);
-        const names = Object.keys((parsed && parsed.chars) || {});
-        names.forEach((name) => {
-            if (!bucket.chars[name]) {
-                const meta = (parsed.chars[name] && parsed.chars[name].meta) || {};
-                const sex = (meta.sex === 'm' || meta.sex === 'male') ? 'male' : (meta.sex === 'o' || meta.sex === 'other' ? 'other' : 'female');
-                const role = (meta.role === 'top') ? 'top' : (meta.role === 'switch' ? 'switch' : 'bottom');
-                bucket.chars[name] = { sex: sex, role: role, stats: {}, desc: {}, static: {}, updatedAt: 0 };
-                if (bucket.order.indexOf(name) < 0) bucket.order.push(name);
-            }
-            const rec = bucket.chars[name];
-            const mm = parsed.chars[name].machine || {};
-            const allow = {};
-            activeFields(rec).forEach((f) => { allow[f.id] = 1; });
-            Object.keys(mm).forEach((id) => {
-                const f = fieldById(id);
-                if (!f) return;
-                if (!allow[id]) return;   /* ★只收当前启用字段（非核心字段即使 AI 写了也不入库） */
-                const item = mm[id] || {};
-                let value = item.value;
-                if (f.type === 'num') {
-                    const n = clampNum(f, value);
-                    if (n === null) return;
-                    value = n;
-                }
-                if (f.type === 'list') {
-                    value = String(value || '').split(/[,，、]/).map((x) => x.trim()).filter(Boolean);
-                }
-                rec.stats[id] = { value: value, comment: item.comment || '', at: Date.now() };
-            });
-            const dd = parsed.chars[name].desc || {};
-            Object.keys(dd).forEach((id) => { rec.desc[id] = { text: dd[id], at: Date.now() }; });
-            rec.updatedAt = Date.now();
-            bucket.order = bucket.order.filter((n) => n !== name);
-            bucket.order.push(name);
-        });
+        const names = applyParsedTo(bucket, parsed);
         all[key] = bucket;
         writeAll(all);
         return names;
+    } catch (e) { return []; }
+}
+/** ★W315：从楼层块重建"当前状态"（删楼 / 改楼 / 切分支 / 切聊天都调它）
+ *  状态就长在楼层里：以最后一条含块的楼为准；删楼 ⇒ 它那一段贡献自动消失。
+ *  面板手填的固定档案（rec.static）与手工建档但还没出过块的角色保留。 */
+export function nsfwRebuildFromChat(chatId, chat) {
+    try {
+        const { all, bucket, key } = nsfwBucket(chatId);
+        const prev = bucket.chars || {};
+        const next = { order: [], pin: bucket.pin || null, chars: {} };
+        const msgs = Array.isArray(chat) ? chat : [];
+        msgs.forEach((m, i) => {
+            if (!m || m.is_user || m.is_system) return;
+            const text = String(m.mes || '');
+            if (text.indexOf('<nsfw') < 0) return;
+            const parsed = nsfwParse(text);
+            if (!parsed || !parsed.hasAny) return;
+            applyParsedTo(next, parsed);
+            Object.keys(next.chars).forEach((n) => {
+                if (n && text.indexOf(n) >= 0) next.chars[n].lastMentionAt = i;
+            });
+        });
+        Object.keys(prev).forEach((n) => {
+            const old = prev[n];
+            if (!next.chars[n]) {
+                if (old && (old.manual || (old.static && Object.keys(old.static).length))) {
+                    next.chars[n] = JSON.parse(JSON.stringify(old));
+                    next.order.push(n);
+                }
+                return;
+            }
+            next.chars[n].static = JSON.parse(JSON.stringify(old.static || {}));
+        });
+        all[key] = next;
+        writeAll(all);
+        return next.order.slice();
     } catch (e) { return []; }
 }
 
@@ -999,6 +1079,8 @@ export function nsfwDumpText(chatId) {
 /* ────────────────────────── 样式 ────────────────────────── */
 
 const CSS = [
+    '.mes_text [data-nsfw]{display:none !important}',
+    '.mes_text nsfw,.mes_text nsfwdesc{display:none !important}',
     '.yw-nsfw{margin:8px 0 10px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 16%,transparent);border-radius:12px;overflow:hidden;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 3%,transparent);font-size:0.9em}',
     '.yw-nsfw-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 10%,transparent);background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 5%,transparent)}',
     '.yw-nsfw-head .nm{font-weight:700;letter-spacing:.5px}',
@@ -1063,6 +1145,61 @@ export function nsfwEnsureStyle() {
     } catch (e) { }
 }
 
+/** 从一段正文里的 <nsfw> 块构造 profile 映射（卡片用，不读缓存） */
+export function nsfwProfilesFromText(text) {
+    const out = {};
+    try {
+        const parsed = nsfwParse(text);
+        Object.keys(parsed.chars || {}).forEach((name) => {
+            const c = parsed.chars[name];
+            const meta = c.meta || {};
+            const sex = (meta.sex === 'm' || meta.sex === 'male') ? 'male' : (meta.sex === 'o' || meta.sex === 'other' ? 'other' : 'female');
+            const role = (meta.role === 'top') ? 'top' : (meta.role === 'switch' ? 'switch' : 'bottom');
+            const stats = {};
+            Object.keys(c.machine || {}).forEach((id) => { stats[id] = c.machine[id]; });
+            const desc = {};
+            Object.keys(c.desc || {}).forEach((id) => { desc[id] = { text: c.desc[id] }; });
+            out[name] = { sex: sex, role: role, stats: stats, desc: desc };
+        });
+    } catch (e) { }
+    return out;
+}
+/** 隐藏正文里的原始块（显示层不改 mes；块本身留在楼层里，小铅笔能看到） */
+export function nsfwHideRaw(root) {
+    try {
+        const host = root || document;
+        if (!host) return;
+        const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, null);
+        const nodes = [];
+        while (walker.nextNode()) nodes.push(walker.currentNode);
+        nodes.forEach((node) => {
+            const v = node.nodeValue || '';
+            const a1 = v.indexOf('<nsfw');
+            const a2 = v.indexOf('&lt;nsfw');
+            let a = a1 < 0 ? a2 : (a2 < 0 ? a1 : Math.min(a1, a2));
+            if (a < 0) return;
+            const parent = node.parentNode;
+            if (!parent) return;
+            if (parent.classList && parent.classList.contains('yw-nsfw-raw')) return;
+            /* 块尾：取最后一个闭合标记；找不到就吃到本节点末尾 */
+            let end = -1;
+            ['</nsfwdesc>', '</nsfw>', '&lt;/nsfwdesc&gt;', '&lt;/nsfw&gt;'].forEach((c) => {
+                const k = v.lastIndexOf(c);
+                if (k >= 0) end = Math.max(end, k + c.length);
+            });
+            if (end < a) end = v.length;
+            const frag = document.createDocumentFragment();
+            if (a > 0) frag.appendChild(document.createTextNode(v.slice(0, a)));
+            const span = document.createElement('span');
+            span.className = 'yw-nsfw-raw';
+            span.style.display = 'none';
+            span.textContent = v.slice(a, end);
+            frag.appendChild(span);
+            if (end < v.length) frag.appendChild(document.createTextNode(v.slice(end)));
+            parent.replaceChild(frag, node);
+        });
+    } catch (e) { }
+}
 /* ────────────────────────── 每楼快照 ────────────────────────── */
 const SNAP_KEY = 'kimi_nsfw_snaps';
 export function nsfwSaveSnap(chatId, msgId) {
@@ -1102,18 +1239,25 @@ export function nsfwMountToMessage(messageId) {
         if (!msg || msg.is_user || msg.is_system) return false;
         const chatId = nsfwChatId(ctx);
         const { bucket } = nsfwBucket(chatId);
-        const names = (bucket.order || []).filter((n) => bucket.chars[n] && bucket.chars[n].updatedAt);
-        if (!names.length) return false;
+        const bucketNames = (bucket.order || []).filter((n) => bucket.chars[n] && bucket.chars[n].updatedAt);
 
         const mesEl = document.querySelector('.mes[mesid="' + messageId + '"]');
         if (!mesEl) return false;
+
+        /* ★W315：卡片只认这一楼自己的块（块就在 mes 里，像 todo/remind 一样跟着楼层走） */
+        const text = String(msg.mes || '');
+        const own = nsfwProfilesFromText(text);
+        const ownNames = Object.keys(own);
+        const snap = ownNames.length ? null : nsfwSnapOf(chatId, messageId);
+        const pick = (n) => own[n] || (snap && snap[n]) || bucket.chars[n] || { sex: 'female', role: 'bottom', stats: {}, desc: {} };
+        let show = ownNames.length ? ownNames : [];
+        if (!show.length && snap) show = Object.keys(snap);
+        if (!show.length) show = bucketNames.filter((n) => text.indexOf(n) >= 0);
+        if (!show.length) return false;
+
         nsfwEnsureStyle();
         mesEl.querySelectorAll('.yw-nsfw').forEach((n) => n.remove());
-
-        const snap = nsfwSnapOf(chatId, messageId);
-        const pick = (n) => (snap && snap[n]) ? snap[n] : bucket.chars[n];
-        let show = names.filter((n) => String(msg.mes || '').includes(n));
-        if (!show.length) show = [names[names.length - 1]];
+        nsfwHideRaw(mesEl);
         show.slice(0, 3).forEach((n) => {
             const card = nsfwRenderCard(n, pick(n));
             card.dataset.mesid = String(messageId);
