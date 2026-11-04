@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.173'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.174'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -2303,12 +2303,16 @@ function applyRequestInjections(bodyObj) {
             try {
                 const __nsfwMode = String(settings.nsfwInjectMode || 'state');
                 /* ★W315：注入时历史里的数据块不进请求（状态由【CURRENT STATE】承载）；
-                   ★W317：off 档不剥块 —— 让楼层里的块本身充当状态 */
+                   ★W317：off 档不剥块 —— 让楼层里的块本身充当状态；
+                   ★W321：只剥「assistant 楼层里我们自己换过外壳的块」（data-nsfw）。
+                   以前的写法会把预设/系统消息里的 <nsfw> 格式示例一起剥掉（作者实测「中间内容消失」）。 */
                 if (__nsfwMode !== 'off') {
                     for (let i = 0; i < msgs.length; i++) {
                         const mm0 = msgs[i];
                         if (!mm0 || typeof mm0.content !== 'string') continue;
-                        if (mm0.content.indexOf('data-nsfw') < 0 && mm0.content.indexOf('<nsfw') < 0) continue;
+                        if (mm0.role !== 'assistant') continue;
+                        if (mm0.content.indexOf('data-nsfw') < 0) continue;
+                        if (mm0.content.indexOf('nsfw_state_guide') >= 0) continue;
                         const stripped = nsfwStripBlocks(mm0.content);
                         if (stripped !== mm0.content) { mm0.content = stripped; changed = true; }
                     }
@@ -9042,7 +9046,7 @@ function bindNsfwCard() {
                 + '<span style="opacity:.7;font-size:.85em">' + role + ' · ' + sex + '</span>'
                 + '<span style="margin-left:auto;opacity:.5;font-size:.8em">' + (c.updatedAt ? new Date(c.updatedAt).toLocaleString() : '—') + '</span>'
                 + '<button class="kimi-btn" data-nsfw-edit="' + esc2(c.name) + '" style="padding:0 6px;font-size:.8em">' + t('nsfwEditValues') + '</button>'
-                + '<button class="kimi-btn" data-nsfw-del="' + esc2(c.name) + '" style="padding:0 6px;font-size:.8em">' + t('nsfwRemove') + '</button>'
+                + '<button class="kimi-btn" data-nsfw-del="' + esc2(c.name) + '" style="padding:0 6px;font-size:.8em">' + t('nsfwRemove') + '</button>'
                 + '</div>';
         }).join('');
     };
