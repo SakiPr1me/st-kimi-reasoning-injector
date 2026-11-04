@@ -348,6 +348,12 @@ function activeFields(profile) {
 }
 function clampNum(f, v) {
     let n = Number(v);
+    if (!Number.isFinite(n)) {
+        /* ★W318：模型爱写 92/100、36/100、1.2cm —— 取第一个数字 */
+        const mm = /-?\d+(?:\.\d+)?/.exec(String(v == null ? '' : v));
+        if (!mm) return null;
+        n = Number(mm[0]);
+    }
     if (!Number.isFinite(n)) return null;
     if (typeof f.min === 'number' && n < f.min) n = f.min;
     if (typeof f.max === 'number' && n > f.max) n = f.max;
