@@ -28,7 +28,7 @@ export const NSFW_FIELDS = [
     { id: 'shame', group: '状态', label: '羞耻心', type: 'num', min: 0, max: 100, core: true },
     { id: 'menstrual', group: '状态', label: '生理周期', type: 'text', core: true },
     { id: 'eggState', group: '状态', label: '卵子状态', type: 'text', core: true },
-    { id: 'milkMl', group: '胸', label: '积乳量', type: 'num', min: 0, max: 2000, core: true },
+    { id: 'milkMl', group: '胸', label: '积乳量', type: 'num', min: 0, max: 2000, core: true, ord: 0 },
     { id: 'voice', group: '状态', label: '发声状态', type: 'text', core: true },
     { id: 'brands', group: '状态', label: '心理烙印', type: 'list', core: true },
     { id: 'bottomline', group: '状态', label: '崩塌底线', type: 'text', core: false },
@@ -49,8 +49,8 @@ export const NSFW_FIELDS = [
     { id: 'belly', group: '体态', label: '腹部外观', type: 'text', core: true },
 
     /* 胸 */
-    { id: 'nippleState', group: '胸', label: '乳头状态', type: 'text', core: true },
-    { id: 'areolaNow', group: '胸', label: '乳晕状态', type: 'text', core: true },
+    { id: 'nippleState', group: '胸', label: '乳头状态', type: 'text', core: true, ord: 60 },
+    { id: 'areolaNow', group: '胸', label: '乳晕状态', type: 'text', core: true, ord: 70 },
 
     /* 穿搭 */
     { id: 'outer', group: '穿搭', label: '外衣', type: 'text', core: true },
@@ -115,13 +115,11 @@ export const NSFW_FIELDS = [
     { id: 'scene', group: '状态', label: '互动情境', type: 'text', core: true , hideInCard: true},
 
     /* ── 静态参数（建档填一次；不要求 AI 每轮输出） ── */
-    { id: 'stChestSize', group: '静态-胸部', tab: '胸', label: '罩杯/胸肌', type: 'text', static: true, after: 'milkMl' },
-    { id: 'stChestShape', group: '静态-胸部', tab: '胸', label: '胸型', type: 'text', static: true, after: 'milkMl' },
-    { id: 'stNippleLen', group: '静态-胸部', tab: '胸', label: '乳头长', type: 'text', static: true, after: 'nippleState' },
-    { id: 'stNippleWid', group: '静态-胸部', tab: '胸', label: '乳头宽', type: 'text', static: true, after: 'nippleState' },
-    { id: 'stAreolaDia', group: '静态-胸部', tab: '胸', label: '乳晕直径', type: 'text', static: true, after: 'areolaNow' },
-    { id: 'stAreolaShape', group: '静态-胸部', tab: '胸', label: '乳晕形态', type: 'text', static: true, after: 'areolaNow' },
-    { id: 'stAreolaColor', group: '静态-胸部', tab: '胸', label: '乳晕色泽', type: 'text', static: true, after: 'areolaNow' },
+    { id: 'stChestSize', group: '静态-胸部', tab: '胸', label: '罩杯/胸肌', type: 'text', static: true, after: 'milkMl', ord: 10 },
+    { id: 'stChestShape', group: '静态-胸部', tab: '胸', label: '胸型', type: 'text', static: true, after: 'milkMl', ord: 20 },
+    { id: 'stNippleLen', group: '静态-胸部', tab: '胸', label: '乳头长', type: 'text', static: true, after: 'nippleState', ord: 30 },
+    { id: 'stNippleWid', group: '静态-胸部', tab: '胸', label: '乳头宽', type: 'text', static: true, after: 'nippleState', ord: 40 },
+    { id: 'stAreolaDia', group: '静态-胸部', tab: '胸', label: '乳晕直径', type: 'text', static: true, after: 'areolaNow', ord: 50 },
     { id: 'stClitLen', group: '静态-前穴', tab: '前穴', label: '阴蒂长度', type: 'text', sex: 'female', static: true, after: 'vulvaShape', ord: 90 },
     { id: 'stClitSize', group: '静态-前穴', tab: '前穴', label: '阴蒂大小', type: 'text', sex: 'female', static: true, after: 'vulvaShape', ord: 100 },
     { id: 'stPenisLen', group: '静态-后穴', tab: '后穴', label: '阴茎长度', type: 'text', sex: 'male', static: true },
