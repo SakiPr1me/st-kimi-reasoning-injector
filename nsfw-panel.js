@@ -160,7 +160,9 @@ export const NSFW_DEFAULT_RULES = [
     { id: 'r14', text: '卵子状态随生理周期变化：卵泡期「未成熟」、排卵期「成熟待排/已排出」、黄体期「已排出·黄体期」、月经期「新一轮」。', enabled: true, builtin: true },
     { id: 'r15', text: '开发度按五个部位（口/胸/前/后/最深）各写四列：等级（1-10）、经验（当前/下一级）、敏感度、已解锁技能（逗号分隔）；没有的技能不要编。', enabled: true, builtin: true },
     { id: 'r16', text: '【档案·固定】里的静态参数（罩杯、乳头尺寸、乳晕、通道常态深度、极限拉伸深度、子宫口深度、前列腺深度、结肠口深度、阴蒂/阴茎尺寸）由用户建档填写，你只读不改，也不要每轮重复输出。', enabled: true, builtin: true },
-    { id: 'r17', text: '「松弛度」「子宫口状态」「结肠口状态」这三个字段的括号评述里要写一句白话描写（原来单独的外口描写/子宫口描写已并入这里）。', enabled: true, builtin: true }
+    { id: 'r17', text: '「松弛度」「子宫口状态」「结肠口状态」这三个字段的括号评述里要写一句白话描写（原来单独的外口描写/子宫口描写已并入这里）。', enabled: true, builtin: true },
+    { id: 'r18', text: '只有本场景里【被插入 / 承受方】的角色才输出 <nsfw> 状态块；纯插入方不要输出（除非他同时也被插入）。输出时在标签上写属性：<nsfw name="角色名" sex="f|m" role="bottom">。', enabled: true, builtin: true },
+    { id: 'r19', text: '某个角色第一次出现时，状态块要把当前启用的字段全部写一遍（缺的写“未知”），之后每轮只写变化的、其余可省略。', enabled: true, builtin: true }
 ];
 
 /* ────────────────────────── 存储 ────────────────────────── */
@@ -187,6 +189,12 @@ function readAll() {
 }
 function writeAll(obj) {
     try { localStorage.setItem(LS_KEY, JSON.stringify(obj || {})); } catch (e) { }
+}
+export function nsfwMsgIndex() {
+    try {
+        const c = window.SillyTavern && window.SillyTavern.getContext ? window.SillyTavern.getContext() : null;
+        return c && Array.isArray(c.chat) ? c.chat.length : 0;
+    } catch (e) { return 0; }
 }
 export function nsfwChatId(ctx) {
     try {
@@ -222,7 +230,7 @@ export function nsfwEnsure(chatId, name, sex, role) {
 /** 该角色适用的静态字段（按性别过滤） */
 export function nsfwStaticFields(profile) {
     const sex = (profile && profile.sex) || 'female';
-    return NSFW_FIELDS.filter((f) => f.static).filter((f) => !f.sex || f.sex === sex);
+    return nsfwAllFields().filter((f) => f.static).filter((f) => !f.sex || f.sex === sex);
 }
 
 /** 读某角色的静态档案为文本（一行一个 字段: 值） */
@@ -269,18 +277,25 @@ export function nsfwRemove(chatId, name) {
 
 const GROUP_ORDER = ['状态', '体态', '穿搭', '胸', '前穴', '后穴', '开发', '经验'];
 
-function fieldById(id) { return NSFW_FIELDS.find((f) => f.id === id) || null; }
+/** 全部字段 = 内置 + 用户自定义（settings.nsfwCustomFields） */
+export function nsfwAllFields() {
+    let custom = [];
+    try { const st = _getSettings() || {}; custom = Array.isArray(st.nsfwCustomFields) ? st.nsfwCustomFields : []; } catch (e) { custom = []; }
+    return NSFW_FIELDS.concat(custom.map((f) => Object.assign({ custom: true, core: true }, f)));
+}
+function fieldById(id) { return nsfwAllFields().find((f) => f.id === id) || null; }
 function fieldByLabel(label) {
     const s = String(label || '').trim();
-    return NSFW_FIELDS.find((f) => !f.static && f.label === s)
-        || NSFW_FIELDS.find((f) => !f.static && f.id === s)
+    const all = nsfwAllFields();
+    return all.find((f) => !f.static && f.label === s)
+        || all.find((f) => !f.static && f.id === s)
         || null;
 }
 function activeFields(profile) {
     const sex = (profile && profile.sex) || 'female';
     const s = _getSettings() || {};
     const showAll = !!s.nsfwShowAllFields;
-    return NSFW_FIELDS.filter((f) => !f.static)
+    return nsfwAllFields().filter((f) => !f.static)
         .filter((f) => !f.sex || f.sex === sex)
         .filter((f) => showAll || f.core === true);
 }
@@ -318,6 +333,66 @@ export function calcPregRisk(profile) {
     } catch (e) { return { risk: 0, why: '' }; }
 }
 
+/** 编辑：写单个动态字段 */
+export function nsfwSetStat(chatId, name, id, value, comment) {
+    try {
+        const { all, bucket, key } = nsfwBucket(chatId);
+        const rec = bucket.chars[name];
+        if (!rec) return false;
+        const f = fieldById(id);
+        if (!f) return false;
+        rec.stats[id] = { value: value, comment: comment || '', at: Date.now() };
+        rec.updatedAt = Date.now();
+        all[key] = bucket;
+        writeAll(all);
+        return true;
+    } catch (e) { return false; }
+}
+/** 编辑：写单个静态字段 */
+export function nsfwSetStatic(chatId, name, id, value) {
+    try {
+        const { all, bucket, key } = nsfwBucket(chatId);
+        const rec = bucket.chars[name];
+        if (!rec) return false;
+        if (!rec.static) rec.static = {};
+        rec.static[id] = String(value == null ? '' : value);
+        all[key] = bucket;
+        writeAll(all);
+        return true;
+    } catch (e) { return false; }
+}
+/** 字段管理：新增自定义字段 */
+export function nsfwAddCustomField(def) {
+    try {
+        const st = _getSettings() || {};
+        const arr = Array.isArray(st.nsfwCustomFields) ? st.nsfwCustomFields.slice() : [];
+        const label = String((def && def.label) || '').trim();
+        if (!label) return false;
+        const id = 'c_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+        arr.push({
+            id: id,
+            group: String(def.group || '状态'),
+            label: label,
+            type: ['num', 'text', 'list'].indexOf(def.type) >= 0 ? def.type : 'text',
+            sex: (def.sex === 'female' || def.sex === 'male') ? def.sex : undefined,
+            min: def.type === 'num' ? 0 : undefined,
+            max: def.type === 'num' ? (Number(def.max) || 100) : undefined
+        });
+        st.nsfwCustomFields = arr;
+        if (typeof _save === 'function') _save();
+        return true;
+    } catch (e) { return false; }
+}
+/** 字段管理：删除自定义字段 */
+export function nsfwDeleteCustomField(id) {
+    try {
+        const st = _getSettings() || {};
+        const arr = (Array.isArray(st.nsfwCustomFields) ? st.nsfwCustomFields : []).filter((f) => f.id !== id);
+        st.nsfwCustomFields = arr;
+        if (typeof _save === 'function') _save();
+        return true;
+    } catch (e) { return false; }
+}
 /* ────────────────────────── 解析 ────────────────────────── */
 
 export function splitValueComment(raw) {
@@ -354,10 +429,21 @@ export function nsfwParse(text) {
         if (!chars[n]) chars[n] = { machine: {}, desc: {} };
         return chars[n];
     };
-    const reM = /<nsfw\s+name\s*=\s*"([^"]+)"\s*>([\s\S]*?)<\/nsfw>/gi;
+    const reM = /<nsfw\s+([^>]*)>([\s\S]*?)<\/nsfw>/gi;
+    const attrOf = (raw, key) => {
+        const mm = new RegExp(key + '\\s*=\\s*"([^"]*)"', 'i').exec(raw || '');
+        return mm ? mm[1] : '';
+    };
     let m;
     while ((m = reM.exec(src))) {
-        const c = ensure(m[1]);
+        const attrs = m[1] || '';
+        const name = attrOf(attrs, 'name').trim();
+        if (!name) continue;
+        const c = ensure(name);
+        c.meta = {
+            sex: attrOf(attrs, 'sex'),
+            role: attrOf(attrs, 'role')
+        };
         const parsed = parseMachineBody(m[2]);
         Object.keys(parsed).forEach((k) => { c.machine[k] = parsed[k]; });
     }
@@ -387,7 +473,10 @@ export function nsfwApply(chatId, parsed) {
         const names = Object.keys((parsed && parsed.chars) || {});
         names.forEach((name) => {
             if (!bucket.chars[name]) {
-                bucket.chars[name] = { sex: 'female', role: 'bottom', stats: {}, desc: {}, static: {}, updatedAt: 0 };
+                const meta = (parsed.chars[name] && parsed.chars[name].meta) || {};
+                const sex = (meta.sex === 'm' || meta.sex === 'male') ? 'male' : (meta.sex === 'o' || meta.sex === 'other' ? 'other' : 'female');
+                const role = (meta.role === 'top') ? 'top' : (meta.role === 'switch' ? 'switch' : 'bottom');
+                bucket.chars[name] = { sex: sex, role: role, stats: {}, desc: {}, static: {}, updatedAt: 0 };
                 if (bucket.order.indexOf(name) < 0) bucket.order.push(name);
             }
             const rec = bucket.chars[name];
@@ -477,6 +566,23 @@ export function buildSummaryLine(name, profile) {
     return '- ' + name + '：理智' + g('sanity') + ' / 配合' + g('compliance') + ' / 欲望' + g('libido');
 }
 
+/** 扫描一段文本，把出现过的角色名记上「最近被提到在第几楼」 */
+export function nsfwMarkMentions(chatId, text, msgIndex) {
+    try {
+        const { all, bucket, key } = nsfwBucket(chatId);
+        const t = String(text || '');
+        Object.keys(bucket.chars || {}).forEach((n) => {
+            if (n && t.indexOf(n) >= 0) {
+                bucket.chars[n].lastMentionAt = Number(msgIndex) || 0;
+                bucket.order = (bucket.order || []).filter((x) => x !== n);
+                bucket.order.push(n);
+            }
+        });
+        all[key] = bucket;
+        writeAll(all);
+    } catch (e) { }
+}
+
 export function buildInjection(chatId, opts) {
     const s = _getSettings() || {};
     if (!s.nsfwEnabled) return '';
@@ -484,7 +590,14 @@ export function buildInjection(chatId, opts) {
     const names = (bucket.order || []).filter((n) => bucket.chars[n]);
     if (!names.length) return '';
     const fullCount = Math.max(1, Math.min(3, Number((opts && opts.fullCount) || s.nsfwFullCount || 2)));
-    let full = names.slice(-fullCount);
+    const msgIndex = Number((opts && opts.msgIndex) || nsfwMsgIndex() || 0);
+    /* ★v10：按"最近两楼提到过谁"取全量（作者口径：上一楼出现的名字就发一轮）；没提到过任何人再退回最近更新 */
+    let picked = names.filter((n) => {
+        const at = Number(bucket.chars[n].lastMentionAt || 0);
+        return at > 0 && (msgIndex - at) <= 2;
+    });
+    if (!picked.length) picked = names.slice();
+    let full = picked.slice(-fullCount);
     if (bucket.pin && bucket.chars[bucket.pin]) {
         full = [bucket.pin].concat(full.filter((n) => n !== bucket.pin)).slice(0, fullCount);
     }
@@ -559,17 +672,18 @@ function devTableHtml(profile) {
 function rowHtml(f, cell) {
     if (!cell) return '';
     const val = fmtVal(f, cell);
-    if (!val) return '';
+    if (!val && !(f && f.static)) return '';
+    const idAttr = ' data-id="' + esc(f.id) + '" data-type="' + esc(f.type) + '"' + (f.static ? ' data-static="1"' : '');
     const c = '<span class="yw-nsfw-c">' + (cell.comment ? esc(cell.comment) : '') + '</span>';
     if (f.type === 'num') {
         const n = Number(cell.value);
         const max = typeof f.max === 'number' ? f.max : 100;
         const pct = Math.max(0, Math.min(100, (n / max) * 100));
-        return '<div class="yw-nsfw-row"><span class="k">' + esc(f.label) + '</span>'
+        return '<div class="yw-nsfw-row"' + idAttr + '><span class="k">' + esc(f.label) + '</span>'
             + '<span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span>'
             + '<span class="v">' + esc(val) + '</span>' + c + '</div>';
     }
-    return '<div class="yw-nsfw-row"><span class="k">' + esc(f.label) + '</span>'
+    return '<div class="yw-nsfw-row"' + idAttr + '><span class="k">' + esc(f.label) + '</span>'
         + '<span class="t">' + esc(val) + '</span>' + c + '</div>';
 }
 
@@ -584,9 +698,11 @@ export function nsfwRenderCard(name, profile) {
     const g = (id) => ((profile.stats || {})[id] || {}).value;
     const preg = calcPregRisk(profile);
 
+    wrap.dataset.char = name;
     const head = document.createElement('div');
     head.className = 'yw-nsfw-head';
-    head.innerHTML = '<span class="nm">' + esc(name) + '</span>'
+    head.innerHTML = '<button type="button" class="yw-nsfw-edit-btn" title="编辑这张卡">✎</button>'
+        + '<span class="nm">' + esc(name) + '</span>'
         + '<span class="tag">' + roleTxt + '</span><span class="tag">' + sexTxt + '</span>'
         + '<span class="kv">理智 ' + esc(g('sanity') == null ? '-' : g('sanity')) + '</span>'
         + '<span class="kv">欲望 ' + esc(g('libido') == null ? '-' : g('libido')) + '</span>'
@@ -649,9 +765,66 @@ export function nsfwRenderCard(name, profile) {
 
     wrap.appendChild(tabBar);
     wrap.appendChild(panels);
+    try { bindCardEdit(wrap, name, profile); } catch (e) { }
     return wrap;
 }
 
+/** 卡片就地编辑：✎ 进入，✓ 保存 */
+function bindCardEdit(wrap, name, profile) {
+    const btn = wrap.querySelector('.yw-nsfw-edit-btn');
+    if (!btn) return;
+    let editing = false;
+    btn.addEventListener('click', function () {
+        const chatId = nsfwChatId();
+        if (!editing) {
+            editing = true;
+            btn.textContent = '✓';
+            btn.title = '保存';
+            wrap.classList.add('yw-nsfw-editing');
+            wrap.querySelectorAll('.yw-nsfw-row[data-id]').forEach((row) => {
+                const id = row.getAttribute('data-id');
+                const isStatic = row.getAttribute('data-static') === '1';
+                const type = row.getAttribute('data-type') || 'text';
+                const cell = isStatic ? { value: (profile.static || {})[id], comment: '' } : ((profile.stats || {})[id] || {});
+                const vEl = row.querySelector('.v') || row.querySelector('.t');
+                if (vEl) {
+                    const inp = document.createElement('input');
+                    inp.className = 'yw-nsfw-in yw-nsfw-in-v';
+                    inp.value = cell.value == null ? '' : String(cell.value);
+                    if (type === 'num') inp.type = 'number';
+                    vEl.textContent = '';
+                    vEl.appendChild(inp);
+                }
+                const cEl = row.querySelector('.yw-nsfw-c');
+                if (cEl && !isStatic) {
+                    const inp2 = document.createElement('input');
+                    inp2.className = 'yw-nsfw-in yw-nsfw-in-c';
+                    inp2.placeholder = '评述';
+                    inp2.value = cell.comment == null ? '' : String(cell.comment);
+                    cEl.textContent = '';
+                    cEl.appendChild(inp2);
+                }
+            });
+            return;
+        }
+        /* 保存 */
+        wrap.querySelectorAll('.yw-nsfw-row[data-id]').forEach((row) => {
+            const id = row.getAttribute('data-id');
+            const isStatic = row.getAttribute('data-static') === '1';
+            const v = row.querySelector('.yw-nsfw-in-v');
+            const c = row.querySelector('.yw-nsfw-in-c');
+            if (!v) return;
+            if (isStatic) nsfwSetStatic(chatId, name, id, v.value);
+            else nsfwSetStat(chatId, name, id, v.value, c ? c.value : '');
+        });
+        editing = false;
+        btn.textContent = '✎';
+        btn.title = '编辑这张卡';
+        wrap.classList.remove('yw-nsfw-editing');
+        const mesid = wrap.dataset.mesid;
+        if (mesid != null) setTimeout(() => { try { nsfwMountToMessage(Number(mesid)); } catch (e) { } }, 30);
+    });
+}
 /* ────────────────────────── 样式 ────────────────────────── */
 
 const CSS = [
@@ -684,6 +857,11 @@ const CSS = [
     '.yw-nsfw-dev tbody th{width:2.6em;opacity:.8;font-weight:600}',
     '.yw-nsfw-dev td.lv{width:2.2em;text-align:right;font-variant-numeric:tabular-nums}',
     '.yw-nsfw-dev td.sk{opacity:.85}',
+    '.yw-nsfw-edit-btn{font:inherit;font-size:.8em;padding:0 6px;border-radius:6px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 24%,transparent);background:transparent;color:inherit;cursor:pointer;opacity:.7}',
+    '.yw-nsfw-edit-btn:hover{opacity:1}',
+    '.yw-nsfw-editing .yw-nsfw-in{font:inherit;font-size:.9em;padding:0 4px;border-radius:4px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 30%,transparent);background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 6%,transparent);color:inherit;min-width:3em;max-width:100%}',
+    '.yw-nsfw-editing .yw-nsfw-in-v{width:6.5em}',
+    '.yw-nsfw-editing .yw-nsfw-in-c{width:100%}',
     '.yw-nsfw-sub{margin:6px 2px 2px;font-size:.76em;opacity:.5;letter-spacing:.5px}',
     '.yw-nsfw--compact .yw-nsfw-row{padding:0 2px;line-height:1.3}',
     '.yw-nsfw--compact .yw-nsfw-row .k{font-size:.78em}',
@@ -723,6 +901,7 @@ export function nsfwMountToMessage(messageId) {
         if (!show.length) show = [names[names.length - 1]];
         show.slice(0, 3).forEach((n) => {
             const card = nsfwRenderCard(n, bucket.chars[n]);
+            card.dataset.mesid = String(messageId);
             const anchor = mesEl.querySelector('.mes_text') || mesEl;
             if (anchor.parentNode) anchor.parentNode.insertBefore(card, anchor.nextSibling);
             else mesEl.appendChild(card);
