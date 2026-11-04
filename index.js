@@ -339,7 +339,9 @@ function ywEnsureSwipesFallback(message) {
      `stopGeneration / removeMacros / toggleDrawer` 等——**不在作者这轮说的 1.13/1.14 范围里**，只作记录，
      本波**没动**（详见报告 §未验项）。 */
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
-const PLUGIN_VERSION = '1.46.148'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+/* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
+   （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
+const PLUGIN_VERSION = '1.46.149'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -11863,7 +11865,20 @@ eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, onSettingsReady);
 //   生成结束后若最后一条仍是 user（= 一个字都没生成出来），按 4/8/12 秒递进重试，最多 3 次，然后停手出声。
 let __apiFailRetry = 0;
 let __genSnap = null;   // 本次生成开始时：最后一条消息的 条数/swipe_id/分支数（判断 429 时 swipe 是否真的没生效）
+/* ★W288（2026-11-04 · 作者报「生成完整后又自己重来一遍，横幅一直挂着 这次没生成出内容，立刻重试」）：
+   真因 = **上一代的 800ms 失败检查没被取消**。时序：
+     ① 第 N 代正常出完 → GENERATION_ENDED → 挂一个 800ms 定时器；
+     ② 800ms 内，完成时判定/自动重roll/用户点重来 ⇒ **第 N+1 代已经 GENERATION_STARTED**（它会把
+        streamGotToken 重置成 false、并覆盖 __genSnap）；
+     ③ 旧定时器醒来，看到的是「第 N+1 代刚开始、还没出字」的状态 ⇒ 误判「这次没生成出内容」⇒ 再开一次。
+   修法（两件，缺一不可）：
+     a) GENERATION_STARTED 时**主动取消**上一代还没跑的失败检查定时器；
+     b) 定时器里再比一次**代号**（__genSeq）—— 只要期间有新一代开始，旧检查一律作废。 */
+let __genSeq = 0;       // 每开始一代生成 +1；定时器用"挂号时的代号"比对，代号变了就作废
+let __apiFailTimer = null;
 eventSource.on(event_types.GENERATION_STARTED, function () {
+    __genSeq++;
+    if (__apiFailTimer) { try { clearTimeout(__apiFailTimer); } catch (e) { } __apiFailTimer = null; }
     // ★W171c（验收必修）：**发送那一刻就把面板上那个名字锁住**（面板读的也是 currentRandName() ⇒ 同一个值）。
     //   之后 ST 可能才创建/切换聊天（chatId 变），请求里用的仍然是这一刻锁住的名字 ⇒ 面板 == 请求。
     RAND_SEND_NAME = (() => { try { return currentRandName(); } catch (e) { return null; } })();
@@ -11886,8 +11901,11 @@ eventSource.on(event_types.GENERATION_ENDED, function () {
     try {
         if (!settings.enabled || !settings.rerollOnEmpty || settings.rerollPaused) { __apiFailRetry = 0; return; }
         if (manualStopClicked) { __apiFailRetry = 0; return; }   // 用户手动停的，不重试
-        setTimeout(function () {
+        const __seq = __genSeq;   // ★W288：挂号时记下"这是第几代"；醒来时代号变了 ⇒ 期间已经开了新一代，本检查作废
+        __apiFailTimer = setTimeout(function () {
+            __apiFailTimer = null;
             try {
+                if (__seq !== __genSeq) return;   // ★W288：已经开过新一代 ⇒ 旧检查作废（防"完整生成又被判没内容"）
                 if (is_send_press || manualStopClicked) return;
                 const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
                 const ch = ctx && Array.isArray(ctx.chat) ? ctx.chat : [];
@@ -11908,6 +11926,7 @@ eventSource.on(event_types.GENERATION_ENDED, function () {
                 console.log('[余温工具箱] 本次生成没有产生 AI 消息（疑似接口失败/429）→ 立刻重试，第 ' + __apiFailRetry + ' 次');
                 setTimeout(function () {
                     try {
+                        if (__seq !== __genSeq) return;   // ★W288：这 0ms 里也可能已经开了新一代 ⇒ 同样作废
                         if (is_send_press || manualStopClicked) return;
                         const c2 = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
                         const ch2 = c2 && Array.isArray(c2.chat) ? c2.chat : [];
