@@ -20,121 +20,108 @@ const NL = String.fromCharCode(10);
 /* ────────────────────────── 字段定义 ────────────────────────── */
 
 export const NSFW_FIELDS = [
-    /* 状态 */
-    { id: 'stamina', group: '状态', label: '体力', type: 'num', min: 0, max: 100, core: true },
-    { id: 'sanity', group: '状态', label: '理智', type: 'num', min: 0, max: 100, core: true },
-    { id: 'libido', group: '状态', label: '欲望', type: 'num', min: 0, max: 100, core: true },
-    { id: 'compliance', group: '状态', label: '配合度', type: 'num', min: 0, max: 100, core: true },
-    { id: 'shame', group: '状态', label: '羞耻心', type: 'num', min: 0, max: 100, core: true },
-    { id: 'menstrual', group: '状态', label: '生理周期', type: 'text', options: ['月经期', '卵泡期', '排卵期', '黄体期'], core: true },
-    { id: 'eggState', group: '状态', label: '卵子状态', type: 'text', options: ['未成熟', '成熟待排', '已排出', '新一轮'], core: true },
-    { id: 'milkMl', group: '胸', label: '积乳量', type: 'num', min: 0, max: 2000, core: true, ord: 0 },
-    { id: 'voice', group: '状态', label: '发声状态', type: 'text', core: true },
-    { id: 'brands', group: '状态', label: '心理烙印', type: 'list', core: true },
-    { id: 'bottomline', group: '状态', label: '崩塌底线', type: 'text', core: false },
-    { id: 'bladder', group: '状态', label: '尿意', type: 'num', min: 0, max: 100, core: false, core: true },
-    { id: 'pain', group: '状态', label: '疼痛度', type: 'num', min: 0, max: 100, core: false, core: true },
-    { id: 'exposure', group: '状态', label: '暴露度', type: 'num', min: 0, max: 100, core: false, core: true },
-    { id: 'pregnancy', group: '状态', label: '怀孕状态', type: 'text', core: false },
+    /* 状态（顺序 = 卡片顺序：体力 → 尿意 → 疼痛 → 理智 → 欲望 → 配合 → 羞耻 → 周期 → 卵子 → 怀孕 → 发声 → 最近对象） */
+    { id: 'stamina', group: '状态', label: '体力', type: 'num', min: 0, max: 100, core: true, ord: 10 },
+    { id: 'bladder', group: '状态', label: '尿意', type: 'num', min: 0, max: 100, core: true, ord: 20 },
+    { id: 'pain', group: '状态', label: '疼痛度', type: 'num', min: 0, max: 100, core: true, ord: 30 },
+    { id: 'sanity', group: '状态', label: '理智', type: 'num', min: 0, max: 100, core: true, ord: 40 },
+    { id: 'libido', group: '状态', label: '欲望', type: 'num', min: 0, max: 100, core: true, ord: 50 },
+    { id: 'compliance', group: '状态', label: '配合度', type: 'num', min: 0, max: 100, core: true, ord: 60 },
+    { id: 'shame', group: '状态', label: '羞耻心', type: 'num', min: 0, max: 100, core: true, ord: 70 },
+    { id: 'menstrual', group: '状态', label: '生理周期', type: 'text', options: ['月经期', '卵泡期', '排卵期', '黄体期'], core: true, ord: 80 },
+    { id: 'eggState', group: '状态', label: '卵子状态', type: 'text', options: ['未成熟', '成熟待排', '已排出', '新一轮'], core: true, ord: 90 },
+    { id: 'pregnancy', group: '状态', label: '怀孕状态', type: 'text', core: true, ord: 100 },
+    { id: 'voice', group: '状态', label: '发声状态', type: 'text', core: true, ord: 110 },
+    { id: 'expLastPartner', group: '状态', label: '最近性经验对象', type: 'text', core: true, ord: 120 },
 
     /* 体态 */
-    { id: 'pose', group: '体态', label: '当前体位', type: 'text', core: true },
-    { id: 'temp', group: '体态', label: '体温', type: 'text', core: true },
-    { id: 'sweat', group: '体态', label: '出汗量', type: 'text', core: false, core: true },
-    { id: 'organFlush', group: '体态', label: '器官充血', type: 'text', core: true },
-    { id: 'wearLevel', group: '体态', label: '损耗度', type: 'text', core: true },
-    { id: 'bodyMarks', group: '体态', label: '体表痕迹', type: 'list', core: true },
-    { id: 'selfJuice', group: '体态', label: '自身体液', type: 'text', core: true },
-    { id: 'extJuice', group: '体态', label: '外部液体', type: 'text', core: true },
-    { id: 'belly', group: '体态', label: '腹部外观', type: 'text', core: true },
+    { id: 'temp', group: '体态', label: '体温', type: 'text', core: true, ord: 10 },
+    { id: 'sweat', group: '体态', label: '出汗量', type: 'text', core: true, ord: 20 },
+    { id: 'organFlush', group: '体态', label: '器官充血', type: 'text', core: true, ord: 30 },
+    { id: 'bodyMarks', group: '体态', label: '体表痕迹', type: 'list', core: true, ord: 40 },
+    { id: 'selfJuice', group: '体态', label: '自身体液', type: 'text', core: true, ord: 50 },
+    { id: 'extJuice', group: '体态', label: '外部液体', type: 'text', core: true, ord: 60 },
+    { id: 'belly', group: '体态', label: '腹部外观', type: 'text', core: true, ord: 70 },
 
-    /* 胸 */
-    { id: 'nippleState', group: '胸', label: '乳头状态', type: 'text', core: true, ord: 60 },
-    { id: 'areolaNow', group: '胸', label: '乳晕状态', type: 'text', core: true, ord: 70 },
+    /* 穿搭（暴露度并进来） */
+    { id: 'outer', group: '穿搭', label: '外衣', type: 'text', core: true, ord: 10 },
+    { id: 'inner', group: '穿搭', label: '内衣', type: 'text', core: true, ord: 20 },
+    { id: 'accessories', group: '穿搭', label: '配饰', type: 'list', core: true, ord: 30 },
+    { id: 'clothState', group: '穿搭', label: '衣物状态', type: 'text', core: true, ord: 40 },
+    { id: 'insertItem', group: '穿搭', label: '插入物', type: 'text', core: true, ord: 50 },
+    { id: 'exposure', group: '穿搭', label: '暴露度', type: 'num', min: 0, max: 100, core: true, ord: 60 },
 
-    /* 穿搭 */
-    { id: 'outer', group: '穿搭', label: '外衣', type: 'text', core: true },
-    { id: 'inner', group: '穿搭', label: '内衣', type: 'text', core: true },
-    { id: 'accessories', group: '穿搭', label: '配饰', type: 'list', core: true },
-    { id: 'clothState', group: '穿搭', label: '衣物状态', type: 'text', core: false, core: true },
-    { id: 'insertItem', group: '穿搭', label: '插入物', type: 'text', core: false, core: true },
+    /* 胸（积乳量并入） */
+    { id: 'milkMl', group: '胸', label: '积乳量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 0, ord: 0 },
 
     /* 前穴（女） */
-    { id: 'vLoose', group: '前穴', label: '松弛度', type: 'text', sex: 'female', core: true, ord: 40 },
-    { id: 'vDepthNow', group: '前穴', label: '当前深度（受撑）', type: 'num', min: 0, max: 100, unit: 'cm', sex: 'female', core: true, ord: 30 },
-    { id: 'vulvaState', group: '前穴', label: '外阴状态', type: 'text', sex: 'female', core: true, ord: 80 },
-    { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', sex: 'female', core: true, ord: 50, options: ['紧闭', '受迫变形', '微开', '全开'] },
-    { id: 'vFluidMl', group: '前穴', label: '阴道液体量', type: 'num', min: 0, max: 2000, unit: 'ml', sex: 'female', core: true, ord: 60 },
-    { id: 'vFluidKind', group: '前穴', label: '阴道液体种类', type: 'text', sex: 'female', core: true, ord: 61 },
-    { id: 'uterusFluidMl', group: '前穴', label: '子宫液体量', type: 'num', min: 0, max: 2000, unit: 'ml', sex: 'female', core: true, ord: 70 },
+    { id: 'vLoose', group: '前穴', label: '松弛度', type: 'text', sex: 'female', core: true, ord: 40, ord: 30 },
+    { id: 'vulvaState', group: '前穴', label: '外阴状态', type: 'text', sex: 'female', core: true, ord: 80, ord: 70 },
+    { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', sex: 'female', core: true, ord: 50, options: ['紧闭', '受迫变形', '微开', '全开'], ord: 40 },
+    { id: 'vFluidMl', group: '前穴', label: '阴道液体量', type: 'num', min: 0, max: 2000, unit: 'ml', sex: 'female', core: true, ord: 60, ord: 50 },
+    { id: 'vFluidKind', group: '前穴', label: '阴道液体种类', type: 'text', sex: 'female', core: true, ord: 61, ord: 51 },
+    { id: 'uterusFluidMl', group: '前穴', label: '子宫液体量', type: 'num', min: 0, max: 2000, unit: 'ml', sex: 'female', core: true, ord: 70, ord: 60 },
+    { id: 'clitState', group: '前穴', label: '阴蒂状态', type: 'text', sex: 'female', core: true, ord: 90, ord: 90 },
 
     /* 后穴（男女通用） */
-    { id: 'aLoose', group: '后穴', label: '松弛度', type: 'text', core: true, ord: 40 },
-    { id: 'aDepthNow', group: '后穴', label: '当前深度（受撑）', type: 'num', min: 0, max: 100, unit: 'cm', core: true, ord: 30 },
-    { id: 'aAnusState', group: '后穴', label: '肛门状态', type: 'text', core: true, ord: 80 },
-    { id: 'colonState', group: '后穴', label: '结肠口状态', type: 'text', core: true, ord: 50, options: ['紧闭', '受迫变形', '微开', '全开'] },
-    { id: 'aFluidMl', group: '后穴', label: '后穴液体量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 60 },
-    { id: 'aFluidKind', group: '后穴', label: '后穴液体种类', type: 'text', core: true, ord: 61 },
-    { id: 'keyPointState', group: '后穴', label: '后穴G点状态', type: 'text', core: false, ord: 70 },
+    { id: 'aLoose', group: '后穴', label: '松弛度', type: 'text', core: true, ord: 40, ord: 30 },
+    { id: 'aAnusState', group: '后穴', label: '肛门状态', type: 'text', core: true, ord: 80, ord: 70 },
+    { id: 'colonState', group: '后穴', label: '结肠口状态', type: 'text', core: true, ord: 50, options: ['紧闭', '受迫变形', '微开', '全开'], ord: 40 },
+    { id: 'aFluidMl', group: '后穴', label: '后穴液体量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 60, ord: 50 },
+    { id: 'aFluidKind', group: '后穴', label: '后穴液体种类', type: 'text', core: true, ord: 61, ord: 51 },
+    { id: 'keyPointState', group: '后穴', label: '后穴G点状态', type: 'text', core: true, ord: 70, ord: 60 },
 
-    /* 开发 */
-    { id: 'devMouthLv', group: '开发', label: '口·等级', type: 'num', min: 0, max: 10, core: true },
-    { id: 'devMouthExp', group: '开发', label: '口·经验', type: 'text', core: true },
-    { id: 'devMouthSense', group: '开发', label: '口·敏感度', type: 'text', core: true },
-    { id: 'devMouthSkill', group: '开发', label: '口·技能', type: 'list', core: true },
-    { id: 'devChestLv', group: '开发', label: '胸·等级', type: 'num', min: 0, max: 10, core: true },
-    { id: 'devChestExp', group: '开发', label: '胸·经验', type: 'text', core: true },
-    { id: 'devChestSense', group: '开发', label: '胸·敏感度', type: 'text', core: true },
-    { id: 'devChestSkill', group: '开发', label: '胸·技能', type: 'list', core: true },
-    { id: 'devFrontLv', group: '开发', label: '前·等级', type: 'num', min: 0, max: 10, core: true },
-    { id: 'devFrontExp', group: '开发', label: '前·经验', type: 'text', core: true },
-    { id: 'devFrontSense', group: '开发', label: '前·敏感度', type: 'text', core: true },
-    { id: 'devFrontSkill', group: '开发', label: '前·技能', type: 'list', core: true },
-    { id: 'devBackLv', group: '开发', label: '后·等级', type: 'num', min: 0, max: 10, core: true },
-    { id: 'devBackExp', group: '开发', label: '后·经验', type: 'text', core: true },
-    { id: 'devBackSense', group: '开发', label: '后·敏感度', type: 'text', core: true },
-    { id: 'devBackSkill', group: '开发', label: '后·技能', type: 'list', core: true },
-    { id: 'devDeepLv', group: '开发', label: '最深·等级', type: 'num', min: 0, max: 10, core: true },
-    { id: 'devDeepExp', group: '开发', label: '最深·经验', type: 'text', core: true },
-    { id: 'devDeepSense', group: '开发', label: '最深·敏感度', type: 'text', core: true },
-    { id: 'devDeepSkill', group: '开发', label: '最深·技能', type: 'list', core: true },
+    /* 开发（等级 / 经验 / 变化） */
+    { id: 'devMouthLv', group: '开发', label: '口·等级', type: 'num', min: 0, max: 10, core: true, ord: 10 },
+    { id: 'devMouthExp', group: '开发', label: '口·经验', type: 'text', core: true, ord: 11 },
+    { id: 'devMouthSense', group: '开发', label: '口·变化', type: 'text', core: true, ord: 12 },
+    { id: 'devChestLv', group: '开发', label: '胸·等级', type: 'num', min: 0, max: 10, core: true, ord: 20 },
+    { id: 'devChestExp', group: '开发', label: '胸·经验', type: 'text', core: true, ord: 21 },
+    { id: 'devChestSense', group: '开发', label: '胸·变化', type: 'text', core: true, ord: 22 },
+    { id: 'devFrontLv', group: '开发', label: '前·等级', type: 'num', min: 0, max: 10, core: true, ord: 30 },
+    { id: 'devFrontExp', group: '开发', label: '前·经验', type: 'text', core: true, ord: 31 },
+    { id: 'devFrontSense', group: '开发', label: '前·变化', type: 'text', core: true, ord: 32 },
+    { id: 'devBackLv', group: '开发', label: '后·等级', type: 'num', min: 0, max: 10, core: true, ord: 40 },
+    { id: 'devBackExp', group: '开发', label: '后·经验', type: 'text', core: true, ord: 41 },
+    { id: 'devBackSense', group: '开发', label: '后·变化', type: 'text', core: true, ord: 42 },
+    { id: 'devDeepLv', group: '开发', label: '最深·等级', type: 'num', min: 0, max: 10, core: true, ord: 50 },
+    { id: 'devDeepExp', group: '开发', label: '最深·经验', type: 'text', core: true, ord: 51 },
+    { id: 'devDeepSense', group: '开发', label: '最深·变化', type: 'text', core: true, ord: 52 },
 
     /* 经验（永久统计） */
-    { id: 'expMasturbation', group: '经验', label: '自慰次数', type: 'num', min: 0, max: 99999, core: true },
-    { id: 'expPartners', group: '经验', label: '经验人数', type: 'num', min: 0, max: 999, core: true },
-    { id: 'expLastPartner', group: '状态', label: '最近性经验对象', type: 'text', core: true },
-    { id: 'expOralCount', group: '经验', label: '口交次数', type: 'num', min: 0, max: 99999, core: true },
-    { id: 'expVCount', group: '经验', label: '前穴次数', type: 'num', min: 0, max: 99999, core: true },
-    { id: 'expVCumCount', group: '经验', label: '前穴中出次数', type: 'num', min: 0, max: 99999, core: true },
-    { id: 'expACount', group: '经验', label: '后穴次数', type: 'num', min: 0, max: 99999, core: true },
-    { id: 'expACumCount', group: '经验', label: '后穴中出次数', type: 'num', min: 0, max: 99999, core: true },
+    { id: 'expMasturbation', group: '经验', label: '自慰次数', type: 'num', min: 0, max: 99999, core: true, ord: 10 },
+    { id: 'expPartners', group: '经验', label: '经验人数', type: 'num', min: 0, max: 999, core: true, ord: 20 },
+    { id: 'expOralCount', group: '经验', label: '口交次数', type: 'num', min: 0, max: 99999, core: true, ord: 30 },
+    { id: 'expVCount', group: '经验', label: '前穴次数', type: 'num', min: 0, max: 99999, core: true, ord: 40 },
+    { id: 'expVCumCount', group: '经验', label: '前穴中出次数', type: 'num', min: 0, max: 99999, core: true, ord: 50 },
+    { id: 'expACount', group: '经验', label: '后穴次数', type: 'num', min: 0, max: 99999, core: true, ord: 60 },
+    { id: 'expACumCount', group: '经验', label: '后穴中出次数', type: 'num', min: 0, max: 99999, core: true, ord: 70 },
 
-    /* 本次性爱（并入状态页底部） */
-    { id: 'condom', group: '状态', label: '避孕套', type: 'text', options: ['是', '否'], core: true , hideInCard: true},
-    { id: 'condomCount', group: '状态', label: '避孕套个数', type: 'num', min: 0, max: 99, core: true , hideInCard: true},
-    { id: 'cumV', group: '状态', label: '前穴中出', type: 'text', options: ['是', '否'], core: true , hideInCard: true},
-    { id: 'orgasmCount', group: '状态', label: '高潮次数', type: 'num', min: 0, max: 999, core: true , hideInCard: true},
-    { id: 'scene', group: '状态', label: '互动情境', type: 'text', core: true , hideInCard: true},
+    /* 本次性爱（卡片不单列，供插件算怀孕率/统计） */
+    { id: 'condom', group: '状态', label: '避孕套', type: 'text', options: ['是', '否'], core: true, hideInCard: true },
+    { id: 'condomCount', group: '状态', label: '避孕套携带数', type: 'num', min: 0, max: 99, core: true, hideInCard: true },
+    { id: 'cumV', group: '状态', label: '前穴中出', type: 'text', options: ['是', '否'], core: true, hideInCard: true },
+    { id: 'orgasmCount', group: '状态', label: '高潮次数', type: 'num', min: 0, max: 999, core: true, hideInCard: true },
 
     /* ── 静态参数（建档填一次；不要求 AI 每轮输出） ── */
-    { id: 'stChestSize', group: '静态-胸部', tab: '胸', label: '罩杯/胸肌', type: 'text', static: true, after: 'milkMl', ord: 10 },
-    { id: 'stChestShape', group: '静态-胸部', tab: '胸', label: '胸型', type: 'text', static: true, after: 'milkMl', ord: 20 },
-    { id: 'stNippleLen', group: '静态-胸部', tab: '胸', label: '乳头长', type: 'text', static: true, after: 'nippleState', ord: 30 },
-    { id: 'stNippleWid', group: '静态-胸部', tab: '胸', label: '乳头宽', type: 'text', static: true, after: 'nippleState', ord: 40 },
-    { id: 'stAreolaDia', group: '静态-胸部', tab: '胸', label: '乳晕直径', type: 'text', static: true, after: 'areolaNow', ord: 50 },
-    { id: 'stClitLen', group: '静态-前穴', tab: '前穴', label: '阴蒂长度', type: 'text', sex: 'female', static: true, after: 'vulvaShape', ord: 90 },
-    { id: 'stClitSize', group: '静态-前穴', tab: '前穴', label: '阴蒂大小', type: 'text', sex: 'female', static: true, after: 'vulvaShape', ord: 100 },
-    { id: 'stPenisLen', group: '静态-后穴', tab: '后穴', label: '阴茎长度', type: 'text', sex: 'male', static: true },
-    { id: 'stPenisGirth', group: '静态-后穴', tab: '后穴', label: '阴茎粗度', type: 'text', sex: 'male', static: true },
-    { id: 'stPenisLook', group: '静态-后穴', tab: '后穴', label: '阴茎外观', type: 'text', sex: 'male', static: true },
-    { id: 'stGDepth', group: '静态-前穴', tab: '前穴', label: 'G点深度', type: 'text', sex: 'female', static: true, after: 'gState', ord: 10 },
-    { id: 'stCervixDepth', group: '静态-前穴', tab: '前穴', label: '子宫口深度', type: 'text', sex: 'female', static: true, after: 'cervixState', ord: 20 },
-    { id: 'stKeyDepth', group: '静态-后穴', tab: '后穴', label: '前列腺深度', type: 'text', static: true, after: 'keyPointState', ord: 10 },
-    { id: 'stColonDepth', group: '静态-后穴', tab: '后穴', label: '结肠口深度', type: 'text', static: true, after: 'colonState', ord: 20 },
-    { id: 'stEroZones', group: '静态-其他', tab: '状态', label: '敏感带', type: 'list', static: true },
-    { id: 'stMouthDepth', group: '静态-其他', tab: '状态', label: '口部耐受深度', type: 'text', static: true },
-    { id: 'stFavPose', group: '静态-其他', tab: '状态', label: '惯用体位', type: 'text', static: true },
-    { id: 'stMarks', group: '静态-其他', tab: '状态', label: '特殊标记', type: 'list', static: true }
+    { id: 'stChestSize', group: '静态-胸部', tab: '胸', label: '罩杯/胸肌', type: 'text', static: true, after: 'milkMl', ord: 10, ord: 10 },
+    { id: 'stChestShape', group: '静态-胸部', tab: '胸', label: '胸型', type: 'text', static: true, after: 'milkMl', ord: 20, ord: 20 },
+    { id: 'stNippleLen', group: '静态-胸部', tab: '胸', label: '乳头长', type: 'text', static: true, after: 'milkMl', ord: 30, ord: 30 },
+    { id: 'stNippleWid', group: '静态-胸部', tab: '胸', label: '乳头宽', type: 'text', static: true, after: 'milkMl', ord: 40, ord: 40 },
+    { id: 'stAreolaDia', group: '静态-胸部', tab: '胸', label: '乳晕直径', type: 'text', static: true, after: 'stNippleWid', ord: 50, ord: 50 },
+    { id: 'stClitLen', group: '静态-前穴', tab: '前穴', label: '阴蒂长度', type: 'text', sex: 'female', static: true, after: 'vulvaState', ord: 90, ord: 80 },
+    { id: 'stClitSize', group: '静态-前穴', tab: '前穴', label: '阴蒂宽', type: 'text', sex: 'female', static: true, after: 'vulvaState', ord: 100, ord: 81 },
+    { id: 'stPenisLen', group: '静态-后穴', tab: '后穴', label: '阴茎长度', type: 'text', sex: 'male', static: true, ord: 80 },
+    { id: 'stPenisGirth', group: '静态-后穴', tab: '后穴', label: '阴茎粗度', type: 'text', sex: 'male', static: true, ord: 81 },
+    { id: 'stPenisLook', group: '静态-后穴', tab: '后穴', label: '阴茎外观', type: 'text', sex: 'male', static: true, ord: 82 },
+    { id: 'stGDepth', group: '静态-前穴', tab: '前穴', label: 'G点深度', type: 'text', sex: 'female', static: true, after: 'vulvaState', ord: 10, ord: 10 },
+    { id: 'stCervixDepth', group: '静态-前穴', tab: '前穴', label: '子宫口深度', type: 'text', sex: 'female', static: true, after: 'cervixState', ord: 20, ord: 20 },
+    { id: 'stKeyDepth', group: '静态-后穴', tab: '后穴', label: '前列腺深度', type: 'text', static: true, after: 'keyPointState', ord: 10, ord: 10 },
+    { id: 'stColonDepth', group: '静态-后穴', tab: '后穴', label: '结肠口深度', type: 'text', static: true, after: 'colonState', ord: 20, ord: 20 },
+    { id: 'stEroZones', group: '静态-其他', tab: '状态', label: '敏感带', type: 'list', static: true, ord: 200 },
+    { id: 'stMouthDepth', group: '静态-其他', tab: '状态', label: '口部耐受深度', type: 'text', static: true, ord: 210 },
+    { id: 'stFavPose', group: '静态-其他', tab: '状态', label: '惯用体位', type: 'text', static: true, ord: 220 },
+    { id: 'stMarks', group: '静态-其他', tab: '状态', label: '特殊标记', type: 'list', static: true, ord: 230 }
 ];
 
 /** 他人视线（只展示，不进数值）—— v2 去掉「精神」 */
@@ -143,7 +130,6 @@ export const NSFW_FIELDS = [
 const NSFW_UNITS = {
     temp: '℃', sweat: 'ml',
     milkMl: 'ml', vFluidMl: 'ml', uterusFluidMl: 'ml', aFluidMl: 'ml',
-    vDepthNow: 'cm', aDepthNow: 'cm',
     stNippleLen: 'cm', stNippleWid: 'cm', stAreolaDia: 'cm', stClitLen: 'cm',
     stGDepth: 'cm', stCervixDepth: 'cm', stKeyDepth: 'cm', stColonDepth: 'cm', stMouthDepth: 'cm',
     stPenisLen: 'cm', stPenisGirth: 'cm'
@@ -1107,24 +1093,23 @@ export function nsfwFillDemo(chatId, name) {
         set('stamina', '42', '腿在抖'); set('sanity', '35', '眼前发白'); set('libido', '85', '烧得人发昏');
         set('compliance', '82', '让做什么就做什么'); set('shame', '20', '不太会脸红了');
         set('menstrual', '排卵期', '这几天最危险'); set('eggState', '成熟待排', '就等这一下');
-        set('voice', '说不出完整句子', '只剩气音'); set('brands', '已适应常态腹胀、把痛爱视为快感', '');
+        set('voice', '说不出完整句子', '只剩气音');
         set('expLastPartner', '陆沉', '今晚');
-        set('pose', '后入式跪趴', '腰塌成一道弧'); set('temp', '38.2℃', '烫得吓人');
+        set('temp', '38.2℃', '烫得吓人');
         set('sweat', '薄汗', '背上一层水光'); set('organFlush', '阴道壁、子宫口、后穴 · 充血红肿', '一碰就抽');
-        set('wearLevel', '肌肉酸痛 / 下肢无力', ''); set('bodyMarks', '腰侧指印、后颈咬痕', '还没消');
+        set('bodyMarks', '腰侧指印、后颈咬痕', '还没消');
         set('selfJuice', '泉涌', '大腿内侧一片湿滑'); set('extJuice', '淋漓沾黏', '混着白浊往下淌');
         set('belly', '微微鼓起', '摸上去沉甸甸');
         set('outer', '开档薄纱情趣睡衣', '贴在汗湿的皮肤上'); set('inner', '无', '早就没穿了');
         set('accessories', '猫尾肛塞', '还在震');
-        set('milkMl', '38', '积了快一天'); set('nippleState', '硬挺凸起 · 极度敏感', '碰一下整个人就弹');
-        set('areolaNow', '茶托状微扩 · 色沉加深', '');
-        set('vDepthNow', '18', '被撑到极限'); set('vLoose', '松弛失守 · 合不拢', '肌肉失去弹性，从外面能看到内壁');
+        set('milkMl', '38', '积了快一天');
+        set('vLoose', '松弛失守 · 合不拢', '肌肉失去弹性，从外面能看到内壁'); set('clitState', '充血挺立', '一碰就缩');
         set('cervixState', '未开 · 充血红肿', '每一下都撞在那'); set('vFluidMl', '58', '顺着大腿往下'); set('vFluidKind', '爱液', '');
         set('uterusFluidMl', '0', '还没灌进去'); set('vulvaState', '小阴唇微张外翻 · 暗红充血', '被磨得发亮');
-        set('aDepthNow', '14', '被塞子撑开'); set('aLoose', '微张 · 边缘泛红', '拔出来会合不拢');
+        set('aLoose', '微张 · 边缘泛红', '拔出来会合不拢');
         set('colonState', '紧闭', '顶到就发酸'); set('aFluidMl', '32', '被堵在里面'); set('aFluidKind', '润滑油', '');
         set('keyPointState', '前列腺 · 充血', '一顶就腿软'); set('aAnusState', '紧致 · 边缘泛红', '');
-        set('devMouthLv', '3', ''); set('devMouthExp', '180/300', ''); set('devMouthSense', '中等', ''); set('devMouthSkill', '深喉、抗呕吐', '');
+        set('devMouthLv', '3', ''); set('devMouthExp', '180/300', ''); set('devMouthSense', '+1 敏感', '');
         set('devChestLv', '4', ''); set('devChestExp', '420/500', ''); set('devChestSense', '极度敏感', ''); set('devChestSkill', '常态激凸、微量溢乳', '');
         set('devFrontLv', '4', ''); set('devFrontExp', '380/500', ''); set('devFrontSense', '高', ''); set('devFrontSkill', '主动收缩绞缠', '');
         set('devBackLv', '2', ''); set('devBackExp', '150/300', ''); set('devBackSense', '中', ''); set('devBackSkill', '—', '');
@@ -1132,7 +1117,7 @@ export function nsfwFillDemo(chatId, name) {
         set('expMasturbation', '24', '最近很频繁'); set('expPartners', '3', ''); set('expOralCount', '31', '很熟练');
         set('expVCount', '17', ''); set('expVCumCount', '9', ''); set('expACount', '6', ''); set('expACumCount', '2', '');
         set('condom', '否', '没用'); set('condomCount', '0', ''); set('cumV', '是', '全灌进去了');
-        set('orgasmCount', '3', '这次已经三次'); set('scene', '浴殿 · 后入持续顶弄', '');
+        set('orgasmCount', '3', '这次已经三次');
         const desc = {
             viewBody: '跪趴的腰塌成一道弧，臀肉上还留着指印，膝盖在打颤',
             viewOutfit: '穿得少，却像一件被仔细拆过包装、又不打算收回去的礼物',
