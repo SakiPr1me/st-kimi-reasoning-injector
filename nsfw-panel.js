@@ -537,9 +537,12 @@ export function nsfwApply(chatId, parsed) {
             }
             const rec = bucket.chars[name];
             const mm = parsed.chars[name].machine || {};
+            const allow = {};
+            activeFields(rec).forEach((f) => { allow[f.id] = 1; });
             Object.keys(mm).forEach((id) => {
                 const f = fieldById(id);
                 if (!f) return;
+                if (!allow[id]) return;   /* ★只收当前启用字段（非核心字段即使 AI 写了也不入库） */
                 const item = mm[id] || {};
                 let value = item.value;
                 if (f.type === 'num') {
@@ -581,7 +584,7 @@ export function buildCharBlock(name, profile) {
         const val = cell ? fmtVal(f, cell) : '';
         if (!val) return;
         const c = cell.comment ? '（' + cell.comment + '）' : '';
-        lines.push(f.id + '=' + val + (cell.comment ? '|' + cell.comment : ''));
+        lines.push(f.id + '=' + val);
     });
     if (!lines.length) return '';
     const stLines = nsfwStaticFields(profile)
