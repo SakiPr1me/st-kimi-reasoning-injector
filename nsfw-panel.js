@@ -26,8 +26,8 @@ export const NSFW_FIELDS = [
     { id: 'libido', group: '状态', label: '欲望', type: 'num', min: 0, max: 100, core: true },
     { id: 'compliance', group: '状态', label: '配合度', type: 'num', min: 0, max: 100, core: true },
     { id: 'shame', group: '状态', label: '羞耻心', type: 'num', min: 0, max: 100, core: true },
-    { id: 'menstrual', group: '状态', label: '生理周期', type: 'text', core: true },
-    { id: 'eggState', group: '状态', label: '卵子状态', type: 'text', core: true },
+    { id: 'menstrual', group: '状态', label: '生理周期', type: 'text', options: ['月经期', '卵泡期', '排卵期', '黄体期'], core: true },
+    { id: 'eggState', group: '状态', label: '卵子状态', type: 'text', options: ['未成熟', '成熟待排', '已排出', '新一轮'], core: true },
     { id: 'milkMl', group: '胸', label: '积乳量', type: 'num', min: 0, max: 2000, core: true, ord: 0 },
     { id: 'voice', group: '状态', label: '发声状态', type: 'text', core: true },
     { id: 'brands', group: '状态', label: '心理烙印', type: 'list', core: true },
@@ -108,9 +108,9 @@ export const NSFW_FIELDS = [
     { id: 'expACumCount', group: '经验', label: '后穴中出次数', type: 'num', min: 0, max: 99999, core: true },
 
     /* 本次性爱（并入状态页底部） */
-    { id: 'condom', group: '状态', label: '避孕套', type: 'text', core: true , hideInCard: true},
+    { id: 'condom', group: '状态', label: '避孕套', type: 'text', options: ['是', '否'], core: true , hideInCard: true},
     { id: 'condomCount', group: '状态', label: '避孕套个数', type: 'num', min: 0, max: 99, core: true , hideInCard: true},
-    { id: 'cumV', group: '状态', label: '前穴中出', type: 'text', core: true , hideInCard: true},
+    { id: 'cumV', group: '状态', label: '前穴中出', type: 'text', options: ['是', '否'], core: true , hideInCard: true},
     { id: 'orgasmCount', group: '状态', label: '高潮次数', type: 'num', min: 0, max: 999, core: true , hideInCard: true},
     { id: 'scene', group: '状态', label: '互动情境', type: 'text', core: true , hideInCard: true},
 
@@ -648,7 +648,9 @@ function tabRowsHtml(profile, grp, byGroup) {
         rows.push({ ord: (typeof f.ord === 'number' ? f.ord : 9999), html: rowHtml(f, { value: v, comment: '' }) });
     });
     rows.sort((a, b) => a.ord - b.ord);
-    return rows.map((r) => r.html).join('');
+    if (!rows.length) return '';
+    return '<table class="yw-nsfw-tbl"><thead><tr><th>字段</th><th>值</th><th>评述</th></tr></thead><tbody>'
+        + rows.map((r) => r.html).join('') + '</tbody></table>';
 }
 /** 开发度表格：部位 × 等级/经验/敏感度/技能 */
 function devTableHtml(profile) {
@@ -673,18 +675,19 @@ function rowHtml(f, cell) {
     if (!cell) return '';
     const val = fmtVal(f, cell);
     if (!val && !(f && f.static)) return '';
-    const idAttr = ' data-id="' + esc(f.id) + '" data-type="' + esc(f.type) + '"' + (f.static ? ' data-static="1"' : '');
-    const c = '<span class="yw-nsfw-c">' + (cell.comment ? esc(cell.comment) : '') + '</span>';
+    const optAttr = Array.isArray(f.options) ? ' data-options="' + esc(f.options.join('|')) + '"' : '';
+    const idAttr = ' data-id="' + esc(f.id) + '" data-type="' + esc(f.type) + '"' + optAttr + (f.static ? ' data-static="1"' : '');
+    const c = '<td class="yw-nsfw-c">' + (cell.comment ? esc(cell.comment) : '') + '</td>';
     if (f.type === 'num') {
         const n = Number(cell.value);
         const max = typeof f.max === 'number' ? f.max : 100;
         const pct = Math.max(0, Math.min(100, (n / max) * 100));
-        return '<div class="yw-nsfw-row"' + idAttr + '><span class="k">' + esc(f.label) + '</span>'
-            + '<span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span>'
-            + '<span class="v">' + esc(val) + '</span>' + c + '</div>';
+        return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
+            + '<td class="v"><span class="num">' + esc(val) + '</span><span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span></td>'
+            + c + '</tr>';
     }
-    return '<div class="yw-nsfw-row"' + idAttr + '><span class="k">' + esc(f.label) + '</span>'
-        + '<span class="t">' + esc(val) + '</span>' + c + '</div>';
+    return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
+        + '<td class="t">' + esc(val) + '</td>' + c + '</tr>';
 }
 
 /** 状态卡（v2：分页 tabs，评述在右） */
@@ -785,15 +788,28 @@ function bindCardEdit(wrap, name, profile) {
                 const id = row.getAttribute('data-id');
                 const isStatic = row.getAttribute('data-static') === '1';
                 const type = row.getAttribute('data-type') || 'text';
+                const optsAttr = row.getAttribute('data-options') || '';
                 const cell = isStatic ? { value: (profile.static || {})[id], comment: '' } : ((profile.stats || {})[id] || {});
                 const vEl = row.querySelector('.v') || row.querySelector('.t');
                 if (vEl) {
-                    const inp = document.createElement('input');
-                    inp.className = 'yw-nsfw-in yw-nsfw-in-v';
-                    inp.value = cell.value == null ? '' : String(cell.value);
-                    if (type === 'num') inp.type = 'number';
                     vEl.textContent = '';
-                    vEl.appendChild(inp);
+                    if (optsAttr) {
+                        const sel = document.createElement('select');
+                        sel.className = 'yw-nsfw-in yw-nsfw-in-v';
+                        optsAttr.split('|').forEach((op) => {
+                            const o = document.createElement('option');
+                            o.value = op; o.textContent = op;
+                            if (String(cell.value) === op) o.selected = true;
+                            sel.appendChild(o);
+                        });
+                        vEl.appendChild(sel);
+                    } else {
+                        const inp = document.createElement('input');
+                        inp.className = 'yw-nsfw-in yw-nsfw-in-v';
+                        inp.value = cell.value == null ? '' : String(cell.value);
+                        if (type === 'num') inp.type = 'number';
+                        vEl.appendChild(inp);
+                    }
                 }
                 const cEl = row.querySelector('.yw-nsfw-c');
                 if (cEl && !isStatic) {
@@ -825,6 +841,58 @@ function bindCardEdit(wrap, name, profile) {
         if (mesid != null) setTimeout(() => { try { nsfwMountToMessage(Number(mesid)); } catch (e) { } }, 30);
     });
 }
+/** 示例填充：给当前聊天塞一个全字段角色，方便先看效果 */
+export function nsfwFillDemo(chatId, name) {
+    try {
+        const n = String(name || '夏海');
+        nsfwEnsure(chatId, n, 'female', 'bottom');
+        nsfwApplyStatic(chatId, n, [
+            '罩杯/胸肌: C 罩杯', '胸型: 水滴形', '乳头长: 1.2cm', '乳头宽: 0.8cm', '乳晕直径: 3.5cm',
+            'G点深度: 5cm', '子宫口深度: 12cm', '阴蒂长度: 1.5cm', '阴蒂大小: 小指末节',
+            '前列腺深度: 5cm', '结肠口深度: 14cm'
+        ].join(String.fromCharCode(10)));
+        const m = {};
+        const set = (id, v, c) => { m[id] = { value: v, comment: c || '' }; };
+        set('stamina', '42', '腿在抖'); set('sanity', '35', '眼前发白'); set('libido', '85', '烧得人发昏');
+        set('compliance', '82', '让做什么就做什么'); set('shame', '20', '不太会脸红了');
+        set('menstrual', '排卵期', '这几天最危险'); set('eggState', '成熟待排', '就等这一下');
+        set('voice', '说不出完整句子', '只剩气音'); set('brands', '已适应常态腹胀、把痛爱视为快感', '');
+        set('expLastPartner', '陆沉', '今晚');
+        set('pose', '后入式跪趴', '腰塌成一道弧'); set('temp', '38.2℃', '烫得吓人');
+        set('sweat', '薄汗', '背上一层水光'); set('organFlush', '阴道壁、子宫口、后穴 · 充血红肿', '一碰就抽');
+        set('wearLevel', '肌肉酸痛 / 下肢无力', ''); set('bodyMarks', '腰侧指印、后颈咬痕', '还没消');
+        set('selfJuice', '泉涌', '大腿内侧一片湿滑'); set('extJuice', '淋漓沾黏', '混着白浊往下淌');
+        set('belly', '微微鼓起', '摸上去沉甸甸');
+        set('outer', '开档薄纱情趣睡衣', '贴在汗湿的皮肤上'); set('inner', '无', '早就没穿了');
+        set('accessories', '猫尾肛塞', '还在震');
+        set('milkMl', '38', '积了快一天'); set('nippleState', '硬挺凸起 · 极度敏感', '碰一下整个人就弹');
+        set('areolaNow', '茶托状微扩 · 色沉加深', '');
+        set('vDepthNow', '12 → 18cm', '被撑到极限'); set('vLoose', '松弛失守 · 合不拢', '肌肉失去弹性，从外面能看到内壁');
+        set('cervixState', '未开 · 充血红肿', '每一下都撞在那'); set('vFluid', '58ml · 爱液', '顺着大腿往下');
+        set('uterusFluid', '0ml', '还没灌进去'); set('vulvaState', '小阴唇微张外翻 · 暗红充血', '被磨得发亮');
+        set('aDepthNow', '10 → 14cm', '被塞子撑开'); set('aLoose', '微张 · 边缘泛红', '拔出来会合不拢');
+        set('colonState', '紧闭', '顶到就发酸'); set('aFluid', '32ml · 润滑油', '被堵在里面');
+        set('keyPointState', '前列腺 · 充血', '一顶就腿软'); set('aAnusState', '紧致 · 边缘泛红', '');
+        set('devMouthLv', '3', ''); set('devMouthExp', '180/300', ''); set('devMouthSense', '中等', ''); set('devMouthSkill', '深喉、抗呕吐', '');
+        set('devChestLv', '4', ''); set('devChestExp', '420/500', ''); set('devChestSense', '极度敏感', ''); set('devChestSkill', '常态激凸、微量溢乳', '');
+        set('devFrontLv', '4', ''); set('devFrontExp', '380/500', ''); set('devFrontSense', '高', ''); set('devFrontSkill', '主动收缩绞缠', '');
+        set('devBackLv', '2', ''); set('devBackExp', '150/300', ''); set('devBackSense', '中', ''); set('devBackSkill', '—', '');
+        set('devDeepLv', '2', ''); set('devDeepExp', '120/300', ''); set('devDeepSense', '内脏级酸胀', ''); set('devDeepSkill', '—', '');
+        set('expMasturbation', '24', '最近很频繁'); set('expPartners', '3', ''); set('expOralCount', '31', '很熟练');
+        set('expVCount', '17', ''); set('expVCumCount', '9', ''); set('expACount', '6', ''); set('expACumCount', '2', '');
+        set('condom', '否', '没用'); set('condomCount', '0', ''); set('cumV', '是', '全灌进去了');
+        set('orgasmCount', '3', '这次已经三次'); set('scene', '浴殿 · 后入持续顶弄', '');
+        const desc = {
+            viewBody: '跪趴的腰塌成一道弧，臀肉上还留着指印，膝盖在打颤',
+            viewOutfit: '穿得少，却像一件被仔细拆过包装、又不打算收回去的礼物',
+            viewChannel: '外口合不拢，光看就知道刚被用过，还挂着没擦干净的痕迹'
+        };
+        const chars = {};
+        chars[n] = { machine: m, desc: desc };
+        nsfwApply(chatId, { chars: chars });
+        return true;
+    } catch (e) { return false; }
+}
 /* ────────────────────────── 样式 ────────────────────────── */
 
 const CSS = [
@@ -851,6 +919,16 @@ const CSS = [
     '.yw-nsfw-viewrow{padding:3px 2px;font-size:.86em;line-height:1.55;font-style:italic;opacity:.9}',
     '.yw-nsfw-viewrow .lbl{opacity:.55;font-style:normal;margin-right:6px}',
     '.yw-nsfw-empty{padding:10px;opacity:.6;font-size:.86em}',
+    '.yw-nsfw-tbl{width:100%;border-collapse:collapse;font-size:.86em;margin:2px 0}',
+    '.yw-nsfw-tbl thead th{opacity:.45;font-weight:500;font-size:.9em;padding:2px 4px;text-align:left;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent)}',
+    '.yw-nsfw-tbl tbody th{width:8.6em;font-weight:500;opacity:.75;padding:3px 4px;text-align:left;white-space:nowrap;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
+    '.yw-nsfw-tbl td{padding:3px 4px;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent);vertical-align:middle}',
+    '.yw-nsfw-tbl td.v{width:7.2em;white-space:nowrap}',
+    '.yw-nsfw-tbl td.v .num{font-variant-numeric:tabular-nums;margin-right:6px}',
+    '.yw-nsfw-tbl td.v .bar{display:inline-block;width:3.6em;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden;vertical-align:middle}',
+    '.yw-nsfw-tbl td.v .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
+    '.yw-nsfw-tbl td.t{max-width:12em;overflow-wrap:anywhere}',
+    '.yw-nsfw-tbl td.yw-nsfw-c{opacity:.6;font-size:.9em;font-style:italic;text-align:right;overflow-wrap:anywhere}',
     '.yw-nsfw-dev{width:100%;border-collapse:collapse;font-size:.84em;margin:2px 0}',
     '.yw-nsfw-dev th,.yw-nsfw-dev td{padding:3px 4px;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent);text-align:left}',
     '.yw-nsfw-dev thead th{opacity:.55;font-weight:500;font-size:.95em}',
