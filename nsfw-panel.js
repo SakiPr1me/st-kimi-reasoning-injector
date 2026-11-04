@@ -451,6 +451,35 @@ export function splitValueComment(raw) {
     return { value: s, comment: '' };
 }
 
+/** 把一个键解析成字段：先整键、再逐词（去掉行首角色名）、再别名 */
+function resolveFieldKey(rawKey, all) {
+    const key = String(rawKey || '').trim();
+    if (!key) return null;
+    const hit = (k) => all.find((x) => x.id === k) || fieldByLabel(k) || null;
+    let f = hit(key);
+    if (f) return f;
+    const alias = NSFW_ALIAS[key];
+    if (alias) { f = all.find((x) => x.id === alias); if (f) return f; }
+    /* 行首可能是角色名：按空格拆开后，从每一个词起截一段再试（"夏茵 开发度·穴" → "开发度·穴"） */
+    const words = key.split(/\s+/).filter(Boolean);
+    for (let i = 1; i < words.length; i++) {
+        const rest = words.slice(i).join(' ');
+        f = hit(rest);
+        if (f) return f;
+        if (NSFW_ALIAS[rest]) { f = all.find((x) => x.id === NSFW_ALIAS[rest]); if (f) return f; }
+    }
+    /* 行首可能是角色名：按空格/· 拆词逐个试 */
+    const toks = key.split(/[\s·]+/).filter(Boolean);
+    for (let i = 0; i < toks.length; i++) {
+        f = hit(toks[i]);
+        if (f) return f;
+        if (NSFW_ALIAS[toks[i]]) { f = all.find((x) => x.id === NSFW_ALIAS[toks[i]]); if (f) return f; }
+    }
+    /* 整键里有「开发度·X」这类带分隔的，去掉前缀再试 */
+    const noPrefix = key.replace(/^(开发度|状态|当前)[·:：\s]*/, '');
+    if (noPrefix !== key) { f = hit(noPrefix); if (f) return f; }
+    return null;
+}
 export function parseMachineBody(body) {
     const out = {};
     const all = nsfwAllFields();
@@ -460,9 +489,9 @@ export function parseMachineBody(body) {
         /* 新格式：id=值|评述（id 唯一，最稳） */
         const eq = s.indexOf('=');
         if (eq > 0) {
-            const key = s.slice(0, eq).trim().split(/\s+/)[0];
+            const rawKey = s.slice(0, eq).trim();
             const rest = s.slice(eq + 1).trim();
-            const f = all.find((x) => x.id === key) || fieldByLabel(key);
+            const f = resolveFieldKey(rawKey, all);
             if (!f) return;
             const sv = splitValueComment(rest);
             out[f.id] = { value: sv.value, comment: sv.comment };
@@ -479,6 +508,20 @@ export function parseMachineBody(body) {
     return out;
 }
 
+/** ★W318：模型常自己起名（兴奋度/心理/体液…）或把角色名写在行首 —— 这里兜一层别名 */
+const NSFW_ALIAS = {
+    '兴奋度': 'libido', '欲望度': 'libido', '快感': 'libido',
+    '心理': 'sanity', '精神': 'sanity', '理智值': 'sanity',
+    '体力值': 'stamina', '羞耻': 'shame', '配合': 'compliance',
+    '体液': 'selfJuice', '爱液': 'selfJuice',
+    '阴道状态': 'vulvaState', '外阴': 'vulvaState',
+    '子宫口': 'cervixState', '结肠口': 'colonState',
+    '开发度·穴': 'devFrontLv', '开发度·前': 'devFrontLv',
+    '开发度·胸': 'devChestLv', '开发度·口': 'devMouthLv',
+    '开发度·后': 'devBackLv', '开发度·最深': 'devDeepLv',
+    '怀孕': 'pregnancy', '怀孕几率': 'pregnancy',
+    '疼痛': 'pain', '尿意': 'bladder', '出汗': 'sweat', '体温': 'temp'
+};
 /** 取一个属性值（双引号 / 单引号 / 无引号都吃） */
 function attrVal(raw, key) {
     const re = new RegExp(key + '\\s*=\\s*(?:"([^"]*)"|([^\\s>]+))', 'i');
@@ -492,14 +535,18 @@ function attrVal(raw, key) {
 export function nsfwWrapBlocks(text) {
     let s = String(text || '');
     if (s.indexOf('<nsfw') < 0) return s;
-    s = s.replace(/<nsfwdesc\s+([^>]*)>/gi, (m0, attrs) => {
-        const name = attrVal(attrs, 'name');
+    /* ★W318：模型常写 <nsfw> 不带属性、甚至不闭合 —— 先补闭合再换外壳 */
+    const openN = (s.match(/<nsfw(\s|>)/gi) || []).length;
+    const closeN = (s.match(/<\/nsfw>/gi) || []).length;
+    if (openN > closeN) s = s.replace(/\s+$/, '') + String.fromCharCode(10) + '</nsfw>';
+    s = s.replace(/<nsfwdesc(?:\s+([^>]*))?>/gi, (m0, attrs) => {
+        const name = attrVal(attrs || '', 'name');
         return '<div class="yw-nsfw-block" data-nsfw="d"' + (name ? ' data-name="' + name + '"' : '') + '>';
     });
-    s = s.replace(/<nsfw\s+([^>]*)>/gi, (m0, attrs) => {
-        const name = attrVal(attrs, 'name');
-        const sex = attrVal(attrs, 'sex');
-        const role = attrVal(attrs, 'role');
+    s = s.replace(/<nsfw(?:\s+([^>]*))?>/gi, (m0, attrs) => {
+        const name = attrVal(attrs || '', 'name');
+        const sex = attrVal(attrs || '', 'sex');
+        const role = attrVal(attrs || '', 'role');
         let out = '<div class="yw-nsfw-block" data-nsfw="m"';
         if (name) out += ' data-name="' + name + '"';
         if (sex) out += ' data-sex="' + sex + '"';
@@ -523,7 +570,12 @@ export function nsfwParse(text) {
     let m;
     while ((m = reM.exec(src))) {
         const attrs = m[1] || '';
-        const name = (attrOf(attrs, 'data-name') || attrOf(attrs, 'name')).trim();
+        let name = (attrOf(attrs, 'data-name') || attrOf(attrs, 'name')).trim();
+        /* ★W318：<nsfw> 没写 name ⇒ 从第一行「角色名 字段 = 值」里认 */
+        if (!name) {
+            const nm = /^[ \t]*([^\s=:：]{1,12})[ \t]+\S+[ \t]*=/m.exec(m[2] || '');
+            if (nm) name = nm[1];
+        }
         if (!name) continue;
         const c = ensure(name);
         c.meta = {
@@ -533,7 +585,7 @@ export function nsfwParse(text) {
         /* ★W316：他人视线三行写在同一个块里（viewBody/viewOutfit/viewChannel），整段当值、不拆 | */
         let body = String(m[2] || '');
         NSFW_DESC_FIELDS.forEach((d) => {
-            const reV = new RegExp('^[ \\t]*' + d.id + '[^=\\n]*[=:：]\\s*(.+)$', 'mi');
+            const reV = new RegExp('^[ \\t]*(?:[^=:：\\n]{1,12}[ \\t]+)?' + d.id + '[^=:：\\n]*[=:：]\\s*(.+)$', 'mi');
             const mv = reV.exec(body);
             if (mv) { c.desc[d.id] = String(mv[1] || '').trim(); body = body.replace(mv[0], ''); }
         });
