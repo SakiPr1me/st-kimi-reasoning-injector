@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.170'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.171'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -463,7 +463,8 @@ const defaultSettings = {
     nsfwShowAllFields: false,        // 是否注入扩展字段（默认只注入核心组，省 token）
     nsfwRules: null,                 // 自定义规则数组；null = 用内置 NSFW_DEFAULT_RULES
     nsfwPin: null,                   // 常驻全量的角色名（null=按最近登场）
-    nsfwDensity: 'normal'            // 卡片行距：compact / normal / loose
+    nsfwDensity: 'normal',
+    nsfwInjectMode: 'state'      // 每轮注入：full=规则+状态+协议 / state=只发当前状态 / off=不注入            // 卡片行距：compact / normal / loose
 };
 
 // ===== 双模式三语预设 =====
@@ -589,6 +590,7 @@ const UI = {
         nsfwHint: "开启后：每轮把「在场角色状态 + 更新规则 + 输出协议」注入提示词，AI 在正文末尾回两段（数值带官能评述 + 他人视线），插件解析后把原文剥掉、在消息里画成卡片。默认关。",
         nsfwFullCount: "在场全量人数：", nsfwAllFields: "注入全部字段（更细但更费 token）",
         nsfwRoster: "角色名册", nsfwNewName: "角色名", nsfwAdd: "＋ 建档", nsfwRemove: "删",
+        nsfwInjectMode: "每轮注入", nsfwInjectFull: "完整（规则 + 状态 + 协议）", nsfwInjectState: "仅当前状态（规则/格式在预设里）", nsfwInjectOff: "不注入（状态只看楼层）",
         nsfwRules: "更新规则（每行一条，注入时按顺序发出）", nsfwPreview: "预览本轮注入", nsfwDemo: "示例填充（先看效果）", nsfwDump: "查看/复制全部状态",
         nsfwNoChars: "还没有角色，先在上面建档。",
         nsfwDensity: "卡片行距：", nsfwDensityCompact: "紧凑", nsfwDensityNormal: "标准", nsfwDensityLoose: "宽松", nsfwStatic: "静态档案（建档填一次；AI 不会改它）", nsfwStaticHint: "一行一个「字段: 值」，例：罩杯/胸肌: C 罩杯", nsfwFields: "字段管理（可视化增删）", nsfwFieldLabel: "新字段名", nsfwFieldAdd: "＋ 加字段", nsfwFieldText: "文本", nsfwFieldNum: "数值", nsfwFieldList: "列表", nsfwFieldAny: "通用", nsfwFieldCustom: "自定义", nsfwEdit: "改", nsfwSave: "保存", nsfwCancel: "取消", nsfwComment: "评述", nsfwEditValues: "改值", nsfwSexF: "女", nsfwSexM: "男", nsfwSexO: "其他", nsfwRoleB: "受", nsfwRoleT: "攻", nsfwRoleS: "双",
@@ -664,6 +666,7 @@ const UI = {
         nsfwHint: "When on: every turn injects the in-scene character states + update rules + output protocol; the AI replies with two blocks at the end (values with sensory notes + outsider views); the plugin parses them, strips the raw text and renders a card in the message. Off by default.",
         nsfwFullCount: "Full-state characters: ", nsfwAllFields: "Inject all fields (finer, more tokens)",
         nsfwRoster: "Characters", nsfwNewName: "Name", nsfwAdd: "＋ Add", nsfwRemove: "Del",
+        nsfwInjectMode: "Per-turn injection", nsfwInjectFull: "Full (rules + state + format)", nsfwInjectState: "State only (rules/format live in the preset)", nsfwInjectOff: "Off (state comes from the floors)",
         nsfwRules: "Update rules (one per line, injected in order)", nsfwPreview: "Preview injection", nsfwDemo: "Fill demo data", nsfwDump: "View / copy all states",
         nsfwNoChars: "No characters yet - add one above.",
         nsfwDensity: "Card density: ", nsfwDensityCompact: "Compact", nsfwDensityNormal: "Normal", nsfwDensityLoose: "Loose", nsfwStatic: "Static profile (fill once; AI never edits it)", nsfwStaticHint: "One 'field: value' per line, e.g. Cup: C", nsfwFields: "Fields (visual add/remove)", nsfwFieldLabel: "New field name", nsfwFieldAdd: "＋ Add field", nsfwFieldText: "Text", nsfwFieldNum: "Number", nsfwFieldList: "List", nsfwFieldAny: "Any", nsfwFieldCustom: "custom", nsfwEdit: "Edit", nsfwSave: "Save", nsfwCancel: "Cancel", nsfwComment: "note", nsfwEditValues: "Edit", nsfwSexF: "F", nsfwSexM: "M", nsfwSexO: "Other", nsfwRoleB: "Bottom", nsfwRoleT: "Top", nsfwRoleS: "Switch",
@@ -739,6 +742,7 @@ const UI = {
         nsfwHint: "켜면 매 턴 등장 캐릭터 상태 + 갱신 규칙 + 출력 프로토콜을 주입하고, AI가 본문 끝에 두 블록(수치+관능 평가 / 타인 시선)을 출력하며, 플러그인이 이를 파싱해 원문을 지우고 메시지에 카드로 그립니다. 기본 꺼짐.",
         nsfwFullCount: "전체 상태 인원: ", nsfwAllFields: "모든 필드 주입 (더 자세하지만 토큰 소모 큼)",
         nsfwRoster: "캐릭터 목록", nsfwNewName: "이름", nsfwAdd: "＋ 추가", nsfwRemove: "삭제",
+        nsfwInjectMode: "매 턴 주입", nsfwInjectFull: "전체 (규칙 + 상태 + 형식)", nsfwInjectState: "현재 상태만 (규칙/형식은 프리셋에)", nsfwInjectOff: "주입 안 함 (층의 상태만 사용)",
         nsfwRules: "갱신 규칙 (한 줄에 하나, 순서대로 주입)", nsfwPreview: "이번 턴 주입 미리보기", nsfwDemo: "예시 데이터 채우기", nsfwDump: "전체 상태 보기/복사",
         nsfwNoChars: "아직 캐릭터가 없습니다. 위에서 추가하세요.",
         nsfwDensity: "카드 밀도: ", nsfwDensityCompact: "좁게", nsfwDensityNormal: "보통", nsfwDensityLoose: "넓게", nsfwStatic: "정적 프로필 (한 번만 입력; AI는 수정하지 않음)", nsfwStaticHint: "한 줄에 '필드: 값' 형식, 예: 컵: C", nsfwFields: "필드 관리 (시각적 추가/삭제)", nsfwFieldLabel: "새 필드 이름", nsfwFieldAdd: "＋ 필드 추가", nsfwFieldText: "텍스트", nsfwFieldNum: "숫자", nsfwFieldList: "목록", nsfwFieldAny: "공통", nsfwFieldCustom: "사용자", nsfwEdit: "수정", nsfwSave: "저장", nsfwCancel: "취소", nsfwComment: "평", nsfwEditValues: "값 수정", nsfwSexF: "여", nsfwSexM: "남", nsfwSexO: "기타", nsfwRoleB: "수", nsfwRoleT: "공", nsfwRoleS: "스위치",
@@ -1194,6 +1198,7 @@ if (settings.nsfwEnabled === undefined) settings.nsfwEnabled = defaultSettings.n
 if (settings.nsfwFullCount === undefined) settings.nsfwFullCount = defaultSettings.nsfwFullCount;
 if (settings.nsfwShowAllFields === undefined) settings.nsfwShowAllFields = defaultSettings.nsfwShowAllFields;
 if (settings.nsfwRules === undefined) settings.nsfwRules = defaultSettings.nsfwRules;
+if (settings.nsfwInjectMode === undefined) settings.nsfwInjectMode = defaultSettings.nsfwInjectMode;
 if (settings.nsfwPin === undefined) settings.nsfwPin = defaultSettings.nsfwPin;
 if (settings.nsfwDensity === undefined) settings.nsfwDensity = defaultSettings.nsfwDensity;
 try { nsfwInit({ t, getSettings: () => settings, save: () => saveSettingsDebounced() }); } catch (e) { }
@@ -2296,17 +2301,21 @@ function applyRequestInjections(bodyObj) {
         //      幂等：本批消息里已经有「【状态栏 · 更新规则】」就不再插第二次
         if (settings.enabled && settings.nsfwEnabled && msgs && msgs.length) {
             try {
-                /* ★W315：历史楼层里的数据块不进请求（状态只由下面的【CURRENT STATE】承载） */
-                for (let i = 0; i < msgs.length; i++) {
-                    const mm0 = msgs[i];
-                    if (!mm0 || typeof mm0.content !== 'string') continue;
-                    if (mm0.content.indexOf('data-nsfw') < 0 && mm0.content.indexOf('<nsfw') < 0) continue;
-                    const stripped = nsfwStripBlocks(mm0.content);
-                    if (stripped !== mm0.content) { mm0.content = stripped; changed = true; }
+                const __nsfwMode = String(settings.nsfwInjectMode || 'state');
+                /* ★W315：注入时历史里的数据块不进请求（状态由【CURRENT STATE】承载）；
+                   ★W317：off 档不剥块 —— 让楼层里的块本身充当状态 */
+                if (__nsfwMode !== 'off') {
+                    for (let i = 0; i < msgs.length; i++) {
+                        const mm0 = msgs[i];
+                        if (!mm0 || typeof mm0.content !== 'string') continue;
+                        if (mm0.content.indexOf('data-nsfw') < 0 && mm0.content.indexOf('<nsfw') < 0) continue;
+                        const stripped = nsfwStripBlocks(mm0.content);
+                        if (stripped !== mm0.content) { mm0.content = stripped; changed = true; }
+                    }
                 }
-                const nsfwText = nsfwBuildInjection(nsfwChatId(), { fullCount: settings.nsfwFullCount });
+                const nsfwText = nsfwBuildInjection(nsfwChatId(), { fullCount: settings.nsfwFullCount, mode: __nsfwMode });
                 if (nsfwText) {
-                    const already = msgs.some((m) => m && typeof m.content === 'string' && m.content.indexOf('【状态栏 · 更新规则】') >= 0);
+                    const already = msgs.some((m) => m && typeof m.content === 'string' && m.content.indexOf('【CURRENT STATE】') >= 0);
                     if (!already) {
                         let sys = null;
                         for (let i = 0; i < msgs.length; i++) {
@@ -9014,6 +9023,11 @@ function bindNsfwCard() {
     const chatId = () => nsfwChatId();
     const esc2 = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+    const $mode = $('#' + extensionName + '_nsfw_injectmode');
+    $mode.off('change.kimiNsfwMode').on('change.kimiNsfwMode', function () {
+        settings.nsfwInjectMode = String($(this).val() || 'state');
+        try { saveSettingsDebounced(); } catch (e) { }
+    });
     const renderRoster = () => {
         const box = document.getElementById(extensionName + "_nsfw_roster");
         if (!box) return;
@@ -10521,6 +10535,12 @@ ${renderWordReplaceRows()}
         <option value="3" ${Number(settings.nsfwFullCount) === 3 ? 'selected' : ''}>3</option>
     </select>
     <label class="checkbox_label" style="margin:0"><input id="${extensionName}_nsfw_allfields" type="checkbox" ${settings.nsfwShowAllFields ? 'checked' : ''}/><span>${t('nsfwAllFields')}</span></label>
+    <label class="kimi-label" style="margin:0">${t('nsfwInjectMode')}</label>
+    <select id="${extensionName}_nsfw_injectmode" class="text_pole" style="width:auto">
+        <option value="full" ${settings.nsfwInjectMode === 'full' ? 'selected' : ''}>${t('nsfwInjectFull')}</option>
+        <option value="state" ${!settings.nsfwInjectMode || settings.nsfwInjectMode === 'state' ? 'selected' : ''}>${t('nsfwInjectState')}</option>
+        <option value="off" ${settings.nsfwInjectMode === 'off' ? 'selected' : ''}>${t('nsfwInjectOff')}</option>
+    </select>
 </div>
 <div class="kimi-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px"><label class="kimi-label" style="margin:0">${t('nsfwDensity')}</label><select id="${extensionName}_nsfw_density" class="text_pole" style="width:auto"><option value="compact" ${settings.nsfwDensity === 'compact' ? 'selected' : ''}>${t('nsfwDensityCompact')}</option><option value="normal" ${!settings.nsfwDensity || settings.nsfwDensity === 'normal' ? 'selected' : ''}>${t('nsfwDensityNormal')}</option><option value="loose" ${settings.nsfwDensity === 'loose' ? 'selected' : ''}>${t('nsfwDensityLoose')}</option></select></div><div class="kimi-label" style="margin-top:8px">${t('nsfwRoster')}</div>
 <div id="${extensionName}_nsfw_roster" class="kimi-nsfw-roster"></div>

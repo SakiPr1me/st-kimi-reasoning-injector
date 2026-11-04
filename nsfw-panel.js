@@ -157,25 +157,14 @@ export const NSFW_DESC_FIELDS = [
 
 /** 内置更新规则（v2：含周期/避孕/经验永久统计） */
 export const NSFW_DEFAULT_RULES = [
-    { id: 'r1', text: '数值只在剧情事件发生时变化；单轮单字段变化不超过 15（重大剧情除外），禁止跳变。', enabled: true, builtin: true },
-    { id: 'r2', text: '理智：随快感/羞辱事件下降，休息安抚回升；降到 0 进入崩溃态（写进发声状态与心理烙印）。', enabled: true, builtin: true },
-    { id: 'r3', text: '配合度：只能缓慢上升，单轮不超过 5，且必须与剧情一致。', enabled: true, builtin: true },
-    { id: 'r4', text: '羞耻心：需要“适应类事件”才能下降；欲望随刺激上升、随冷却下降。', enabled: true, builtin: true },
-    { id: 'r5', text: '生理周期按「月经期 → 卵泡期 → 排卵期 → 黄体期」循环推进，只在时间推进时换期，不要随意跳期。', enabled: true, builtin: true },
-    { id: 'r6', text: '怀孕几率由插件按「周期 + 是否避孕 + 前穴是否中出」即时计算（基础很低：月经1/卵泡2/排卵10/黄体4，中出+6，避孕×0.05），你不要自己写这个值；但要把「生理周期 / 卵子状态 / 避孕套 / 前穴中出」三个输入写准。', enabled: true, builtin: true },
-    { id: 'r7', text: '经验是永久统计：自慰/口交/前穴/前穴中出/后穴/后穴中出 只增不减；「经验人数」在首次与新的对象发生关系时 +1；「最近性经验对象」写最近一次的对象名。', enabled: true, builtin: true },
-    { id: 'r8', text: '状态页底部的「本次」字段（避孕套、避孕套个数、前穴中出、高潮次数、互动情境）每轮按本轮实际发生重写；换场景时清零。', enabled: true, builtin: true },
-    { id: 'r9', text: '液体分别记录：阴道内 / 子宫内 / 后穴内，各自写 ml 与液体种类（精液/爱液/肠液/润滑油）；单个通道不得超过静态的「极限容纳量」，超了改写为外溢。', enabled: true, builtin: true },
-    { id: 'r10', text: '深度不得超过静态的「极限拉伸深度」；超了写“撕裂/极限”。', enabled: true, builtin: true },
-    { id: 'r11', text: '所有数值钳制在字段范围内；缺字段沿用上一轮的值，不要重置。', enabled: true, builtin: true },
-    { id: 'r12', text: '每个字段的值后面必须跟一句官能评述（括号内），评述要与数值一致；评述只描述身体与感官，不写剧情推进。', enabled: true, builtin: true },
-    { id: 'r13', text: '积乳：泌乳体质每轮按时间与刺激累积「积乳量 ml」，被吸出/挤出后下降；未到量时写胀痛感。', enabled: true, builtin: true },
-    { id: 'r14', text: '卵子状态随生理周期变化：卵泡期「未成熟」、排卵期「成熟待排/已排出」、黄体期「已排出·黄体期」、月经期「新一轮」。', enabled: true, builtin: true },
-    { id: 'r15', text: '开发度按五个部位（口/胸/前/后/最深）各写四列：等级（1-10）、经验（当前/下一级）、敏感度、已解锁技能（逗号分隔）；没有的技能不要编。', enabled: true, builtin: true },
-    { id: 'r16', text: '【档案·固定】里的静态参数（罩杯、乳头尺寸、乳晕、通道常态深度、极限拉伸深度、子宫口深度、前列腺深度、结肠口深度、阴蒂/阴茎尺寸）由用户建档填写，你只读不改，也不要每轮重复输出。', enabled: true, builtin: true },
-    { id: 'r17', text: '「松弛度」「子宫口状态」「结肠口状态」这三个字段的括号评述里要写一句白话描写（原来单独的外口描写/子宫口描写已并入这里）。', enabled: true, builtin: true },
-    { id: 'r18', text: '只有本场景里【被插入 / 承受方】的角色才输出 <nsfw> 状态块；纯插入方不要输出（除非他同时也被插入）。输出时在标签上写属性：<nsfw name="角色名" sex="f|m" role="bottom">。', enabled: true, builtin: true },
-    { id: 'r19', text: '每轮都要完整输出状态块里的全部字段（缺的写“未知”），不要省略、不要只报变化。', enabled: true, builtin: true }
+    { id: 'r1', text: '怀孕几率由插件按「周期 + 是否避孕 + 前穴是否中出」算，你不要自己写；只要把「生理周期 / 卵子状态 / 避孕套 / 前穴中出」写准。', enabled: true, builtin: true },
+    { id: 'r2', text: '经验类是永久统计，只增不减；「经验人数」在新对象第一次时 +1，「最近性经验对象」写最近一次的对象名。', enabled: true, builtin: true },
+    { id: 'r3', text: '缺字段沿用上一轮的值，不要重置成 0 或「未知」以外的东西；所有数值不出字段范围。', enabled: true, builtin: true },
+    { id: 'r4', text: '「避孕套 / 避孕套个数 / 前穴中出 / 高潮次数 / 互动情境」按本轮实际重写；换场景清零。', enabled: true, builtin: true },
+    { id: 'r5', text: '生理周期只按时间推进（月经→卵泡→排卵→黄体），不要随意跳期；卵子状态跟着周期走。', enabled: true, builtin: true },
+    { id: 'r6', text: '静态档案（罩杯、乳头/阴蒂/阴茎尺寸、通道常态与极限深度、子宫口/前列腺/结肠口深度）由用户建档，你只读不改。', enabled: true, builtin: true },
+    { id: 'r7', text: '只有本轮【被插入 / 承受方】的角色才写；纯插入方不写（除非他同时被插入）。', enabled: true, builtin: true },
+    { id: 'r8', text: '每轮把所有字段写全（不知道的写「未知」），不要只写变化的字段。', enabled: true, builtin: true }
 ];
 
 /* ────────────────────────── 存储 ────────────────────────── */
@@ -781,14 +770,19 @@ export function buildInjection(chatId, opts) {
     }
     const others = names.filter((n) => full.indexOf(n) < 0);
 
+    /* ★W317：注入三档 —— full = 规则+状态+协议 / state = 只发当前状态（默认，规则与格式在预设里）/ off = 完全不注入 */
+    const mode = String((opts && opts.mode) || s.nsfwInjectMode || 'state');
+    if (mode === 'off') return '';
     const rules = (Array.isArray(s.nsfwRules) && s.nsfwRules.length ? s.nsfwRules : NSFW_DEFAULT_RULES)
         .filter((r) => r && r.enabled !== false && r.text)
         .map((r) => '- ' + r.text);
 
     const parts = [];
-    parts.push('【状态栏 · 更新规则】');
-    parts.push(rules.join(NL));
-    parts.push('');
+    if (mode === 'full') {
+        parts.push('【状态栏 · 更新规则】');
+        parts.push(rules.join(NL));
+        parts.push('');
+    }
     parts.push('【CURRENT STATE】');
     full.forEach((n) => {
         const b = buildCharBlock(n, bucket.chars[n]);
@@ -798,8 +792,10 @@ export function buildInjection(chatId, opts) {
         parts.push('【其余角色（只需在剧情涉及他们时才更新）】');
         others.forEach((n) => parts.push(buildSummaryLine(n, bucket.chars[n])));
     }
-    parts.push('');
-    parts.push(buildProtocolDoc(bucket.chars[full[0]] || { sex: 'female' }));
+    if (mode === 'full') {
+        parts.push('');
+        parts.push(buildProtocolDoc(bucket.chars[full[0]] || { sex: 'female' }));
+    }
     return parts.join(NL);
 }
 
