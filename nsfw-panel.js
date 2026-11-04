@@ -138,6 +138,17 @@ export const NSFW_FIELDS = [
 ];
 
 /** 他人视线（只展示，不进数值）—— v2 去掉「精神」 */
+
+/* ★W316：量纲类字段的单位（字段名后面直接标，AI 只写数字；卡片也按这个补单位） */
+const NSFW_UNITS = {
+    temp: '℃', sweat: 'ml',
+    milkMl: 'ml', vFluidMl: 'ml', uterusFluidMl: 'ml', aFluidMl: 'ml',
+    vDepthNow: 'cm', aDepthNow: 'cm',
+    stNippleLen: 'cm', stNippleWid: 'cm', stAreolaDia: 'cm', stClitLen: 'cm',
+    stGDepth: 'cm', stCervixDepth: 'cm', stKeyDepth: 'cm', stColonDepth: 'cm', stMouthDepth: 'cm',
+    stPenisLen: 'cm', stPenisGirth: 'cm'
+};
+NSFW_FIELDS.forEach((f) => { if (!f.unit && NSFW_UNITS[f.id]) f.unit = NSFW_UNITS[f.id]; });
 export const NSFW_DESC_FIELDS = [
     { id: 'viewBody', label: '体态·他人视线' },
     { id: 'viewOutfit', label: '穿搭·他人视线' },
@@ -530,7 +541,14 @@ export function nsfwParse(text) {
             sex: attrOf(attrs, 'data-sex') || attrOf(attrs, 'sex'),
             role: attrOf(attrs, 'data-role') || attrOf(attrs, 'role')
         };
-        const parsed = parseMachineBody(m[2]);
+        /* ★W316：他人视线三行写在同一个块里（viewBody/viewOutfit/viewChannel），整段当值、不拆 | */
+        let body = String(m[2] || '');
+        NSFW_DESC_FIELDS.forEach((d) => {
+            const reV = new RegExp('^[ \\t]*' + d.id + '[^=\\n]*[=:：]\\s*(.+)$', 'mi');
+            const mv = reV.exec(body);
+            if (mv) { c.desc[d.id] = String(mv[1] || '').trim(); body = body.replace(mv[0], ''); }
+        });
+        const parsed = parseMachineBody(body);
         Object.keys(parsed).forEach((k) => { c.machine[k] = parsed[k]; });
     }
     const reD = /<div\s+([^>]*\bdata-nsfw\s*=\s*"d"[^>]*)>([\s\S]*?)<\/div>/gi;
@@ -653,6 +671,14 @@ function fmtVal(f, cell) {
     if (f.type === 'list') return Array.isArray(v) ? v.join('、') : String(v || '');
     return String(v == null ? '' : v);
 }
+/** 数值 + 单位（避免 "1.2cm cm"；★W316 量纲字段只存数字，单位在这里补） */
+function withUnit(f, val) {
+    const t = String(val == null ? '' : val).trim();
+    if (!t || !f || !f.unit) return t;
+    const u = String(f.unit);
+    if (t.indexOf(u) >= 0) return t;
+    return t + ' ' + u;
+}
 
 export function buildCharBlock(name, profile) {
     const fields = activeFields(profile);
@@ -672,21 +698,42 @@ export function buildCharBlock(name, profile) {
 
 export function buildProtocolDoc(profile) {
     const fields = activeFields(profile);
-    const labels = fields.map((f) => f.label).join(' · ');
-    const descLabels = NSFW_DESC_FIELDS.map((d) => d.label).join(' · ');
-    return [
-        '【输出格式（必须照做）】',
-        '在正文最后追加两段，不要改动正文本身：',
-        '<nsfw name="角色名">',
-        '字段: 值（一句官能评述）',
-        '...</nsfw>',
-        '<nsfwdesc name="角色名">',
-        '体态·他人视线: ...',
-        '</nsfwdesc>',
-        '机器段字段清单：' + labels,
-        '官能段字段清单：' + descLabels,
-        '规则：每个字段都要写；值必须与评述一致；官能段写“外人眼里此刻的样子”，要色色的打量，不要写剧情推进。'
-    ].join(NL);
+    const spec = fields.map((f) => {
+        let t = '';
+        if (f.id === 'devMouthExp' || /Exp$/.test(f.id)) t = '（当前/上限，如 180/300）';
+        else if (Array.isArray(f.options)) t = '[' + f.options.join('/') + ']';
+        else if (f.type === 'num') t = (typeof f.min === 'number' ? f.min : 0) + '-' + (typeof f.max === 'number' ? f.max : 100) + (f.unit ? '(' + f.unit + ')' : '');
+        else if (f.type === 'list') t = '（列表，用、分隔）';
+        else if (f.unit) t = '(' + f.unit + ')';
+        return f.id + ' ' + f.label + (t ? ' ' + t : '');
+    });
+    const out = [
+        '【输出格式 · 必须照做】',
+        '触发：本轮正文出现「被插入 / 承受方」的 NSFW 行为才写；只写承受方，多个受方各写一段；纯插入方不写。',
+        '位置：写在正文最后，正文本身一个字都不要改。',
+        '⚠️ 标签必须写全 —— 第一行必须是 <nsfw name="角色名" sex="f|m" role="bottom">，最后一行必须是 </nsfw>；少任何一个，整段都读不到。',
+        '⚠️ 不要用代码块包起来，不要加 ``` ，不要写成 JSON。',
+        '每行固定写法：ID = 值|一句评述（ID 照抄下面清单的第一个词，= 和 | 都是英文半角）',
+        '· 值里不出现 = 或 |；列表用「、」分隔',
+        '· 字段名后面括号里是单位 ⇒ 只写数字（例：乳头长(cm) = 1.2|…）',
+        '· 标 0-100 的写整数；标 当前/上限 的写成 45/100；不知道的写 未知',
+        '· 每轮把所有行写全（顺序不限），三行「他人视线」写在同一个块的最后',
+        '',
+        '<nsfw name="角色名" sex="f|m" role="bottom">',
+        'sanity 理智 0-100 = 42|喘得厉害，话都说不完整',
+        'stNippleLen 乳头长 (cm) = 1.2|比平时更挺',
+        'devMouthExp 口·经验 当前/上限 = 180/300|已经很熟练',
+        'viewBody 体态·他人视线 = 眼神散得像被抽走主心骨',
+        'viewOutfit 穿搭·他人视线 = 像被拆过包装的礼物',
+        'viewChannel 通道·他人视线 = 一片狼藉，还没合拢',
+        '</nsfw>',
+        '',
+        '字段清单（ID + 中文 + 范围/单位）：',
+        spec.join(NL),
+        '',
+        '他人视线三行：' + NSFW_DESC_FIELDS.map((d) => d.id + ' ' + d.label).join('；') + '（写在同一个 <nsfw> 块里，整段文字，不用 |）'
+    ];
+    return out.join(NL);
 }
 
 export function buildSummaryLine(name, profile) {
@@ -808,11 +855,11 @@ function rowHtml(f, cell) {
         const max = typeof f.max === 'number' ? f.max : 100;
         const pct = Math.max(0, Math.min(100, (n / max) * 100));
         return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
-            + '<td class="v"><span class="num">' + esc(val) + (f.unit ? ' ' + esc(f.unit) : '') + '</span><span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span></td>'
+            + '<td class="v"><span class="num">' + esc(withUnit(f, val)) + '</span><span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span></td>'
             + c + '</tr>';
     }
     return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
-        + '<td class="t">' + esc(val) + '</td>' + c + '</tr>';
+        + '<td class="t">' + esc(withUnit(f, val)) + '</td>' + c + '</tr>';
 }
 
 /** 状态卡（v2：分页 tabs，评述在右） */
