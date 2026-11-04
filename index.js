@@ -10,7 +10,7 @@ import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
-import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 
 
@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.152'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.153'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -462,7 +462,8 @@ const defaultSettings = {
     nsfwFullCount: 2,                // 每轮注入几个「在场」角色的完整状态（1-3）
     nsfwShowAllFields: false,        // 是否注入扩展字段（默认只注入核心组，省 token）
     nsfwRules: null,                 // 自定义规则数组；null = 用内置 NSFW_DEFAULT_RULES
-    nsfwPin: null                    // 常驻全量的角色名（null=按最近登场）
+    nsfwPin: null,                   // 常驻全量的角色名（null=按最近登场）
+    nsfwDensity: 'normal'            // 卡片行距：compact / normal / loose
 };
 
 // ===== 双模式三语预设 =====
@@ -590,7 +591,7 @@ const UI = {
         nsfwRoster: "角色名册", nsfwNewName: "角色名", nsfwAdd: "＋ 建档", nsfwRemove: "删",
         nsfwRules: "更新规则（每行一条，注入时按顺序发出）", nsfwPreview: "预览本轮注入",
         nsfwNoChars: "还没有角色，先在上面建档。",
-        nsfwSexF: "女", nsfwSexM: "男", nsfwSexO: "其他", nsfwRoleB: "受", nsfwRoleT: "攻", nsfwRoleS: "双",
+        nsfwDensity: "卡片行距：", nsfwDensityCompact: "紧凑", nsfwDensityNormal: "标准", nsfwDensityLoose: "宽松", nsfwStatic: "静态档案（建档填一次；AI 不会改它）", nsfwStaticHint: "一行一个「字段: 值」，例：罩杯/胸肌: C 罩杯", nsfwSexF: "女", nsfwSexM: "男", nsfwSexO: "其他", nsfwRoleB: "受", nsfwRoleT: "攻", nsfwRoleS: "双",
         },
     en: {
         pluginName: "🔥 Yu Wen Toolkit (Inject / Reroll / Replace / API-pool / Fix-tags)", enabled: "Plugin Toggle",
@@ -665,7 +666,7 @@ const UI = {
         nsfwRoster: "Characters", nsfwNewName: "Name", nsfwAdd: "＋ Add", nsfwRemove: "Del",
         nsfwRules: "Update rules (one per line, injected in order)", nsfwPreview: "Preview injection",
         nsfwNoChars: "No characters yet - add one above.",
-        nsfwSexF: "F", nsfwSexM: "M", nsfwSexO: "Other", nsfwRoleB: "Bottom", nsfwRoleT: "Top", nsfwRoleS: "Switch",
+        nsfwDensity: "Card density: ", nsfwDensityCompact: "Compact", nsfwDensityNormal: "Normal", nsfwDensityLoose: "Loose", nsfwStatic: "Static profile (fill once; AI never edits it)", nsfwStaticHint: "One 'field: value' per line, e.g. Cup: C", nsfwSexF: "F", nsfwSexM: "M", nsfwSexO: "Other", nsfwRoleB: "Bottom", nsfwRoleT: "Top", nsfwRoleS: "Switch",
         },
     ko: {
         pluginName: "🔥 위온 툴킷 (주입 / 재롤 / 치환 / API풀 / 태그수정)", enabled: "플러그인 스위치",
@@ -740,7 +741,7 @@ const UI = {
         nsfwRoster: "캐릭터 목록", nsfwNewName: "이름", nsfwAdd: "＋ 추가", nsfwRemove: "삭제",
         nsfwRules: "갱신 규칙 (한 줄에 하나, 순서대로 주입)", nsfwPreview: "이번 턴 주입 미리보기",
         nsfwNoChars: "아직 캐릭터가 없습니다. 위에서 추가하세요.",
-        nsfwSexF: "여", nsfwSexM: "남", nsfwSexO: "기타", nsfwRoleB: "수", nsfwRoleT: "공", nsfwRoleS: "스위치",
+        nsfwDensity: "카드 밀도: ", nsfwDensityCompact: "좁게", nsfwDensityNormal: "보통", nsfwDensityLoose: "넓게", nsfwStatic: "정적 프로필 (한 번만 입력; AI는 수정하지 않음)", nsfwStaticHint: "한 줄에 '필드: 값' 형식, 예: 컵: C", nsfwSexF: "여", nsfwSexM: "남", nsfwSexO: "기타", nsfwRoleB: "수", nsfwRoleT: "공", nsfwRoleS: "스위치",
         }
 };
 // 按当前语言取文案；缺 key 时回退中文
@@ -1194,6 +1195,7 @@ if (settings.nsfwFullCount === undefined) settings.nsfwFullCount = defaultSettin
 if (settings.nsfwShowAllFields === undefined) settings.nsfwShowAllFields = defaultSettings.nsfwShowAllFields;
 if (settings.nsfwRules === undefined) settings.nsfwRules = defaultSettings.nsfwRules;
 if (settings.nsfwPin === undefined) settings.nsfwPin = defaultSettings.nsfwPin;
+if (settings.nsfwDensity === undefined) settings.nsfwDensity = defaultSettings.nsfwDensity;
 try { nsfwInit({ t, getSettings: () => settings, save: () => saveSettingsDebounced() }); } catch (e) { }
 /* ★W84：**一颗开关拆成两颗**的迁移 —— 口径选的是"**两颗新键都以老键的值为初值**"：
      · 老键没写过（undefined / true）⇒ 两颗都 true ⇒ 与升级前**一模一样**（老用户不会突然看不到按钮）；
@@ -9001,6 +9003,22 @@ function bindNsfwCard() {
                 + '<button class="kimi-btn" data-nsfw-del="' + esc2(c.name) + '" style="padding:0 6px;font-size:.8em">' + t('nsfwRemove') + '</button>'
                 + '</div>';
         }).join('');
+        const sel = document.getElementById(extensionName + '_nsfw_static_char');
+        if (sel) {
+            const cur = sel.value;
+            sel.innerHTML = list.map((c) => '<option value="' + esc2(c.name) + '">' + esc2(c.name) + '</option>').join('');
+            if (cur && list.some((c) => c.name === cur)) sel.value = cur;
+            loadStaticBox();
+        }
+    };
+
+    const loadStaticBox = () => {
+        const sel = document.getElementById(extensionName + '_nsfw_static_char');
+        const box = document.getElementById(extensionName + '_nsfw_static_box');
+        if (!sel || !box) return;
+        const n = sel.value;
+        box.value = n ? nsfwStaticText(chatId(), n) : '';
+        box.disabled = !n;
     };
 
     const renderRules = () => {
@@ -9037,6 +9055,19 @@ function bindNsfwCard() {
         if (!n) return;
         try { nsfwRemove(chatId(), n); } catch (e) { }
         renderRoster();
+    });
+    $('#' + extensionName + '_nsfw_density').on('change', function () {
+        settings.nsfwDensity = String($(this).val() || 'normal');
+        saveSettingsDebounced();
+        try { nsfwReattachAll(); } catch (e) { }
+    });
+    $('#' + extensionName + '_nsfw_static_char').off('change.kimiNsfwStatic').on('change.kimiNsfwStatic', function () { loadStaticBox(); });
+    $('#' + extensionName + '_nsfw_static_box').off('change.kimiNsfwStaticBox').on('change.kimiNsfwStaticBox', function () {
+        const sel = document.getElementById(extensionName + '_nsfw_static_char');
+        const n = sel ? sel.value : '';
+        if (!n) return;
+        try { nsfwApplyStatic(chatId(), n, String($(this).val() || '')); } catch (e) { }
+        try { nsfwReattachAll(); } catch (e) { }
     });
     $("#" + extensionName + "_nsfw_rules").off("change.kimiNsfwRules").on("change.kimiNsfwRules", function () {
         const lines = String($(this).val() || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
@@ -10349,7 +10380,7 @@ ${renderWordReplaceRows()}
     </select>
     <label class="checkbox_label" style="margin:0"><input id="${extensionName}_nsfw_allfields" type="checkbox" ${settings.nsfwShowAllFields ? 'checked' : ''}/><span>${t('nsfwAllFields')}</span></label>
 </div>
-<div class="kimi-label" style="margin-top:8px">${t('nsfwRoster')}</div>
+<div class="kimi-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px"><label class="kimi-label" style="margin:0">${t('nsfwDensity')}</label><select id="${extensionName}_nsfw_density" class="text_pole" style="width:auto"><option value="compact" ${settings.nsfwDensity === 'compact' ? 'selected' : ''}>${t('nsfwDensityCompact')}</option><option value="normal" ${!settings.nsfwDensity || settings.nsfwDensity === 'normal' ? 'selected' : ''}>${t('nsfwDensityNormal')}</option><option value="loose" ${settings.nsfwDensity === 'loose' ? 'selected' : ''}>${t('nsfwDensityLoose')}</option></select></div><div class="kimi-label" style="margin-top:8px">${t('nsfwRoster')}</div>
 <div id="${extensionName}_nsfw_roster" class="kimi-nsfw-roster"></div>
 <div class="kimi-row" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px">
     <input id="${extensionName}_nsfw_new_name" type="text" class="text_pole" style="flex:1;min-width:100px" placeholder="${t('nsfwNewName')}"/>
@@ -10361,7 +10392,7 @@ ${renderWordReplaceRows()}
     </select>
     <button id="${extensionName}_nsfw_add" class="kimi-btn">${t('nsfwAdd')}</button>
 </div>
-<div class="kimi-label" style="margin-top:8px">${t('nsfwRules')}</div>
+<div class="kimi-label" style="margin-top:8px">${t('nsfwStatic')}</div><div class="kimi-row" style="display:flex;align-items:center;gap:6px;margin-top:4px"><select id="${extensionName}_nsfw_static_char" class="text_pole" style="width:auto"></select><span class="kimi-hint" style="margin:0">${t('nsfwStaticHint')}</span></div><textarea id="${extensionName}_nsfw_static_box" class="text_pole" rows="7" style="width:100%;box-sizing:border-box;font-size:0.85em;margin-top:4px"></textarea><div class="kimi-label" style="margin-top:8px">${t('nsfwRules')}</div>
 <textarea id="${extensionName}_nsfw_rules" class="text_pole" rows="7" style="width:100%;box-sizing:border-box;font-size:0.9em"></textarea>
 <div class="kimi-row" style="margin-top:6px"><button id="${extensionName}_nsfw_preview" class="kimi-btn">${t('nsfwPreview')}</button></div>
 <pre id="${extensionName}_nsfw_preview_box" style="display:none;max-height:40vh;overflow:auto;white-space:pre-wrap;font-size:0.85em;margin-top:6px"></pre>
