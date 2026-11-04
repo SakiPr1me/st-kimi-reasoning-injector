@@ -340,11 +340,7 @@ function fieldByLabel(label) {
 }
 function activeFields(profile) {
     const sex = (profile && profile.sex) || 'female';
-    const s = _getSettings() || {};
-    const showAll = !!s.nsfwShowAllFields;
-    return nsfwAllFields().filter((f) => !f.static)
-        .filter((f) => !f.sex || f.sex === sex)
-        .filter((f) => showAll || f.core === true);
+    return nsfwAllFields().filter((f) => !f.sex || f.sex === sex);
 }
 function clampNum(f, v) {
     let n = Number(v);
@@ -544,12 +540,6 @@ export function nsfwApply(chatId, parsed) {
             Object.keys(mm).forEach((id) => {
                 const f = fieldById(id);
                 if (!f) return;
-                /* 静态档案：只在还没填时接受 AI 的首次填写 */
-                if (f.static) {
-                    if (!rec.static) rec.static = {};
-                    if (!rec.static[id]) rec.static[id] = String((mm[id] || {}).value || '').trim();
-                    return;
-                }
                 if (!allow[id]) return;   /* ★只收当前启用字段（非核心字段即使 AI 写了也不入库） */
                 const item = mm[id] || {};
                 let value = item.value;
@@ -588,19 +578,13 @@ export function buildCharBlock(name, profile) {
     const fields = activeFields(profile);
     const lines = [];
     fields.forEach((f) => {
-        const cell = (profile.stats || {})[f.id];
+        const cell = (profile.stats || {})[f.id]
+            || ((profile.static || {})[f.id] ? { value: profile.static[f.id], comment: '' } : null);
         const val = cell ? fmtVal(f, cell) : '';
         if (!val) return;
-        const c = cell.comment ? '（' + cell.comment + '）' : '';
         lines.push(f.id + '=' + val);
     });
     if (!lines.length) return '';
-    const stLines = nsfwStaticFields(profile)
-        .map((f) => ({ f: f, v: String((profile.static || {})[f.id] || '').trim() }))
-        .filter((x) => x.v)
-        .map((x) => x.f.id + '=' + x.v);
-    if (stLines.length) lines.unshift('【档案·固定·只读】');
-    if (stLines.length) stLines.forEach((x) => lines.push(x));
     const preg = calcPregRisk(profile);
     if (preg.why) lines.push('怀孕几率: ' + preg.risk + '%（插件计算，不要改写）');
     return '<nsfw name="' + name + '">' + NL + lines.join(NL) + NL + '</nsfw>';
@@ -708,12 +692,6 @@ function tabRowsHtml(profile, grp, byGroup) {
         if (!cell || !fmtVal(f, cell)) return;
         rows.push({ ord: (typeof f.ord === 'number' ? f.ord : 9999), html: rowHtml(f, cell) });
     });
-    nsfwStaticFields(profile).forEach((f) => {
-        if ((f.tab || '状态') !== grp) return;
-        const v = String((profile.static || {})[f.id] || '').trim();
-        if (!v) return;
-        rows.push({ ord: (typeof f.ord === 'number' ? f.ord : 9999), html: rowHtml(f, { value: v, comment: '' }) });
-    });
     rows.sort((a, b) => a.ord - b.ord);
     if (!rows.length) return '';
     return '<table class="yw-nsfw-tbl"><thead><tr><th>字段</th><th>值</th><th>评述</th></tr></thead><tbody>'
@@ -780,10 +758,14 @@ export function nsfwRenderCard(name, profile) {
         + '<span class="kv yw-nsfw-preg">怀孕 ' + preg.risk + '%</span>';
     wrap.appendChild(head);
 
+    const statsView = Object.assign({}, profile.stats || {});
+    Object.keys(profile.static || {}).forEach((id) => {
+        if (!statsView[id] && profile.static[id]) statsView[id] = { value: profile.static[id], comment: '' };
+    });
     const byGroup = {};
     activeFields(profile).forEach((f) => {
         if (f.hideInCard) return;
-        const cell = (profile.stats || {})[f.id];
+        const cell = statsView[f.id];
         if (!cell || !fmtVal(f, cell)) return;
         (byGroup[f.group] = byGroup[f.group] || []).push(rowHtml(f, cell));
     });
