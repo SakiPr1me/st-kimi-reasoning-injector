@@ -280,8 +280,53 @@ const GROUP_ORDER = ['状态', '体态', '穿搭', '胸', '前穴', '后穴', '�
 /** 全部字段 = 内置 + 用户自定义（settings.nsfwCustomFields） */
 export function nsfwAllFields() {
     let custom = [];
-    try { const st = _getSettings() || {}; custom = Array.isArray(st.nsfwCustomFields) ? st.nsfwCustomFields : []; } catch (e) { custom = []; }
-    return NSFW_FIELDS.concat(custom.map((f) => Object.assign({ custom: true, core: true }, f)));
+    let overrides = {};
+    try {
+        const st = _getSettings() || {};
+        custom = Array.isArray(st.nsfwCustomFields) ? st.nsfwCustomFields : [];
+        overrides = (st.nsfwFieldOverrides && typeof st.nsfwFieldOverrides === 'object') ? st.nsfwFieldOverrides : {};
+    } catch (e) { custom = []; overrides = {}; }
+    const base = NSFW_FIELDS.map((f) => {
+        const ov = overrides[f.id];
+        return ov ? Object.assign({}, f, ov) : f;
+    });
+    return base.concat(custom.map((f) => Object.assign({ custom: true, core: true }, f)));
+}
+
+/** 字段管理：改内置字段（label/group/type/sex） */
+export function nsfwSetFieldOverride(id, patch) {
+    try {
+        const st = _getSettings() || {};
+        const ov = Object.assign({}, st.nsfwFieldOverrides || {});
+        ov[id] = Object.assign({}, ov[id] || {}, patch || {});
+        st.nsfwFieldOverrides = ov;
+        if (typeof _save === 'function') _save();
+        return true;
+    } catch (e) { return false; }
+}
+export function nsfwClearFieldOverride(id) {
+    try {
+        const st = _getSettings() || {};
+        const ov = Object.assign({}, st.nsfwFieldOverrides || {});
+        delete ov[id];
+        st.nsfwFieldOverrides = ov;
+        if (typeof _save === 'function') _save();
+        return true;
+    } catch (e) { return false; }
+}
+/** 字段管理：改自定义字段 */
+export function nsfwUpdateCustomField(id, patch) {
+    try {
+        const st = _getSettings() || {};
+        const arr = (Array.isArray(st.nsfwCustomFields) ? st.nsfwCustomFields : []).map((f) => (f.id === id ? Object.assign({}, f, patch || {}) : f));
+        st.nsfwCustomFields = arr;
+        if (typeof _save === 'function') _save();
+        return true;
+    } catch (e) { return false; }
+}
+/** 面板编辑：拿某角色档案 */
+export function nsfwGetChar(chatId, name) {
+    try { const { bucket } = nsfwBucket(chatId); return bucket.chars[name] || null; } catch (e) { return null; }
 }
 function fieldById(id) { return nsfwAllFields().find((f) => f.id === id) || null; }
 function fieldByLabel(label) {
