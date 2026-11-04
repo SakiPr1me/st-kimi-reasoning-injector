@@ -162,7 +162,7 @@ export const NSFW_DEFAULT_RULES = [
     { id: 'r16', text: '【档案·固定】里的静态参数（罩杯、乳头尺寸、乳晕、通道常态深度、极限拉伸深度、子宫口深度、前列腺深度、结肠口深度、阴蒂/阴茎尺寸）由用户建档填写，你只读不改，也不要每轮重复输出。', enabled: true, builtin: true },
     { id: 'r17', text: '「松弛度」「子宫口状态」「结肠口状态」这三个字段的括号评述里要写一句白话描写（原来单独的外口描写/子宫口描写已并入这里）。', enabled: true, builtin: true },
     { id: 'r18', text: '只有本场景里【被插入 / 承受方】的角色才输出 <nsfw> 状态块；纯插入方不要输出（除非他同时也被插入）。输出时在标签上写属性：<nsfw name="角色名" sex="f|m" role="bottom">。', enabled: true, builtin: true },
-    { id: 'r19', text: '某个角色第一次出现时，状态块要把当前启用的字段全部写一遍（缺的写“未知”），之后每轮只写变化的、其余可省略。', enabled: true, builtin: true }
+    { id: 'r19', text: '每轮都要完整输出状态块里的全部字段（缺的写“未知”），不要省略、不要只报变化。', enabled: true, builtin: true }
 ];
 
 /* ────────────────────────── 存储 ────────────────────────── */
@@ -458,7 +458,7 @@ export function parseMachineBody(body) {
         /* 新格式：id=值|评述（id 唯一，最稳） */
         const eq = s.indexOf('=');
         if (eq > 0) {
-            const key = s.slice(0, eq).trim();
+            const key = s.slice(0, eq).trim().split(/\s+/)[0];
             const rest = s.slice(eq + 1).trim();
             const f = all.find((x) => !x.static && x.id === key) || fieldByLabel(key);
             if (!f) return;
