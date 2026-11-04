@@ -63,7 +63,7 @@ export const NSFW_FIELDS = [
     { id: 'vLoose', group: '前穴', label: '松弛度', type: 'text', sex: 'female', core: true, ord: 40 },
     { id: 'vDepthNow', group: '前穴', label: '当前深度（受撑）', type: 'text', sex: 'female', core: true, ord: 30 },
     { id: 'vulvaState', group: '前穴', label: '外阴状态', type: 'text', sex: 'female', core: true, ord: 80 },
-    { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', sex: 'female', core: true, ord: 50 },
+    { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', sex: 'female', core: true, ord: 50, options: ['紧闭', '受迫变形', '微开', '全开'] },
     { id: 'vFluid', group: '前穴', label: '阴道液体状况', type: 'text', sex: 'female', core: true, ord: 60 },
     { id: 'uterusFluid', group: '前穴', label: '子宫液体状况', type: 'text', sex: 'female', core: true, ord: 70 },
 
@@ -71,7 +71,7 @@ export const NSFW_FIELDS = [
     { id: 'aLoose', group: '后穴', label: '松弛度', type: 'text', core: true, ord: 40 },
     { id: 'aDepthNow', group: '后穴', label: '当前深度（受撑）', type: 'text', core: true, ord: 30 },
     { id: 'aAnusState', group: '后穴', label: '肛门状态', type: 'text', core: true, ord: 80 },
-    { id: 'colonState', group: '后穴', label: '结肠口状态', type: 'text', core: true, ord: 50 },
+    { id: 'colonState', group: '后穴', label: '结肠口状态', type: 'text', core: true, ord: 50, options: ['紧闭', '受迫变形', '微开', '全开'] },
     { id: 'aFluid', group: '后穴', label: '后穴液体状况', type: 'text', core: true, ord: 60 },
     { id: 'keyPointState', group: '后穴', label: '后穴G点状态', type: 'text', core: false, ord: 70 },
 
@@ -442,6 +442,8 @@ export function nsfwDeleteCustomField(id) {
 
 export function splitValueComment(raw) {
     const s = String(raw || '').trim();
+    const bar = s.indexOf('|');
+    if (bar >= 0) return { value: s.slice(0, bar).trim(), comment: s.slice(bar + 1).trim() };
     const m = s.match(/^(.*?)[（(]([^（）()]*)[）)]\s*$/);
     if (m) return { value: m[1].trim(), comment: m[2].trim() };
     return { value: s, comment: '' };
@@ -449,19 +451,28 @@ export function splitValueComment(raw) {
 
 export function parseMachineBody(body) {
     const out = {};
+    const all = nsfwAllFields();
     String(body || '').split(/\r?\n/).forEach((line) => {
         const s = line.trim();
         if (!s) return;
-        const idx = s.indexOf(':');
-        const idx2 = s.indexOf('：');
-        const cut = idx >= 0 ? idx : idx2;
+        /* 新格式：id=值|评述（id 唯一，最稳） */
+        const eq = s.indexOf('=');
+        if (eq > 0) {
+            const key = s.slice(0, eq).trim();
+            const rest = s.slice(eq + 1).trim();
+            const f = all.find((x) => !x.static && x.id === key) || fieldByLabel(key);
+            if (!f) return;
+            const sv = splitValueComment(rest);
+            out[f.id] = { value: sv.value, comment: sv.comment };
+            return;
+        }
+        /* 旧格式兜底：标签: 值（评述） */
+        const cut = s.indexOf(':') >= 0 ? s.indexOf(':') : s.indexOf('：');
         if (cut <= 0) return;
-        const label = s.slice(0, cut).trim();
-        const rest = s.slice(cut + 1).trim();
-        const f = fieldByLabel(label);
-        if (!f) return;
-        const sv = splitValueComment(rest);
-        out[f.id] = { value: sv.value, comment: sv.comment };
+        const f2 = fieldByLabel(s.slice(0, cut).trim());
+        if (!f2) return;
+        const sv2 = splitValueComment(s.slice(cut + 1).trim());
+        out[f2.id] = { value: sv2.value, comment: sv2.comment };
     });
     return out;
 }
@@ -570,7 +581,7 @@ export function buildCharBlock(name, profile) {
         const val = cell ? fmtVal(f, cell) : '';
         if (!val) return;
         const c = cell.comment ? '（' + cell.comment + '）' : '';
-        lines.push(f.label + ': ' + val + c);
+        lines.push(f.id + '=' + val + (cell.comment ? '|' + cell.comment : ''));
     });
     if (!lines.length) return '';
     const stLines = nsfwStaticFields(profile)
