@@ -760,7 +760,8 @@ export function nsfwRenderCard(name, profile) {
     wrap.dataset.char = name;
     const head = document.createElement('div');
     head.className = 'yw-nsfw-head';
-    head.innerHTML = '<button type="button" class="yw-nsfw-edit-btn" title="编辑这张卡">✎</button>'
+    head.innerHTML = '<button type="button" class="yw-nsfw-copy-btn" title="复制全部内容">⧉</button>'
+        + '<button type="button" class="yw-nsfw-edit-btn" title="编辑这张卡">✎</button>'
         + '<span class="nm">' + esc(name) + '</span>'
         + '<span class="tag">' + roleTxt + '</span><span class="tag">' + sexTxt + '</span>'
         + '<span class="kv">理智 ' + esc(g('sanity') == null ? '-' : g('sanity')) + '</span>'
@@ -830,6 +831,26 @@ export function nsfwRenderCard(name, profile) {
 
 /** 卡片就地编辑：✎ 进入，✓ 保存 */
 function bindCardEdit(wrap, name, profile) {
+    const copyBtn = wrap.querySelector('.yw-nsfw-copy-btn');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', function () {
+            const text = nsfwDumpChar(nsfwChatId(), name);
+            const done = () => { copyBtn.textContent = '✓'; setTimeout(() => { copyBtn.textContent = '⧉'; }, 1200); };
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(done).catch(function () { });
+                } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    done();
+                }
+            } catch (e) { }
+        });
+    }
     const btn = wrap.querySelector('.yw-nsfw-edit-btn');
     if (!btn) return;
     let editing = false;
@@ -949,6 +970,39 @@ export function nsfwFillDemo(chatId, name) {
         return true;
     } catch (e) { return false; }
 }
+/** 导出某角色全部状态为纯文本 */
+export function nsfwDumpChar(chatId, name) {
+    try {
+        const { bucket } = nsfwBucket(chatId);
+        const rec = bucket.chars[name];
+        if (!rec) return '';
+        const lines = ['== ' + name + ' (' + (rec.sex || 'female') + ' / ' + (rec.role || 'bottom') + ') =='];
+        nsfwAllFields().filter((f) => !f.static && (!f.sex || f.sex === (rec.sex || 'female'))).forEach((f) => {
+            const c = (rec.stats || {})[f.id];
+            if (!c) return;
+            const v = fmtVal(f, c);
+            if (!v) return;
+            lines.push(f.id + ' ' + f.label + ' = ' + v + (c.comment ? '|' + c.comment : ''));
+        });
+        const stIds = Object.keys(rec.static || {});
+        stIds.forEach((id) => {
+            const f = nsfwAllFields().find((x) => x.id === id);
+            if (f && rec.static[id]) lines.push('[档案] ' + f.label + ' = ' + rec.static[id]);
+        });
+        NSFW_DESC_FIELDS.forEach((d) => {
+            if (rec.desc && rec.desc[d.id]) lines.push(d.label + ': ' + (rec.desc[d.id].text || ''));
+        });
+        return lines.join(String.fromCharCode(10));
+    } catch (e) { return ''; }
+}
+/** 导出当前聊天全部角色 */
+export function nsfwDumpText(chatId) {
+    try {
+        const { bucket } = nsfwBucket(chatId);
+        const names = (bucket.order || []).filter((n) => bucket.chars[n]);
+        return names.map((n) => nsfwDumpChar(chatId, n)).filter(Boolean).join(String.fromCharCode(10, 10));
+    } catch (e) { return ''; }
+}
 /* ────────────────────────── 样式 ────────────────────────── */
 
 const CSS = [
@@ -991,6 +1045,8 @@ const CSS = [
     '.yw-nsfw-dev tbody th{width:2.6em;opacity:.8;font-weight:600}',
     '.yw-nsfw-dev td.lv{width:2.2em;text-align:right;font-variant-numeric:tabular-nums}',
     '.yw-nsfw-dev td.sk{opacity:.85}',
+    '.yw-nsfw-copy-btn{font:inherit;font-size:.8em;padding:0 6px;border-radius:6px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 24%,transparent);background:transparent;color:inherit;cursor:pointer;opacity:.7}',
+    '.yw-nsfw-copy-btn:hover{opacity:1}',
     '.yw-nsfw-edit-btn{font:inherit;font-size:.8em;padding:0 6px;border-radius:6px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 24%,transparent);background:transparent;color:inherit;cursor:pointer;opacity:.7}',
     '.yw-nsfw-edit-btn:hover{opacity:1}',
     '.yw-nsfw-editing .yw-nsfw-in{font:inherit;font-size:.9em;padding:0 4px;border-radius:4px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 30%,transparent);background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 6%,transparent);color:inherit;min-width:3em;max-width:100%}',

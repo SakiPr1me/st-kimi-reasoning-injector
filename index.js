@@ -10,7 +10,7 @@ import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
-import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 
 
@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.163'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.164'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -589,7 +589,7 @@ const UI = {
         nsfwHint: "开启后：每轮把「在场角色状态 + 更新规则 + 输出协议」注入提示词，AI 在正文末尾回两段（数值带官能评述 + 他人视线），插件解析后把原文剥掉、在消息里画成卡片。默认关。",
         nsfwFullCount: "在场全量人数：", nsfwAllFields: "注入全部字段（更细但更费 token）",
         nsfwRoster: "角色名册", nsfwNewName: "角色名", nsfwAdd: "＋ 建档", nsfwRemove: "删",
-        nsfwRules: "更新规则（每行一条，注入时按顺序发出）", nsfwPreview: "预览本轮注入", nsfwDemo: "示例填充（先看效果）",
+        nsfwRules: "更新规则（每行一条，注入时按顺序发出）", nsfwPreview: "预览本轮注入", nsfwDemo: "示例填充（先看效果）", nsfwDump: "查看/复制全部状态",
         nsfwNoChars: "还没有角色，先在上面建档。",
         nsfwDensity: "卡片行距：", nsfwDensityCompact: "紧凑", nsfwDensityNormal: "标准", nsfwDensityLoose: "宽松", nsfwStatic: "静态档案（建档填一次；AI 不会改它）", nsfwStaticHint: "一行一个「字段: 值」，例：罩杯/胸肌: C 罩杯", nsfwFields: "字段管理（可视化增删）", nsfwFieldLabel: "新字段名", nsfwFieldAdd: "＋ 加字段", nsfwFieldText: "文本", nsfwFieldNum: "数值", nsfwFieldList: "列表", nsfwFieldAny: "通用", nsfwFieldCustom: "自定义", nsfwEdit: "改", nsfwSave: "保存", nsfwCancel: "取消", nsfwComment: "评述", nsfwEditValues: "改值", nsfwSexF: "女", nsfwSexM: "男", nsfwSexO: "其他", nsfwRoleB: "受", nsfwRoleT: "攻", nsfwRoleS: "双",
         },
@@ -664,7 +664,7 @@ const UI = {
         nsfwHint: "When on: every turn injects the in-scene character states + update rules + output protocol; the AI replies with two blocks at the end (values with sensory notes + outsider views); the plugin parses them, strips the raw text and renders a card in the message. Off by default.",
         nsfwFullCount: "Full-state characters: ", nsfwAllFields: "Inject all fields (finer, more tokens)",
         nsfwRoster: "Characters", nsfwNewName: "Name", nsfwAdd: "＋ Add", nsfwRemove: "Del",
-        nsfwRules: "Update rules (one per line, injected in order)", nsfwPreview: "Preview injection", nsfwDemo: "Fill demo data",
+        nsfwRules: "Update rules (one per line, injected in order)", nsfwPreview: "Preview injection", nsfwDemo: "Fill demo data", nsfwDump: "View / copy all states",
         nsfwNoChars: "No characters yet - add one above.",
         nsfwDensity: "Card density: ", nsfwDensityCompact: "Compact", nsfwDensityNormal: "Normal", nsfwDensityLoose: "Loose", nsfwStatic: "Static profile (fill once; AI never edits it)", nsfwStaticHint: "One 'field: value' per line, e.g. Cup: C", nsfwFields: "Fields (visual add/remove)", nsfwFieldLabel: "New field name", nsfwFieldAdd: "＋ Add field", nsfwFieldText: "Text", nsfwFieldNum: "Number", nsfwFieldList: "List", nsfwFieldAny: "Any", nsfwFieldCustom: "custom", nsfwEdit: "Edit", nsfwSave: "Save", nsfwCancel: "Cancel", nsfwComment: "note", nsfwEditValues: "Edit", nsfwSexF: "F", nsfwSexM: "M", nsfwSexO: "Other", nsfwRoleB: "Bottom", nsfwRoleT: "Top", nsfwRoleS: "Switch",
         },
@@ -739,7 +739,7 @@ const UI = {
         nsfwHint: "켜면 매 턴 등장 캐릭터 상태 + 갱신 규칙 + 출력 프로토콜을 주입하고, AI가 본문 끝에 두 블록(수치+관능 평가 / 타인 시선)을 출력하며, 플러그인이 이를 파싱해 원문을 지우고 메시지에 카드로 그립니다. 기본 꺼짐.",
         nsfwFullCount: "전체 상태 인원: ", nsfwAllFields: "모든 필드 주입 (더 자세하지만 토큰 소모 큼)",
         nsfwRoster: "캐릭터 목록", nsfwNewName: "이름", nsfwAdd: "＋ 추가", nsfwRemove: "삭제",
-        nsfwRules: "갱신 규칙 (한 줄에 하나, 순서대로 주입)", nsfwPreview: "이번 턴 주입 미리보기", nsfwDemo: "예시 데이터 채우기",
+        nsfwRules: "갱신 규칙 (한 줄에 하나, 순서대로 주입)", nsfwPreview: "이번 턴 주입 미리보기", nsfwDemo: "예시 데이터 채우기", nsfwDump: "전체 상태 보기/복사",
         nsfwNoChars: "아직 캐릭터가 없습니다. 위에서 추가하세요.",
         nsfwDensity: "카드 밀도: ", nsfwDensityCompact: "좁게", nsfwDensityNormal: "보통", nsfwDensityLoose: "넓게", nsfwStatic: "정적 프로필 (한 번만 입력; AI는 수정하지 않음)", nsfwStaticHint: "한 줄에 '필드: 값' 형식, 예: 컵: C", nsfwFields: "필드 관리 (시각적 추가/삭제)", nsfwFieldLabel: "새 필드 이름", nsfwFieldAdd: "＋ 필드 추가", nsfwFieldText: "텍스트", nsfwFieldNum: "숫자", nsfwFieldList: "목록", nsfwFieldAny: "공통", nsfwFieldCustom: "사용자", nsfwEdit: "수정", nsfwSave: "저장", nsfwCancel: "취소", nsfwComment: "평", nsfwEditValues: "값 수정", nsfwSexF: "여", nsfwSexM: "남", nsfwSexO: "기타", nsfwRoleB: "수", nsfwRoleT: "공", nsfwRoleS: "스위치",
         }
@@ -9170,6 +9170,18 @@ function bindNsfwCard() {
         box.innerHTML = '';
         box.removeAttribute('data-name');
     });
+    $('#' + extensionName + '_nsfw_dump').off('click.kimiNsfwDump').on('click.kimiNsfwDump', function () {
+        const box = document.getElementById(extensionName + '_nsfw_preview_box');
+        let text = '';
+        try { text = nsfwDumpText(chatId()); } catch (e) { text = ''; }
+        if (box) {
+            box.textContent = text || '（当前聊天还没有状态档案）';
+            box.style.display = 'block';
+        }
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text || '');
+        } catch (e) { }
+    });
     renderFields();
     $('#' + extensionName + '_nsfw_demo').off('click.kimiNsfwDemo').on('click.kimiNsfwDemo', function () {
         try { nsfwFillDemo(chatId(), '夏海'); } catch (e) { }
@@ -10513,7 +10525,7 @@ ${renderWordReplaceRows()}
     </select>
     <button id="${extensionName}_nsfw_f_add" class="kimi-btn">${t('nsfwFieldAdd')}</button>
 </div>
-<div class="kimi-row" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button id="${extensionName}_nsfw_demo" class="kimi-btn">${t('nsfwDemo')}</button><button id="${extensionName}_nsfw_preview" class="kimi-btn">${t('nsfwPreview')}</button></div>
+<div class="kimi-row" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button id="${extensionName}_nsfw_demo" class="kimi-btn">${t('nsfwDemo')}</button><button id="${extensionName}_nsfw_dump" class="kimi-btn">${t('nsfwDump')}</button><button id="${extensionName}_nsfw_preview" class="kimi-btn">${t('nsfwPreview')}</button></div>
 <pre id="${extensionName}_nsfw_preview_box" style="display:none;max-height:40vh;overflow:auto;white-space:pre-wrap;font-size:0.85em;margin-top:6px"></pre>
 </div>
 </details>
