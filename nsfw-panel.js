@@ -1506,7 +1506,8 @@ export function nsfwMountToMessage(messageId) {
         const mesEl = document.querySelector('.mes[mesid="' + messageId + '"]');
         if (!mesEl) return false;
 
-        /* ★W315：卡片只认这一楼自己的块（块就在 mes 里，像 todo/remind 一样跟着楼层走） */
+        /* ★W315：卡片只认这一楼自己的块（块就在 mes 里，像 todo/remind 一样跟着楼层走）
+           ★W332：没有块就不画 —— 以前会退回「档案里最新状态」，导致新楼/新分支正文里随口提到名字就挂出一张旧卡 */
         const text = String(msg.mes || '');
         const own = nsfwProfilesFromText(text);
         const ownNames = Object.keys(own);
@@ -1514,7 +1515,6 @@ export function nsfwMountToMessage(messageId) {
         const pick = (n) => own[n] || (snap && snap[n]) || bucket.chars[n] || { sex: 'female', role: 'bottom', stats: {}, desc: {} };
         let show = ownNames.length ? ownNames : [];
         if (!show.length && snap) show = Object.keys(snap);
-        if (!show.length) show = bucketNames.filter((n) => text.indexOf(n) >= 0);
         if (!show.length) return false;
 
         nsfwEnsureStyle();
