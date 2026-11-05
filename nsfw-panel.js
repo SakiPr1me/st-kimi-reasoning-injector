@@ -897,9 +897,7 @@ function rowHtml(f, cell) {
             + c + '</tr>';
     }
     return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
-        + '<td class="t" colspan="2">' + esc(withUnit(f, val))
-        + (cell.comment ? '<span class="yw-nsfw-c">' + esc(cell.comment) + '</span>' : '')
-        + '</td></tr>';
+        + '<td class="t">' + esc(withUnit(f, val)) + '</td>' + c + '</tr>';
 }
 
 /** 状态卡（v2：分页 tabs，评述在右） */
@@ -1198,8 +1196,7 @@ const CSS = [
     '.yw-nsfw-tbl td.v .num{font-variant-numeric:tabular-nums;margin-right:6px}',
     '.yw-nsfw-tbl td.v .bar{display:inline-block;width:3.6em;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden;vertical-align:middle}',
     '.yw-nsfw-tbl td.v .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
-    '.yw-nsfw-tbl td.t{overflow-wrap:anywhere}',
-    '.yw-nsfw-tbl .yw-nsfw-c{opacity:.62;font-size:.92em;font-style:italic;margin-left:.5em;overflow-wrap:anywhere}',
+    '.yw-nsfw-tbl td.t{width:38%;overflow-wrap:anywhere}',
     '.yw-nsfw-tbl td.yw-nsfw-c{opacity:.6;font-size:.9em;font-style:italic;text-align:right;overflow-wrap:anywhere}',
     '.yw-nsfw-dev{width:100%;border-collapse:collapse;font-size:.84em;margin:2px 0}',
     '.yw-nsfw-dev th,.yw-nsfw-dev td{padding:3px 4px;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent);text-align:left}',
