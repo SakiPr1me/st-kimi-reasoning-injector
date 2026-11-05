@@ -648,7 +648,7 @@ export function nsfwRebuildFromChat(chatId, chat) {
         const next = { order: [], pin: bucket.pin || null, chars: {} };
         const msgs = Array.isArray(chat) ? chat : [];
         msgs.forEach((m, i) => {
-            if (!m || m.is_user || m.is_system) return;
+            if (!m || m.is_system) return;   /* ★W328：用户楼层里手填的块也算（作者会自己补表格） */
             const text = String(m.mes || '');
             if (text.indexOf('<nsfw') < 0) return;
             const parsed = nsfwParse(text);

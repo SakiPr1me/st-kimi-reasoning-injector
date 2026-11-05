@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.180'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.181'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -9236,6 +9236,12 @@ eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (id) => { showTpsForMessa
 // tps 会丢失 → 补刷新钩子
 eventSource.on(event_types.MESSAGE_SWIPED, (id) => { showTpsForMessage(id); nsfwHook(id, true); try { judgeDisplayedBranch(id); } catch (e) { } }); // v1.37.54 切分支后判定这条分支
 eventSource.on(event_types.MESSAGE_EDITED, (id) => { showTpsForMessage(id); nsfwHook(id, true); try { judgeDisplayedBranch(id); } catch (e) { } }); // v1.37.54
+/* ★W328：作者可能在自己发的楼层里手补一份表格 ⇒ 发完立刻重建 + 刷新悬浮条 */
+eventSource.on(event_types.MESSAGE_SENT, () => {
+    try {
+        if (settings.nsfwEnabled) { nsfwSyncChat(); nsfwMountSender(); }
+    } catch (e) { }
+});
 eventSource.on(event_types.MESSAGE_DELETED, () => {
 deleteGuardUntil = Date.now() + 3000; judgedBranchKey = ''; // v1.37.55 删除消息 → 3 秒内不做重roll判定
     // 删除后 ST 重渲染全部消息：逐个补 tps
