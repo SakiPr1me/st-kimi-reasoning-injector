@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.185'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.186'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -9364,7 +9364,15 @@ eventSource.on(event_types.STREAM_TOKEN_RECEIVED, (text) => {
 eventSource.on(event_types.STREAM_TOKEN_RECEIVED, checkAutoStop);
 
 // 生成结束：本次零 token → 空回（断流/服务器不稳）→ 自动重roll
+eventSource.on(event_types.GENERATION_STARTED, () => {
+    /* ★W333：生成期间把状态卡藏起来（作者要求：跟其它美化一样，生成完再显示新内容，流式期间不挂着） */
+    try { if (document && document.body) document.body.classList.add('yw-nsfw-generating'); } catch (e) { }
+});
 eventSource.on(event_types.GENERATION_ENDED, () => {
+    try {
+        if (document && document.body) document.body.classList.remove('yw-nsfw-generating');
+        if (settings.nsfwEnabled) setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, 120);
+    } catch (e) { }
     lastGenManuallyStopped = false; // 一轮生成彻底结束，清手动停止标记
     // v1.37.56：dry-run 不会发 GENERATION_ENDED（dry-run 在 Generate 里提前 return，从不显示停止按钮，
     //   hideStopButton 的"按钮可见才 emit"条件不成立）→ 收到的 ENDED 一定是真实生成的收尾，必须照常处理。

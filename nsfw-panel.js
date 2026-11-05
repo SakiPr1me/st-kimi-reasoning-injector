@@ -23,7 +23,7 @@ export const NSFW_FIELDS = [
     /* ── 第一组：状态 ── */
     { id: 'snapTime', group: '状态', label: '快照时间', type: 'text', core: true, ord: 1 },
     { id: 'temp', group: '状态', label: '体温', type: 'text', core: true, ord: 5 },
-    { id: 'sweat', group: '状态', label: '出汗量', type: 'text', core: true, ord: 10 },
+    { id: 'sweat', group: '身体', label: '出汗量', type: 'text', core: true, ord: 22 },
     { id: 'stamina', group: '状态', label: '体力', type: 'num', min: 0, max: 100, core: true, ord: 15 },
     { id: 'bladder', group: '状态', label: '尿意', type: 'num', min: 0, max: 100, core: true, ord: 20 },
     { id: 'pain', group: '状态', label: '疼痛度', type: 'num', min: 0, max: 100, core: true, ord: 25 },
@@ -541,11 +541,16 @@ export function nsfwParse(text) {
     let m;
     while ((m = reM.exec(src))) {
         const attrs = m[1] || '';
-        let name = (attrOf(attrs, 'data-name') || attrOf(attrs, 'name')).trim();
+        /* ★W334：作者新格式 —— 名字是块内第一行 `name 角色名 = 夏茵`，先抽出来（不当字段、也不让行首推断误认成 "name"） */
+        let body0 = String(m[2] || '');
+        const nmLine = /^[ \t]*name(?:[ \t]*[一-龥]+)?[ \t]*[=:：][ \t]*(.+)$/mi.exec(body0);
+        const nmInline = nmLine ? String(nmLine[1] || '').trim() : '';
+        if (nmLine) body0 = body0.replace(nmLine[0], '');
+        let name = (attrOf(attrs, 'data-name') || attrOf(attrs, 'name') || nmInline).trim();
         /* ★W318：<nsfw> 没写 name ⇒ 从第一行「角色名 字段 = 值」里认 */
         if (!name) {
-            const nm = /^[ \t]*([^\s=:：]{1,12})[ \t]+\S+[ \t]*=/m.exec(m[2] || '');
-            if (nm) name = nm[1];
+            const nm = /^[ \t]*([^\s=:：]{1,12})[ \t]+\S+[ \t]*=/m.exec(body0);
+            if (nm && nm[1] !== 'name') name = nm[1];
         }
         if (!name) continue;
         const c = ensure(name);
@@ -554,7 +559,7 @@ export function nsfwParse(text) {
             role: attrOf(attrs, 'data-role') || attrOf(attrs, 'role')
         };
         /* ★W316：他人视线三行写在同一个块里（viewBody/viewOutfit/viewChannel），整段当值、不拆 | */
-        let body = String(m[2] || '');
+        let body = body0;
         NSFW_DESC_FIELDS.forEach((d) => {
             const reV = new RegExp('^[ \\t]*(?:[^=:：\\n]{1,12}[ \\t]+)?' + d.id + '[^=:：\\n]*[=:：]\\s*(.+)$', 'mi');
             const mv = reV.exec(body);
@@ -1078,6 +1083,7 @@ export function nsfwRenderCard(name, profile) {
         + '<button type="button" class="yw-nsfw-edit-btn" title="编辑这张卡">✎</button>'
         + '<span class="nm">' + esc(name) + '</span>'
         + '<span class="tag">' + roleTxt + '</span><span class="tag">' + sexTxt + '</span>'
+        + (g('snapTime') ? '<span class="kv yw-nsfw-snaptime">⏱ ' + esc(g('snapTime')) + '</span>' : '')
         + '<span class="kv">理智 ' + esc(g('sanity') == null ? '-' : g('sanity')) + '</span>'
         + '<span class="kv">欲望 ' + esc(g('libido') == null ? '-' : g('libido')) + '</span>'
         + '<span class="kv yw-nsfw-preg">怀孕 ' + preg.risk + '%</span>';
@@ -1325,6 +1331,7 @@ export function nsfwDumpText(chatId) {
 
 const CSS = [
     '.mes_text [data-nsfw]{display:none !important}',
+    'body.yw-nsfw-generating .yw-nsfw{display:none !important}',   /* ★W333 生成期间藏卡 */
     '.mes_text nsfw,.mes_text nsfwdesc{display:none !important}',
     '.yw-nsfw{margin:6px 0 8px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 16%,transparent);border-radius:12px;overflow:hidden;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 3%,transparent);font-size:0.86em}',
     '.yw-nsfw-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:6px 9px;border-bottom:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 10%,transparent);background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 5%,transparent)}',
