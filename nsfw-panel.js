@@ -927,6 +927,8 @@ export function nsfwShowSnapshot(name) {
         body.appendChild(nsfwRenderCard(name, rec));
         box.appendChild(body);
         box.style.display = 'block';
+        box.addEventListener('mousedown', (e) => e.stopPropagation());
+        box.addEventListener('click', (e) => e.stopPropagation());
         box.querySelector('.yw-nsfw-pv-x').addEventListener('click', () => { box.style.display = 'none'; });
     } catch (e) { }
 }
@@ -964,6 +966,8 @@ export function nsfwMountSender() {
             + '<label class="yw-nsfw-sd-auto" title="自动：上一楼正文或你的消息里出现谁就发谁"><input type="checkbox"' + (auto ? ' checked' : '') + '/><span>AUTO</span></label>'
             + '<span class="yw-nsfw-sd-sep"></span>'
             + (items || '<span class="yw-nsfw-sd-empty">无档案</span>');
+        host.addEventListener('mousedown', (e) => e.stopPropagation());
+        host.addEventListener('click', (e) => e.stopPropagation());
         const autoCb = host.querySelector('.yw-nsfw-sd-auto input');
         autoCb.addEventListener('change', (e) => {
             st.nsfwAutoSend = !!e.target.checked;
@@ -1335,7 +1339,7 @@ const CSS = [
     '.yw-nsfw-tbl td.v .bar{display:inline-block;width:3.6em;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden;vertical-align:middle}',
     '.yw-nsfw-tbl td.v .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
     /* ★W327 悬浮发送条：一条横条，可拖；AUTO 在左，名字在右；点名字看快照 */
-    '#yw-nsfw-sender{position:fixed;right:12px;bottom:86px;z-index:29998;display:flex;align-items:center;gap:6px;max-width:min(72vw,560px);padding:4px 8px;border-radius:999px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 26%,transparent);background:color-mix(in srgb,var(--SmartThemeBlurTintColor,transparent) 88%,transparent);backdrop-filter:blur(10px);color:var(--SmartThemeBodyColor,currentColor);font-size:12px;line-height:1.2;box-shadow:0 4px 16px rgba(0,0,0,.22);user-select:none}',
+    '#yw-nsfw-sender{position:fixed;right:12px;bottom:86px;z-index:30040;display:flex;align-items:center;gap:6px;max-width:min(72vw,560px);padding:4px 8px;border-radius:999px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 26%,transparent);background:color-mix(in srgb,var(--SmartThemeBlurTintColor,transparent) 88%,transparent);backdrop-filter:blur(10px);color:var(--SmartThemeBodyColor,currentColor);font-size:12px;line-height:1.2;box-shadow:0 4px 16px rgba(0,0,0,.22);user-select:none}',
     '#yw-nsfw-sender .yw-nsfw-sd-grip{cursor:grab;opacity:.45;padding:0 2px;letter-spacing:-2px}',
     '#yw-nsfw-sender .yw-nsfw-sd-grip:active{cursor:grabbing}',
     '#yw-nsfw-sender .yw-nsfw-sd-auto{display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;white-space:nowrap}',
@@ -1347,7 +1351,7 @@ const CSS = [
     '#yw-nsfw-sender .yw-nsfw-sd-name{cursor:pointer;font-weight:500;white-space:nowrap;padding:0 2px}',
     '#yw-nsfw-sender .yw-nsfw-sd-name:hover{text-decoration:underline}',
     '#yw-nsfw-sender .yw-nsfw-sd-empty{opacity:.6}',
-    '#yw-nsfw-preview{position:fixed;right:12px;bottom:130px;z-index:29999;display:none;width:min(92vw,420px);max-height:70vh;overflow:auto;border-radius:14px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 24%,transparent);background:var(--SmartThemeBlurTintColor,transparent);backdrop-filter:blur(12px);box-shadow:0 10px 34px rgba(0,0,0,.3);padding:8px;color:var(--SmartThemeBodyColor,currentColor);font-size:12px}',
+    '#yw-nsfw-preview{position:fixed;right:12px;bottom:130px;z-index:30050;display:none;width:min(92vw,420px);max-height:70vh;overflow:auto;border-radius:14px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 24%,transparent);background:var(--SmartThemeBlurTintColor,transparent);backdrop-filter:blur(12px);box-shadow:0 10px 34px rgba(0,0,0,.3);padding:8px;color:var(--SmartThemeBodyColor,currentColor);font-size:12px}',
     '#yw-nsfw-preview .yw-nsfw-pv-hd{display:flex;align-items:center;justify-content:space-between;font-weight:600;margin-bottom:6px;padding:0 2px}',
     '#yw-nsfw-preview .yw-nsfw-pv-x{cursor:pointer;border:0;background:transparent;color:inherit;opacity:.6;font-size:14px}',
     '#yw-nsfw-preview .yw-nsfw{margin:0}',
