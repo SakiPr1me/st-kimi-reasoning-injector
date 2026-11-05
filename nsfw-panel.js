@@ -21,6 +21,7 @@ const NL = String.fromCharCode(10);
 
 export const NSFW_FIELDS = [
     /* ── 第一组：状态 ── */
+    { id: 'snapTime', group: '状态', label: '快照时间', type: 'text', core: true, ord: 1 },
     { id: 'temp', group: '状态', label: '体温', type: 'text', core: true, ord: 5 },
     { id: 'sweat', group: '状态', label: '出汗量', type: 'text', core: true, ord: 10 },
     { id: 'stamina', group: '状态', label: '体力', type: 'num', min: 0, max: 100, core: true, ord: 15 },
@@ -31,15 +32,16 @@ export const NSFW_FIELDS = [
     { id: 'compliance', group: '状态', label: '配合度', type: 'num', min: 0, max: 100, core: true, ord: 40 },
     { id: 'shame', group: '状态', label: '羞耻心', type: 'num', min: 0, max: 100, core: true, ord: 45 },
     { id: 'menstrual', group: '状态', label: '生理周期', type: 'text', options: ['月经期', '卵泡期', '排卵期', '黄体期'], core: true, ord: 50 },
-    { id: 'menstrualNextDays', group: '状态', label: '距下阶段天数', type: 'num', min: 0, max: 30, unit: '天', core: true, ord: 55 },
+    { id: 'menstrualNextDays', group: '状态', label: '距下阶段天数', type: 'num', min: 0, max: 30, unit: '天', noBar: true, core: true, ord: 55 },
     { id: 'pregnancy', group: '状态', label: '怀孕状态', type: 'text', core: true, ord: 60 },
     { id: 'expLastPartner', group: '状态', label: '最近性经验对象', type: 'text', core: true, ord: 65 },
-    { id: 'condom', group: '状态', label: '避孕套', type: 'text', options: ['是', '否'], core: true, ord: 70 },
+    { id: 'partnerPenisSize', group: '状态', label: '其阴茎尺寸', type: 'num', min: 0, max: 40, unit: 'cm', noBar: true, core: true, ord: 66 },
+    { id: 'condom', group: '状态', label: '使用避孕套', type: 'text', options: ['是', '否'], core: true, ord: 70 },
     { id: 'condomCount', group: '状态', label: '避孕套携带数', type: 'num', min: 0, max: 99, core: true, ord: 75 },
     { id: 'cumV', group: '状态', label: '前穴中出', type: 'text', options: ['是', '否'], core: true, ord: 80 },
 
     /* ── 第二组：身体 ── */
-    { id: 'orgasmCount', group: '身体', label: '当天高潮次数', type: 'num', min: 0, max: 999, core: true, ord: 5 },
+    { id: 'orgasmCount', group: '身体', label: '当天高潮次数', type: 'num', min: 0, max: 99, core: true, ord: 5 },
     { id: 'voice', group: '身体', label: '发声状态', type: 'text', core: true, ord: 10 },
     { id: 'organFlush', group: '身体', label: '器官充血', type: 'text', core: true, ord: 15 },
     { id: 'bodyMarks', group: '身体', label: '体表痕迹', type: 'list', core: true, ord: 20 },
@@ -68,7 +70,7 @@ export const NSFW_FIELDS = [
     { id: 'stClitSize', group: '前穴', label: '阴蒂宽', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 10 },
     { id: 'clitState', group: '前穴', label: '阴蒂状态', type: 'text', core: true, ord: 15 },
     { id: 'vulvaState', group: '前穴', label: '外阴状态', type: 'text', core: true, ord: 20 },
-    { id: 'vLoose', group: '前穴', label: '松弛度', type: 'text', core: true, ord: 25 },
+    { id: 'vLoose', group: '前穴', label: '松弛度', type: 'num', min: 0, max: 100, core: true, ord: 25 },
     { id: 'stGDepth', group: '前穴', label: 'G点深度', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 30 },
     { id: 'stCervixDepth', group: '前穴', label: '子宫口深度', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 35 },
     { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', options: ['紧闭', '红肿', '受迫挤压宫壁', '微开', '全开'], core: true, ord: 40 },
@@ -82,7 +84,7 @@ export const NSFW_FIELDS = [
     { id: 'stPenisLook', group: '后穴', label: '阴茎外观', type: 'text', core: true, ord: 15 },
     { id: 'aAnusState', group: '后穴', label: '肛门状态', type: 'text', core: true, ord: 20 },
     { id: 'keyPointState', group: '后穴', label: '后穴G点状态', type: 'text', core: true, ord: 25 },
-    { id: 'aLoose', group: '后穴', label: '松弛度', type: 'text', core: true, ord: 30 },
+    { id: 'aLoose', group: '后穴', label: '松弛度', type: 'num', min: 0, max: 100, core: true, ord: 30 },
     { id: 'stKeyDepth', group: '后穴', label: '前列腺深度', type: 'num', min: 0, max: 40, unit: 'cm', core: true, ord: 35 },
     { id: 'stColonDepth', group: '后穴', label: '结肠口深度', type: 'num', min: 0, max: 40, unit: 'cm', core: true, ord: 40 },
     { id: 'colonState', group: '后穴', label: '结肠口状态', type: 'text', options: ['紧闭', '受迫变形', '微开', '全开'], core: true, ord: 45 },
@@ -977,8 +979,9 @@ function rowHtml(f, cell) {
         const n = Number(cell.value);
         const max = typeof f.max === 'number' ? f.max : 100;
         const pct = Math.max(0, Math.min(100, (n / max) * 100));
+        const barHtml = f.noBar ? '' : '<span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span>';
         return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
-            + '<td class="v"><span class="num">' + esc(withUnit(f, val)) + '</span><span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span></td>'
+            + '<td class="v"><span class="num">' + esc(withUnit(f, val)) + '</span>' + barHtml + '</td>'
             + c + '</tr>';
     }
     return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
@@ -1187,10 +1190,10 @@ export function nsfwFillDemo(chatId, name) {
         set('outer', '开档薄纱情趣睡衣', '贴在汗湿的皮肤上'); set('inner', '无', '早就没穿了');
         set('accessories', '猫尾肛塞', '还在震');
         set('milkMl', '38', '积了快一天');
-        set('vLoose', '松弛失守 · 合不拢', '肌肉失去弹性，从外面能看到内壁'); set('clitState', '充血挺立', '一碰就缩');
+        set('vLoose', '85', '肌肉失去弹性，从外面能看到内壁'); set('clitState', '充血挺立', '一碰就缩');
         set('cervixState', '未开 · 充血红肿', '每一下都撞在那'); set('vFluidMl', '58', '顺着大腿往下'); set('vFluidKind', '爱液', '');
         set('uterusFluidMl', '0', '还没灌进去'); set('vulvaState', '小阴唇微张外翻 · 暗红充血', '被磨得发亮');
-        set('aLoose', '微张 · 边缘泛红', '拔出来会合不拢');
+        set('aLoose', '35', '拔出来会合不拢');
         set('colonState', '紧闭', '顶到就发酸'); set('aFluidMl', '32', '被堵在里面'); set('aFluidKind', '润滑油', '');
         set('keyPointState', '前列腺 · 充血', '一顶就腿软'); set('aAnusState', '紧致 · 边缘泛红', '');
         set('expOralCount', '2', '含被动'); set('expBlowjobCount', '5', '他很喜欢');
