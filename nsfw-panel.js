@@ -650,7 +650,8 @@ export function nsfwRebuildFromChat(chatId, chat) {
         msgs.forEach((m, i) => {
             if (!m || m.is_system) return;   /* ★W328：用户楼层里手填的块也算（作者会自己补表格） */
             const text = String(m.mes || '');
-            if (text.indexOf('<nsfw') < 0) return;
+            /* ★W331：楼层里的块早被换成 <div data-nsfw> 外壳了 —— 两种都要认，否则刷新后重建为空（作者实测「无档案」） */
+            if (text.indexOf('<nsfw') < 0 && text.indexOf('data-nsfw') < 0) return;
             const parsed = nsfwParse(text);
             if (!parsed || !parsed.hasAny) return;
             applyParsedTo(next, parsed);
