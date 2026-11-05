@@ -10,7 +10,7 @@ import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
-import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 
 
@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.177'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.178'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -464,7 +464,7 @@ const defaultSettings = {
     nsfwRules: null,                 // 自定义规则数组；null = 用内置 NSFW_DEFAULT_RULES
     nsfwPin: null,                   // 常驻全量的角色名（null=按最近登场）
     nsfwDensity: 'normal',
-    nsfwInjectMode: 'state'      // 每轮注入：full=规则+状态+协议 / state=只发当前状态 / off=不注入            // 卡片行距：compact / normal / loose
+    nsfwSendMode: 'auto'         // 发给 AI：auto=正文出现谁发谁 / manual=按悬浮窗勾选 / off=不发送            // 卡片行距：compact / normal / loose
 };
 
 // ===== 双模式三语预设 =====
@@ -1199,6 +1199,7 @@ if (settings.nsfwFullCount === undefined) settings.nsfwFullCount = defaultSettin
 if (settings.nsfwShowAllFields === undefined) settings.nsfwShowAllFields = defaultSettings.nsfwShowAllFields;
 if (settings.nsfwRules === undefined) settings.nsfwRules = defaultSettings.nsfwRules;
 if (settings.nsfwInjectMode === undefined) settings.nsfwInjectMode = defaultSettings.nsfwInjectMode;
+if (settings.nsfwSendMode === undefined) settings.nsfwSendMode = defaultSettings.nsfwSendMode;
 if (settings.nsfwPin === undefined) settings.nsfwPin = defaultSettings.nsfwPin;
 if (settings.nsfwDensity === undefined) settings.nsfwDensity = defaultSettings.nsfwDensity;
 try { nsfwInit({ t, getSettings: () => settings, save: () => saveSettingsDebounced() }); } catch (e) { }
@@ -2295,6 +2296,36 @@ function applyRequestInjections(bodyObj) {
         if (settings.enabled && msgs) {
             const __randWrap = applyRandAndWrapInPlace(msgs);
             if (__randWrap.changed) changed = true;
+        }
+
+        // 1.3) ★W325：NSFW 状态栏 —— 楼层里的旧块不重复发给 AI（不越滚越大）；按悬浮窗模式发送"最新读数"
+        if (settings.enabled && settings.nsfwEnabled && msgs && msgs.length) {
+            try {
+                /* ①历史楼层里我们自己换过外壳的块不进请求（你的正则也可以再兜一层） */
+                for (let i = 0; i < msgs.length; i++) {
+                    const mm0 = msgs[i];
+                    if (!mm0 || typeof mm0.content !== 'string') continue;
+                    if (mm0.role !== 'assistant') continue;
+                    if (mm0.content.indexOf('data-nsfw') < 0) continue;
+                    if (mm0.content.indexOf('nsfw_state_guide') >= 0) continue;
+                    const stripped = nsfwStripBlocks(mm0.content);
+                    if (stripped !== mm0.content) { mm0.content = stripped; changed = true; }
+                }
+                /* ②按模式选人（AUTO=上一楼 AI 正文或用户楼层里出现过的名字；手动=悬浮窗勾选；off=不发） */
+                const sendNames = nsfwPickForRequest(nsfwChatId(), msgs);
+                if (sendNames.length) {
+                    const sendText = nsfwBuildSend(nsfwChatId(), sendNames);
+                    if (sendText) {
+                        let sys0 = null;
+                        for (let i = 0; i < msgs.length; i++) {
+                            if (msgs[i] && msgs[i].role === 'system' && typeof msgs[i].content === 'string') { sys0 = msgs[i]; break; }
+                        }
+                        if (sys0) sys0.content = sendText + String.fromCharCode(10, 10) + sys0.content;
+                        else msgs.unshift({ role: 'system', content: sendText });
+                        changed = true;
+                    }
+                }
+            } catch (e) { /* 状态栏失败绝不拖垮注入 */ }
         }
 
         // 1.5) 历史 assistant <content> 单换行补双换行
@@ -8982,7 +9013,21 @@ function nsfwSyncChat() {
         if (ctx) nsfwRebuildFromChat(nsfwChatId(ctx), ctx.chat);
     } catch (e) { }
 }
-function nsfwHook(id, rebuild) { try { if (!settings.nsfwEnabled) return; if (rebuild) nsfwSyncChat(); nsfwMountToMessage(id); } catch (e) { } }
+function nsfwHook(id, rebuild) {
+    try {
+        if (!settings.nsfwEnabled) return;
+        /* ★W325：切换分支/编辑时，先把旧卡摘掉（切换动画期间不再挂着），等 ST 渲染完再按这一楼自己的块重画 */
+        if (rebuild) {
+            const mesEl0 = document.querySelector('.mes[mesid="' + id + '"]');
+            if (mesEl0) mesEl0.querySelectorAll('.yw-nsfw').forEach((n) => n.remove());
+            setTimeout(() => {
+                try { nsfwSyncChat(); nsfwMountToMessage(id); } catch (e) { }
+            }, 400);
+            return;
+        }
+        nsfwMountToMessage(id);
+    } catch (e) { }
+}
 
 /* ★W290：状态栏（NSFW）设置卡的事件绑定（面板整体重建 ⇒ 每次重建后重绑；幂等） */
 function bindNsfwCard() {
@@ -9015,7 +9060,7 @@ function bindNsfwCard() {
     $en.on("change", function () {
         settings.nsfwEnabled = $(this).is(":checked");
         saveSettingsDebounced();
-        try { if (settings.nsfwEnabled) nsfwReattachAll(); } catch (e) { }
+        try { if (settings.nsfwEnabled) { nsfwReattachAll(); nsfwMountSender(); } else { nsfwMountSender(); } } catch (e) { }
     });
     $("#" + extensionName + "_nsfw_fullcount").on("change", function () {
         settings.nsfwFullCount = Math.max(1, Math.min(3, Number($(this).val()) || 2));
@@ -9046,7 +9091,7 @@ function bindNsfwCard() {
         try { nsfwReattachAll(); } catch (e) { }
     });
     const fieldFormHtml = (f) => {
-        const groups = ['状态', '体态', '穿搭', '胸', '前穴', '后穴', '开发', '经验'];
+        const groups = ['状态', '身体', '穿搭', '胸', '前穴', '后穴', '开发'];
         const gsel = '<select class="text_pole" data-f="group" style="width:auto">' + groups.map((g) => '<option value="' + g + '"' + ((f.group === g) ? ' selected' : '') + '>' + g + '</option>').join('') + '</select>';
         const tsel = '<select class="text_pole" data-f="type" style="width:auto">' + ['num', 'text', 'list'].map((ty) => '<option value="' + ty + '"' + ((f.type === ty) ? ' selected' : '') + '>' + ty + '</option>').join('') + '</select>';
         const ssel = '<select class="text_pole" data-f="sex" style="width:auto">' + [['', t('nsfwFieldAny')], ['female', t('nsfwSexF')], ['male', t('nsfwSexM')]].map((a) => '<option value="' + a[0] + '"' + ((String(f.sex || '') === a[0]) ? ' selected' : '') + '>' + a[1] + '</option>').join('') + '</select>';
@@ -9486,6 +9531,7 @@ document.addEventListener('click', (e) => {
 }, true);
 
 eventSource.on(event_types.CHAT_CHANGED, () => {
+    try { if (settings.nsfwEnabled) nsfwMountSender(); } catch (e) { }   /* ★W325：换聊天刷新悬浮发送面板 */
     isDryRun = false;
     dryRunSince = 0;
     /* ★W290：换聊天 → 状态卡按新聊天的档案重画 */

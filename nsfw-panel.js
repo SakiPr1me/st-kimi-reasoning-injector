@@ -20,108 +20,85 @@ const NL = String.fromCharCode(10);
 /* ────────────────────────── 字段定义 ────────────────────────── */
 
 export const NSFW_FIELDS = [
-    /* 状态（顺序 = 卡片顺序：体力 → 尿意 → 疼痛 → 理智 → 欲望 → 配合 → 羞耻 → 周期 → 卵子 → 怀孕 → 发声 → 最近对象） */
-    { id: 'stamina', group: '状态', label: '体力', type: 'num', min: 0, max: 100, core: true, ord: 10 },
+    /* ── 第一组：状态 ── */
+    { id: 'temp', group: '状态', label: '体温', type: 'text', core: true, ord: 5 },
+    { id: 'sweat', group: '状态', label: '出汗量', type: 'text', core: true, ord: 10 },
+    { id: 'stamina', group: '状态', label: '体力', type: 'num', min: 0, max: 100, core: true, ord: 15 },
     { id: 'bladder', group: '状态', label: '尿意', type: 'num', min: 0, max: 100, core: true, ord: 20 },
-    { id: 'pain', group: '状态', label: '疼痛度', type: 'num', min: 0, max: 100, core: true, ord: 30 },
-    { id: 'sanity', group: '状态', label: '理智', type: 'num', min: 0, max: 100, core: true, ord: 40 },
-    { id: 'libido', group: '状态', label: '欲望', type: 'num', min: 0, max: 100, core: true, ord: 50 },
-    { id: 'compliance', group: '状态', label: '配合度', type: 'num', min: 0, max: 100, core: true, ord: 60 },
-    { id: 'shame', group: '状态', label: '羞耻心', type: 'num', min: 0, max: 100, core: true, ord: 70 },
-    { id: 'menstrual', group: '状态', label: '生理周期', type: 'text', options: ['月经期', '卵泡期', '排卵期', '黄体期'], core: true, ord: 80 },
-    { id: 'eggState', group: '状态', label: '卵子状态', type: 'text', options: ['未成熟', '成熟待排', '已排出', '新一轮'], core: true, ord: 90 },
-    { id: 'pregnancy', group: '状态', label: '怀孕状态', type: 'text', core: true, ord: 100 },
-    { id: 'voice', group: '状态', label: '发声状态', type: 'text', core: true, ord: 110 },
-    { id: 'expLastPartner', group: '状态', label: '最近性经验对象', type: 'text', core: true, ord: 120 },
+    { id: 'pain', group: '状态', label: '疼痛度', type: 'num', min: 0, max: 100, core: true, ord: 25 },
+    { id: 'sanity', group: '状态', label: '理智', type: 'num', min: 0, max: 100, core: true, ord: 30 },
+    { id: 'libido', group: '状态', label: '欲望', type: 'num', min: 0, max: 100, core: true, ord: 35 },
+    { id: 'compliance', group: '状态', label: '配合度', type: 'num', min: 0, max: 100, core: true, ord: 40 },
+    { id: 'shame', group: '状态', label: '羞耻心', type: 'num', min: 0, max: 100, core: true, ord: 45 },
+    { id: 'menstrual', group: '状态', label: '生理周期', type: 'text', options: ['月经期', '卵泡期', '排卵期', '黄体期'], core: true, ord: 50 },
+    { id: 'menstrualNextDays', group: '状态', label: '距下阶段天数', type: 'num', min: 0, max: 30, unit: '天', core: true, ord: 55 },
+    { id: 'pregnancy', group: '状态', label: '怀孕状态', type: 'text', core: true, ord: 60 },
+    { id: 'expLastPartner', group: '状态', label: '最近性经验对象', type: 'text', core: true, ord: 65 },
+    { id: 'condom', group: '状态', label: '避孕套', type: 'text', options: ['是', '否'], core: true, ord: 70 },
+    { id: 'condomCount', group: '状态', label: '避孕套携带数', type: 'num', min: 0, max: 99, core: true, ord: 75 },
+    { id: 'cumV', group: '状态', label: '前穴中出', type: 'text', options: ['是', '否'], core: true, ord: 80 },
 
-    /* 体态 */
-    { id: 'temp', group: '体态', label: '体温', type: 'text', core: true, ord: 10 },
-    { id: 'sweat', group: '体态', label: '出汗量', type: 'text', core: true, ord: 20 },
-    { id: 'organFlush', group: '体态', label: '器官充血', type: 'text', core: true, ord: 30 },
-    { id: 'bodyMarks', group: '体态', label: '体表痕迹', type: 'list', core: true, ord: 40 },
-    { id: 'selfJuice', group: '体态', label: '自身体液', type: 'text', core: true, ord: 50 },
-    { id: 'extJuice', group: '体态', label: '外部液体', type: 'text', core: true, ord: 60 },
-    { id: 'belly', group: '体态', label: '腹部外观', type: 'text', core: true, ord: 70 },
+    /* ── 第二组：身体 ── */
+    { id: 'orgasmCount', group: '身体', label: '当天高潮次数', type: 'num', min: 0, max: 999, core: true, ord: 5 },
+    { id: 'voice', group: '身体', label: '发声状态', type: 'text', core: true, ord: 10 },
+    { id: 'organFlush', group: '身体', label: '器官充血', type: 'text', core: true, ord: 15 },
+    { id: 'bodyMarks', group: '身体', label: '体表痕迹', type: 'list', core: true, ord: 20 },
+    { id: 'selfJuice', group: '身体', label: '自身体液', type: 'text', core: true, ord: 25 },
+    { id: 'extJuice', group: '身体', label: '外部液体', type: 'text', core: true, ord: 30 },
+    { id: 'belly', group: '身体', label: '腹部外观', type: 'text', core: true, ord: 35 },
 
-    /* 穿搭（暴露度并进来） */
+    /* ── 第三组：穿搭 ── */
+    { id: 'exposure', group: '穿搭', label: '暴露度', type: 'num', min: 0, max: 100, core: true, ord: 5 },
     { id: 'outer', group: '穿搭', label: '外衣', type: 'text', core: true, ord: 10 },
-    { id: 'inner', group: '穿搭', label: '内衣', type: 'text', core: true, ord: 20 },
-    { id: 'accessories', group: '穿搭', label: '配饰', type: 'list', core: true, ord: 30 },
-    { id: 'clothState', group: '穿搭', label: '衣物状态', type: 'text', core: true, ord: 40 },
-    { id: 'insertItem', group: '穿搭', label: '插入物', type: 'text', core: true, ord: 50 },
-    { id: 'exposure', group: '穿搭', label: '暴露度', type: 'num', min: 0, max: 100, core: true, ord: 60 },
+    { id: 'inner', group: '穿搭', label: '内衣', type: 'text', core: true, ord: 15 },
+    { id: 'accessories', group: '穿搭', label: '配饰', type: 'list', core: true, ord: 20 },
+    { id: 'clothState', group: '穿搭', label: '衣物状态', type: 'text', core: true, ord: 25 },
+    { id: 'insertItem', group: '穿搭', label: '插入物', type: 'text', core: true, ord: 30 },
 
-    /* 胸（积乳量并入） */
-    { id: 'milkMl', group: '胸', label: '积乳量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 0, ord: 0 },
+    /* ── 第四组：胸 ── */
+    { id: 'milkMl', group: '胸', label: '积乳量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 5 },
+    { id: 'stChestSize', group: '胸', label: '罩杯/胸肌', type: 'text', core: true, ord: 10 },
+    { id: 'stChestShape', group: '胸', label: '胸型', type: 'text', core: true, ord: 15 },
+    { id: 'stNippleLen', group: '胸', label: '乳头长', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 20 },
+    { id: 'stNippleWid', group: '胸', label: '乳头宽', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 25 },
+    { id: 'stAreolaDia', group: '胸', label: '乳晕直径', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 30 },
 
-    /* 前穴（女） */
-    { id: 'vLoose', group: '前穴', label: '松弛度', type: 'text', sex: 'female', core: true, ord: 40, ord: 30 },
-    { id: 'vulvaState', group: '前穴', label: '外阴状态', type: 'text', sex: 'female', core: true, ord: 80, ord: 70 },
-    { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', sex: 'female', core: true, ord: 50, options: ['紧闭', '受迫变形', '微开', '全开'], ord: 40 },
-    { id: 'vFluidMl', group: '前穴', label: '阴道液体量', type: 'num', min: 0, max: 2000, unit: 'ml', sex: 'female', core: true, ord: 60, ord: 50 },
-    { id: 'vFluidKind', group: '前穴', label: '阴道液体种类', type: 'text', sex: 'female', core: true, ord: 61, ord: 51 },
-    { id: 'uterusFluidMl', group: '前穴', label: '子宫液体量', type: 'num', min: 0, max: 2000, unit: 'ml', sex: 'female', core: true, ord: 70, ord: 60 },
-    { id: 'clitState', group: '前穴', label: '阴蒂状态', type: 'text', sex: 'female', core: true, ord: 90, ord: 90 },
+    /* ── 第五组：前穴 ── */
+    { id: 'stClitLen', group: '前穴', label: '阴蒂长度', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 5 },
+    { id: 'stClitSize', group: '前穴', label: '阴蒂宽', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 10 },
+    { id: 'clitState', group: '前穴', label: '阴蒂状态', type: 'text', core: true, ord: 15 },
+    { id: 'vulvaState', group: '前穴', label: '外阴状态', type: 'text', core: true, ord: 20 },
+    { id: 'vLoose', group: '前穴', label: '松弛度', type: 'text', core: true, ord: 25 },
+    { id: 'stGDepth', group: '前穴', label: 'G点深度', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 30 },
+    { id: 'stCervixDepth', group: '前穴', label: '子宫口深度', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 35 },
+    { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', options: ['紧闭', '红肿', '受迫挤压宫壁', '微开', '全开'], core: true, ord: 40 },
+    { id: 'vFluidKind', group: '前穴', label: '阴道液体种类', type: 'text', core: true, ord: 45 },
+    { id: 'vFluidMl', group: '前穴', label: '阴道液体量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 50 },
+    { id: 'uterusFluidMl', group: '前穴', label: '子宫液体量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 55 },
 
-    /* 后穴（男女通用） */
-    { id: 'aLoose', group: '后穴', label: '松弛度', type: 'text', core: true, ord: 40, ord: 30 },
-    { id: 'aAnusState', group: '后穴', label: '肛门状态', type: 'text', core: true, ord: 80, ord: 70 },
-    { id: 'colonState', group: '后穴', label: '结肠口状态', type: 'text', core: true, ord: 50, options: ['紧闭', '受迫变形', '微开', '全开'], ord: 40 },
-    { id: 'aFluidMl', group: '后穴', label: '后穴液体量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 60, ord: 50 },
-    { id: 'aFluidKind', group: '后穴', label: '后穴液体种类', type: 'text', core: true, ord: 61, ord: 51 },
-    { id: 'keyPointState', group: '后穴', label: '后穴G点状态', type: 'text', core: true, ord: 70, ord: 60 },
+    /* ── 第六组：后穴 ── */
+    { id: 'stPenisLen', group: '后穴', label: '阴茎长度', type: 'num', min: 0, max: 40, unit: 'cm', core: true, ord: 5 },
+    { id: 'stPenisGirth', group: '后穴', label: '阴茎粗度', type: 'num', min: 0, max: 40, unit: 'cm', core: true, ord: 10 },
+    { id: 'stPenisLook', group: '后穴', label: '阴茎外观', type: 'text', core: true, ord: 15 },
+    { id: 'aAnusState', group: '后穴', label: '肛门状态', type: 'text', core: true, ord: 20 },
+    { id: 'keyPointState', group: '后穴', label: '后穴G点状态', type: 'text', core: true, ord: 25 },
+    { id: 'aLoose', group: '后穴', label: '松弛度', type: 'text', core: true, ord: 30 },
+    { id: 'stKeyDepth', group: '后穴', label: '前列腺深度', type: 'num', min: 0, max: 40, unit: 'cm', core: true, ord: 35 },
+    { id: 'stColonDepth', group: '后穴', label: '结肠口深度', type: 'num', min: 0, max: 40, unit: 'cm', core: true, ord: 40 },
+    { id: 'colonState', group: '后穴', label: '结肠口状态', type: 'text', options: ['紧闭', '受迫变形', '微开', '全开'], core: true, ord: 45 },
+    { id: 'aFluidKind', group: '后穴', label: '后穴液体种类', type: 'text', core: true, ord: 50 },
+    { id: 'aFluidMl', group: '后穴', label: '后穴液体量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 55 },
 
-    /* 开发（等级 / 经验 / 变化） */
-    { id: 'devMouthLv', group: '开发', label: '口·等级', type: 'num', min: 0, max: 10, core: true, ord: 10 },
-    { id: 'devMouthExp', group: '开发', label: '口·经验', type: 'text', core: true, ord: 11 },
-    { id: 'devMouthSense', group: '开发', label: '口·变化', type: 'text', core: true, ord: 12 },
-    { id: 'devChestLv', group: '开发', label: '胸·等级', type: 'num', min: 0, max: 10, core: true, ord: 20 },
-    { id: 'devChestExp', group: '开发', label: '胸·经验', type: 'text', core: true, ord: 21 },
-    { id: 'devChestSense', group: '开发', label: '胸·变化', type: 'text', core: true, ord: 22 },
-    { id: 'devFrontLv', group: '开发', label: '前·等级', type: 'num', min: 0, max: 10, core: true, ord: 30 },
-    { id: 'devFrontExp', group: '开发', label: '前·经验', type: 'text', core: true, ord: 31 },
-    { id: 'devFrontSense', group: '开发', label: '前·变化', type: 'text', core: true, ord: 32 },
-    { id: 'devBackLv', group: '开发', label: '后·等级', type: 'num', min: 0, max: 10, core: true, ord: 40 },
-    { id: 'devBackExp', group: '开发', label: '后·经验', type: 'text', core: true, ord: 41 },
-    { id: 'devBackSense', group: '开发', label: '后·变化', type: 'text', core: true, ord: 42 },
-    { id: 'devDeepLv', group: '开发', label: '最深·等级', type: 'num', min: 0, max: 10, core: true, ord: 50 },
-    { id: 'devDeepExp', group: '开发', label: '最深·经验', type: 'text', core: true, ord: 51 },
-    { id: 'devDeepSense', group: '开发', label: '最深·变化', type: 'text', core: true, ord: 52 },
-
-    /* 经验（永久统计） */
-    { id: 'expMasturbation', group: '经验', label: '自慰次数', type: 'num', min: 0, max: 99999, core: true, ord: 10 },
-    { id: 'expPartners', group: '经验', label: '经验人数', type: 'num', min: 0, max: 999, core: true, ord: 20 },
-    { id: 'expOralCount', group: '经验', label: '口交次数', type: 'num', min: 0, max: 99999, core: true, ord: 30 },
-    { id: 'expVCount', group: '经验', label: '前穴次数', type: 'num', min: 0, max: 99999, core: true, ord: 40 },
-    { id: 'expVCumCount', group: '经验', label: '前穴中出次数', type: 'num', min: 0, max: 99999, core: true, ord: 50 },
-    { id: 'expACount', group: '经验', label: '后穴次数', type: 'num', min: 0, max: 99999, core: true, ord: 60 },
-    { id: 'expACumCount', group: '经验', label: '后穴中出次数', type: 'num', min: 0, max: 99999, core: true, ord: 70 },
-
-    /* 本次性爱（卡片不单列，供插件算怀孕率/统计） */
-    { id: 'condom', group: '状态', label: '避孕套', type: 'text', options: ['是', '否'], core: true, hideInCard: true },
-    { id: 'condomCount', group: '状态', label: '避孕套携带数', type: 'num', min: 0, max: 99, core: true, hideInCard: true },
-    { id: 'cumV', group: '状态', label: '前穴中出', type: 'text', options: ['是', '否'], core: true, hideInCard: true },
-    { id: 'orgasmCount', group: '状态', label: '高潮次数', type: 'num', min: 0, max: 999, core: true, hideInCard: true },
-
-    /* ── 静态参数（建档填一次；不要求 AI 每轮输出） ── */
-    { id: 'stChestSize', group: '静态-胸部', tab: '胸', label: '罩杯/胸肌', type: 'text', static: true, after: 'milkMl', ord: 10, ord: 10 },
-    { id: 'stChestShape', group: '静态-胸部', tab: '胸', label: '胸型', type: 'text', static: true, after: 'milkMl', ord: 20, ord: 20 },
-    { id: 'stNippleLen', group: '静态-胸部', tab: '胸', label: '乳头长', type: 'text', static: true, after: 'milkMl', ord: 30, ord: 30 },
-    { id: 'stNippleWid', group: '静态-胸部', tab: '胸', label: '乳头宽', type: 'text', static: true, after: 'milkMl', ord: 40, ord: 40 },
-    { id: 'stAreolaDia', group: '静态-胸部', tab: '胸', label: '乳晕直径', type: 'text', static: true, after: 'stNippleWid', ord: 50, ord: 50 },
-    { id: 'stClitLen', group: '静态-前穴', tab: '前穴', label: '阴蒂长度', type: 'text', sex: 'female', static: true, after: 'vulvaState', ord: 90, ord: 80 },
-    { id: 'stClitSize', group: '静态-前穴', tab: '前穴', label: '阴蒂宽', type: 'text', sex: 'female', static: true, after: 'vulvaState', ord: 100, ord: 81 },
-    { id: 'stPenisLen', group: '静态-后穴', tab: '后穴', label: '阴茎长度', type: 'text', sex: 'male', static: true, ord: 80 },
-    { id: 'stPenisGirth', group: '静态-后穴', tab: '后穴', label: '阴茎粗度', type: 'text', sex: 'male', static: true, ord: 81 },
-    { id: 'stPenisLook', group: '静态-后穴', tab: '后穴', label: '阴茎外观', type: 'text', sex: 'male', static: true, ord: 82 },
-    { id: 'stGDepth', group: '静态-前穴', tab: '前穴', label: 'G点深度', type: 'text', sex: 'female', static: true, after: 'vulvaState', ord: 10, ord: 10 },
-    { id: 'stCervixDepth', group: '静态-前穴', tab: '前穴', label: '子宫口深度', type: 'text', sex: 'female', static: true, after: 'cervixState', ord: 20, ord: 20 },
-    { id: 'stKeyDepth', group: '静态-后穴', tab: '后穴', label: '前列腺深度', type: 'text', static: true, after: 'keyPointState', ord: 10, ord: 10 },
-    { id: 'stColonDepth', group: '静态-后穴', tab: '后穴', label: '结肠口深度', type: 'text', static: true, after: 'colonState', ord: 20, ord: 20 },
-    { id: 'stEroZones', group: '静态-其他', tab: '状态', label: '敏感带', type: 'list', static: true, ord: 200 },
-    { id: 'stMouthDepth', group: '静态-其他', tab: '状态', label: '口部耐受深度', type: 'text', static: true, ord: 210 },
-    { id: 'stFavPose', group: '静态-其他', tab: '状态', label: '惯用体位', type: 'text', static: true, ord: 220 },
-    { id: 'stMarks', group: '静态-其他', tab: '状态', label: '特殊标记', type: 'list', static: true, ord: 230 }
+    /* ── 第八组：开发（永久统计，评述写身体变化） ── */
+    { id: 'expMasturbation', group: '开发', label: '自慰次数', type: 'num', min: 0, max: 99999, core: true, ord: 5 },
+    { id: 'expPartners', group: '开发', label: '经验人数', type: 'num', min: 0, max: 999, core: true, ord: 10 },
+    { id: 'expOralCount', group: '开发', label: '口交次数', type: 'num', min: 0, max: 99999, core: true, ord: 15 },
+    { id: 'expBlowjobCount', group: '开发', label: '被口交次数', type: 'num', min: 0, max: 99999, core: true, ord: 20 },
+    { id: 'expChestCount', group: '开发', label: '胸部行为次数', type: 'num', min: 0, max: 99999, core: true, ord: 25 },
+    { id: 'expVCount', group: '开发', label: '前穴次数', type: 'num', min: 0, max: 99999, core: true, ord: 30 },
+    { id: 'expVCumCount', group: '开发', label: '前穴中出次数', type: 'num', min: 0, max: 99999, core: true, ord: 35 },
+    { id: 'expACount', group: '开发', label: '后穴次数', type: 'num', min: 0, max: 99999, core: true, ord: 40 },
+    { id: 'expACumCount', group: '开发', label: '后穴中出次数', type: 'num', min: 0, max: 99999, core: true, ord: 45 },
 ];
 
 /** 他人视线（只展示，不进数值）—— v2 去掉「精神」 */
@@ -131,7 +108,7 @@ const NSFW_UNITS = {
     temp: '℃', sweat: 'ml',
     milkMl: 'ml', vFluidMl: 'ml', uterusFluidMl: 'ml', aFluidMl: 'ml',
     stNippleLen: 'cm', stNippleWid: 'cm', stAreolaDia: 'cm', stClitLen: 'cm',
-    stGDepth: 'cm', stCervixDepth: 'cm', stKeyDepth: 'cm', stColonDepth: 'cm', stMouthDepth: 'cm',
+    stGDepth: 'cm', stCervixDepth: 'cm', stKeyDepth: 'cm', stColonDepth: 'cm',
     stPenisLen: 'cm', stPenisGirth: 'cm'
 };
 NSFW_FIELDS.forEach((f) => { if (!f.unit && NSFW_UNITS[f.id]) f.unit = NSFW_UNITS[f.id]; });
@@ -267,7 +244,7 @@ export function nsfwRemove(chatId, name) {
 
 /* ────────────────────────── 字段工具 ────────────────────────── */
 
-const GROUP_ORDER = ['状态', '体态', '穿搭', '胸', '前穴', '后穴', '开发', '经验'];
+const GROUP_ORDER = ['状态', '身体', '穿搭', '胸', '前穴', '后穴', '开发'];
 
 /** 全部字段 = 内置 + 用户自定义（settings.nsfwCustomFields） */
 export function nsfwAllFields() {
@@ -508,9 +485,9 @@ const NSFW_ALIAS = {
     '体液': 'selfJuice', '爱液': 'selfJuice',
     '阴道状态': 'vulvaState', '外阴': 'vulvaState',
     '子宫口': 'cervixState', '结肠口': 'colonState',
-    '开发度·穴': 'devFrontLv', '开发度·前': 'devFrontLv',
-    '开发度·胸': 'devChestLv', '开发度·口': 'devMouthLv',
-    '开发度·后': 'devBackLv', '开发度·最深': 'devDeepLv',
+    '开发度·穴': 'expVCount', '开发度·前': 'expVCount',
+    '开发度·胸': 'expChestCount', '开发度·口': 'expOralCount',
+    '开发度·后': 'expACount', '开发度·最深': 'expVCumCount',
     '怀孕': 'pregnancy', '怀孕几率': 'pregnancy',
     '疼痛': 'pain', '尿意': 'bladder', '出汗': 'sweat', '体温': 'temp'
 };
@@ -721,7 +698,7 @@ export function buildCharBlock(name, profile) {
             || ((profile.static || {})[f.id] ? { value: profile.static[f.id], comment: '' } : null);
         const val = cell ? fmtVal(f, cell) : '';
         if (!val) return;
-        lines.push(f.id + '=' + val);
+        lines.push(f.id + '=' + val + (cell.comment ? '|' + cell.comment : ''));
     });
     if (!lines.length) return '';
     const preg = calcPregRisk(profile);
@@ -843,6 +820,114 @@ export function buildInjection(chatId, opts) {
     return parts.join(NL);
 }
 
+
+/* ────────────────────────── 发送给 AI（悬浮窗选人） ────────────────────────── */
+
+const SEND_KEY = 'kimi_nsfw_send';
+function readSend() {
+    try {
+        const raw = localStorage.getItem(SEND_KEY);
+        const obj = raw ? (JSON.parse(raw) || {}) : {};
+        return obj && typeof obj === 'object' ? obj : {};
+    } catch (e) { return {}; }
+}
+/** 这个聊天手动勾选要发送的角色 */
+export function nsfwSendPicks(chatId) {
+    try {
+        const all = readSend();
+        const k = String(chatId || 'default');
+        return Array.isArray(all[k]) ? all[k].slice() : [];
+    } catch (e) { return []; }
+}
+export function nsfwSetSendPick(chatId, name, on) {
+    try {
+        const all = readSend();
+        const k = String(chatId || 'default');
+        const list = Array.isArray(all[k]) ? all[k].slice() : [];
+        const i = list.indexOf(name);
+        if (on && i < 0) list.push(name);
+        if (!on && i >= 0) list.splice(i, 1);
+        all[k] = list;
+        localStorage.setItem(SEND_KEY, JSON.stringify(all));
+    } catch (e) { }
+}
+/** 本轮该发送谁：off=不发送；manual=勾选的；auto=上一楼 AI 正文或用户楼层里出现过的名字 */
+export function nsfwPickForRequest(chatId, msgs) {
+    try {
+        const st = _getSettings() || {};
+        const mode = String(st.nsfwSendMode || 'auto');
+        if (mode === 'off') return [];
+        const { bucket } = nsfwBucket(chatId);
+        const names = (bucket.order || []).filter((n) => bucket.chars[n]);
+        if (!names.length) return [];
+        if (mode === 'manual') {
+            const picks = nsfwSendPicks(chatId);
+            return names.filter((n) => picks.indexOf(n) >= 0);
+        }
+        const lastA = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') return String(msgs[i].content || ''); } return ''; })();
+        const lastU = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'user') return String(msgs[i].content || ''); } return ''; })();
+        const text = lastA + String.fromCharCode(10) + lastU;
+        return names.filter((n) => n && text.indexOf(n) >= 0);
+    } catch (e) { return []; }
+}
+/** 组装发送文本（取的是楼层里最新读出的档案） */
+export function nsfwBuildSend(chatId, names) {
+    try {
+        const { bucket } = nsfwBucket(chatId);
+        const parts = ['【状态栏 · 当前状态】'];
+        (names || []).forEach((n) => {
+            const b = buildCharBlock(n, bucket.chars[n]);
+            if (b) parts.push(b);
+        });
+        return parts.length > 1 ? parts.join(NL) : '';
+    } catch (e) { return ''; }
+}
+
+/** 悬浮发送面板：芯片 + 展开小窗（模式 + 逐人勾选） */
+export function nsfwMountSender() {
+    try {
+        if (typeof document === 'undefined') return;
+        const st = _getSettings() || {};
+        if (!st.nsfwEnabled) { const old0 = document.getElementById('yw-nsfw-sender'); if (old0) old0.remove(); return; }
+        nsfwEnsureStyle();
+        let host = document.getElementById('yw-nsfw-sender');
+        if (!host) {
+            host = document.createElement('div');
+            host.id = 'yw-nsfw-sender';
+            document.body.appendChild(host);
+        }
+        const chatId = nsfwChatId();
+        const { bucket } = nsfwBucket(chatId);
+        const names = (bucket.order || []).filter((n) => bucket.chars[n]);
+        const picks = nsfwSendPicks(chatId);
+        const mode = String(st.nsfwSendMode || 'auto');
+        const modeTxt = mode === 'manual' ? '手动' : (mode === 'off' ? '不发送' : 'AUTO');
+        host.innerHTML = '<div class="yw-nsfw-sd-chip" title="状态栏发送">状态·' + modeTxt + '</div>'
+            + '<div class="yw-nsfw-sd-panel" style="display:none">'
+            + '<div class="yw-nsfw-sd-hd">状态栏发送 <select class="yw-nsfw-sd-mode">'
+            + '<option value="auto"' + (mode === 'auto' ? ' selected' : '') + '>AUTO（正文里出现谁就发谁）</option>'
+            + '<option value="manual"' + (mode === 'manual' ? ' selected' : '') + '>手动（按下面勾选）</option>'
+            + '<option value="off"' + (mode === 'off' ? ' selected' : '') + '>完全不发送</option>'
+            + '</select><button type="button" class="yw-nsfw-sd-x">✕</button></div>'
+            + '<div class="yw-nsfw-sd-list">'
+            + (names.length ? names.map((n) => '<label class="yw-nsfw-sd-row"><input type="checkbox" data-name="' + esc(n) + '"' + (picks.indexOf(n) >= 0 ? ' checked' : '') + (mode === 'manual' ? '' : ' disabled') + '/><span>' + esc(n) + '</span></label>').join('') : '<div class="yw-nsfw-sd-empty">（这个聊天还没有角色档案）</div>')
+            + '</div>'
+            + '<div class="yw-nsfw-sd-tip">' + (mode === 'auto' ? '上一楼正文或你的消息里提到谁，就发谁的状态。' : (mode === 'manual' ? '勾选谁就每轮发谁。' : '已关闭：不把状态发给 AI。')) + '</div>'
+            + '</div>';
+        const chip = host.querySelector('.yw-nsfw-sd-chip');
+        const panel = host.querySelector('.yw-nsfw-sd-panel');
+        chip.addEventListener('click', () => { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; });
+        host.querySelector('.yw-nsfw-sd-x').addEventListener('click', () => { panel.style.display = 'none'; });
+        host.querySelector('.yw-nsfw-sd-mode').addEventListener('change', (e) => {
+            st.nsfwSendMode = String(e.target.value || 'auto');
+            try { if (_save) _save(); } catch (e2) { }
+            nsfwMountSender();
+        });
+        host.querySelectorAll('.yw-nsfw-sd-row input').forEach((cb) => {
+            cb.addEventListener('change', () => { nsfwSetSendPick(chatId, cb.getAttribute('data-name'), cb.checked); });
+        });
+    } catch (e) { }
+}
 /* ────────────────────────── 展示 ────────────────────────── */
 
 function esc(s) {
@@ -942,7 +1027,8 @@ export function nsfwRenderCard(name, profile) {
 
     const tabs = [];
     GROUP_ORDER.forEach((grp) => {
-        const html = (grp === '开发') ? devTableHtml(profile) : tabRowsHtml(profile, grp, byGroup);
+        /* ★W325：「开发」组改成普通计数行（旧的 部位×等级/经验/变化 表已随字段删除） */
+        const html = tabRowsHtml(profile, grp, byGroup);
         if (html) tabs.push({ id: grp, label: grp, html: html });
     });
     const viewRows = NSFW_DESC_FIELDS.map((d) => (profile.desc && profile.desc[d.id] ? { label: d.label, text: profile.desc[d.id].text } : null)).filter(Boolean);
@@ -1090,7 +1176,7 @@ export function nsfwFillDemo(chatId, name) {
         const set = (id, v, c) => { m[id] = { value: v, comment: c || '' }; };
         set('stamina', '42', '腿在抖'); set('sanity', '35', '眼前发白'); set('libido', '85', '烧得人发昏');
         set('compliance', '82', '让做什么就做什么'); set('shame', '20', '不太会脸红了');
-        set('menstrual', '排卵期', '这几天最危险'); set('eggState', '成熟待排', '就等这一下');
+        set('menstrual', '排卵期', '这几天最危险'); set('menstrualNextDays', '3', '就等这一下');
         set('voice', '说不出完整句子', '只剩气音');
         set('expLastPartner', '陆沉', '今晚');
         set('temp', '38.2℃', '烫得吓人');
@@ -1107,11 +1193,11 @@ export function nsfwFillDemo(chatId, name) {
         set('aLoose', '微张 · 边缘泛红', '拔出来会合不拢');
         set('colonState', '紧闭', '顶到就发酸'); set('aFluidMl', '32', '被堵在里面'); set('aFluidKind', '润滑油', '');
         set('keyPointState', '前列腺 · 充血', '一顶就腿软'); set('aAnusState', '紧致 · 边缘泛红', '');
-        set('devMouthLv', '3', ''); set('devMouthExp', '180/300', ''); set('devMouthSense', '+1 敏感', '');
-        set('devChestLv', '4', ''); set('devChestExp', '420/500', ''); set('devChestSense', '极度敏感', ''); set('devChestSkill', '常态激凸、微量溢乳', '');
-        set('devFrontLv', '4', ''); set('devFrontExp', '380/500', ''); set('devFrontSense', '高', ''); set('devFrontSkill', '主动收缩绞缠', '');
-        set('devBackLv', '2', ''); set('devBackExp', '150/300', ''); set('devBackSense', '中', ''); set('devBackSkill', '—', '');
-        set('devDeepLv', '2', ''); set('devDeepExp', '120/300', ''); set('devDeepSense', '内脏级酸胀', ''); set('devDeepSkill', '—', '');
+        set('expOralCount', '2', '含被动'); set('expBlowjobCount', '5', '他很喜欢');
+        set('expChestCount', '40', '每次必被照顾');
+        set('expVCount', '14', '两日累计，穴口已含得住他');
+        set('expACount', '3', '刚开始开发');
+        set('expVCumCount', '13', '内壁学会了含住临界点');
         set('expMasturbation', '24', '最近很频繁'); set('expPartners', '3', ''); set('expOralCount', '31', '很熟练');
         set('expVCount', '17', ''); set('expVCumCount', '9', ''); set('expACount', '6', ''); set('expACumCount', '2', '');
         set('condom', '否', '没用'); set('condomCount', '0', ''); set('cumV', '是', '全灌进去了');
@@ -1196,6 +1282,16 @@ const CSS = [
     '.yw-nsfw-tbl td.v .num{font-variant-numeric:tabular-nums;margin-right:6px}',
     '.yw-nsfw-tbl td.v .bar{display:inline-block;width:3.6em;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden;vertical-align:middle}',
     '.yw-nsfw-tbl td.v .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
+    '#yw-nsfw-sender{position:fixed;right:14px;bottom:90px;z-index:29998;font-size:13px}',
+    '#yw-nsfw-sender .yw-nsfw-sd-chip{cursor:pointer;padding:4px 10px;border-radius:999px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 30%,transparent);background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 10%,transparent);color:var(--SmartThemeBodyColor,currentColor);opacity:.85;user-select:none}',
+    '#yw-nsfw-sender .yw-nsfw-sd-panel{margin-top:6px;width:240px;max-height:50vh;overflow:auto;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 24%,transparent);border-radius:12px;background:var(--SmartThemeBlurTintColor,transparent);backdrop-filter:blur(8px);padding:8px;color:var(--SmartThemeBodyColor,currentColor);box-shadow:0 6px 24px rgba(0,0,0,.25)}',
+    '#yw-nsfw-sender .yw-nsfw-sd-hd{display:flex;align-items:center;gap:6px;font-weight:600;margin-bottom:6px}',
+    '#yw-nsfw-sender .yw-nsfw-sd-mode{flex:1;min-width:0;font:inherit;font-size:.9em}',
+    '#yw-nsfw-sender .yw-nsfw-sd-x{cursor:pointer;border:0;background:transparent;color:inherit;opacity:.6;padding:0 2px}',
+    '#yw-nsfw-sender .yw-nsfw-sd-row{display:flex;align-items:center;gap:6px;padding:2px 0}',
+    '#yw-nsfw-sender .yw-nsfw-sd-row input{accent-color:var(--SmartThemeBodyColor,currentColor)}',
+    '#yw-nsfw-sender .yw-nsfw-sd-empty{opacity:.6;font-size:.9em;padding:4px 0}',
+    '#yw-nsfw-sender .yw-nsfw-sd-tip{opacity:.55;font-size:.82em;margin-top:6px;line-height:1.4}',
     '.yw-nsfw-tbl td.t{width:38%;overflow-wrap:anywhere}',
     '.yw-nsfw-tbl td.yw-nsfw-c{opacity:.6;font-size:.9em;font-style:italic;text-align:right;overflow-wrap:anywhere}',
     '.yw-nsfw-dev{width:100%;border-collapse:collapse;font-size:.84em;margin:2px 0}',
