@@ -860,7 +860,9 @@ export function nsfwPickForRequest(chatId, msgs) {
         /* ★W327：AUTO 勾上=按正文提到谁发谁；不勾=只发手动勾选的人；都不选=不发送 */
         const auto = (st.nsfwAutoSend !== undefined) ? !!st.nsfwAutoSend : (String(st.nsfwSendMode || 'auto') === 'auto');
         const { bucket } = nsfwBucket(chatId);
+        const live = nsfwStateFromMsgs(msgs);
         const names = (bucket.order || []).filter((n) => bucket.chars[n]);
+        Object.keys(live.chars).forEach((n) => { if (names.indexOf(n) < 0) names.push(n); });
         if (!names.length) return [];
         if (!auto) {
             const picks = nsfwSendPicks(chatId);
@@ -873,12 +875,28 @@ export function nsfwPickForRequest(chatId, msgs) {
     } catch (e) { return []; }
 }
 /** 组装发送文本（取的是楼层里最新读出的档案） */
-export function nsfwBuildSend(chatId, names) {
+/** 从一批消息（= 这次请求实际带的历史）重建状态；正在生成的那一楼本来就不在 msgs 里 */
+export function nsfwStateFromMsgs(msgs) {
+    const tmp = { order: [], chars: {} };
+    (msgs || []).forEach((m) => {
+        if (!m || typeof m.content !== 'string') return;
+        if (m.role !== 'assistant' && m.role !== 'user') return;
+        if (m.content.indexOf('<nsfw') < 0 && m.content.indexOf('data-nsfw') < 0) return;
+        const parsed = nsfwParse(m.content);
+        if (parsed && parsed.hasAny) applyParsedTo(tmp, parsed);
+    });
+    return tmp;
+}
+export function nsfwBuildSend(chatId, names, msgs, opts) {
     try {
         const { bucket } = nsfwBucket(chatId);
+        /* ★W330：优先用「这次请求带的历史」重建（重roll/新分支时那一楼不在里面）；没有就退回缓存档案 */
+        const live = Array.isArray(msgs) ? nsfwStateFromMsgs(msgs) : null;
         const parts = ['【状态栏 · 当前状态】'];
         (names || []).forEach((n) => {
-            const b = buildCharBlock(n, bucket.chars[n]);
+            /* AUTO 时 live 为准（正在重roll/新分支的那一楼不在 msgs 里，不能拿它的旧值）；手动勾选才允许回退缓存档案 */
+            const prof = (live && live.chars[n]) || (((!(opts && opts.liveOnly))) ? bucket.chars[n] : null);
+            const b = buildCharBlock(n, prof);
             if (b) parts.push(b);
         });
         return parts.length > 1 ? parts.join(NL) : '';
