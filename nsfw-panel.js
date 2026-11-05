@@ -849,22 +849,21 @@ function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-/** 一页的行：动态行 + 静态档案按 after 内联（不再单列「档案·固定」） */
+/** 一页的行：按 tab 归属取字段（静态参数也进对应分页），顺序 = ord */
 function tabRowsHtml(profile, grp, byGroup) {
     const rows = [];
     activeFields(profile).forEach((f) => {
-        if (f.hideInCard) return;
-        if (f.group !== grp) return;
+        if ((f.tab || f.group) !== grp) return;
         const cell = (profile.stats || {})[f.id];
         if (!cell || !fmtVal(f, cell)) return;
         rows.push({ ord: (typeof f.ord === 'number' ? f.ord : 9999), html: rowHtml(f, cell) });
     });
     rows.sort((a, b) => a.ord - b.ord);
     if (!rows.length) return '';
-    return '<table class="yw-nsfw-tbl"><thead><tr><th>字段</th><th>值</th><th>评述</th></tr></thead><tbody>'
+    return '<table class="yw-nsfw-tbl"><tbody>'
         + rows.map((r) => r.html).join('') + '</tbody></table>';
 }
-/** 开发度表格：部位 × 等级/经验/敏感度/技能 */
+/** 开发度表格：部位 × 等级/经验/变化 */
 function devTableHtml(profile) {
     const parts = [ ['口', 'Mouth'], ['胸', 'Chest'], ['前', 'Front'], ['后', 'Back'], ['最深', 'Deep'] ];
     const cell = (id) => {
@@ -876,12 +875,11 @@ function devTableHtml(profile) {
         const lv = cell('dev' + pp[1] + 'Lv');
         const exp = cell('dev' + pp[1] + 'Exp');
         const sense = cell('dev' + pp[1] + 'Sense');
-        const skill = cell('dev' + pp[1] + 'Skill');
-        if (!lv && !exp && !sense && !skill) return '';
-        return '<tr><th>' + esc(pp[0]) + '</th><td class="lv">' + esc(lv) + '</td><td>' + esc(exp) + '</td><td>' + esc(sense) + '</td><td class="sk">' + esc(skill) + '</td></tr>';
+        if (!lv && !exp && !sense) return '';
+        return '<tr><th>' + esc(pp[0]) + '</th><td class="lv">' + esc(lv) + '</td><td>' + esc(exp) + '</td><td>' + esc(sense) + '</td></tr>';
     }).join('');
     if (!rows) return '';
-    return '<table class="yw-nsfw-dev"><thead><tr><th>部位</th><th>等级</th><th>经验</th><th>敏感度</th><th>技能</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    return '<table class="yw-nsfw-dev"><thead><tr><th>部位</th><th>等级</th><th>经验</th><th>变化</th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
 function rowHtml(f, cell) {
     if (!cell) return '';
@@ -899,7 +897,9 @@ function rowHtml(f, cell) {
             + c + '</tr>';
     }
     return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
-        + '<td class="t">' + esc(withUnit(f, val)) + '</td>' + c + '</tr>';
+        + '<td class="t" colspan="2">' + esc(withUnit(f, val))
+        + (cell.comment ? '<span class="yw-nsfw-c">' + esc(cell.comment) + '</span>' : '')
+        + '</td></tr>';
 }
 
 /** 状态卡（v2：分页 tabs，评述在右） */
@@ -1198,7 +1198,8 @@ const CSS = [
     '.yw-nsfw-tbl td.v .num{font-variant-numeric:tabular-nums;margin-right:6px}',
     '.yw-nsfw-tbl td.v .bar{display:inline-block;width:3.6em;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden;vertical-align:middle}',
     '.yw-nsfw-tbl td.v .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
-    '.yw-nsfw-tbl td.t{max-width:12em;overflow-wrap:anywhere}',
+    '.yw-nsfw-tbl td.t{overflow-wrap:anywhere}',
+    '.yw-nsfw-tbl .yw-nsfw-c{opacity:.62;font-size:.92em;font-style:italic;margin-left:.5em;overflow-wrap:anywhere}',
     '.yw-nsfw-tbl td.yw-nsfw-c{opacity:.6;font-size:.9em;font-style:italic;text-align:right;overflow-wrap:anywhere}',
     '.yw-nsfw-dev{width:100%;border-collapse:collapse;font-size:.84em;margin:2px 0}',
     '.yw-nsfw-dev th,.yw-nsfw-dev td{padding:3px 4px;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent);text-align:left}',
