@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.179'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.180'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -464,7 +464,7 @@ const defaultSettings = {
     nsfwRules: null,                 // 自定义规则数组；null = 用内置 NSFW_DEFAULT_RULES
     nsfwPin: null,                   // 常驻全量的角色名（null=按最近登场）
     nsfwDensity: 'normal',
-    nsfwSendMode: 'auto'         // 发给 AI：auto=正文出现谁发谁 / manual=按悬浮窗勾选 / off=不发送            // 卡片行距：compact / normal / loose
+    nsfwAutoSend: true           // 发给 AI：true=AUTO（正文出现谁发谁）/ false=只发悬浮条里勾选的人            // 卡片行距：compact / normal / loose
 };
 
 // ===== 双模式三语预设 =====
@@ -1199,7 +1199,7 @@ if (settings.nsfwFullCount === undefined) settings.nsfwFullCount = defaultSettin
 if (settings.nsfwShowAllFields === undefined) settings.nsfwShowAllFields = defaultSettings.nsfwShowAllFields;
 if (settings.nsfwRules === undefined) settings.nsfwRules = defaultSettings.nsfwRules;
 if (settings.nsfwInjectMode === undefined) settings.nsfwInjectMode = defaultSettings.nsfwInjectMode;
-if (settings.nsfwSendMode === undefined) settings.nsfwSendMode = defaultSettings.nsfwSendMode;
+if (settings.nsfwAutoSend === undefined) settings.nsfwAutoSend = (settings.nsfwSendMode ? settings.nsfwSendMode === 'auto' : defaultSettings.nsfwAutoSend);
 if (settings.nsfwPin === undefined) settings.nsfwPin = defaultSettings.nsfwPin;
 if (settings.nsfwDensity === undefined) settings.nsfwDensity = defaultSettings.nsfwDensity;
 try { nsfwInit({ t, getSettings: () => settings, save: () => saveSettingsDebounced() }); } catch (e) { }
