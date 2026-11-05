@@ -22,7 +22,6 @@ const NL = String.fromCharCode(10);
 export const NSFW_FIELDS = [
     /* ── 第一组：状态 ── */
     { id: 'snapTime', group: '状态', label: '快照时间', type: 'text', core: true, ord: 1 },
-    { id: 'temp', group: '状态', label: '体温', type: 'text', core: true, ord: 5 },
     { id: 'sweat', group: '身体', label: '出汗量', type: 'text', core: true, ord: 22 },
     { id: 'stamina', group: '状态', label: '体力', type: 'num', min: 0, max: 100, core: true, ord: 15 },
     { id: 'bladder', group: '状态', label: '尿意', type: 'num', min: 0, max: 100, core: true, ord: 20 },
@@ -32,7 +31,7 @@ export const NSFW_FIELDS = [
     { id: 'compliance', group: '状态', label: '配合度', type: 'num', min: 0, max: 100, core: true, ord: 40 },
     { id: 'shame', group: '状态', label: '羞耻心', type: 'num', min: 0, max: 100, core: true, ord: 45 },
     { id: 'menstrual', group: '状态', label: '生理周期', type: 'text', options: ['月经期', '卵泡期', '排卵期', '黄体期'], core: true, ord: 50 },
-    { id: 'menstrualNextDays', group: '状态', label: '距下阶段天数', type: 'num', min: 0, max: 30, unit: '天', noBar: true, core: true, ord: 55 },
+    { id: 'menstrualNextDays', group: '状态', label: '距下阶段天数', type: 'num', unit: '天', noBar: true, core: true, ord: 55 },
     { id: 'pregnancy', group: '状态', label: '怀孕状态', type: 'text', core: true, ord: 60 },
     { id: 'expLastPartner', group: '状态', label: '最近性经验对象', type: 'text', core: true, ord: 65 },
     { id: 'partnerPenisSize', group: '状态', label: '其阴茎尺寸', type: 'num', min: 0, max: 40, unit: 'cm', noBar: true, core: true, ord: 66 },
