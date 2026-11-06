@@ -1064,18 +1064,26 @@ function rowHtml(f, cell) {
     /* ★W345：四列固定 —— 字段 | 条 | 值 | 评述；条在左、值在右，值尽量不换行（放不下省略号，悬停看全文） */
     const valTxt = esc(withUnit(f, val));
     const wrapCls = (String(withUnit(f, val)).length > 22) ? ' wrap' : '';   /* ★W348：长值才折行，短值不换行 */
-    const bTd = (f.type === 'num' && !f.noBar)
+    /* ★W350：条紧贴数值（数值定宽 + 条紧跟其后），值紧贴标题；三列：字段|值(含条)|评述 */
+    const barHtml = (f.type === 'num' && !f.noBar)
         ? (() => {
             const n = Number(cell.value);
             const max = typeof f.max === 'number' ? f.max : 100;
             const pct = Math.max(0, Math.min(100, (n / max) * 100));
-            return '<td class="b"><span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span></td>';
+            return '<span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span>';
         })()
-        : '<td class="b"></td>';
+        : '';
+    const cmtTxt = cell.comment ? esc(cell.comment) : '';
+    if (barHtml) {
+        return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
+            + '<td class="v num" title="' + valTxt + '"><span class="n">' + valTxt + '</span>' + barHtml + '</td>'
+            + c + '</tr>';
+    }
+    /* ★W351：无条的行 —— 值和评述同在一格（值紧贴标题、评述浮右），长文本按整行宽折行 */
     return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
-        + '<td class="v' + (f.type === 'num' ? ' num' : '') + wrapCls + '" title="' + valTxt + '">' + valTxt + '</td>'
-        + bTd
-        + c + '</tr>';
+        + '<td class="v' + wrapCls + '" colspan="2" title="' + valTxt + '">'
+        + '<span class="vcmt">' + cmtTxt + '</span>' + valTxt + '</td>'
+        + '</tr>';
 }
 
 /** 状态卡（v2：分页 tabs，评述在右） */
@@ -1372,15 +1380,16 @@ const CSS = [
     '.yw-nsfw-empty{padding:10px;opacity:.6;font-size:.86em}',
     '.yw-nsfw-tbl{width:100%;border-collapse:collapse;font-size:.86em;margin:2px 0;table-layout:auto}',
     '.yw-nsfw-tbl thead th{opacity:.45;font-weight:500;font-size:.9em;padding:2px 4px;text-align:left;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent)}',
-    '.yw-nsfw-tbl tbody th{font-weight:500;opacity:.72;padding:2px 8px 2px 4px;text-align:left;white-space:nowrap;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
+    '.yw-nsfw-tbl tbody th{width:1%;font-weight:500;opacity:.72;padding:2px 8px 2px 4px;text-align:left;white-space:nowrap;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
     '.yw-nsfw-tbl td{padding:2px 4px;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent);vertical-align:middle}',
     '.yw-nsfw-tbl td.v{white-space:nowrap;line-height:1.35}',
-    '.yw-nsfw-tbl td.v.num{font-variant-numeric:tabular-nums}',
+    '.yw-nsfw-tbl td.v.num{width:1%;font-variant-numeric:tabular-nums}',
     '.yw-nsfw-tbl td.v.wrap{white-space:normal;overflow-wrap:anywhere}',
     '.yw-nsfw-tbl td.v:empty{min-height:1em}',
-    '.yw-nsfw-tbl td.b{width:4.8em;min-width:4.8em;max-width:4.8em;padding-left:2px;padding-right:6px}',
-    '.yw-nsfw-tbl td.b .bar{display:block;width:100%;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden}',
-    '.yw-nsfw-tbl td.b .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
+    '.yw-nsfw-tbl td.v .n{display:inline-block;min-width:3.2em;text-align:left;margin-right:4px}',
+    '.yw-nsfw-tbl td.v .vcmt{float:right;max-width:56%;margin-left:12px;opacity:.6;font-size:.9em;font-style:italic;text-align:right;overflow-wrap:anywhere}',
+    '.yw-nsfw-tbl td.v .bar{display:inline-block;width:4.6em;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden;vertical-align:middle}',
+    '.yw-nsfw-tbl td.v .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
     /* ★W327 悬浮发送条：一条横条，可拖；AUTO 在左，名字在右；点名字看快照 */
     '#yw-nsfw-sender{position:fixed;right:12px;bottom:86px;z-index:30040;display:flex;align-items:center;gap:6px;max-width:min(72vw,560px);padding:4px 8px;border-radius:999px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 26%,transparent);background:color-mix(in srgb,var(--SmartThemeBlurTintColor,transparent) 88%,transparent);backdrop-filter:blur(10px);color:var(--SmartThemeBodyColor,currentColor);font-size:12px;line-height:1.2;box-shadow:0 4px 16px rgba(0,0,0,.22);user-select:none}',
     '#yw-nsfw-sender .yw-nsfw-sd-grip{cursor:grab;opacity:.45;padding:0 2px;letter-spacing:-2px}',
