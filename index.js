@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.234'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.235'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -588,7 +588,7 @@ const UI = {
         apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效。切换会同步改写 URL、密钥、模型名 三项，预置/采样等其它参数一概不动；命中 limit/quota/rate 即触发。",
         dblSave: "保存",
         dblEditLabel: "双击正文直接改字",
-        nsfwTitle: "状态栏（NSFW）", nsfwEnable: "启用状态栏（每轮画卡+注入）",
+        nsfwTitle: "状态栏（NSFW）", nsfwEnable: "启用状态栏",
         nsfwHint: "将已有状态快照画卡，并注入提示词中",
         nsfwFullCount: "在场全量人数：", nsfwAllFields: "注入全部字段（更细但更费 token）",
         nsfwRoster: "角色名册", nsfwNewName: "角色名", nsfwAdd: "＋ 建档", nsfwRemove: "删",
@@ -665,7 +665,7 @@ const UI = {
         apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections. Switching syncs three fields: URL, key and model name - presets/sampling untouched. Triggers on limit/quota/rate.",
         dblSave: "Save",
         dblEditLabel: "Double-click message text to edit it in place",
-        nsfwTitle: "Status Panel (NSFW)", nsfwEnable: "Enable status panel (card + inject every turn)",
+        nsfwTitle: "Status Panel (NSFW)", nsfwEnable: "Enable status panel",
         nsfwHint: "When on: every turn injects the in-scene character states + update rules + output protocol; the AI replies with two blocks at the end (values with sensory notes + outsider views); the plugin parses them, strips the raw text and renders a card in the message. Off by default.",
         nsfwFullCount: "Full-state characters: ", nsfwAllFields: "Inject all fields (finer, more tokens)",
         nsfwRoster: "Characters", nsfwNewName: "Name", nsfwAdd: "＋ Add", nsfwRemove: "Del",
@@ -742,7 +742,7 @@ const UI = {
         apiHint: "키는 로컬 settings.json에 평문 저장됨 - 파일 공유 금지. Custom(OpenAI 호환) 연결에서만 동작. 전환 시 URL·키·모델명 세 항목을 함께 변경, 프리셋/샘플링은 불변. limit/quota/rate 에서 트리거.",
         dblSave: "저장",
         dblEditLabel: "메시지 본문을 두 번 클릭하면 그 자리에서 바로 수정",
-        nsfwTitle: "상태 패널 (NSFW)", nsfwEnable: "상태 패널 사용 (매 턴 카드 + 주입)",
+        nsfwTitle: "상태 패널 (NSFW)", nsfwEnable: "상태 패널 사용",
         nsfwHint: "켜면 매 턴 등장 캐릭터 상태 + 갱신 규칙 + 출력 프로토콜을 주입하고, AI가 본문 끝에 두 블록(수치+관능 평가 / 타인 시선)을 출력하며, 플러그인이 이를 파싱해 원문을 지우고 메시지에 카드로 그립니다. 기본 꺼짐.",
         nsfwFullCount: "전체 상태 인원: ", nsfwAllFields: "모든 필드 주입 (더 자세하지만 토큰 소모 큼)",
         nsfwRoster: "캐릭터 목록", nsfwNewName: "이름", nsfwAdd: "＋ 추가", nsfwRemove: "삭제",

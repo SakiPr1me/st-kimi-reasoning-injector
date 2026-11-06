@@ -141,6 +141,25 @@ let _t = (k) => k;
 let _getSettings = () => ({});
 let _save = () => { };
 
+/** ★W385：一次性清掉旧「示例填充」留下的假角色（名字是写死的那个），避免悬浮条/名册里继续看到 */
+export function nsfwPurgeLegacyDemo() {
+    try {
+        if (localStorage.getItem('kimi_nsfw_purged_v2') === '1') return;
+        const all = readAll();
+        let changed = false;
+        const BAD = ['夏海'];   /* 夏海 */
+        Object.keys(all).forEach((k) => {
+            const b = all[k];
+            if (!b || !b.chars) return;
+            BAD.forEach((n) => {
+                if (b.chars[n]) { delete b.chars[n]; changed = true; }
+                if (Array.isArray(b.order) && b.order.indexOf(n) >= 0) { b.order = b.order.filter((x) => x !== n); changed = true; }
+            });
+        });
+        if (changed) writeAll(all);
+        localStorage.setItem('kimi_nsfw_purged_v2', '1');
+    } catch (e) { }
+}
 export function nsfwInit(opts) {
     try {
         if (opts && typeof opts.t === 'function') _t = opts.t;
@@ -149,6 +168,7 @@ export function nsfwInit(opts) {
         /* ★W315：样式随模块一起装（不必等第一张卡挂上才隐藏楼层里的块） */
         const st0 = _getSettings && _getSettings();
         if (st0) nsfwEnsureStyle();
+        nsfwPurgeLegacyDemo();
     } catch (e) { }
 }
 
@@ -1225,6 +1245,11 @@ export function nsfwMountSender() {
             document.body.appendChild(host);
         }
         const chatId = nsfwChatId();
+        /* ★W385：先按楼层重建 —— 历史遗留的、没有楼层块支撑的名字（含示例填充）自动消失 */
+        try {
+            const ctxR = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
+            if (ctxR && Array.isArray(ctxR.chat)) nsfwRebuildFromChat(chatId, ctxR.chat);
+        } catch (e) { }
         const { bucket } = nsfwBucket(chatId);
         const names = (bucket.order || []).filter((n) => bucket.chars[n]);
         const picks = nsfwSendPicks(chatId);
