@@ -616,6 +616,8 @@ export function parseMachineBody(body) {
         if (eq > 0) {
             const rawKey = s.slice(0, eq).trim();
             const rest = s.slice(eq + 1).trim();
+            /* ★W409：AI 抄回来的「怀孕几率」行是插件卡片专用显示行 —— 不接收（否则会污染 pregnancy 字段） */
+            if (/怀孕(几率|概率)|几率/.test(rawKey)) return;
             const f = resolveFieldKey(rawKey, all);
             if (!f) return;
             const sv = splitValueComment(rest);
@@ -1261,9 +1263,7 @@ export function nsfwBuildSend(chatId, names, msgs, opts) {
             const b = buildCharBlock(n, prof);
             if (!b) return;
             const t0 = String(((prof.stats || {}).snapTime || {}).value || '');
-            const preg0 = calcPregRisk(prof);   /* ★W408：怀孕几率放块外，只作参考，避免 AI 把它当成快照格式的一部分 */
             parts.push('以下是' + n + (t0 ? '于' + t0 : '') + '的NSFW状态快照（出于省token需求评述不作为提示词发送，不代表没有），如进入NSFW剧情则按照以上要求综合剧情与推理完整更新（不进入则不输出）：');
-            if (preg0.why) parts.push('（插件已算好：怀孕几率 ' + preg0.risk + '%，仅作参考；不要在快照里写这一行。）');
             parts.push(b);
         });
         return parts.length > 1 ? parts.join(NL) : '';
