@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.226'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.227'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -464,6 +464,8 @@ const defaultSettings = {
     nsfwRules: null,                 // 自定义规则数组；null = 用内置 NSFW_DEFAULT_RULES
     nsfwPin: null,                   // 常驻全量的角色名（null=按最近登场）
     nsfwDensity: 'normal',
+    nsfwCaptureHide: true,          // 捕捉并隐藏楼里的快照（关了就不解析、不画卡、不隐藏）
+    nsfwSenderEnabled: true,        // 发送悬浮窗（关了就不显示、也不发送）
     nsfwAutoSend: true           // 发给 AI：true=AUTO（正文出现谁发谁）/ false=只发悬浮条里勾选的人            // 卡片行距：compact / normal / loose
 };
 
@@ -590,6 +592,7 @@ const UI = {
         nsfwHint: "开启后：每轮把「在场角色状态 + 更新规则 + 输出协议」注入提示词，AI 在正文末尾回两段（数值带官能评述 + 他人视线），插件解析后把原文剥掉、在消息里画成卡片。默认关。",
         nsfwFullCount: "在场全量人数：", nsfwAllFields: "注入全部字段（更细但更费 token）",
         nsfwRoster: "角色名册", nsfwNewName: "角色名", nsfwAdd: "＋ 建档", nsfwRemove: "删",
+        nsfwCaptureHide: "捕捉并隐藏NSFW状态栏（正文只显示美化卡）", nsfwCaptureHideHint: "开着：读到楼里的快照、藏起原始文字；关了：不解析、不画卡、原文照常显示。", nsfwSenderToggle: "发送悬浮窗", nsfwSenderHint: "右下角那条小横条：勾谁就发谁；AUTO 会按上一楼正文 / 你输入的正文自动判定，勾/取消都只影响这一轮。", nsfwPeekList: "当前聊天（点名字看状态）", nsfwAutoHint: "自动：正文里出现谁就发谁",
         nsfwInjectMode: "每轮注入", nsfwInjectFull: "完整（规则 + 状态 + 协议）", nsfwInjectState: "仅当前状态（规则/格式在预设里）", nsfwInjectOff: "不注入（状态只看楼层）",
         nsfwRules: "更新规则（每行一条，注入时按顺序发出）", nsfwPreview: "预览本轮注入", nsfwPeek: "看快照", nsfwDemo: "示例填充（先看效果）", nsfwDump: "查看/复制全部状态",
         nsfwNoChars: "还没有角色，先在上面建档。",
@@ -666,6 +669,7 @@ const UI = {
         nsfwHint: "When on: every turn injects the in-scene character states + update rules + output protocol; the AI replies with two blocks at the end (values with sensory notes + outsider views); the plugin parses them, strips the raw text and renders a card in the message. Off by default.",
         nsfwFullCount: "Full-state characters: ", nsfwAllFields: "Inject all fields (finer, more tokens)",
         nsfwRoster: "Characters", nsfwNewName: "Name", nsfwAdd: "＋ Add", nsfwRemove: "Del",
+        nsfwCaptureHide: "Capture & hide the block", nsfwCaptureHideHint: "On: parse the snapshot from the floor and hide the raw text. Off: no parsing, no card, raw text stays.", nsfwSenderToggle: "Sender bar", nsfwSenderHint: "The small bar at bottom right: check who to send. AUTO picks from the last AI content / your input. Checks apply to this round only.", nsfwPeekList: "This chat (click a name)", nsfwAutoHint: "Auto: send whoever appears",
         nsfwInjectMode: "Per-turn injection", nsfwInjectFull: "Full (rules + state + format)", nsfwInjectState: "State only (rules/format live in the preset)", nsfwInjectOff: "Off (state comes from the floors)",
         nsfwRules: "Update rules (one per line, injected in order)", nsfwPreview: "Preview injection", nsfwPeek: "Snapshot", nsfwDemo: "Fill demo data", nsfwDump: "View / copy all states",
         nsfwNoChars: "No characters yet - add one above.",
@@ -742,6 +746,7 @@ const UI = {
         nsfwHint: "켜면 매 턴 등장 캐릭터 상태 + 갱신 규칙 + 출력 프로토콜을 주입하고, AI가 본문 끝에 두 블록(수치+관능 평가 / 타인 시선)을 출력하며, 플러그인이 이를 파싱해 원문을 지우고 메시지에 카드로 그립니다. 기본 꺼짐.",
         nsfwFullCount: "전체 상태 인원: ", nsfwAllFields: "모든 필드 주입 (더 자세하지만 토큰 소모 큼)",
         nsfwRoster: "캐릭터 목록", nsfwNewName: "이름", nsfwAdd: "＋ 추가", nsfwRemove: "삭제",
+        nsfwCaptureHide: "스냅샷 캡처 및 숨김", nsfwCaptureHideHint: "켜면 층의 스냅샷을 읽고 원문을 숨깁니다. 끄면 파싱/카드 없이 원문 그대로.", nsfwSenderToggle: "전송 바", nsfwSenderHint: "오른쪽 아래 작은 바. 체크한 사람에게 전송. AUTO는 본문/입력에 나온 사람 자동 판정, 체크/해제는 이번 턴만.", nsfwPeekList: "현재 채팅 (이름 클릭)", nsfwAutoHint: "자동: 본문에 나온 사람",
         nsfwInjectMode: "매 턴 주입", nsfwInjectFull: "전체 (규칙 + 상태 + 형식)", nsfwInjectState: "현재 상태만 (규칙/형식은 프리셋에)", nsfwInjectOff: "주입 안 함 (층의 상태만 사용)",
         nsfwRules: "갱신 규칙 (한 줄에 하나, 순서대로 주입)", nsfwPreview: "이번 턴 주입 미리보기", nsfwPeek: "스냅샷", nsfwDemo: "예시 데이터 채우기", nsfwDump: "전체 상태 보기/복사",
         nsfwNoChars: "아직 캐릭터가 없습니다. 위에서 추가하세요.",
@@ -1199,6 +1204,8 @@ if (settings.nsfwFullCount === undefined) settings.nsfwFullCount = defaultSettin
 if (settings.nsfwShowAllFields === undefined) settings.nsfwShowAllFields = defaultSettings.nsfwShowAllFields;
 if (settings.nsfwRules === undefined) settings.nsfwRules = defaultSettings.nsfwRules;
 if (settings.nsfwInjectMode === undefined) settings.nsfwInjectMode = defaultSettings.nsfwInjectMode;
+if (settings.nsfwCaptureHide === undefined) settings.nsfwCaptureHide = defaultSettings.nsfwCaptureHide;
+if (settings.nsfwSenderEnabled === undefined) settings.nsfwSenderEnabled = defaultSettings.nsfwSenderEnabled;
 if (settings.nsfwAutoSend === undefined) settings.nsfwAutoSend = (settings.nsfwSendMode ? settings.nsfwSendMode === 'auto' : defaultSettings.nsfwAutoSend);
 if (settings.nsfwPin === undefined) settings.nsfwPin = defaultSettings.nsfwPin;
 if (settings.nsfwDensity === undefined) settings.nsfwDensity = defaultSettings.nsfwDensity;
@@ -2309,7 +2316,7 @@ function applyRequestInjections(bodyObj) {
 
         // 1.3) ★W325：NSFW 状态栏 —— 楼层里的旧块不重复发给 AI（不越滚越大）；按悬浮窗模式发送"最新读数"
         /* ★W336：状态栏是独立功能，不受工具箱总开关影响（否则总开关关着时：生成后不解析→无卡、悬浮窗无档案） */
-        if (settings.nsfwEnabled && msgs && msgs.length) {
+        if (settings.nsfwEnabled && settings.nsfwSenderEnabled !== false && msgs && msgs.length) {
             try {
                 /* ①历史楼层里我们自己换过外壳的块不进请求（你的正则也可以再兜一层） */
                 for (let i = 0; i < msgs.length; i++) {
@@ -8992,6 +8999,7 @@ const nsfwParsedKeys = new Set();
 eventSource.on(event_types.MESSAGE_RECEIVED, async (id) => {
     try {
         if (!settings.nsfwEnabled) return;   /* ★W336：同上，只认状态栏自己的开关 */
+        if (settings.nsfwCaptureHide === false) return;   /* ★W377：捕捉开关关着 ⇒ 不解析、不换壳、不画卡 */
         /* ★W338：回复已经落地 ⇒ 这一轮不再算「生成中」，立刻取消隐藏（防 ENDED 没来/被下一轮重试覆盖） */
         try { if (document && document.body) document.body.classList.remove('yw-nsfw-generating'); } catch (e) { }
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
@@ -9043,7 +9051,7 @@ function nsfwSyncChat() {
 }
 function nsfwHook(id, rebuild) {
     try {
-        if (!settings.nsfwEnabled) return;
+        if (!settings.nsfwEnabled || settings.nsfwCaptureHide === false) return;
         /* ★W325：切换分支/编辑时，先把旧卡摘掉（切换动画期间不再挂着），等 ST 渲染完再按这一楼自己的块重画 */
         if (rebuild) {
             const mesEl0 = document.querySelector('.mes[mesid="' + id + '"]');
@@ -9072,14 +9080,9 @@ function bindNsfwCard() {
         if (!list.length) { box.innerHTML = '<div class="kimi-hint">' + t('nsfwNoChars') + '</div>'; return; }
         box.innerHTML = list.map((c) => {
             const sex = c.sex === 'male' ? t('nsfwSexM') : (c.sex === 'other' ? t('nsfwSexO') : t('nsfwSexF'));
-            const role = c.role === 'top' ? t('nsfwRoleT') : (c.role === 'switch' ? t('nsfwRoleS') : t('nsfwRoleB'));
             return '<div class="kimi-nsfw-item" style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px dashed var(--SmartThemeBorderColor)">'
-                + '<b>' + esc2(c.name) + '</b>'
-                + '<span style="opacity:.7;font-size:.85em">' + role + ' · ' + sex + '</span>'
-                + '<span style="margin-left:auto;opacity:.5;font-size:.8em">' + (c.updatedAt ? new Date(c.updatedAt).toLocaleString() : '—') + '</span>'
-                + '<button class="kimi-btn" data-nsfw-peek="' + esc2(c.name) + '" style="padding:0 6px;font-size:.8em">' + t('nsfwPeek') + '</button>'
-                + '<button class="kimi-btn" data-nsfw-edit="' + esc2(c.name) + '" style="padding:0 6px;font-size:.8em">' + t('nsfwEditValues') + '</button>'
-                + '<button class="kimi-btn" data-nsfw-del="' + esc2(c.name) + '" style="padding:0 6px;font-size:.8em">' + t('nsfwRemove') + '</button>'
+                + '<b data-nsfw-peek="' + esc2(c.name) + '" style="cursor:pointer;text-decoration:underline dotted">' + esc2(c.name) + '</b>'
+                + '<span style="opacity:.7;font-size:.85em">' + sex + '</span>'
                 + '</div>';
         }).join('');
     };
@@ -9125,6 +9128,25 @@ function bindNsfwCard() {
         if (!n) return;
         try { nsfwRemove(chatId(), n); } catch (e) { }
         renderRoster();
+    });
+    const $capHide = $("#" + extensionName + "_nsfw_capturehide");
+    $capHide.off("change.kimiNsfwCap").on("change.kimiNsfwCap", function () {
+        settings.nsfwCaptureHide = $(this).is(":checked");
+        saveSettingsDebounced();
+        try { if (settings.nsfwCaptureHide) nsfwReattachAll(); } catch (e) { }
+    });
+    const $senderOn = $("#" + extensionName + "_nsfw_sender");
+    $senderOn.off("change.kimiNsfwSender").on("change.kimiNsfwSender", function () {
+        settings.nsfwSenderEnabled = $(this).is(":checked");
+        saveSettingsDebounced();
+        try { nsfwMountSender(); } catch (e) { }
+    });
+    const $autoOn = $("#" + extensionName + "_nsfw_auto");
+    $autoOn.off("change.kimiNsfwAuto").on("change.kimiNsfwAuto", function () {
+        settings.nsfwAutoSend = $(this).is(":checked");
+        try { nsfwClearSendOnce(nsfwChatId()); } catch (e) { }
+        saveSettingsDebounced();
+        try { nsfwMountSender(); } catch (e) { }
     });
     $('#' + extensionName + '_nsfw_density').on('change', function () {
         settings.nsfwDensity = String($(this).val() || 'normal');
@@ -10586,29 +10608,14 @@ ${renderWordReplaceRows()}
 <div class="kimi-card-body">
 <label class="checkbox_label"><input id="${extensionName}_nsfw_enabled" type="checkbox" ${settings.nsfwEnabled ? 'checked' : ''}/><span>${t('nsfwEnable')}</span></label>
 <div class="kimi-hint">${t('nsfwHint')}</div>
-<div class="kimi-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
-    <label class="kimi-label" style="margin:0">${t('nsfwDensity')}</label>
-    <select id="${extensionName}_nsfw_density" class="text_pole" style="width:auto"><option value="compact" ${settings.nsfwDensity === 'compact' ? 'selected' : ''}>${t('nsfwDensityCompact')}</option><option value="normal" ${!settings.nsfwDensity || settings.nsfwDensity === 'normal' ? 'selected' : ''}>${t('nsfwDensityNormal')}</option><option value="loose" ${settings.nsfwDensity === 'loose' ? 'selected' : ''}>${t('nsfwDensityLoose')}</option></select>
-</div>
-<div class="kimi-label" style="margin-top:8px">${t('nsfwRoster')}</div>
+<label class="checkbox_label" style="margin-top:6px"><input id="${extensionName}_nsfw_capturehide" type="checkbox" ${settings.nsfwCaptureHide !== false ? 'checked' : ''}/><span>${t('nsfwCaptureHide')}</span></label>
+<div class="kimi-hint">${t('nsfwCaptureHideHint')}</div>
+<label class="checkbox_label" style="margin-top:6px"><input id="${extensionName}_nsfw_sender" type="checkbox" ${settings.nsfwSenderEnabled !== false ? 'checked' : ''}/><span>${t('nsfwSenderToggle')}</span></label>
+<div class="kimi-hint">${t('nsfwSenderHint')}</div>
+<div class="kimi-label" style="margin-top:10px">${t('nsfwPeekList')}</div>
+<div class="kimi-row" style="margin-top:2px"><label class="checkbox_label" style="margin:0"><input id="${extensionName}_nsfw_auto" type="checkbox" ${settings.nsfwAutoSend !== false ? 'checked' : ''}/><span>AUTO</span></label><span class="kimi-hint" style="margin:0 0 0 6px">${t('nsfwAutoHint')}</span></div>
 <div id="${extensionName}_nsfw_roster" class="kimi-nsfw-roster"></div>
 <div id="${extensionName}_nsfw_char_editor"></div>
-<div class="kimi-row" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px">
-    <input id="${extensionName}_nsfw_new_name" type="text" class="text_pole" style="flex:1;min-width:100px" placeholder="${t('nsfwNewName')}"/>
-    <select id="${extensionName}_nsfw_new_sex" class="text_pole" style="width:auto">
-        <option value="female">${t('nsfwSexF')}</option><option value="male">${t('nsfwSexM')}</option><option value="other">${t('nsfwSexO')}</option>
-    </select>
-    <select id="${extensionName}_nsfw_new_role" class="text_pole" style="width:auto">
-        <option value="bottom">${t('nsfwRoleB')}</option><option value="top">${t('nsfwRoleT')}</option><option value="switch">${t('nsfwRoleS')}</option>
-    </select>
-    <button id="${extensionName}_nsfw_add" class="kimi-btn">${t('nsfwAdd')}</button>
-</div>
-<div class="kimi-row" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
-    <button id="${extensionName}_nsfw_peekall" class="kimi-btn">${t('nsfwPeek')}</button>
-    <button id="${extensionName}_nsfw_dump" class="kimi-btn">${t('nsfwDump')}</button>
-    <button id="${extensionName}_nsfw_demo" class="kimi-btn">${t('nsfwDemo')}</button>
-</div>
-<pre id="${extensionName}_nsfw_preview_box" style="display:none;max-height:40vh;overflow:auto;white-space:pre-wrap;font-size:0.85em;margin-top:6px"></pre>
 </div>
 </details>
 

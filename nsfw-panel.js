@@ -1163,7 +1163,7 @@ export function nsfwMountSender() {
     try {
         if (typeof document === 'undefined') return;
         const st = _getSettings() || {};
-        if (!st.nsfwEnabled) {
+        if (!st.nsfwEnabled || st.nsfwSenderEnabled === false) {
             const old0 = document.getElementById('yw-nsfw-sender'); if (old0) old0.remove();
             const pv0 = document.getElementById('yw-nsfw-preview'); if (pv0) pv0.remove();
             return;
@@ -1873,6 +1873,7 @@ export function nsfwMountToMessage(messageId) {
         const ctx = window.SillyTavern && window.SillyTavern.getContext ? window.SillyTavern.getContext() : null;
         const msg = ctx && ctx.chat ? ctx.chat[messageId] : null;
         if (!msg || msg.is_user || msg.is_system) return false;
+        if ((_getSettings() || {}).nsfwCaptureHide === false) return false;   /* ★W377 */
         const chatId = nsfwChatId(ctx);
         const { bucket } = nsfwBucket(chatId);
         const bucketNames = (bucket.order || []).filter((n) => bucket.chars[n] && bucket.chars[n].updatedAt);
