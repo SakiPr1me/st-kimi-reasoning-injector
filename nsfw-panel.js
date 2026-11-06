@@ -375,6 +375,7 @@ function viewField(f) {
     if (!g) return f;
     const o = Object.assign({}, f);
     if (g.label) o.label = g.label;
+    if (g.group) o.group = g.group;   /* ★W411：分页归属也跟指南（把 stPenis* 挪到【身体】就真的去身体页） */
     if (g.unit) o.unit = g.unit;
     if (typeof g.min === 'number') o.min = g.min;
     if (typeof g.max === 'number') o.max = g.max;
@@ -942,7 +943,8 @@ export function buildCharBlock(name, profile) {
         if (!gmap[gg]) { gmap[gg] = { g: gg, items: [] }; groups.push(gmap[gg]); }
         gmap[gg].items.push(line);
     };
-    fields.forEach((f) => {
+    fields.forEach((f0) => {
+        const f = viewField(f0);   /* ★W411：中文/范围/单位/分组都以指南为准 */
         if (f.id === 'snapTime') return;   /* 已在块头 */
         const cell = (profile.stats || {})[f.id]
             || ((profile.static || {})[f.id] ? { value: profile.static[f.id], comment: '' } : null);
@@ -1562,8 +1564,8 @@ function tabRowsHtml(profile, grp, byGroup) {
     const rows = [];
     activeFields(profile).forEach((f) => {
         if (f.id === 'snapTime') return;   /* ★W344：快照时间放标题栏，不在状态页重复一行 */
-        if ((f.tab || f.group) !== grp) return;
-        const fv = viewField(f);   /* ★W390：中文名/范围/单位以预设指南为准 */
+        const fv = viewField(f);   /* ★W390/W411：中文名/范围/单位/分组都以预设指南为准 */
+        if ((fv.tab || fv.group) !== grp) return;
         const cell = (profile.stats || {})[f.id];
         if (!cell || !fmtVal(fv, cell)) return;
         rows.push({ ord: (typeof f.ord === 'number' ? f.ord : 9999), html: rowHtml(fv, cell) });
@@ -1661,7 +1663,16 @@ export function nsfwRenderCard(name, profile) {
     panels.className = 'yw-nsfw-panels';
 
     const tabs = [];
-    GROUP_ORDER.forEach((grp) => {
+    /* ★W411：分页先走内置顺序，再把指南里新造的分组补上（否则把字段挪到新组会从卡上消失） */
+    const tabGroups = GROUP_ORDER.slice();
+    try {
+        activeFields(profile).forEach((f) => {
+            const fv = viewField(f);
+            const g0 = String(fv.tab || fv.group || '').trim();
+            if (g0 && tabGroups.indexOf(g0) < 0) tabGroups.push(g0);
+        });
+    } catch (eT) { }
+    tabGroups.forEach((grp) => {
         /* ★W325：「开发」组改成普通计数行（旧的 部位×等级/经验/变化 表已随字段删除） */
         const html = tabRowsHtml(profile, grp, byGroup);
         if (html) tabs.push({ id: grp, label: grp, html: html });
@@ -1943,7 +1954,9 @@ function bindCardEdit(wrap, name, profile) {
             if (mesid0 != null && changes.length) nsfwEditFloor(chatId, Number(mesid0), name, changes);
         } catch (e) { }
         const mesid = wrap.dataset.mesid;
-        if (mesid != null) setTimeout(() => { try { nsfwMountToMessage(Number(mesid)); } catch (e) { } }, 30);
+        /* ★W411：同样重挂全部（编辑只改了当前楼，但酒馆可能整页重刷） */
+        setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, 30);
+        setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, 300);
     });
 }
 /** ★W362：编辑卡片后写回楼层块（值/评述），并同步 swipes + 存盘 + 重渲染 */
@@ -2011,10 +2024,10 @@ export function nsfwEditFloor(chatId, mesid, name, changes) {
             const chatEl = document.querySelector(".mes[mesid=\"" + mesid + "\"] .mes_text");
             if (chatEl && ctx.messageFormatting) {
                 chatEl.innerHTML = ctx.messageFormatting(next, msg.name || "", false, false, mesid);
-                nsfwMountToMessage(mesid);
-            } else {
-                nsfwMountToMessage(mesid);
             }
+            /* ★W411：saveChat 可能让酒馆整页重渲染（其它楼的卡一起没）——重挂全部楼层的卡，不只当前楼 */
+            nsfwReattachAll();
+            setTimeout(() => { try { nsfwReattachAll(); } catch (e2) { } }, 200);
         } catch (e) { }
         return true;
     } catch (e) { return false; }
