@@ -895,12 +895,13 @@ export function nsfwStateFromMsgs(msgs) {
 export function nsfwBuildSend(chatId, names, msgs, opts) {
     try {
         const { bucket } = nsfwBucket(chatId);
-        /* ★W330：优先用「这次请求带的历史」重建（重roll/新分支时那一楼不在里面）；没有就退回缓存档案 */
+        /* ★W343：给了 msgs 就只认「这次请求带的历史」——正在重roll/新分支的那一楼不在里面，
+           绝不能拿它（或缓存里的旧值）当状态；只有没给 msgs（预览等）才退回缓存档案 */
         const live = Array.isArray(msgs) ? nsfwStateFromMsgs(msgs) : null;
         const parts = ['【状态栏 · 当前状态】'];
         (names || []).forEach((n) => {
-            /* AUTO 时 live 为准（正在重roll/新分支的那一楼不在 msgs 里，不能拿它的旧值）；手动勾选才允许回退缓存档案 */
-            const prof = (live && live.chars[n]) || (((!(opts && opts.liveOnly))) ? bucket.chars[n] : null);
+            const prof = live ? (live.chars[n] || null) : bucket.chars[n];
+            if (!prof) return;
             const b = buildCharBlock(n, prof);
             if (b) parts.push(b);
         });
