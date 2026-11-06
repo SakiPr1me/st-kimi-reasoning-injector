@@ -1063,6 +1063,7 @@ function rowHtml(f, cell) {
     const c = '<td class="yw-nsfw-c">' + (cell.comment ? esc(cell.comment) : '') + '</td>';
     /* ★W345：四列固定 —— 字段 | 条 | 值 | 评述；条在左、值在右，值尽量不换行（放不下省略号，悬停看全文） */
     const valTxt = esc(withUnit(f, val));
+    const wrapCls = (String(withUnit(f, val)).length > 22) ? ' wrap' : '';   /* ★W348：长值才折行，短值不换行 */
     const bTd = (f.type === 'num' && !f.noBar)
         ? (() => {
             const n = Number(cell.value);
@@ -1072,8 +1073,8 @@ function rowHtml(f, cell) {
         })()
         : '<td class="b"></td>';
     return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
+        + '<td class="v' + (f.type === 'num' ? ' num' : '') + wrapCls + '" title="' + valTxt + '">' + valTxt + '</td>'
         + bTd
-        + '<td class="v' + (f.type === 'num' ? ' num' : '') + '" title="' + valTxt + '">' + valTxt + '</td>'
         + c + '</tr>';
 }
 
@@ -1360,7 +1361,7 @@ const CSS = [
     '.yw-nsfw-panel.on{display:block}',
     /* ★W346：这行原来是给 div 布局写的 flex —— 套在 <tr> 上会把 td 变成 block，列宽全失效（值被挤成一字一行）。tr 上只留行距。 */
     '.yw-nsfw-row{line-height:1.45}',
-    '.yw-nsfw-row .k{flex:0 0 9.6em;opacity:.7;font-size:.84em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.yw-nsfw-row .k{opacity:.7;font-size:.84em;white-space:nowrap}',   /* ★W348：标题不再省略 */
     '.yw-nsfw-row .bar{flex:0 0 4.6em;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden;align-self:center}',
     '.yw-nsfw-row .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
     '.yw-nsfw-row .v{flex:0 0 2.2em;text-align:right;font-variant-numeric:tabular-nums;font-size:.86em}',
@@ -1369,12 +1370,13 @@ const CSS = [
     '.yw-nsfw-viewrow{padding:3px 2px;font-size:.86em;line-height:1.55;font-style:italic;opacity:.9}',
     '.yw-nsfw-viewrow .lbl{opacity:.55;font-style:normal;margin-right:6px}',
     '.yw-nsfw-empty{padding:10px;opacity:.6;font-size:.86em}',
-    '.yw-nsfw-tbl{width:100%;border-collapse:collapse;font-size:.86em;margin:2px 0;table-layout:fixed}',
+    '.yw-nsfw-tbl{width:100%;border-collapse:collapse;font-size:.86em;margin:2px 0;table-layout:auto}',
     '.yw-nsfw-tbl thead th{opacity:.45;font-weight:500;font-size:.9em;padding:2px 4px;text-align:left;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent)}',
-    '.yw-nsfw-tbl tbody th{width:7em;font-weight:500;opacity:.72;padding:2px 4px;text-align:left;white-space:nowrap;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
+    '.yw-nsfw-tbl tbody th{font-weight:500;opacity:.72;padding:2px 8px 2px 4px;text-align:left;white-space:nowrap;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
     '.yw-nsfw-tbl td{padding:2px 4px;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent);vertical-align:middle}',
-    '.yw-nsfw-tbl td.v{width:34%;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.35}',
-    '.yw-nsfw-tbl td.v.num{text-align:right;font-variant-numeric:tabular-nums}',
+    '.yw-nsfw-tbl td.v{white-space:nowrap;line-height:1.35}',
+    '.yw-nsfw-tbl td.v.num{font-variant-numeric:tabular-nums}',
+    '.yw-nsfw-tbl td.v.wrap{white-space:normal;overflow-wrap:anywhere}',
     '.yw-nsfw-tbl td.v:empty{min-height:1em}',
     '.yw-nsfw-tbl td.b{width:4.8em;padding-left:2px;padding-right:6px}',
     '.yw-nsfw-tbl td.b .bar{display:block;width:100%;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden}',
@@ -1396,7 +1398,7 @@ const CSS = [
     '#yw-nsfw-preview .yw-nsfw-pv-hd{display:flex;align-items:center;justify-content:space-between;font-weight:600;margin-bottom:6px;padding:0 2px}',
     '#yw-nsfw-preview .yw-nsfw-pv-x{cursor:pointer;border:0;background:transparent;color:inherit;opacity:.6;font-size:14px}',
     '#yw-nsfw-preview .yw-nsfw{margin:0}',
-    '@media (max-width:600px){.yw-nsfw-tbl{font-size:.8em}.yw-nsfw-tbl tbody th{width:5.4em}.yw-nsfw-tbl td.b{width:3.2em}.yw-nsfw-tbl td.v{width:34%;white-space:normal;overflow:visible;text-overflow:clip}.yw-nsfw-tbl td.yw-nsfw-c{font-size:.86em}}',
+    '@media (max-width:600px){.yw-nsfw-tbl{font-size:.8em}.yw-nsfw-tbl td.b{width:3.2em}.yw-nsfw-tbl td.v{white-space:normal;overflow-wrap:anywhere}.yw-nsfw-tbl td.yw-nsfw-c{font-size:.86em}}',
     '.yw-nsfw-tbl td.yw-nsfw-c{opacity:.6;font-size:.9em;font-style:italic;text-align:right;overflow-wrap:anywhere}',
     '.yw-nsfw-dev{width:100%;border-collapse:collapse;font-size:.84em;margin:2px 0}',
     '.yw-nsfw-dev th,.yw-nsfw-dev td{padding:3px 4px;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent);text-align:left}',
