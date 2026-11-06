@@ -2082,7 +2082,7 @@ export function nsfwDumpText(chatId) {
 
 const CSS = [
     '.mes_text [data-nsfw]{display:none !important}',
-    'body.yw-nsfw-generating .yw-nsfw{display:none !important}',   /* ★W333 生成期间藏卡 */
+    '.mes.yw-nsfw-hide .yw-nsfw{display:none !important}',   /* ★W407：生成期间只藏正在生成那一楼的卡（前面楼层的照常看） */
     '.mes_text nsfw,.mes_text nsfwdesc{display:none !important}',
     '.yw-nsfw{margin:6px 0 8px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 16%,transparent);border-radius:12px;overflow:hidden;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 3%,transparent);font-size:0.86em}',
     '.yw-nsfw-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:6px 9px;border-bottom:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 10%,transparent);background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 5%,transparent)}',

@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.248'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.249'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -1323,6 +1323,7 @@ setInterval(() => {
     try {
         if (!isGenerating && document.body && document.body.classList.contains('yw-nsfw-generating')) {
             document.body.classList.remove('yw-nsfw-generating');
+            try { nsfwMarkGeneratingFloor(false); } catch (e2) { }
             if (settings.nsfwEnabled) try { nsfwReattachAll(); } catch (e) { }
         }
     } catch (e) { }
@@ -8989,6 +8990,8 @@ eventSource.on(event_types.MESSAGE_RECEIVED, async (id) => {
         if (settings.nsfwCaptureHide === false) return;   /* ★W377：捕捉开关关着 ⇒ 不解析、不换壳、不画卡 */
         /* ★W338：回复已经落地 ⇒ 这一轮不再算「生成中」，立刻取消隐藏（防 ENDED 没来/被下一轮重试覆盖） */
         try { if (document && document.body) document.body.classList.remove('yw-nsfw-generating'); } catch (e) { }
+        try { nsfwMarkGeneratingFloor(false); } catch (e3) { }
+        try { nsfwMarkGeneratingFloor(false); } catch (e) { }
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const msg = ctx && ctx.chat ? ctx.chat[id] : null;
         if (!msg || msg.is_user || msg.is_system) return;
@@ -9348,6 +9351,25 @@ eventSource.on(event_types.MESSAGE_SWIPE_DELETED, () => {
 });
 
 // 新生成开始：清掉流式截断状态、空回状态，防止残留
+/* ★W407：生成期间只藏「这一楼」的卡（以前是 body 级 CSS，把所有楼的卡都藏了） */
+function nsfwMarkGeneratingFloor(on) {
+    try {
+        document.querySelectorAll(".mes.yw-nsfw-hide").forEach((el) => el.classList.remove("yw-nsfw-hide"));
+        if (!on) return;
+        const ctxG = (typeof window !== "undefined" && window.SillyTavern?.getContext) ? SillyTavern.getContext() : null;
+        const chatG = (ctxG && Array.isArray(ctxG.chat)) ? ctxG.chat : [];
+        let gid = chatG.length - 1;
+        if (gid < 0) {
+            const list0 = document.querySelectorAll("#chat .mes[mesid]");
+            if (list0.length) gid = Number(list0[list0.length - 1].getAttribute("mesid"));
+        }
+        if (gid >= 0) {
+            const el0 = document.querySelector('.mes[mesid="' + gid + '"]');
+            if (el0) el0.classList.add("yw-nsfw-hide");
+        }
+    } catch (e) { }
+}
+
 eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     isDryRun = !!dryRun; // ST 提示词查看器 dry-run（Generate 第三个参数）
     if (isDryRun) {
@@ -9441,6 +9463,7 @@ setInterval(() => {
     try {
         if (!isGenerating && document.body && document.body.classList.contains('yw-nsfw-generating')) {
             document.body.classList.remove('yw-nsfw-generating');
+            try { nsfwMarkGeneratingFloor(false); } catch (e2) { }
             if (settings.nsfwEnabled) try { nsfwReattachAll(); } catch (e) { }
         }
     } catch (e) { }
@@ -9478,6 +9501,7 @@ setInterval(() => {
 eventSource.on(event_types.GENERATION_STARTED, () => {
     /* ★W333：生成期间把状态卡藏起来（作者要求：跟其它美化一样，生成完再显示新内容，流式期间不挂着） */
     try { if (document && document.body) document.body.classList.add('yw-nsfw-generating'); } catch (e) { }
+    try { nsfwMarkGeneratingFloor(true); } catch (e) { }   /* ★W407 */
     /* ★W397：切到新分支那一刻就按当前聊天重建 —— 被换掉那一支的名字/状态立刻下架，
        中途停止也不会挂着旧分支的图表（拿到新块后再回来） */
     try { if (settings.nsfwEnabled) { nsfwSyncChat(); nsfwMountSender(); } } catch (e) { }
@@ -9486,12 +9510,15 @@ eventSource.on(event_types.GENERATION_STARTED, () => {
 try {
     eventSource.on(event_types.GENERATION_STOPPED, () => {
         try { if (document && document.body) document.body.classList.remove('yw-nsfw-generating'); } catch (e) { }
+        try { nsfwMarkGeneratingFloor(false); } catch (e3) { }
+        try { nsfwMarkGeneratingFloor(false); } catch (e) { }
         try { if (settings.nsfwEnabled) setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, 300); } catch (e) { }
     });
 } catch (e) { }
 eventSource.on(event_types.GENERATION_ENDED, () => {
     try {
         if (document && document.body) document.body.classList.remove('yw-nsfw-generating');
+        try { nsfwMarkGeneratingFloor(false); } catch (e) { }
         if (settings.nsfwEnabled) [150, 500, 1100].forEach((ms) => setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, ms));
     } catch (e) { }
     lastGenManuallyStopped = false; // 一轮生成彻底结束，清手动停止标记
