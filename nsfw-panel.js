@@ -931,11 +931,10 @@ export function buildCharBlock(name, profile) {
         const ex = profile.extra || {};
         Object.keys(ex).forEach((id) => {
             const e0 = ex[id] || {};
-            /* ★W391：近况这类多行字段逐条发（最多最近 10 条），别压成一行 */
-            if (Array.isArray(e0.list) && e0.list.length) {
-                e0.list.slice(-10).forEach((v) => { const t0 = String(v == null ? "" : v).trim(); if (t0) lines.push(id + '=' + t0); });
-                return;
-            }
+            /* ★W392：近况只给自己看 —— 不发给 AI（否则它会把上一份照抄/拿正文事件重写一遍） */
+            const g0 = nsfwGuideMeta(id) || {};
+            if (id === 'gapLog' || String(e0.group || g0.group || '') === '近况') return;
+            if (Array.isArray(e0.list) && e0.list.length) return;   /* 多行字段一律不发送 */
             const v = String(e0.value == null ? "" : e0.value).trim();
             if (v) lines.push(id + '=' + v);
         });
