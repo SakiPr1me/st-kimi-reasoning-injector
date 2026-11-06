@@ -10,7 +10,7 @@ import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
-import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwSetGuide, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 
 
@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.247'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.248'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -2329,49 +2329,16 @@ function applyRequestInjections(bodyObj) {
 
         // 1.3) ★W325：NSFW 状态栏 —— 楼层里的旧块不重复发给 AI（不越滚越大）；按悬浮窗模式发送"最新读数"
         /* ★W336：状态栏是独立功能，不受工具箱总开关影响（否则总开关关着时：生成后不解析→无卡、悬浮窗无档案） */
-        if (settings.nsfwEnabled && settings.nsfwCaptureHide !== false && settings.nsfwSenderEnabled !== false && msgs && msgs.length) {   /* ★W379：不捕捉就没有快照，也就没什么可发 */
+        /* ★W403：只要「捕捉」开着，历史里的状态块就剥掉（总开关关/发送窗关也一样 ——
+           他的口径是"不启用/不发送时，AI 不该拿到这些状态"）。三闸全开才注入最新状态。 */
+        if (settings.nsfwCaptureHide !== false && msgs && msgs.length) {
             try {
-                /* ★W400（真 BUG）：**先按原始历史拼好要发的状态，再剥旧块**。
-                   原来先剥后拼 ⇒ buildSend 从"已经被剥干净的 msgs"重建状态 ⇒ 永远读到空 ⇒ 什么状态都发不出去
-                   （作者实机：AI 思维链里说"前文没有这个快照"）。顺序反了，一行都不能省。 */
-                const nsfwChatId0 = nsfwChatId();
-                const sendNames = nsfwPickForRequest(nsfwChatId0, msgs);
-                const sendText0 = sendNames.length ? nsfwBuildSend(nsfwChatId0, sendNames, msgs) : '';
-                /* ①历史楼层里我们自己换过外壳的块不进请求（你的正则也可以再兜一层） */
-                for (let i = 0; i < msgs.length; i++) {
-                    const mm0 = msgs[i];
-                    if (!mm0 || typeof mm0.content !== 'string') continue;
-                    if (mm0.role !== 'assistant') continue;
-                    if (mm0.content.indexOf('data-nsfw') < 0 && mm0.content.indexOf('<nsfw') < 0) continue;   /* ★W379：没捕捉成 div 的裸块也剥，别把原文塞进请求 */
-                    if (mm0.content.indexOf('nsfw_state_guide') >= 0) continue;
-                    const stripped = nsfwStripBlocks(mm0.content);
-                    if (stripped !== mm0.content) { mm0.content = stripped; changed = true; }
-                }
-                /* ②插入已经拼好的状态（选人/拼块都在剥之前完成） */
-                if (sendNames.length) {
-                    const sendText = sendText0;
-                    if (sendText) {
-                        /* ★W364：插在 </nsfw_state_guide> 上面（预设里那段指南的收尾标签前），找不到退回第一条 system 最前面 */
-                        let sys0 = null, at = -1;
-                        for (let i = 0; i < msgs.length; i++) {
-                            if (!msgs[i] || msgs[i].role !== 'system' || typeof msgs[i].content !== 'string') continue;
-                            const k = msgs[i].content.indexOf('</nsfw_state_guide>');
-                            if (k >= 0) { sys0 = msgs[i]; at = k; break; }
-                        }
-                        if (sys0) {
-                            const c0 = sys0.content;
-                            sys0.content = c0.slice(0, at) + sendText + String.fromCharCode(10) + c0.slice(at);
-                        } else {
-                            for (let i = 0; i < msgs.length; i++) {
-                                if (msgs[i] && msgs[i].role === 'system' && typeof msgs[i].content === 'string') { sys0 = msgs[i]; break; }
-                            }
-                            if (sys0) sys0.content = sendText + String.fromCharCode(10, 10) + sys0.content;
-                            else msgs.unshift({ role: 'system', content: sendText });
-                        }
-                        /* 一次性追加的人，发完就清（下一轮回到纯 AUTO） */
-                        try { nsfwClearSendOnce(nsfwChatId()); } catch (e) { }
-                        changed = true;
-                    }
+                if (settings.nsfwEnabled && settings.nsfwSenderEnabled !== false) {
+                    /* ★W401：拼状态 / 剥旧块 / 插 system 全在模块那一个函数里（顺序：先拼后剥） */
+                    const nsfwReq = nsfwRewriteRequest(msgs, nsfwChatId());
+                    if (nsfwReq.changed) changed = true;
+                } else {
+                    if (nsfwStripHistory(msgs)) changed = true;
                 }
             } catch (e) { /* 状态栏失败绝不拖垮注入 */ }
         }
@@ -9111,7 +9078,14 @@ function bindNsfwCard() {
     $en.on("change", function () {
         settings.nsfwEnabled = $(this).is(":checked");
         saveSettingsDebounced();
-        try { if (settings.nsfwEnabled) { nsfwReattachAll(); nsfwMountSender(); nsfwStartObserver(); } else { nsfwMountSender(); } } catch (e) { }
+        try {
+            if (settings.nsfwEnabled) { nsfwReattachAll(); nsfwMountSender(); nsfwStartObserver(); }
+            else {
+                /* ★W404：关掉就不要再画画了 —— 已挂出来的卡一并摘掉 */
+                document.querySelectorAll(".yw-nsfw").forEach((n) => n.remove());
+                nsfwMountSender();
+            }
+        } catch (e) { }
     });
     $("#" + extensionName + "_nsfw_fullcount").on("change", function () {
         settings.nsfwFullCount = Math.max(1, Math.min(3, Number($(this).val()) || 2));
@@ -9157,6 +9131,20 @@ function bindNsfwCard() {
         settings.nsfwCaptureHide = $(this).is(":checked");
         saveSettingsDebounced();
         try { if (settings.nsfwCaptureHide) nsfwReattachAll(); } catch (e) { }
+        /* ★W402：关掉捕捉 ⇒ 把卡摘掉并把现有消息重渲染一遍（钩子按新开关放行原文） */
+        try {
+            if (settings.nsfwCaptureHide === false) {
+                document.querySelectorAll(".yw-nsfw").forEach((n) => n.remove());
+                const ctxR0 = (window.SillyTavern && SillyTavern.getContext) ? SillyTavern.getContext() : null;
+                const chatR0 = (ctxR0 && Array.isArray(ctxR0.chat)) ? ctxR0.chat : [];
+                chatR0.forEach((m0, i0) => {
+                    if (!m0 || m0.is_user || m0.is_system) return;
+                    const txt0 = String(m0.mes || '');
+                    if (txt0.indexOf("<nsfw") < 0 && txt0.indexOf("data-nsfw") < 0) return;
+                    if (typeof reRenderMessage === "function") { try { reRenderMessage(i0); } catch (e1) { } }
+                });
+            }
+        } catch (e2) { }
         syncSenderEnabled();
     });
     const $senderOn = $("#" + extensionName + "_nsfw_sender");
@@ -9279,11 +9267,25 @@ function bindNsfwCard() {
         const name = String($(this).attr('data-cedit-save') || '');
         const box = document.getElementById(extensionName + '_nsfw_char_editor');
         if (!box) return;
+        const changes0 = [];
         box.querySelectorAll('[data-v]').forEach((el) => {
             const id = el.getAttribute('data-v');
             const c = box.querySelector('[data-c="' + id + '"]');
             nsfwSetStat(chatId(), name, id, el.value, c ? c.value : '');
+            changes0.push({ id: id, value: el.value, comment: c ? c.value : '' });
         });
+        /* ★W404：编辑器改的值也要写回楼层块 —— 只写缓存的话下一次重建就被楼层覆盖（看起来"改了没生效"） */
+        try {
+            const ctxEd = (window.SillyTavern && SillyTavern.getContext) ? SillyTavern.getContext() : null;
+            const chatEd = (ctxEd && Array.isArray(ctxEd.chat)) ? ctxEd.chat : [];
+            for (let ie = chatEd.length - 1; ie >= 0; ie--) {
+                const me = chatEd[ie];
+                if (!me || me.is_user || me.is_system) continue;
+                const te = String(me.mes || '');
+                if (!te || te.indexOf(name) < 0) continue;
+                if (nsfwEditFloor(chatId(), ie, name, changes0)) break;
+            }
+        } catch (eEd) { }
         box.innerHTML = '';
         box.removeAttribute('data-name');
         try { nsfwReattachAll(); } catch (e) { }

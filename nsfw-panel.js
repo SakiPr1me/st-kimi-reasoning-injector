@@ -431,7 +431,7 @@ function activeFields(profile) {
 /** ★W391：模型偷懒写「未知」时，不拿它覆盖已有的值（相当于没更新） */
 function isUnknownish(v) {
     const t = String(v == null ? '' : v).trim();
-    return /^(未知|不详|未记录|无记录|未知。?|不清楚|不确定)$/.test(t);
+    return /^(未知|不详|未记录|无记录|未知。?|不清楚|不确定|n\/a|n\.a\.?|na)$/i.test(t);
 }
 function clampNum(f, v) {
     let n = Number(v);
@@ -559,7 +559,9 @@ export function nsfwDeleteCustomField(id) {
 
 export function splitValueComment(raw) {
     const s = String(raw || '').trim();
-    const bar = s.indexOf('|');
+    let bar = s.indexOf('|');
+    const barF = s.indexOf('｜');
+    if (bar < 0 || (barF >= 0 && barF < bar)) bar = barF;   /* ★W404：全角竖线也算 */
     if (bar >= 0) return { value: s.slice(0, bar).trim(), comment: s.slice(bar + 1).trim() };
     const m = s.match(/^(.*?)[（(]([^（）()]*)[）)]\s*$/);
     if (m) return { value: m[1].trim(), comment: m[2].trim() };
@@ -702,7 +704,13 @@ export function nsfwParse(text) {
         /* ★W318：<nsfw> 没写 name ⇒ 从第一行「角色名 字段 = 值」里认 */
         if (!name) {
             const nm = /^[ \t]*([^\s=:：]{1,12})[ \t]+\S+[ \t]*=/m.exec(body0);
-            if (nm && nm[1] !== 'name') name = nm[1];
+            if (nm && nm[1] !== 'name') {
+                name = nm[1];
+                /* ★W405：把行首那个名字摘掉（否则 `夏茵 stamina = 42` 会把「夏茵」当成一个自定义字段） */
+                const lineStart0 = nm.index;
+                const line0 = body0.slice(lineStart0);
+                body0 = body0.slice(0, lineStart0) + line0.replace(name, '');
+            }
         }
         if (!name) continue;
         const c = ensure(name);
@@ -811,6 +819,8 @@ function applyParsedTo(bucket, parsed) {
             const f = viewField(f0);   /* ★W390：范围以指南为准 */
             const item = mm[id] || {};
             let value = item.value;
+            /* ★W405：空值/纯空白 = 没更新（否则数值会被 Number('') 变成 0、文本被清空） */
+            if (String(value == null ? '' : value).trim() === '') return;
             if (f.type === 'num') {
                 const n = clampNum(f, value);
                 if (n === null) return;
@@ -887,6 +897,10 @@ export function nsfwRebuildFromChat(chatId, chat) {
                 return;
             }
             next.chars[n].static = JSON.parse(JSON.stringify(old.static || {}));
+            /* ★W404：手填档案的三件套也保留（以前只拷 static ⇒ 出过块就变回 女/受、manual 丢失、删楼即消失） */
+            if (old.manual) next.chars[n].manual = true;
+            if (old.sex) next.chars[n].sex = old.sex;
+            if (old.role) next.chars[n].role = old.role;
         });
         all[key] = next;
         writeAll(all);
@@ -1192,6 +1206,7 @@ export function nsfwAutoPicks(chatId, msgs) {
         const live = nsfwStateFromMsgs(msgs);
         const names = (bucket.order || []).filter((n) => bucket.chars[n]);
         Object.keys(live.chars).forEach((n) => { if (names.indexOf(n) < 0) names.push(n); });
+        /* 块里的 `name 角色名 = X` 也算“这一楼有她”——她刚在这楼出过场，状态要继续发（否则正文用代词时状态会断）。 */
         const lastA = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') return aiContent(String(msgs[i].content || '')); } return ''; })();
         const lastU = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'user') return realUserInput(String(msgs[i].content || '')); } return ''; })();
         const text = lastA + String.fromCharCode(10) + lastU;
@@ -1220,10 +1235,6 @@ export function nsfwPickForRequest(chatId, msgs) {
         const union = base.filter((n) => off.indexOf(n) < 0);
         once.forEach((n) => { if (union.indexOf(n) < 0 && off.indexOf(n) < 0) union.push(n); });
         return union;
-        const lastA = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') return aiContent(String(msgs[i].content || '')); } return ''; })();
-        const lastU = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'user') return realUserInput(String(msgs[i].content || '')); } return ''; })();
-        const text = lastA + String.fromCharCode(10) + lastU;
-        return names.filter((n) => n && text.indexOf(n) >= 0);
     } catch (e) { return []; }
 }
 /** 组装发送文本（取的是楼层里最新读出的档案） */
@@ -1257,6 +1268,60 @@ export function nsfwBuildSend(chatId, names, msgs, opts) {
         });
         return parts.length > 1 ? parts.join(NL) : '';
     } catch (e) { return ''; }
+}
+
+/** ★W401：请求侧一条龙 —— 先按**原始历史**拼状态，再剥旧块，最后插进 system。
+ *  顺序是唯一正确的顺序（先剥后拼 ⇒ 状态永远为空，W400 实锤）。index.js 与验收探针共用这一份。 */
+/** ★W403：只剥历史 assistant 楼层里的旧块（总开关关 / 发送悬浮窗关 时也要剥，
+ *  否则 AI 照样能从历史里读到上一个快照 = 等于还在发）。 */
+export function nsfwStripHistory(msgs) {
+    let changed = false;
+    try {
+        if (!Array.isArray(msgs)) return false;
+        for (let i = 0; i < msgs.length; i++) {
+            const m = msgs[i];
+            if (!m || typeof m.content !== 'string') continue;
+            if (m.role !== 'assistant') continue;
+            if (m.content.indexOf('data-nsfw') < 0 && m.content.indexOf('<nsfw') < 0) continue;
+            if (m.content.indexOf('nsfw_state_guide') >= 0) continue;
+            const st = nsfwStripBlocks(m.content);
+            if (st !== m.content) { m.content = st; changed = true; }
+        }
+    } catch (e) { }
+    return changed;
+}
+
+export function nsfwRewriteRequest(msgs, chatId) {
+    const out = { changed: false, names: [], text: '' };
+    try {
+        if (!Array.isArray(msgs) || !msgs.length) return out;
+        /* ① 拼状态：必须在剥块之前（历史里还留着块） */
+        out.names = nsfwPickForRequest(chatId, msgs);
+        out.text = out.names.length ? nsfwBuildSend(chatId, out.names, msgs) : '';
+        /* ② 剥掉历史 assistant 楼层里的旧块（不重复发给 AI） */
+        if (nsfwStripHistory(msgs)) out.changed = true;
+        /* ③ 插到 </nsfw_state_guide> 前；找不到就第一条 system 最前；再没有就 unshift */
+        if (out.text) {
+            let sys0 = null, at = -1;
+            for (let i = 0; i < msgs.length; i++) {
+                if (!msgs[i] || msgs[i].role !== 'system' || typeof msgs[i].content !== 'string') continue;
+                const k = msgs[i].content.indexOf('</nsfw_state_guide>');
+                if (k >= 0) { sys0 = msgs[i]; at = k; break; }
+            }
+            if (sys0) {
+                sys0.content = sys0.content.slice(0, at) + out.text + String.fromCharCode(10) + sys0.content.slice(at);
+            } else {
+                for (let i = 0; i < msgs.length; i++) {
+                    if (msgs[i] && msgs[i].role === 'system' && typeof msgs[i].content === 'string') { sys0 = msgs[i]; break; }
+                }
+                if (sys0) sys0.content = out.text + String.fromCharCode(10, 10) + sys0.content;
+                else msgs.unshift({ role: 'system', content: out.text });
+            }
+            out.changed = true;
+            try { nsfwClearSendOnce(chatId); } catch (e) { }
+        }
+    } catch (e) { }
+    return out;
 }
 
 /** ★W327 悬浮发送条：一条横条（可拖）+ AUTO 勾 + 名字列表；点名字看最新快照 */
@@ -1701,26 +1766,46 @@ export function nsfwRenderCard(name, profile) {
                 maxH = Math.max(maxH, k.scrollHeight);
                 k.style.display = old;
             });
-            if (maxH > 0) { panels.style.minHeight = maxH + 'px'; panels.style.height = maxH + 'px'; }
-            /* ★W394：比最高页矮的分页，空白处补「空行」——每行都和上面一样有一条虚线（作者：要统一） */
+            if (maxH > 0) {
+                /* ★W404：把容器上下 padding 算进去（只给 maxH 会把最高页底部裁掉 8px / 出滚动条） */
+                let padV0 = 8;
+                try {
+                    const cs0 = getComputedStyle(panels);
+                    padV0 = (parseFloat(cs0.paddingTop) || 0) + (parseFloat(cs0.paddingBottom) || 0);
+                } catch (e0) { }
+                panels.style.minHeight = (maxH + padV0) + 'px';
+                panels.style.height = (maxH + padV0) + 'px';
+            }
+            /* ★W394/W406：比最高页矮的分页，空白处补「空行」（和上面一样一条虚线）；
+               分两三轮补 —— 每轮都重新量，直到和最高页齐（最后一块是矮空行，:last-child 去掉底线）。 */
             kids.forEach((k) => {
-                const old = k.style.display;
-                k.style.display = 'block';
-                const used = k.scrollHeight;
-                k.style.display = old;
-                const left = maxH - used;
-                if (left <= 2) return;
-                const rows0 = k.querySelectorAll('.yw-nsfw-row');
-                const sample = rows0.length ? rows0[rows0.length - 1] : null;
-                const rowH = sample ? Math.max(14, Math.round(sample.getBoundingClientRect().height)) : 27;
-                const n = Math.floor(left / rowH);
-                for (let i = 0; i < n; i++) {
-                    const f = document.createElement('div');
-                    f.className = 'yw-nsfw-row yw-nsfw-fill';
-                    f.style.height = rowH + 'px';
-                    k.appendChild(f);
+                for (let pass0 = 0; pass0 < 3; pass0++) {
+                    const old = k.style.display;
+                    k.style.display = 'block';
+                    const used = k.scrollHeight;
+                    /* 行高必须在「显示着」的时候量 —— 先 restore 再量会得到 0 */
+                    const rows0 = k.querySelectorAll('.yw-nsfw-row');
+                    const sample = rows0.length ? rows0[rows0.length - 1] : null;
+                    const rowH = sample ? Math.max(14, Math.round(sample.getBoundingClientRect().height)) : 27;
+                    k.style.display = old;
+                    const left = maxH - used;
+                    if (left <= 2) break;
+                    if (left < rowH) {
+                        /* 不足一行：直接补一块「矮空行」，这一页就齐了 */
+                        const f2 = document.createElement('div');
+                        f2.className = 'yw-nsfw-row yw-nsfw-fill';
+                        f2.style.height = left + 'px';
+                        k.appendChild(f2);
+                        break;
+                    }
+                    const n = Math.floor(left / rowH);
+                    for (let i = 0; i < n; i++) {
+                        const f = document.createElement('div');
+                        f.className = 'yw-nsfw-row yw-nsfw-fill';
+                        f.style.height = rowH + 'px';
+                        k.appendChild(f);
+                    }
                 }
-                /* 余下不足一行的部分留白（不能再有线，否则页底又多一条） */
             });
         } catch (e) { }
     };
@@ -1729,6 +1814,7 @@ export function nsfwRenderCard(name, profile) {
     try { if (typeof requestAnimationFrame === 'function') requestAnimationFrame(lockPanels); } catch (e) { }
     try { setTimeout(lockPanels, 150); } catch (e) { }
     try { setTimeout(lockPanels, 600); } catch (e) { }
+    try { setTimeout(lockPanels, 1200); } catch (e) { }   /* ★W406：字体/排版晚到再锁一次 */
     try { bindCardEdit(wrap, name, profile); } catch (e) { }
     return wrap;
 }
@@ -1844,13 +1930,36 @@ export function nsfwEditFloor(chatId, mesid, name, changes) {
         if (!msg) return false;
         const src = String(msg.mes || '');
         const esc0 = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        let openEnd = -1;
+        let closeIdx = -1;
         const openRe = new RegExp('<(?:div[^>]*data-nsfw="m"[^>]*data-name="' + esc0(name) + '"[^>]*|nsfw\\s+name="' + esc0(name) + '"[^>]*)>', 'i');
         const om = openRe.exec(src);
-        const closeTag = om && om[0].indexOf('div') === 1 ? '</div>' : '</nsfw>';
-        /* 找块的结尾 */
-        const openEnd = om ? om.index + om[0].length : -1;
-        const closeIdx = om ? src.indexOf(closeTag, openEnd) : -1;
-        if (!om || closeIdx < 0) return false;
+        if (om) {
+            openEnd = om.index + om[0].length;
+            const ct0 = om[0].indexOf('div') === 1 ? '</div>' : '</nsfw>';
+            closeIdx = src.indexOf(ct0, openEnd);
+        }
+        /* ★W404：作者新格式是 <nsfw> 无属性 + 块内 `name 角色名 = X` —— 上面那个正则匹配不到，
+           这里按「块体里的 name 行」再找一次（否则卡片编辑静默失败、30ms 后又变回旧值）。 */
+        if (openEnd < 0 || closeIdx < 0) {
+            const reAny = /<(?:div\b[^>]*\bdata-nsfw\s*=\s*"m"[^>]*|nsfw\b[^>]*)>/gi;
+            const nameLine = new RegExp('^[ \\t]*name(?:[ \\t]*[\\u4e00-\\u9fa5]+)?[ \\t]*[=:：][ \\t]*' + esc0(name) + '[ \\t]*$', 'mi');
+            let m2;
+            while ((m2 = reAny.exec(src))) {
+                const isDiv = /^<div/i.test(m2[0]);
+                const ct2 = isDiv ? '</div>' : '</nsfw>';
+                const oe2 = m2.index + m2[0].length;
+                const ci2 = src.indexOf(ct2, oe2);
+                if (ci2 < 0) continue;
+                const body0 = src.slice(oe2, ci2);
+                const hitName = nameLine.test(body0)
+                    || new RegExp('data-name\\s*=\\s*"' + esc0(name) + '"').test(m2[0]);
+                if (!hitName) continue;
+                openEnd = oe2; closeIdx = ci2;
+                break;
+            }
+        }
+        if (openEnd < 0 || closeIdx < 0) return false;
         let body = src.slice(openEnd, closeIdx);
         changes.forEach((ch) => {
             const id = String(ch.id || "");
@@ -1986,7 +2095,7 @@ const CSS = [
     '.yw-nsfw-tab{font:inherit;font-size:.78em;padding:1px 8px;border-radius:999px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 22%,transparent);background:transparent;color:inherit;opacity:.62;cursor:pointer}',
     '.yw-nsfw-tab.on{opacity:1;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent);border-color:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 45%,transparent)}',
     '.yw-nsfw-panels{padding:2px 7px 6px;box-sizing:border-box;overflow-x:hidden}',
-    '.yw-nsfw-panels::after{content:"";display:block;height:1px;margin-top:4px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
+
     '.yw-nsfw-panel{display:none}',
     '.yw-nsfw-panel.on{display:block}',
     /* ★W346：这行原来是给 div 布局写的 flex —— 套在 <tr> 上会把 td 变成 block，列宽全失效（值被挤成一字一行）。tr 上只留行距。 */
@@ -2089,7 +2198,20 @@ export function nsfwProfilesFromText(text) {
             const sex = (meta.sex === 'm' || meta.sex === 'male') ? 'male' : (meta.sex === 'o' || meta.sex === 'other' ? 'other' : 'female');
             const role = (meta.role === 'top') ? 'top' : (meta.role === 'switch' ? 'switch' : 'bottom');
             const stats = {};
-            Object.keys(c.machine || {}).forEach((id) => { stats[id] = c.machine[id]; });
+            /* ★W404：楼里的卡也要过一遍「合并层同款」校验 —— 否则 N/A/未知 会照画、条的宽度变 NaN */
+            Object.keys(c.machine || {}).forEach((id) => {
+                const cell = c.machine[id] || {};
+                const val0 = String(cell.value == null ? '' : cell.value).trim();
+                if (!val0 || isUnknownish(val0)) return;
+                const f = fieldById(id);
+                if (f && f.type === 'num') {
+                    const n = clampNum(f, val0);
+                    if (n === null) return;
+                    stats[id] = { value: n, comment: cell.comment || '' };
+                } else {
+                    stats[id] = cell;
+                }
+            });
             const desc = {};
             Object.keys(c.desc || {}).forEach((id) => { desc[id] = { text: c.desc[id] }; });
             /* ★W396：楼里的卡是从这段文本重拼的 —— 必须把自定义字段（近况/用户加的分组）一起带上，
@@ -2134,7 +2256,13 @@ export function nsfwInstallFormatterHook() {
         if (!fmt || typeof fmt.addHook !== 'function') return false;
         if (window.__ywNsfwFmtHooked) return true;
         fmt.addHook((mes) => {
-            try { return nsfwStripForDisplay(mes); } catch (e) { return mes; }
+            try {
+                /* ★W402：钩子只挂一次 —— 必须**每次格式化时**看当前开关，
+                   否则用户把「捕捉并隐藏」关掉后原文仍然被藏（刷新也不回来）。 */
+                const st = _getSettings() || {};
+                if (st.nsfwCaptureHide === false) return mes;
+                return nsfwStripForDisplay(mes);
+            } catch (e) { return mes; }
         }, { order: 0 });
         window.__ywNsfwFmtHooked = true;
         return true;
@@ -2221,6 +2349,8 @@ export function nsfwMountToMessage(messageId) {
 
         const mesEl = document.querySelector('.mes[mesid="' + messageId + '"]');
         if (!mesEl) return false;
+        /* ★W404：先摘旧卡 —— 新分支没块时也要把上一分支的卡拿掉（不能等后面早退） */
+        mesEl.querySelectorAll('.yw-nsfw').forEach((n) => n.remove());
 
         /* ★W315：卡片只认这一楼自己的块（块就在 mes 里，像 todo/remind 一样跟着楼层走）
            ★W332：没有块就不画 —— 以前会退回「档案里最新状态」，导致新楼/新分支正文里随口提到名字就挂出一张旧卡 */
