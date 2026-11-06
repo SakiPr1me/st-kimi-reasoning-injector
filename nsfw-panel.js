@@ -1373,7 +1373,7 @@ const CSS = [
     '.yw-nsfw-tbl thead th{opacity:.45;font-weight:500;font-size:.9em;padding:2px 4px;text-align:left;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent)}',
     '.yw-nsfw-tbl tbody th{width:7em;font-weight:500;opacity:.72;padding:2px 4px;text-align:left;white-space:nowrap;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
     '.yw-nsfw-tbl td{padding:2px 4px;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent);vertical-align:middle}',
-    '.yw-nsfw-tbl td.v{width:34%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.yw-nsfw-tbl td.v{width:34%;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.35}',
     '.yw-nsfw-tbl td.v.num{text-align:right;font-variant-numeric:tabular-nums}',
     '.yw-nsfw-tbl td.v:empty{min-height:1em}',
     '.yw-nsfw-tbl td.b{width:4.8em;padding-left:2px;padding-right:6px}',
