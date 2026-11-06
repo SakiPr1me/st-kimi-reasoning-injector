@@ -1801,6 +1801,22 @@ export function nsfwProfilesFromText(text) {
     return out;
 }
 /** 隐藏正文里的原始块（显示层不改 mes；块本身留在楼层里，小铅笔能看到） */
+/** ★W380：在「显示层」把 <nsfw> 换成带 data-nsfw 的 div（不碰 mes）——
+ *  现代酒馆有 messageFormatter.addHook（在 DOMPurify 之前跑），用它就不必改写聊天记录。 */
+export function nsfwInstallFormatterHook() {
+    try {
+        if (typeof window === 'undefined' || !window.SillyTavern || !window.SillyTavern.getContext) return false;
+        const ctx = window.SillyTavern.getContext();
+        const fmt = ctx && ctx.messageFormatter;
+        if (!fmt || typeof fmt.addHook !== 'function') return false;
+        if (window.__ywNsfwFmtHooked) return true;
+        fmt.addHook((mes) => {
+            try { return nsfwWrapBlocks(mes); } catch (e) { return mes; }
+        }, { order: 0 });
+        window.__ywNsfwFmtHooked = true;
+        return true;
+    } catch (e) { return false; }
+}
 export function nsfwHideRaw(root) {
     try {
         const host = root || document;
