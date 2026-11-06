@@ -339,26 +339,29 @@ export function calcPregRisk(profile) {
         else if (phase.indexOf('黄体') >= 0) base = 4;
         const condomOn = /是|有/.test(val('condom'));
         const cumFlag = /是|有/.test(val('cumV'));
-        /* ★W356：戴套 = 体内没有精液（作者口径：中出本来就意味着没戴）；只有没戴才按体内精液量加分。
-           精液量来源：阴道液体种类里含「精液」⇒ 记阴道液体量；子宫液体量直接算；写了中出但没填量 ⇒ 按 8ml 兜底 */
-        let semenMl = 0;
+        /* ★W357：作者删了「中出」条目 ⇒ 只看戴套 + 体内精液量；子宫里的精液权重远高于阴道 */
+        let vMl = 0, uMl = 0;
         if (!condomOn) {
-            if (String(val('vFluidKind')).indexOf('精液') >= 0) semenMl += Number(val('vFluidMl')) || 0;
-            semenMl += Number(val('uterusFluidMl')) || 0;
-            if (cumFlag && semenMl <= 0) semenMl = 8;
+            if (String(val('vFluidKind')).indexOf('精液') >= 0) vMl = Number(val('vFluidMl')) || 0;
+            uMl = Number(val('uterusFluidMl')) || 0;
         }
         let bonus = 0;
         if (!condomOn) {
-            if (semenMl >= 30) bonus = 9;
-            else if (semenMl >= 10) bonus = 6;
-            else if (semenMl > 0) bonus = 3;
-            if (cumFlag && bonus < 3) bonus = 3;
+            /* 子宫内（权重高）：>=8ml +10 / >=3ml +7 / >0 +4 */
+            if (uMl >= 8) bonus += 10;
+            else if (uMl >= 3) bonus += 7;
+            else if (uMl > 0) bonus += 4;
+            /* 阴道内（权重低）：>=40ml +4 / >=15ml +3 / >0 +2 */
+            if (vMl >= 40) bonus += 4;
+            else if (vMl >= 15) bonus += 3;
+            else if (vMl > 0) bonus += 2;
+            if (bonus > 14) bonus = 14;
         }
         let risk = base + bonus;
         if (condomOn) risk = base * 0.05;
         risk = Math.max(0, Math.min(100, Math.round(risk)));
         let why = phase || '周期未知';
-        why += condomOn ? ' · 戴套（风险极低）' : (' · 未戴 · 体内精液 ' + Math.round(semenMl) + 'ml');
+        why += condomOn ? ' · 戴套（风险极低）' : (' · 未戴 · 子宫内 ' + Math.round(uMl) + 'ml · 阴道内 ' + Math.round(vMl) + 'ml');
         if (!condomOn && cumFlag) why += ' · 前穴中出';
         return { risk: risk, why: why };
     } catch (e) { return { risk: 0, why: '' }; }
