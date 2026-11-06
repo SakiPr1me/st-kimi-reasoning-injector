@@ -335,7 +335,7 @@ export function calcPregRisk(profile) {
         let base = 2;
         if (phase.indexOf('月经') >= 0) base = 1;
         else if (phase.indexOf('卵泡') >= 0) base = 2;
-        else if (phase.indexOf('排卵') >= 0) base = 15;
+        else if (phase.indexOf('排卵') >= 0) base = 20;   /* ★W358：排卵期基准 15→20 */
         else if (phase.indexOf('黄体') >= 0) base = 4;
         const condomOn = /是|有/.test(val('condom'));
         const cumFlag = /是|有/.test(val('cumV'));
@@ -347,15 +347,15 @@ export function calcPregRisk(profile) {
         }
         let bonus = 0;
         if (!condomOn) {
-            /* 子宫内（权重高）：>=8ml +10 / >=3ml +7 / >0 +4 */
-            if (uMl >= 8) bonus += 10;
-            else if (uMl >= 3) bonus += 7;
-            else if (uMl > 0) bonus += 4;
+            /* 子宫内（权重最高）：>=8ml +14 / >=3ml +9 / >0 +5 */
+            if (uMl >= 8) bonus += 14;
+            else if (uMl >= 3) bonus += 9;
+            else if (uMl > 0) bonus += 5;
             /* 阴道内（权重低）：>=40ml +4 / >=15ml +3 / >0 +2 */
             if (vMl >= 40) bonus += 4;
             else if (vMl >= 15) bonus += 3;
             else if (vMl > 0) bonus += 2;
-            if (bonus > 14) bonus = 14;
+            if (bonus > 18) bonus = 18;
         }
         let risk = base + bonus;
         if (condomOn) risk = base * 0.05;
