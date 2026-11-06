@@ -1281,7 +1281,7 @@ export function nsfwRenderCard(name, profile) {
     head.innerHTML = '<button type="button" class="yw-nsfw-copy-btn" title="复制全部内容">⧉</button>'
         + '<button type="button" class="yw-nsfw-edit-btn" title="编辑这张卡">✎</button>'
         + '<span class="nm">' + esc(name) + '</span>'
-        + '<span class="tag">' + sexTxt + '</span>';   /* ★W369：去掉「受」标签——快照本来就只写被进入方 */
+        + '<span class="tag">' + sexTxt + '</span>'   /* ★W369：去掉「受」标签——快照本来就只写被进入方 */
         + (g('snapTime') ? '<span class="kv yw-nsfw-snaptime">⏱ ' + esc(g('snapTime')) + '</span>' : '')
         + '<span class="kv">理智 ' + esc(g('sanity') == null ? '-' : g('sanity')) + '</span>'
         + '<span class="kv">欲望 ' + esc(g('libido') == null ? '-' : g('libido')) + '</span>'
