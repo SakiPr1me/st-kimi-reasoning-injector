@@ -347,15 +347,20 @@ export function calcPregRisk(profile) {
         }
         let bonus = 0;
         if (!condomOn) {
-            /* 子宫内（权重最高）：>=8ml +14 / >=3ml +9 / >0 +5 */
-            if (uMl >= 8) bonus += 14;
-            else if (uMl >= 3) bonus += 9;
-            else if (uMl > 0) bonus += 5;
-            /* 阴道内（权重低）：>=40ml +4 / >=15ml +3 / >0 +2 */
-            if (vMl >= 40) bonus += 4;
-            else if (vMl >= 15) bonus += 3;
+            /* ★W359：作者定稿档位（子宫按 30/80/200 跳档，阴道每 20ml 加一档） */
+            if (uMl > 200) bonus += 30;
+            else if (uMl > 80) bonus += 14;
+            else if (uMl > 30) bonus += 9;
+            else if (uMl > 0) bonus += 4;
+            if (vMl > 160) bonus += 10;
+            else if (vMl > 140) bonus += 9;
+            else if (vMl > 120) bonus += 8;
+            else if (vMl > 100) bonus += 7;
+            else if (vMl > 80) bonus += 6;
+            else if (vMl > 60) bonus += 5;
+            else if (vMl > 40) bonus += 4;
+            else if (vMl > 20) bonus += 3;
             else if (vMl > 0) bonus += 2;
-            if (bonus > 18) bonus = 18;
         }
         let risk = base + bonus;
         if (condomOn) risk = base * 0.05;
