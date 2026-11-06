@@ -1650,7 +1650,7 @@ export function nsfwEditFloor(chatId, mesid, name, changes) {
 /** 示例填充：给当前聊天塞一个全字段角色，方便先看效果 */
 export function nsfwFillDemo(chatId, name) {
     try {
-        const n = String(name || '夏海');
+        const n = String(name || '');
         nsfwEnsure(chatId, n, 'female', 'bottom');
         nsfwApplyStatic(chatId, n, [
             '罩杯/胸肌: C 罩杯', '胸型: 水滴形', '乳头长: 1.2cm', '乳头宽: 0.8cm', '乳晕直径: 3.5cm',

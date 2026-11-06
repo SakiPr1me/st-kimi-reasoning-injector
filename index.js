@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.233'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.234'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -589,10 +589,10 @@ const UI = {
         dblSave: "保存",
         dblEditLabel: "双击正文直接改字",
         nsfwTitle: "状态栏（NSFW）", nsfwEnable: "启用状态栏（每轮画卡+注入）",
-        nsfwHint: "开启后：每轮把「在场角色状态 + 更新规则 + 输出协议」注入提示词，AI 在正文末尾回两段（数值带官能评述 + 他人视线），插件解析后把原文剥掉、在消息里画成卡片。默认关。",
+        nsfwHint: "将已有状态快照画卡，并注入提示词中",
         nsfwFullCount: "在场全量人数：", nsfwAllFields: "注入全部字段（更细但更费 token）",
         nsfwRoster: "角色名册", nsfwNewName: "角色名", nsfwAdd: "＋ 建档", nsfwRemove: "删",
-        nsfwCaptureHide: "捕捉并隐藏NSFW状态栏", nsfwCaptureHideHint: "", nsfwSenderToggle: "发送悬浮窗", nsfwSenderHint: "右下角那条小横条：勾谁就发谁；AUTO 会按上一楼正文 / 你输入的正文自动判定，勾/取消都只影响这一轮。", nsfwPeekList: "当前聊天（点名字看状态）", nsfwAutoHint: "自动：正文里出现谁就发谁",
+        nsfwCaptureHide: "捕捉并隐藏NSFW状态栏", nsfwCaptureHideHint: "", nsfwSenderToggle: "发送悬浮窗", nsfwSenderHint: "新增一个悬浮框，选谁就将谁的状态快照发送；AUTO 为上一轮正文 + 用户发送里有谁的名字，就帮你勾选并发送谁，也可在悬浮窗手动勾选（勾/取消只影响这一轮）。", nsfwPeekList: "当前聊天（点名字看状态）", nsfwAutoHint: "自动：正文里出现谁就发谁",
         nsfwInjectMode: "每轮注入", nsfwInjectFull: "完整（规则 + 状态 + 协议）", nsfwInjectState: "仅当前状态（规则/格式在预设里）", nsfwInjectOff: "不注入（状态只看楼层）",
         nsfwRules: "更新规则（每行一条，注入时按顺序发出）", nsfwPreview: "预览本轮注入", nsfwPeek: "看快照", nsfwDemo: "示例填充（先看效果）", nsfwDump: "查看/复制全部状态",
         nsfwNoChars: "还没有角色，先在上面建档。",
@@ -9291,11 +9291,6 @@ function bindNsfwCard() {
         } catch (e) { }
     });
     renderFields();
-    $('#' + extensionName + '_nsfw_demo').off('click.kimiNsfwDemo').on('click.kimiNsfwDemo', function () {
-        try { nsfwFillDemo(chatId(), '夏海'); } catch (e) { }
-        try { renderRoster(); } catch (e) { }
-        try { nsfwReattachAll(); } catch (e) { }
-    });
 
     renderRoster();
 }
