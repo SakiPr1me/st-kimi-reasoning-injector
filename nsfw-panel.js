@@ -72,7 +72,7 @@ export const NSFW_FIELDS = [
     { id: 'vLoose', group: '前穴', label: '松弛度', type: 'num', min: 0, max: 100, core: true, ord: 25 },
     { id: 'stGDepth', group: '前穴', label: 'G点深度', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 30, noBar: true },
     { id: 'stCervixDepth', group: '前穴', label: '子宫口深度', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 35, noBar: true },
-    { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', options: ['紧闭', '红肿', '受迫挤压宫壁', '微开', '全开'], core: true, ord: 40 },
+    { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', options: ['紧闭', '红肿', '受迫位移', '微开', '全开'], core: true, ord: 40 },
     { id: 'vFluidKind', group: '前穴', label: '阴道液体种类', type: 'text', core: true, ord: 45 },
     { id: 'vFluidMl', group: '前穴', label: '阴道液体量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 50, noBar: true },
     { id: 'uterusFluidMl', group: '前穴', label: '子宫液体量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 55, noBar: true },
