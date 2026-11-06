@@ -735,7 +735,7 @@ export function buildCharBlock(name, profile) {
             || ((profile.static || {})[f.id] ? { value: profile.static[f.id], comment: '' } : null);
         const val = cell ? fmtVal(f, cell) : '';
         if (!val) return;
-        lines.push(f.id + '=' + val + (cell.comment ? '|' + cell.comment : ''));
+        lines.push(f.id + '=' + val);   /* ★W364：评述不发送（省 token；快照里仍然有） */
     });
     if (!lines.length) return '';
     const preg = calcPregRisk(profile);
@@ -861,6 +861,7 @@ export function buildInjection(chatId, opts) {
 /* ────────────────────────── 发送给 AI（悬浮窗选人） ────────────────────────── */
 
 const SEND_KEY = 'kimi_nsfw_send';
+const SEND_ONCE_KEY = 'kimi_nsfw_send_once';
 function readSend() {
     try {
         const raw = localStorage.getItem(SEND_KEY);
@@ -888,7 +889,51 @@ export function nsfwSetSendPick(chatId, name, on) {
         localStorage.setItem(SEND_KEY, JSON.stringify(all));
     } catch (e) { }
 }
-/** 本轮该发送谁：off=不发送；manual=勾选的；auto=上一楼 AI 正文或用户楼层里出现过的名字 */
+/** ★W364：AUTO 下手动追加的一次性名单（发完即清） */
+export function nsfwSendOnce(chatId) {
+    try {
+        const raw = localStorage.getItem(SEND_ONCE_KEY);
+        const all = raw ? (JSON.parse(raw) || {}) : {};
+        const k = String(chatId || 'default');
+        return Array.isArray(all[k]) ? all[k].slice() : [];
+    } catch (e) { return []; }
+}
+export function nsfwSetSendOnce(chatId, name, on) {
+    try {
+        const raw = localStorage.getItem(SEND_ONCE_KEY);
+        const all = raw ? (JSON.parse(raw) || {}) : {};
+        const k = String(chatId || 'default');
+        const list = Array.isArray(all[k]) ? all[k].slice() : [];
+        const i = list.indexOf(name);
+        if (on && i < 0) list.push(name);
+        if (!on && i >= 0) list.splice(i, 1);
+        all[k] = list;
+        localStorage.setItem(SEND_ONCE_KEY, JSON.stringify(all));
+    } catch (e) { }
+}
+export function nsfwClearSendOnce(chatId) {
+    try {
+        const raw = localStorage.getItem(SEND_ONCE_KEY);
+        const all = raw ? (JSON.parse(raw) || {}) : {};
+        const k = String(chatId || 'default');
+        delete all[k];
+        localStorage.setItem(SEND_ONCE_KEY, JSON.stringify(all));
+    } catch (e) { }
+}
+/** AUTO 这一轮会发谁（只看正文/用户消息里出现过的名字） */
+export function nsfwAutoPicks(chatId, msgs) {
+    try {
+        const { bucket } = nsfwBucket(chatId);
+        const live = nsfwStateFromMsgs(msgs);
+        const names = (bucket.order || []).filter((n) => bucket.chars[n]);
+        Object.keys(live.chars).forEach((n) => { if (names.indexOf(n) < 0) names.push(n); });
+        const lastA = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') return String(msgs[i].content || ''); } return ''; })();
+        const lastU = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'user') return String(msgs[i].content || ''); } return ''; })();
+        const text = lastA + String.fromCharCode(10) + lastU;
+        return names.filter((n) => n && text.indexOf(n) >= 0);
+    } catch (e) { return []; }
+}
+/** 本轮该发送谁：AUTO=正文提到的人 + 手动一次性追加；手动=勾选的 */
 export function nsfwPickForRequest(chatId, msgs) {
     try {
         const st = _getSettings() || {};
@@ -903,6 +948,12 @@ export function nsfwPickForRequest(chatId, msgs) {
             const picks = nsfwSendPicks(chatId);
             return names.filter((n) => picks.indexOf(n) >= 0);
         }
+        /* AUTO：正文命中的 ∪ 手动追加 */
+        const base = nsfwAutoPicks(chatId, msgs);
+        const once = nsfwSendOnce(chatId);
+        const union = base.slice();
+        once.forEach((n) => { if (union.indexOf(n) < 0) union.push(n); });
+        return union;
         const lastA = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') return String(msgs[i].content || ''); } return ''; })();
         const lastU = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'user') return String(msgs[i].content || ''); } return ''; })();
         const text = lastA + String.fromCharCode(10) + lastU;
@@ -928,12 +979,15 @@ export function nsfwBuildSend(chatId, names, msgs, opts) {
         /* ★W343：给了 msgs 就只认「这次请求带的历史」——正在重roll/新分支的那一楼不在里面，
            绝不能拿它（或缓存里的旧值）当状态；只有没给 msgs（预览等）才退回缓存档案 */
         const live = Array.isArray(msgs) ? nsfwStateFromMsgs(msgs) : null;
-        const parts = ['【状态栏 · 当前状态】'];
+        const parts = [];
         (names || []).forEach((n) => {
             const prof = live ? (live.chars[n] || null) : bucket.chars[n];
             if (!prof) return;
             const b = buildCharBlock(n, prof);
-            if (b) parts.push(b);
+            if (!b) return;
+            const t0 = String(((prof.stats || {}).snapTime || {}).value || '');
+            parts.push('以下是' + n + (t0 ? '于' + t0 : '') + '的NSFW状态快照（出于省token需求评述不作为提示词发送，不代表没有），如进入NSFW剧情则按照以上要求综合剧情与推理完整更新（不进入则不输出）：');
+            parts.push(b);
         });
         return parts.length > 1 ? parts.join(NL) : '';
     } catch (e) { return ''; }
@@ -1041,8 +1095,18 @@ export function nsfwMountSender() {
             const pos = JSON.parse(localStorage.getItem('kimi_nsfw_sender_pos') || 'null');
             if (pos && Number.isFinite(pos.x)) { host.style.left = pos.x + 'px'; host.style.top = pos.y + 'px'; host.style.right = 'auto'; host.style.bottom = 'auto'; }
         } catch (e) { }
+        /* ★W364：AUTO 下勾选框变成「本轮会发谁」的示意；手动勾一个 = 只加这一轮 */
+        const once = nsfwSendOnce(chatId);
+        let autoPicks = [];
+        if (auto) {
+            try {
+                const ctx0 = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
+                const msgs0 = (ctx0 && Array.isArray(ctx0.chat)) ? ctx0.chat.map((m) => ({ role: m.is_user ? 'user' : 'assistant', content: String(m.mes || '') })) : [];
+                autoPicks = nsfwAutoPicks(chatId, msgs0);
+            } catch (e) { autoPicks = []; }
+        }
         const items = names.map((n) => '<span class="yw-nsfw-sd-item">'
-            + '<input type="checkbox" data-send="' + esc(n) + '"' + (picks.indexOf(n) >= 0 ? ' checked' : '') + (auto ? ' disabled' : '') + '/>'
+            + '<input type="checkbox" data-send="' + esc(n) + '"' + ((auto ? (autoPicks.indexOf(n) >= 0 || once.indexOf(n) >= 0) : (picks.indexOf(n) >= 0)) ? ' checked' : '') + '/>'
             + '<b class="yw-nsfw-sd-name" data-name="' + esc(n) + '" title="点名字看最新快照">' + esc(n) + '</b></span>').join('');
         host.innerHTML = '<span class="yw-nsfw-sd-grip" title="按住拖动">⠿</span>'
             + '<label class="yw-nsfw-sd-auto" title="自动：上一楼正文或你的消息里出现谁就发谁"><input type="checkbox"' + (auto ? ' checked' : '') + '/><span>AUTO</span></label>'
@@ -1057,7 +1121,17 @@ export function nsfwMountSender() {
             nsfwMountSender();
         });
         host.querySelectorAll('input[data-send]').forEach((cb) => {
-            cb.addEventListener('change', () => nsfwSetSendPick(chatId, cb.getAttribute('data-send'), cb.checked));
+            cb.addEventListener('change', () => {
+                const nm0 = cb.getAttribute('data-send');
+                if (auto) {
+                    const isAuto = autoPicks.indexOf(nm0) >= 0;
+                    if (!isAuto) nsfwSetSendOnce(chatId, nm0, cb.checked);
+                    else if (!cb.checked) cb.checked = true;   /* AUTO 命中的不能取消，只能追加 */
+                } else {
+                    nsfwSetSendPick(chatId, nm0, cb.checked);
+                }
+                nsfwMountSender();
+            });
         });
         host.querySelectorAll('.yw-nsfw-sd-name').forEach((el) => {
             el.addEventListener('click', () => nsfwShowSnapshot(el.getAttribute('data-name')));
