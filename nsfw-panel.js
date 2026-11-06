@@ -1207,6 +1207,8 @@ export function nsfwRenderCard(name, profile) {
             panels.querySelectorAll('.yw-nsfw-panel').forEach((x) => x.classList.remove('on'));
             const p = panels.querySelector('[data-panel="' + t.id + '"]');
             if (p) p.classList.add('on');
+            /* ★W363：切页时再锁一次高度（首次量的时候可能还没排版） */
+            try { if (wrap._nsfwLock) wrap._nsfwLock(); } catch (e) { }
         });
         tabBar.appendChild(b);
 
@@ -1238,6 +1240,7 @@ export function nsfwRenderCard(name, profile) {
     lockPanels();
     try { if (typeof requestAnimationFrame === 'function') requestAnimationFrame(lockPanels); } catch (e) { }
     try { setTimeout(lockPanels, 150); } catch (e) { }
+    try { setTimeout(lockPanels, 600); } catch (e) { }
     try { bindCardEdit(wrap, name, profile); } catch (e) { }
     return wrap;
 }
@@ -1694,6 +1697,15 @@ export function nsfwMountToMessage(messageId) {
             const anchor = mesEl.querySelector('.mes_text') || mesEl;
             if (anchor.parentNode) anchor.parentNode.insertBefore(card, anchor.nextSibling);
             else mesEl.appendChild(card);
+            /* ★W363：挂进真实 DOM 后再锁一次高度（渲染时还没排版，量到的是 0） */
+            try {
+                if (card._nsfwLock) {
+                    card._nsfwLock();
+                    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(card._nsfwLock);
+                    setTimeout(card._nsfwLock, 120);
+                    setTimeout(card._nsfwLock, 500);
+                }
+            } catch (e) { }
         });
         return true;
     } catch (e) { return false; }
