@@ -1609,7 +1609,7 @@ const CSS = [
     '.yw-nsfw-row .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
 
 
-    '.yw-nsfw-row .yw-nsfw-c{flex:1 1 auto;min-width:0;margin-left:auto;text-align:right;opacity:.62;font-style:italic;overflow-wrap:anywhere}',
+    '.yw-nsfw-row .yw-nsfw-c{flex:1 1 auto;min-width:0;margin-left:auto;text-align:right;opacity:.6;font-size:.88em;font-style:italic;overflow-wrap:anywhere}',
     '.yw-nsfw-viewrow{padding:3px 2px;line-height:1.6;font-style:italic;opacity:.85}',   /* ★W362：与左侧字段同字号 */
     '.yw-nsfw-viewrow .lbl{opacity:.55;font-style:normal;margin-right:6px}',
     '.yw-nsfw-empty{padding:10px;opacity:.6;font-size:.86em}',
