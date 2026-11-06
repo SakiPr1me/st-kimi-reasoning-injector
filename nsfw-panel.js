@@ -599,6 +599,25 @@ export function nsfwParse(text) {
         });
         const parsed = parseMachineBody(body);
         Object.keys(parsed).forEach((k) => { c.machine[k] = parsed[k]; });
+        /* ★W374：清单之外的自定义字段也吞进来（形如 `foo 中文 = 值|评述` 或 `foo=值`） */
+        try {
+            const known = {};
+            const allF = nsfwAllFields();
+            allF.forEach((f) => { known[f.id] = 1; });
+            body.split(/\r?\n/).forEach((ln) => {
+                const s2 = ln.trim();
+                if (!s2 || s2.indexOf('=') < 0) return;
+                const key0 = s2.slice(0, s2.indexOf('=')).trim().split(/\s+/)[0];
+                if (!/^[A-Za-z_\u4e00-\u9fa5][A-Za-z0-9_\-\u4e00-\u9fa5]*$/.test(key0)) return;
+                if (known[key0]) return;
+                if (/^(name|snapTime)$/.test(key0)) return;
+                const rest0 = s2.slice(s2.indexOf('=') + 1).trim();
+                if (!rest0) return;
+                const sv = splitValueComment(rest0);
+                if (!c.extra) c.extra = {};
+                c.extra[key0] = { value: sv.value, comment: sv.comment };
+            });
+        } catch (e0) { }
     }
     const reD = /<div\s+([^>]*\bdata-nsfw\s*=\s*"d"[^>]*)>([\s\S]*?)<\/div>/gi;
     while ((m = reD.exec(src))) {
@@ -660,6 +679,12 @@ function applyParsedTo(bucket, parsed) {
         });
         const dd = parsed.chars[name].desc || {};
         Object.keys(dd).forEach((id) => { rec.desc[id] = { text: dd[id], at: Date.now() }; });
+        /* ★W374：自定义字段一并落盘（原来的值沿用，新的覆盖） */
+        const ex = parsed.chars[name].extra || {};
+        Object.keys(ex).forEach((id) => {
+            if (!rec.extra) rec.extra = {};
+            rec.extra[id] = { value: ex[id].value, comment: ex[id].comment || "", at: Date.now() };
+        });
         rec.updatedAt = Date.now();
         bucket.order = bucket.order.filter((n) => n !== name);
         bucket.order.push(name);
@@ -740,6 +765,14 @@ export function buildCharBlock(name, profile) {
         if (!val) return;
         lines.push(f.id + '=' + val);   /* ★W364：评述不发送（省 token；快照里仍然有） */
     });
+    /* ★W374：自定义字段跟普通字段一起发 */
+    try {
+        const ex = profile.extra || {};
+        Object.keys(ex).forEach((id) => {
+            const v = String((ex[id] || {}).value == null ? "" : ex[id].value).trim();
+            if (v) lines.push(id + "=" + v);
+        });
+    } catch (e) { }
     if (!lines.length) return '';
     const preg = calcPregRisk(profile);
     if (preg.why) lines.push('怀孕几率: ' + preg.risk + '%（插件计算，不要改写）');
@@ -1316,6 +1349,15 @@ export function nsfwRenderCard(name, profile) {
         const html = tabRowsHtml(profile, grp, byGroup);
         if (html) tabs.push({ id: grp, label: grp, html: html });
     });
+    /* ★W374：自定义字段单独一页「其它」 */
+    try {
+        const ex = profile.extra || {};
+        const exIds = Object.keys(ex).filter((id) => String((ex[id] || {}).value || "").trim());
+        if (exIds.length) {
+            const h = exIds.map((id) => '<div class="yw-nsfw-row"><span class="k">' + esc(id) + '</span><span class="v">' + esc(String(ex[id].value)) + '</span><span class="yw-nsfw-c">' + esc(ex[id].comment || "") + '</span></div>').join("");
+            tabs.push({ id: "其它", label: "其它", html: h });
+        }
+    } catch (e) { }
     const viewRows = NSFW_DESC_FIELDS.map((d) => (profile.desc && profile.desc[d.id] ? { label: d.label, text: profile.desc[d.id].text } : null)).filter(Boolean);
     if (viewRows.length) {
         tabs.push({
@@ -1380,7 +1422,7 @@ export function nsfwRenderCard(name, profile) {
                 maxH = Math.max(maxH, k.scrollHeight);
                 k.style.display = old;
             });
-            if (maxH > 0) panels.style.minHeight = maxH + 'px';
+            if (maxH > 0) { panels.style.minHeight = maxH + 'px'; panels.style.height = maxH + 'px'; }
         } catch (e) { }
     };
     wrap._nsfwLock = lockPanels;
@@ -1644,7 +1686,8 @@ const CSS = [
     '.yw-nsfw-tabs{display:flex;flex-wrap:wrap;gap:3px;padding:5px 7px 0;position:sticky;top:0;z-index:1;background:inherit}',
     '.yw-nsfw-tab{font:inherit;font-size:.78em;padding:1px 8px;border-radius:999px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 22%,transparent);background:transparent;color:inherit;opacity:.62;cursor:pointer}',
     '.yw-nsfw-tab.on{opacity:1;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent);border-color:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 45%,transparent)}',
-    '.yw-nsfw-panels{padding:2px 7px 6px}',
+    '.yw-nsfw-panels{padding:2px 7px 6px;box-sizing:border-box;overflow-x:hidden}',
+    '.yw-nsfw-panels::after{content:"";display:block;height:1px;margin-top:4px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
     '.yw-nsfw-panel{display:none}',
     '.yw-nsfw-panel.on{display:block}',
     /* ★W346：这行原来是给 div 布局写的 flex —— 套在 <tr> 上会把 td 变成 block，列宽全失效（值被挤成一字一行）。tr 上只留行距。 */
