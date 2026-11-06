@@ -1365,7 +1365,7 @@ export function nsfwRenderCard(name, profile) {
             const hitTab = tabs.filter((t) => t.label === g)[0];
             const h = Object.keys(ex)
                 .filter((id) => String(ex[id].group || "其它") === g && String(ex[id].value || "").trim())
-                .map((id) => '<div class="yw-nsfw-row"><span class="k">' + esc(id) + '</span><span class="v">' + esc(String(ex[id].value)) + '</span><span class="yw-nsfw-c">' + esc(ex[id].comment || "") + '</span></div>').join("");
+                .map((id) => '<div class="yw-nsfw-row" data-id="' + esc(id) + '" data-type="text"><span class="k">' + esc(id) + '</span><span class="v">' + esc(String(ex[id].value)) + '</span><span class="yw-nsfw-c">' + esc(ex[id].comment || "") + '</span></div>').join("");
             if (!h) return;
             if (hitTab) hitTab.html += h;
             else tabs.push({ id: "x-" + g, label: g, html: h });
@@ -1484,7 +1484,7 @@ function bindCardEdit(wrap, name, profile) {
                 const isStatic = row.getAttribute('data-static') === '1';
                 const type = row.getAttribute('data-type') || 'text';
                 const optsAttr = row.getAttribute('data-options') || '';
-                const cell = isStatic ? { value: (profile.static || {})[id], comment: '' } : ((profile.stats || {})[id] || {});
+                const cell = isStatic ? { value: (profile.static || {})[id], comment: '' } : ((profile.stats || {})[id] || (profile.extra || {})[id] || {});   /* ★W376：自定义字段从 extra 取原值 */
                 const vEl = row.querySelector('.v') || row.querySelector('.t');
                 if (vEl) {
                     vEl.textContent = '';
