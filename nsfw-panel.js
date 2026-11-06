@@ -920,6 +920,29 @@ export function nsfwClearSendOnce(chatId) {
         localStorage.setItem(SEND_ONCE_KEY, JSON.stringify(all));
     } catch (e) { }
 }
+/** ★W366：只看「真实用户输入」——作者用 4A 包裹/<user_input> 把用户楼层包了，小说前缀里的名字不该触发 AUTO */
+function realUserInput(t) {
+    let s = String(t || '');
+    const m = /<user_input>([\s\S]*?)<\/user_input>/i.exec(s);
+    if (m) return m[1];
+    const k = s.indexOf('本轮真实输入：');
+    if (k >= 0) {
+        let rest = s.slice(k + '本轮真实输入：'.length);
+        const end = rest.indexOf(String.fromCharCode(10) + '————');
+        if (end >= 0) rest = rest.slice(0, end);
+        return rest;
+    }
+    return s;
+}
+/** AI 楼层只看 <content> 正文（其它模块里提到的名字不算） */
+function aiContent(t) {
+    const s = String(t || '');
+    const parts = [];
+    const re = /<content>([\s\S]*?)<\/content>/gi;
+    let m;
+    while ((m = re.exec(s))) parts.push(m[1]);
+    return parts.length ? parts.join(String.fromCharCode(10)) : s;
+}
 /** AUTO 这一轮会发谁（只看正文/用户消息里出现过的名字） */
 export function nsfwAutoPicks(chatId, msgs) {
     try {
@@ -927,8 +950,8 @@ export function nsfwAutoPicks(chatId, msgs) {
         const live = nsfwStateFromMsgs(msgs);
         const names = (bucket.order || []).filter((n) => bucket.chars[n]);
         Object.keys(live.chars).forEach((n) => { if (names.indexOf(n) < 0) names.push(n); });
-        const lastA = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') return String(msgs[i].content || ''); } return ''; })();
-        const lastU = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'user') return String(msgs[i].content || ''); } return ''; })();
+        const lastA = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') return aiContent(String(msgs[i].content || '')); } return ''; })();
+        const lastU = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'user') return realUserInput(String(msgs[i].content || '')); } return ''; })();
         const text = lastA + String.fromCharCode(10) + lastU;
         return names.filter((n) => n && text.indexOf(n) >= 0);
     } catch (e) { return []; }
@@ -954,8 +977,8 @@ export function nsfwPickForRequest(chatId, msgs) {
         const union = base.slice();
         once.forEach((n) => { if (union.indexOf(n) < 0) union.push(n); });
         return union;
-        const lastA = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') return String(msgs[i].content || ''); } return ''; })();
-        const lastU = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'user') return String(msgs[i].content || ''); } return ''; })();
+        const lastA = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') return aiContent(String(msgs[i].content || '')); } return ''; })();
+        const lastU = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'user') return realUserInput(String(msgs[i].content || '')); } return ''; })();
         const text = lastA + String.fromCharCode(10) + lastU;
         return names.filter((n) => n && text.indexOf(n) >= 0);
     } catch (e) { return []; }
