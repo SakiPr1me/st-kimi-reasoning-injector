@@ -335,17 +335,31 @@ export function calcPregRisk(profile) {
         let base = 2;
         if (phase.indexOf('月经') >= 0) base = 1;
         else if (phase.indexOf('卵泡') >= 0) base = 2;
-        else if (phase.indexOf('排卵') >= 0) base = 15;   /* ★W355：按作者要求提高排卵期基准（10→15），+中出6 = 21% */
+        else if (phase.indexOf('排卵') >= 0) base = 15;
         else if (phase.indexOf('黄体') >= 0) base = 4;
-        const condom = val('condom');
-        const cumV = val('cumV');
-        let risk = base;
-        if (cumV.indexOf('是') >= 0 || cumV.indexOf('有') >= 0) risk += 6;
-        if (condom.indexOf('是') >= 0 || condom.indexOf('有') >= 0) risk = risk * 0.05;
+        const condomOn = /是|有/.test(val('condom'));
+        const cumFlag = /是|有/.test(val('cumV'));
+        /* ★W356：戴套 = 体内没有精液（作者口径：中出本来就意味着没戴）；只有没戴才按体内精液量加分。
+           精液量来源：阴道液体种类里含「精液」⇒ 记阴道液体量；子宫液体量直接算；写了中出但没填量 ⇒ 按 8ml 兜底 */
+        let semenMl = 0;
+        if (!condomOn) {
+            if (String(val('vFluidKind')).indexOf('精液') >= 0) semenMl += Number(val('vFluidMl')) || 0;
+            semenMl += Number(val('uterusFluidMl')) || 0;
+            if (cumFlag && semenMl <= 0) semenMl = 8;
+        }
+        let bonus = 0;
+        if (!condomOn) {
+            if (semenMl >= 30) bonus = 9;
+            else if (semenMl >= 10) bonus = 6;
+            else if (semenMl > 0) bonus = 3;
+            if (cumFlag && bonus < 3) bonus = 3;
+        }
+        let risk = base + bonus;
+        if (condomOn) risk = base * 0.05;
         risk = Math.max(0, Math.min(100, Math.round(risk)));
         let why = phase || '周期未知';
-        why += ' · ' + (condom ? ('避孕：' + condom) : '避孕未填');
-        if (cumV) why += ' · 前穴中出：' + cumV;
+        why += condomOn ? ' · 戴套（风险极低）' : (' · 未戴 · 体内精液 ' + Math.round(semenMl) + 'ml');
+        if (!condomOn && cumFlag) why += ' · 前穴中出';
         return { risk: risk, why: why };
     } catch (e) { return { risk: 0, why: '' }; }
 }
