@@ -445,6 +445,14 @@ function resolveFieldKey(rawKey, all) {
         if (f) return f;
         if (NSFW_ALIAS[toks[i]]) { f = all.find((x) => x.id === NSFW_ALIAS[toks[i]]); if (f) return f; }
     }
+    /* ★W344：AI 写错一点也尽量认 —— 标签归一化（去空格/符号）后相等或互相包含，唯一命中才采用 */
+    const norm = (t) => String(t || '').replace(/[s·:：()（）[]【】,，、]/g, '');
+    const kn = norm(key);
+    if (kn.length >= 2) {
+        let cands = all.filter((x) => norm(x.label) === kn);
+        if (!cands.length) cands = all.filter((x) => norm(x.label).indexOf(kn) >= 0 || kn.indexOf(norm(x.label)) >= 0);
+        if (cands.length === 1) return cands[0];
+    }
     /* 整键里有「开发度·X」这类带分隔的，去掉前缀再试 */
     const noPrefix = key.replace(/^(开发度|状态|当前)[·:：\s]*/, '');
     if (noPrefix !== key) { f = hit(noPrefix); if (f) return f; }
@@ -1017,6 +1025,7 @@ function esc(s) {
 function tabRowsHtml(profile, grp, byGroup) {
     const rows = [];
     activeFields(profile).forEach((f) => {
+        if (f.id === 'snapTime') return;   /* ★W344：快照时间放标题栏，不在状态页重复一行 */
         if ((f.tab || f.group) !== grp) return;
         const cell = (profile.stats || {})[f.id];
         if (!cell || !fmtVal(f, cell)) return;
@@ -1052,17 +1061,19 @@ function rowHtml(f, cell) {
     const optAttr = Array.isArray(f.options) ? ' data-options="' + esc(f.options.join('|')) + '"' : '';
     const idAttr = ' data-id="' + esc(f.id) + '" data-type="' + esc(f.type) + '"' + optAttr + (f.static ? ' data-static="1"' : '');
     const c = '<td class="yw-nsfw-c">' + (cell.comment ? esc(cell.comment) : '') + '</td>';
-    if (f.type === 'num') {
+    /* ★W344：四列固定 —— 字段 | 值 | 条 | 评述；条永远在独立一列，文字才整齐 */
+    if (f.type === 'num' && !f.noBar) {
         const n = Number(cell.value);
         const max = typeof f.max === 'number' ? f.max : 100;
         const pct = Math.max(0, Math.min(100, (n / max) * 100));
-        const barHtml = f.noBar ? '' : '<span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span>';
         return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
-            + '<td class="v"><span class="num">' + esc(withUnit(f, val)) + '</span>' + barHtml + '</td>'
+            + '<td class="v num">' + esc(withUnit(f, val)) + '</td>'
+            + '<td class="b"><span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span></td>'
             + c + '</tr>';
     }
+    /* 无条的行：值占「值+条」两列，列的起点仍对齐 */
     return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
-        + '<td class="t">' + esc(withUnit(f, val)) + '</td>' + c + '</tr>';
+        + '<td class="v" colspan="2">' + esc(withUnit(f, val)) + '</td>' + c + '</tr>';
 }
 
 /** 状态卡（v2：分页 tabs，评述在右） */
@@ -1356,14 +1367,15 @@ const CSS = [
     '.yw-nsfw-viewrow{padding:3px 2px;font-size:.86em;line-height:1.55;font-style:italic;opacity:.9}',
     '.yw-nsfw-viewrow .lbl{opacity:.55;font-style:normal;margin-right:6px}',
     '.yw-nsfw-empty{padding:10px;opacity:.6;font-size:.86em}',
-    '.yw-nsfw-tbl{width:100%;border-collapse:collapse;font-size:.86em;margin:2px 0}',
+    '.yw-nsfw-tbl{width:100%;border-collapse:collapse;font-size:.86em;margin:2px 0;table-layout:fixed}',
     '.yw-nsfw-tbl thead th{opacity:.45;font-weight:500;font-size:.9em;padding:2px 4px;text-align:left;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent)}',
-    '.yw-nsfw-tbl tbody th{width:8.2em;font-weight:500;opacity:.72;padding:2px 4px;text-align:left;white-space:nowrap;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
+    '.yw-nsfw-tbl tbody th{width:7em;font-weight:500;opacity:.72;padding:2px 4px;text-align:left;white-space:nowrap;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
     '.yw-nsfw-tbl td{padding:2px 4px;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent);vertical-align:middle}',
-    '.yw-nsfw-tbl td.v{width:7.2em;white-space:nowrap}',
-    '.yw-nsfw-tbl td.v .num{display:inline-block;width:3.1em;text-align:right;font-variant-numeric:tabular-nums;margin-right:6px}',
-    '.yw-nsfw-tbl td.v .bar{display:inline-block;width:3.6em;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden;vertical-align:middle}',
-    '.yw-nsfw-tbl td.v .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
+    '.yw-nsfw-tbl td.v{width:32%;overflow-wrap:anywhere}',
+    '.yw-nsfw-tbl td.v.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}',
+    '.yw-nsfw-tbl td.b{width:4.8em;padding-left:8px}',
+    '.yw-nsfw-tbl td.b .bar{display:block;width:100%;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden}',
+    '.yw-nsfw-tbl td.b .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
     /* ★W327 悬浮发送条：一条横条，可拖；AUTO 在左，名字在右；点名字看快照 */
     '#yw-nsfw-sender{position:fixed;right:12px;bottom:86px;z-index:30040;display:flex;align-items:center;gap:6px;max-width:min(72vw,560px);padding:4px 8px;border-radius:999px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 26%,transparent);background:color-mix(in srgb,var(--SmartThemeBlurTintColor,transparent) 88%,transparent);backdrop-filter:blur(10px);color:var(--SmartThemeBodyColor,currentColor);font-size:12px;line-height:1.2;box-shadow:0 4px 16px rgba(0,0,0,.22);user-select:none}',
     '#yw-nsfw-sender .yw-nsfw-sd-grip{cursor:grab;opacity:.45;padding:0 2px;letter-spacing:-2px}',
@@ -1381,7 +1393,7 @@ const CSS = [
     '#yw-nsfw-preview .yw-nsfw-pv-hd{display:flex;align-items:center;justify-content:space-between;font-weight:600;margin-bottom:6px;padding:0 2px}',
     '#yw-nsfw-preview .yw-nsfw-pv-x{cursor:pointer;border:0;background:transparent;color:inherit;opacity:.6;font-size:14px}',
     '#yw-nsfw-preview .yw-nsfw{margin:0}',
-    '.yw-nsfw-tbl td.t{width:38%;overflow-wrap:anywhere}',    '.yw-nsfw-tbl td.t{width:38%;overflow-wrap:anywhere}',
+    '@media (max-width:600px){.yw-nsfw-tbl{font-size:.8em}.yw-nsfw-tbl tbody th{width:5.6em}.yw-nsfw-tbl td.v{width:30%}.yw-nsfw-tbl td.b{width:3.6em;padding-left:5px}.yw-nsfw-tbl td.yw-nsfw-c{font-size:.88em}}',
     '.yw-nsfw-tbl td.yw-nsfw-c{opacity:.6;font-size:.9em;font-style:italic;text-align:right;overflow-wrap:anywhere}',
     '.yw-nsfw-dev{width:100%;border-collapse:collapse;font-size:.84em;margin:2px 0}',
     '.yw-nsfw-dev th,.yw-nsfw-dev td{padding:3px 4px;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent);text-align:left}',
