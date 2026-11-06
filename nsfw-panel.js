@@ -91,15 +91,15 @@ export const NSFW_FIELDS = [
     { id: 'aFluidMl', group: '后穴', label: '后穴液体量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 55, noBar: true },
 
     /* ── 第八组：开发（永久统计，评述写身体变化） ── */
-    { id: 'expMasturbation', group: '开发', label: '自慰次数', type: 'num', min: 0, max: 999, core: true, ord: 5, noBar: true },
-    { id: 'expPartners', group: '开发', label: '经验人数', type: 'num', min: 0, max: 99, core: true, ord: 10, noBar: true },
-    { id: 'expOralCount', group: '开发', label: '口交次数', type: 'num', min: 0, max: 999, core: true, ord: 15, noBar: true },
-    { id: 'expBlowjobCount', group: '开发', label: '被口交次数', type: 'num', min: 0, max: 999, core: true, ord: 20, noBar: true },
-    { id: 'expChestCount', group: '开发', label: '胸部行为次数', type: 'num', min: 0, max: 999, core: true, ord: 25, noBar: true },
-    { id: 'expVCount', group: '开发', label: '前穴次数', type: 'num', min: 0, max: 999, core: true, ord: 30, noBar: true },
-    { id: 'expVCumCount', group: '开发', label: '前穴中出次数', type: 'num', min: 0, max: 999, core: true, ord: 35, noBar: true },
-    { id: 'expACount', group: '开发', label: '后穴次数', type: 'num', min: 0, max: 999, core: true, ord: 40, noBar: true },
-    { id: 'expACumCount', group: '开发', label: '后穴中出次数', type: 'num', min: 0, max: 999, core: true, ord: 45, noBar: true },
+    { id: 'expMasturbation', group: '开发', label: '自慰次数', type: 'num', min: 0, max: 999, core: true, ord: 5 },
+    { id: 'expPartners', group: '开发', label: '经验人数', type: 'num', min: 0, max: 99, core: true, ord: 10 },
+    { id: 'expOralCount', group: '开发', label: '口交次数', type: 'num', min: 0, max: 999, core: true, ord: 15 },
+    { id: 'expBlowjobCount', group: '开发', label: '被口交次数', type: 'num', min: 0, max: 999, core: true, ord: 20 },
+    { id: 'expChestCount', group: '开发', label: '胸部行为次数', type: 'num', min: 0, max: 999, core: true, ord: 25 },
+    { id: 'expVCount', group: '开发', label: '前穴次数', type: 'num', min: 0, max: 999, core: true, ord: 30 },
+    { id: 'expVCumCount', group: '开发', label: '前穴中出次数', type: 'num', min: 0, max: 999, core: true, ord: 35 },
+    { id: 'expACount', group: '开发', label: '后穴次数', type: 'num', min: 0, max: 999, core: true, ord: 40 },
+    { id: 'expACumCount', group: '开发', label: '后穴中出次数', type: 'num', min: 0, max: 999, core: true, ord: 45 },
 ];
 
 /** 他人视线（只展示，不进数值）—— v2 去掉「精神」 */
