@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.246'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.247'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -2331,6 +2331,12 @@ function applyRequestInjections(bodyObj) {
         /* ★W336：状态栏是独立功能，不受工具箱总开关影响（否则总开关关着时：生成后不解析→无卡、悬浮窗无档案） */
         if (settings.nsfwEnabled && settings.nsfwCaptureHide !== false && settings.nsfwSenderEnabled !== false && msgs && msgs.length) {   /* ★W379：不捕捉就没有快照，也就没什么可发 */
             try {
+                /* ★W400（真 BUG）：**先按原始历史拼好要发的状态，再剥旧块**。
+                   原来先剥后拼 ⇒ buildSend 从"已经被剥干净的 msgs"重建状态 ⇒ 永远读到空 ⇒ 什么状态都发不出去
+                   （作者实机：AI 思维链里说"前文没有这个快照"）。顺序反了，一行都不能省。 */
+                const nsfwChatId0 = nsfwChatId();
+                const sendNames = nsfwPickForRequest(nsfwChatId0, msgs);
+                const sendText0 = sendNames.length ? nsfwBuildSend(nsfwChatId0, sendNames, msgs) : '';
                 /* ①历史楼层里我们自己换过外壳的块不进请求（你的正则也可以再兜一层） */
                 for (let i = 0; i < msgs.length; i++) {
                     const mm0 = msgs[i];
@@ -2341,10 +2347,9 @@ function applyRequestInjections(bodyObj) {
                     const stripped = nsfwStripBlocks(mm0.content);
                     if (stripped !== mm0.content) { mm0.content = stripped; changed = true; }
                 }
-                /* ②按模式选人（AUTO=上一楼 AI 正文或用户楼层里出现过的名字；手动=悬浮窗勾选；off=不发） */
-                const sendNames = nsfwPickForRequest(nsfwChatId(), msgs);
+                /* ②插入已经拼好的状态（选人/拼块都在剥之前完成） */
                 if (sendNames.length) {
-                    const sendText = nsfwBuildSend(nsfwChatId(), sendNames, msgs);
+                    const sendText = sendText0;
                     if (sendText) {
                         /* ★W364：插在 </nsfw_state_guide> 上面（预设里那段指南的收尾标签前），找不到退回第一条 system 最前面 */
                         let sys0 = null, at = -1;
