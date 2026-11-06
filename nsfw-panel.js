@@ -335,7 +335,7 @@ export function calcPregRisk(profile) {
         let base = 2;
         if (phase.indexOf('月经') >= 0) base = 1;
         else if (phase.indexOf('卵泡') >= 0) base = 2;
-        else if (phase.indexOf('排卵') >= 0) base = 10;
+        else if (phase.indexOf('排卵') >= 0) base = 15;   /* ★W355：按作者要求提高排卵期基准（10→15），+中出6 = 21% */
         else if (phase.indexOf('黄体') >= 0) base = 4;
         const condom = val('condom');
         const cumV = val('cumV');
