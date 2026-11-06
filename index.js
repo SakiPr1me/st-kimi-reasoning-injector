@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.189'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.190'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -1308,6 +1308,15 @@ function healTruncatedPreset() {
 // 启动时修一次 + 每次生成前再修一次（多端同开时，旧版客户端可能把坏数据覆盖回来；
 // 生成前兜底保证发出去的种子永远是完整的）
 healTruncatedPreset();
+/* ★W338：看门狗 —— 只要 isGenerating 为假，隐藏类就摘掉（防某轮生成异常结束/自动重试未收尾导致卡永久隐藏） */
+setInterval(() => {
+    try {
+        if (!isGenerating && document.body && document.body.classList.contains('yw-nsfw-generating')) {
+            document.body.classList.remove('yw-nsfw-generating');
+            if (settings.nsfwEnabled) try { nsfwReattachAll(); } catch (e) { }
+        }
+    } catch (e) { }
+}, 800);
 eventSource.on(event_types.GENERATION_STARTED, () => { try { healTruncatedPreset(); } catch (e) { } });
 
 // KIMI/DS 为固定内置预设（不可修改）：启动即以「当前模式+语言」的代码预设为准 →
@@ -8970,6 +8979,8 @@ const nsfwParsedKeys = new Set();
 eventSource.on(event_types.MESSAGE_RECEIVED, async (id) => {
     try {
         if (!settings.nsfwEnabled) return;   /* ★W336：同上，只认状态栏自己的开关 */
+        /* ★W338：回复已经落地 ⇒ 这一轮不再算「生成中」，立刻取消隐藏（防 ENDED 没来/被下一轮重试覆盖） */
+        try { if (document && document.body) document.body.classList.remove('yw-nsfw-generating'); } catch (e) { }
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const msg = ctx && ctx.chat ? ctx.chat[id] : null;
         if (!msg || msg.is_user || msg.is_system) return;
@@ -9368,10 +9379,26 @@ eventSource.on(event_types.STREAM_TOKEN_RECEIVED, (text) => {
 eventSource.on(event_types.STREAM_TOKEN_RECEIVED, checkAutoStop);
 
 // 生成结束：本次零 token → 空回（断流/服务器不稳）→ 自动重roll
+/* ★W338：看门狗 —— 只要 isGenerating 为假，隐藏类就摘掉（防某轮生成异常结束/自动重试未收尾导致卡永久隐藏） */
+setInterval(() => {
+    try {
+        if (!isGenerating && document.body && document.body.classList.contains('yw-nsfw-generating')) {
+            document.body.classList.remove('yw-nsfw-generating');
+            if (settings.nsfwEnabled) try { nsfwReattachAll(); } catch (e) { }
+        }
+    } catch (e) { }
+}, 800);
 eventSource.on(event_types.GENERATION_STARTED, () => {
     /* ★W333：生成期间把状态卡藏起来（作者要求：跟其它美化一样，生成完再显示新内容，流式期间不挂着） */
     try { if (document && document.body) document.body.classList.add('yw-nsfw-generating'); } catch (e) { }
 });
+/* ★W338：手动停止也取消隐藏（有的路径只发 STOPPED 不发 ENDED） */
+try {
+    eventSource.on(event_types.GENERATION_STOPPED, () => {
+        try { if (document && document.body) document.body.classList.remove('yw-nsfw-generating'); } catch (e) { }
+        try { if (settings.nsfwEnabled) setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, 300); } catch (e) { }
+    });
+} catch (e) { }
 eventSource.on(event_types.GENERATION_ENDED, () => {
     try {
         if (document && document.body) document.body.classList.remove('yw-nsfw-generating');
