@@ -2227,11 +2227,12 @@ export function nsfwMountToMessage(messageId) {
         const text = String(msg.mes || '');
         const own = nsfwProfilesFromText(text);
         const ownNames = Object.keys(own);
-        const snap = ownNames.length ? null : nsfwSnapOf(chatId, messageId);
-        const pick = (n) => own[n] || (snap && snap[n]) || bucket.chars[n] || { sex: 'female', role: 'bottom', stats: {}, desc: {} };
-        let show = ownNames.length ? ownNames : [];
-        if (!show.length && snap) show = Object.keys(snap);
-        if (!show.length) return false;
+        /* ★W397：只认这一楼自己的块 —— 不再退回「按楼存的快照」。
+           新分支/重roll 后如果这楼还没有自己的块（比如生成中途停止），
+           那张快照还是上一个分支的 ⇒ 绝不能把旧图表挂到新分支上。 */
+        if (!ownNames.length) return false;
+        const pick = (n) => own[n] || bucket.chars[n] || { sex: 'female', role: 'bottom', stats: {}, desc: {} };
+        const show = ownNames;
 
         nsfwEnsureStyle();
         mesEl.querySelectorAll('.yw-nsfw').forEach((n) => n.remove());
