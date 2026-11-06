@@ -761,25 +761,29 @@ function withUnit(f, val) {
 export function buildCharBlock(name, profile) {
     const fields = activeFields(profile);
     const lines = [];
+    /* ★W383：跟作者提示词的格式完全一致 —— <nsfw> 无属性，名字/时间写在块内头两行 */
+    const snap0 = String((((profile || {}).stats || {}).snapTime || {}).value || '');
+    lines.push('name 角色名 = ' + name);
+    lines.push('snapTime 快照时间 = ' + (snap0 || '未知'));
     fields.forEach((f) => {
+        if (f.id === 'snapTime') return;   /* 已在块头 */
         const cell = (profile.stats || {})[f.id]
             || ((profile.static || {})[f.id] ? { value: profile.static[f.id], comment: '' } : null);
         const val = cell ? fmtVal(f, cell) : '';
         if (!val) return;
-        lines.push(f.id + '=' + val);   /* ★W364：评述不发送（省 token；快照里仍然有） */
+        lines.push(f.id + '=' + val);   /* 评述不发送（省 token） */
     });
-    /* ★W374：自定义字段跟普通字段一起发 */
+    /* 自定义字段跟普通字段一起发 */
     try {
         const ex = profile.extra || {};
         Object.keys(ex).forEach((id) => {
             const v = String((ex[id] || {}).value == null ? "" : ex[id].value).trim();
-            if (v) lines.push(id + "=" + v);
+            if (v) lines.push(id + '=' + v);
         });
     } catch (e) { }
-    if (!lines.length) return '';
     const preg = calcPregRisk(profile);
     if (preg.why) lines.push('怀孕几率: ' + preg.risk + '%（插件计算，不要改写）');
-    return '<nsfw name="' + name + '">' + NL + lines.join(NL) + NL + '</nsfw>';
+    return '<nsfw>' + NL + lines.join(NL) + NL + '</nsfw>';
 }
 
 export function buildProtocolDoc(profile) {
