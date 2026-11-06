@@ -1061,19 +1061,20 @@ function rowHtml(f, cell) {
     const optAttr = Array.isArray(f.options) ? ' data-options="' + esc(f.options.join('|')) + '"' : '';
     const idAttr = ' data-id="' + esc(f.id) + '" data-type="' + esc(f.type) + '"' + optAttr + (f.static ? ' data-static="1"' : '');
     const c = '<td class="yw-nsfw-c">' + (cell.comment ? esc(cell.comment) : '') + '</td>';
-    /* ★W344：四列固定 —— 字段 | 值 | 条 | 评述；条永远在独立一列，文字才整齐 */
-    if (f.type === 'num' && !f.noBar) {
-        const n = Number(cell.value);
-        const max = typeof f.max === 'number' ? f.max : 100;
-        const pct = Math.max(0, Math.min(100, (n / max) * 100));
-        return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
-            + '<td class="v num">' + esc(withUnit(f, val)) + '</td>'
-            + '<td class="b"><span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span></td>'
-            + c + '</tr>';
-    }
-    /* 无条的行：值占「值+条」两列，列的起点仍对齐 */
+    /* ★W345：四列固定 —— 字段 | 条 | 值 | 评述；条在左、值在右，值尽量不换行（放不下省略号，悬停看全文） */
+    const valTxt = esc(withUnit(f, val));
+    const bTd = (f.type === 'num' && !f.noBar)
+        ? (() => {
+            const n = Number(cell.value);
+            const max = typeof f.max === 'number' ? f.max : 100;
+            const pct = Math.max(0, Math.min(100, (n / max) * 100));
+            return '<td class="b"><span class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></span></td>';
+        })()
+        : '<td class="b"></td>';
     return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
-        + '<td class="v" colspan="2">' + esc(withUnit(f, val)) + '</td>' + c + '</tr>';
+        + bTd
+        + '<td class="v' + (f.type === 'num' ? ' num' : '') + '" title="' + valTxt + '">' + valTxt + '</td>'
+        + c + '</tr>';
 }
 
 /** 状态卡（v2：分页 tabs，评述在右） */
@@ -1371,9 +1372,10 @@ const CSS = [
     '.yw-nsfw-tbl thead th{opacity:.45;font-weight:500;font-size:.9em;padding:2px 4px;text-align:left;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent)}',
     '.yw-nsfw-tbl tbody th{width:7em;font-weight:500;opacity:.72;padding:2px 4px;text-align:left;white-space:nowrap;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
     '.yw-nsfw-tbl td{padding:2px 4px;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent);vertical-align:middle}',
-    '.yw-nsfw-tbl td.v{width:32%;overflow-wrap:anywhere}',
-    '.yw-nsfw-tbl td.v.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}',
-    '.yw-nsfw-tbl td.b{width:4.8em;padding-left:8px}',
+    '.yw-nsfw-tbl td.v{width:34%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.yw-nsfw-tbl td.v.num{text-align:right;font-variant-numeric:tabular-nums}',
+    '.yw-nsfw-tbl td.v:empty{min-height:1em}',
+    '.yw-nsfw-tbl td.b{width:4.8em;padding-left:2px;padding-right:6px}',
     '.yw-nsfw-tbl td.b .bar{display:block;width:100%;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden}',
     '.yw-nsfw-tbl td.b .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
     /* ★W327 悬浮发送条：一条横条，可拖；AUTO 在左，名字在右；点名字看快照 */
@@ -1393,7 +1395,7 @@ const CSS = [
     '#yw-nsfw-preview .yw-nsfw-pv-hd{display:flex;align-items:center;justify-content:space-between;font-weight:600;margin-bottom:6px;padding:0 2px}',
     '#yw-nsfw-preview .yw-nsfw-pv-x{cursor:pointer;border:0;background:transparent;color:inherit;opacity:.6;font-size:14px}',
     '#yw-nsfw-preview .yw-nsfw{margin:0}',
-    '@media (max-width:600px){.yw-nsfw-tbl{font-size:.8em}.yw-nsfw-tbl tbody th{width:5.6em}.yw-nsfw-tbl td.v{width:30%}.yw-nsfw-tbl td.b{width:3.6em;padding-left:5px}.yw-nsfw-tbl td.yw-nsfw-c{font-size:.88em}}',
+    '@media (max-width:600px){.yw-nsfw-tbl{font-size:.8em}.yw-nsfw-tbl tbody th{width:5.4em}.yw-nsfw-tbl td.b{width:3.2em}.yw-nsfw-tbl td.v{width:34%;white-space:normal;overflow:visible;text-overflow:clip}.yw-nsfw-tbl td.yw-nsfw-c{font-size:.86em}}',
     '.yw-nsfw-tbl td.yw-nsfw-c{opacity:.6;font-size:.9em;font-style:italic;text-align:right;overflow-wrap:anywhere}',
     '.yw-nsfw-dev{width:100%;border-collapse:collapse;font-size:.84em;margin:2px 0}',
     '.yw-nsfw-dev th,.yw-nsfw-dev td{padding:3px 4px;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent);text-align:left}',
