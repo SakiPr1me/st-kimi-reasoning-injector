@@ -1537,6 +1537,41 @@ export function nsfwMountToMessage(messageId) {
     } catch (e) { return false; }
 }
 
+/* ★W337：自愈观察器 —— 酒馆/别的插件重渲染消息会把卡冲掉，这里发现「有块没卡」就补上（生成中不插手） */
+let __nsfwObs = null;
+let __nsfwObsTimer = 0;
+export function nsfwStartObserver() {
+    try {
+        if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
+        const chat = document.getElementById('chat');
+        if (!chat) return;
+        if (__nsfwObs && __nsfwObs._target === chat) return;
+        if (__nsfwObs) { try { __nsfwObs.disconnect(); } catch (e) { } }
+        __nsfwObs = new MutationObserver(() => {
+            clearTimeout(__nsfwObsTimer);
+            __nsfwObsTimer = setTimeout(() => {
+                try {
+                    if (document.body && document.body.classList.contains('yw-nsfw-generating')) return;
+                    const ctx = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
+                    if (!ctx || !Array.isArray(ctx.chat)) return;
+                    document.querySelectorAll('#chat .mes[mesid]').forEach((el) => {
+                        const id = Number(el.getAttribute('mesid'));
+                        if (!Number.isFinite(id)) return;
+                        const msg = ctx.chat[id];
+                        if (!msg) return;
+                        const txt = String(msg.mes || '');
+                        const hasBlock = txt.indexOf('data-nsfw') >= 0 || txt.indexOf('<nsfw') >= 0;
+                        if (!hasBlock) return;
+                        if (el.querySelector('.yw-nsfw')) return;
+                        nsfwMountToMessage(id);
+                    });
+                } catch (e) { }
+            }, 220);
+        });
+        __nsfwObs._target = chat;
+        __nsfwObs.observe(chat, { childList: true, subtree: true });
+    } catch (e) { }
+}
 export function nsfwReattachAll() {
     try {
         document.querySelectorAll('#chat .mes[mesid]').forEach((el) => {
