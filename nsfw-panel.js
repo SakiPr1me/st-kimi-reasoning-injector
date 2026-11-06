@@ -981,6 +981,34 @@ export function nsfwShowSnapshot(name) {
         body.appendChild(nsfwRenderCard(name, rec));
         box.appendChild(body);
         box.style.display = 'block';
+        /* ★W362：预览浮层可拖动（按住标题栏），位置记住 */
+        try {
+            const hd = box.querySelector('.yw-nsfw-pv-hd');
+            if (hd && hd.dataset.dragBound !== '1') {
+                hd.dataset.dragBound = '1';
+                hd.style.cursor = 'move';
+                let on = false, sx = 0, sy = 0, ox = 0, oy = 0;
+                hd.addEventListener('mousedown', (e) => {
+                    const r = box.getBoundingClientRect();
+                    on = true; sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
+                    box.style.right = 'auto'; box.style.bottom = 'auto';
+                    e.preventDefault();
+                });
+                document.addEventListener('mousemove', (e) => {
+                    if (!on) return;
+                    const x = Math.max(0, Math.min(window.innerWidth - 80, ox + e.clientX - sx));
+                    const y = Math.max(0, Math.min(window.innerHeight - 40, oy + e.clientY - sy));
+                    box.style.left = x + 'px'; box.style.top = y + 'px';
+                });
+                document.addEventListener('mouseup', () => {
+                    if (!on) return; on = false;
+                    const r = box.getBoundingClientRect();
+                    try { localStorage.setItem('kimi_nsfw_preview_pos', JSON.stringify({ x: Math.round(r.left), y: Math.round(r.top) })); } catch (e) { }
+                });
+            }
+            const pv = JSON.parse(localStorage.getItem('kimi_nsfw_preview_pos') || 'null');
+            if (pv && Number.isFinite(pv.x)) { box.style.left = pv.x + 'px'; box.style.top = pv.y + 'px'; box.style.right = 'auto'; box.style.bottom = 'auto'; }
+        } catch (e) { }
         box.addEventListener('mousedown', (e) => e.stopPropagation());
         box.addEventListener('click', (e) => e.stopPropagation());
         box.querySelector('.yw-nsfw-pv-x').addEventListener('click', () => { box.style.display = 'none'; });
@@ -1191,18 +1219,25 @@ export function nsfwRenderCard(name, profile) {
 
     wrap.appendChild(tabBar);
     wrap.appendChild(panels);
-    /* ★W354：按「最高一页」把面板高度钉死 —— 切分页时上面的分页条不再跳位 */
-    try {
-        const kids = Array.prototype.slice.call(panels.children);
-        let maxH = 0;
-        kids.forEach((k) => {
-            const old = k.style.display;
-            k.style.display = 'block';
-            maxH = Math.max(maxH, k.offsetHeight);
-            k.style.display = old;
-        });
-        if (maxH > 0) panels.style.minHeight = maxH + 'px';
-    } catch (e) { }
+    /* ★W354/W362：按「最高一页」把面板高度钉死 —— 切分页时上面的分页条不跳位；
+       渲染当下可能还没排版（宽度为 0），所以 rAF + 150ms 各再锁一次 */
+    const lockPanels = () => {
+        try {
+            const kids = Array.prototype.slice.call(panels.children);
+            let maxH = 0;
+            kids.forEach((k) => {
+                const old = k.style.display;
+                k.style.display = 'block';
+                maxH = Math.max(maxH, k.scrollHeight);
+                k.style.display = old;
+            });
+            if (maxH > 0) panels.style.minHeight = maxH + 'px';
+        } catch (e) { }
+    };
+    wrap._nsfwLock = lockPanels;
+    lockPanels();
+    try { if (typeof requestAnimationFrame === 'function') requestAnimationFrame(lockPanels); } catch (e) { }
+    try { setTimeout(lockPanels, 150); } catch (e) { }
     try { bindCardEdit(wrap, name, profile); } catch (e) { }
     return wrap;
 }
@@ -1292,9 +1327,72 @@ function bindCardEdit(wrap, name, profile) {
         btn.textContent = '✎';
         btn.title = '编辑这张卡';
         wrap.classList.remove('yw-nsfw-editing');
+        /* ★W362：把改动写回这一楼的块 —— 卡片是「读楼层」画的，只改 bucket 会被下次挂载覆盖 */
+        try {
+            const mesid0 = wrap.dataset.mesid;
+            const changes = [];
+            wrap.querySelectorAll(".yw-nsfw-row[data-id]").forEach((row) => {
+                const id = row.getAttribute("data-id");
+                const v = row.querySelector(".yw-nsfw-in-v");
+                const c = row.querySelector(".yw-nsfw-in-c");
+                if (!v) return;
+                changes.push({ id: id, value: v.value, comment: c ? c.value : "" });
+            });
+            if (mesid0 != null && changes.length) nsfwEditFloor(chatId, Number(mesid0), name, changes);
+        } catch (e) { }
         const mesid = wrap.dataset.mesid;
         if (mesid != null) setTimeout(() => { try { nsfwMountToMessage(Number(mesid)); } catch (e) { } }, 30);
     });
+}
+/** ★W362：编辑卡片后写回楼层块（值/评述），并同步 swipes + 存盘 + 重渲染 */
+export function nsfwEditFloor(chatId, mesid, name, changes) {
+    try {
+        const ctx = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
+        if (!ctx || !Array.isArray(ctx.chat)) return false;
+        const msg = ctx.chat[mesid];
+        if (!msg) return false;
+        const src = String(msg.mes || '');
+        const esc0 = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const openRe = new RegExp('<(?:div[^>]*data-nsfw="m"[^>]*data-name="' + esc0(name) + '"[^>]*|nsfw\\s+name="' + esc0(name) + '"[^>]*)>', 'i');
+        const om = openRe.exec(src);
+        const closeTag = om && om[0].indexOf('div') === 1 ? '</div>' : '</nsfw>';
+        /* 找块的结尾 */
+        const openEnd = om ? om.index + om[0].length : -1;
+        const closeIdx = om ? src.indexOf(closeTag, openEnd) : -1;
+        if (!om || closeIdx < 0) return false;
+        let body = src.slice(openEnd, closeIdx);
+        changes.forEach((ch) => {
+            const id = String(ch.id || "");
+            if (!id) return;
+            const val0 = String(ch.value == null ? '' : ch.value) + (ch.comment ? '|' + ch.comment : '');
+            const line = id + '=' + val0;
+            const re = new RegExp('^[ \\t]*' + esc0(id) + '[^=\\n]*=[^\\n]*$', 'mi');
+            /* 保留原来的「ID 中文 [范围]」前缀，只换 = 后面的值 */
+            if (re.test(body)) body = body.replace(re, (m0) => {
+                const eq = m0.indexOf('=');
+                return m0.slice(0, eq + 1) + ' ' + val0;
+            });
+            else body = body.replace(/\s*$/, '') + String.fromCharCode(10) + line;
+        });
+        const next = src.slice(0, openEnd) + body + src.slice(closeIdx);
+        if (next === src) return false;
+        msg.mes = next;
+        try {
+            if (Array.isArray(msg.swipes) && typeof msg.swipe_id === "number" && msg.swipes[msg.swipe_id] != null) msg.swipes[msg.swipe_id] = next;
+        } catch (e) { }
+        try { if (ctx.saveChat) ctx.saveChat(); } catch (e) { }
+        try { if (typeof ctx.saveChat === "function") ctx.saveChat(); } catch (e) { }
+        try {
+            const chatEl = document.querySelector(".mes[mesid=\"" + mesid + "\"] .mes_text");
+            if (chatEl && ctx.messageFormatting) {
+                chatEl.innerHTML = ctx.messageFormatting(next, msg.name || "", false, false, mesid);
+                nsfwMountToMessage(mesid);
+            } else {
+                nsfwMountToMessage(mesid);
+            }
+        } catch (e) { }
+        return true;
+    } catch (e) { return false; }
 }
 /** 示例填充：给当前聊天塞一个全字段角色，方便先看效果 */
 export function nsfwFillDemo(chatId, name) {
@@ -1412,7 +1510,7 @@ const CSS = [
 
 
     '.yw-nsfw-row .yw-nsfw-c{flex:1 1 auto;min-width:0;margin-left:auto;text-align:right;opacity:.62;font-style:italic;overflow-wrap:anywhere}',
-    '.yw-nsfw-viewrow{padding:3px 2px;font-size:.86em;line-height:1.55;font-style:italic;opacity:.9}',
+    '.yw-nsfw-viewrow{padding:3px 2px;line-height:1.6;font-style:italic;opacity:.85}',   /* ★W362：与左侧字段同字号 */
     '.yw-nsfw-viewrow .lbl{opacity:.55;font-style:normal;margin-right:6px}',
     '.yw-nsfw-empty{padding:10px;opacity:.6;font-size:.86em}',
     '.yw-nsfw-tbl{width:100%;border-collapse:collapse;font-size:.86em;margin:2px 0;table-layout:auto}',
