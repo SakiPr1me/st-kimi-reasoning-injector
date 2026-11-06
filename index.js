@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.243'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.244'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -2468,6 +2468,7 @@ window.fetch = async function(...args) {
 let autoRerollCount = 0;
 let lastAutoRerollMessageId = -1;
 let lastAutoRerollTime = 0;
+let lastStuckRecoverAt = 0;   // ★W398：卡死看门狗上次补切时间
 let earlyStopTriggered = false;      // 流式中已触发截断（防重复 stopGeneration）
 let earlyRerollMessageId = -1;       // 已被流式截断、需要强制重roll的消息id
 let rerollGuard = createRerollGuard();   // v1.37.54：截断后「待新分支」状态（确认进入分支后一直等，不盲等出字）
@@ -9403,6 +9404,7 @@ try { rerollGuard.confirmBranch(); } catch (e) { } // v1.37.54 真实生成开�
     emptyRerollTargetId = -1;
     autoStopTriggered = false;
     earlyRerollHandled = false;
+    lastStuckRecoverAt = 0;   /* ★W398 */
 });
 
 // v1.11.51：生成前按注入模式设置 cot_require 变量（output_format 的 <cot> 行是否显示）。
@@ -9436,6 +9438,36 @@ setInterval(() => {
         }
     } catch (e) { }
 }, 800);
+/* ★W398：卡死看门狗 —— 自动重roll 已经发起，但既没有生成在跑、也没有待确认的 swipe，
+   最后一条还是空占位（典型：ST 把 swipe 回滚了 / 截断后既没走空回也没走半截楼）
+   ⇒ 继续把分支切过去，直到连续上限（手动停止/暂停时一律不动）。 */
+setInterval(() => {
+    try {
+        if (!settings.enabled || settings.rerollPaused) return;
+        if (isGenerating || autoSwipeBusy) return;
+        if (!rerollFiredThisGen) return;
+        if (pendingSwipeConfirm !== -1 || rerollRetryTarget >= 0) return;
+        if (manualStopClicked || lastGenManuallyStopped) return;
+        if (Date.now() - lastAutoRerollTime < 12000) return;
+        if (Date.now() - lastStuckRecoverAt < 12000) return;
+        if (autoRerollCount >= settings.autoRerollLimit) return;
+        const ctxS = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? SillyTavern.getContext() : null;
+        const chatS = (ctxS && Array.isArray(ctxS.chat)) ? ctxS.chat : [];
+        let rid = -1;
+        for (let i = chatS.length - 1; i >= 0; i--) { const m = chatS[i]; if (m && !m.is_user && !m.is_system) { rid = i; break; } }
+        if (rid < 0) return;
+        if (!isEmptyMes(String(chatS[rid].mes ?? ''))) return;
+        lastStuckRecoverAt = Date.now();
+        autoRerollCount++;
+        lastAutoRerollTime = Date.now();
+        rerollFiredThisGen = true;
+        console.log(`[余温工具箱] 卡死看门狗：空楼层 + 没有生成在跑 → 再切一次（连续 ${autoRerollCount}/${settings.autoRerollLimit}）`);
+        notifyReroll(`🔄 卡住兜底：再切一次分支（连续 ${autoRerollCount}/${settings.autoRerollLimit}）`);
+        updateRerollStatus();
+        triggerAutoSwipe(rid);
+    } catch (e) { }
+}, 2000);
+
 eventSource.on(event_types.GENERATION_STARTED, () => {
     /* ★W333：生成期间把状态卡藏起来（作者要求：跟其它美化一样，生成完再显示新内容，流式期间不挂着） */
     try { if (document && document.body) document.body.classList.add('yw-nsfw-generating'); } catch (e) { }
@@ -9492,22 +9524,39 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
     if (manualStopClicked) return; // 用户手动停止：不当作空回
     console.log('[余温工具箱] ENDED 守卫: 已收到token，非空回');
     if (streamGotToken) {
+        /* ★W398：先定位这次生成的那条楼 */
+        let rid = lastObservedMesId;
+        if (rid < 0) {
+            try {
+                const ctxB = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+                const cb = ctxB?.chat;
+                for (let i = (cb?.length || 1) - 1; i >= 0; i--) {
+                    const m = cb[i];
+                    if (m && !m.is_user && !m.is_system) { rid = i; break; }
+                }
+            } catch (e) { }
+        }
+        /* ★W398：截断/断流收尾时消息可能是**空占位** —— checkNativeReroll 见到空占位会直接 return
+           （那条早退是给 ST 1.13 的"swipe 建槽空占位"用的），于是既没空回重roll、也没半截楼判定 ⇒
+           横幅挂在 1/30 不动。生成已经结束（这里就是 ENDED）、又不是手动停/不是我们按标记截的，
+           就按空回处理（**与「结束仍无截断标记」那个勾无关**）。 */
+        let emptyNow = false;
+        try {
+            const cE = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? SillyTavern.getContext() : null;
+            const mE = cE?.chat?.[rid];
+            emptyNow = !!(mE && !mE.is_user && !mE.is_system && isEmptyMes(String(mE.mes ?? '')));
+        } catch (e) { }
+        if (rid >= 0 && emptyNow && settings.enabled && settings.rerollOnEmpty && !autoStopTriggered && !emptyRerollHandled && !rerollFiredThisGen && !settings.rerollPaused) {
+            console.log('[余温工具箱] ENDED 收尾是空占位 → 按空回兜底重roll（消息#' + rid + '）');
+            emptyRerollHandled = true;
+            handleEmptyReroll(rid, '空回（收尾兜底）');
+            return;
+        }
         // 半截楼兜底（v1.34.2）：流式中途断流（网络断/超时/服务器中断——「输出到一半截断」的典型形态）时
         // 消息没有正常完成 → MESSAGE_RECEIVED 不触发 → checkNativeReroll 没机会跑 → 有 token 的截断楼从不重roll。
         // 此处补跑完整性判定：checkNativeReroll 内部自带标记校验/冷却/上限/总闸，重复调用无害。
         // （能走到这里说明非手动停止——manualStopClicked 在上方 3187 已 return）
         if (settings.enabled && settings.rerollOnNoMutter && !rerollFiredThisGen && !settings.rerollPaused) {
-            let rid = lastObservedMesId;
-            if (rid < 0) {
-                try {
-                    const ctxB = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-                    const cb = ctxB?.chat;
-                    for (let i = (cb?.length || 1) - 1; i >= 0; i--) {
-                        const m = cb[i];
-                        if (m && !m.is_user && !m.is_system) { rid = i; break; }
-                    }
-                } catch (e) { }
-            }
             if (rid >= 0) {
                 console.log('[余温工具箱] ENDED 半截楼兜底判定：消息#' + rid);
                 checkNativeReroll(rid);
