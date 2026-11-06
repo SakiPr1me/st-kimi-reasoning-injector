@@ -1360,7 +1360,7 @@ const CSS = [
     '.yw-nsfw-tbl tbody th{width:8.2em;font-weight:500;opacity:.72;padding:2px 4px;text-align:left;white-space:nowrap;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
     '.yw-nsfw-tbl td{padding:2px 4px;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent);vertical-align:middle}',
     '.yw-nsfw-tbl td.v{width:7.2em;white-space:nowrap}',
-    '.yw-nsfw-tbl td.v .num{font-variant-numeric:tabular-nums;margin-right:6px}',
+    '.yw-nsfw-tbl td.v .num{display:inline-block;width:3.1em;text-align:right;font-variant-numeric:tabular-nums;margin-right:6px}',
     '.yw-nsfw-tbl td.v .bar{display:inline-block;width:3.6em;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden;vertical-align:middle}',
     '.yw-nsfw-tbl td.v .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
     /* ★W327 悬浮发送条：一条横条，可拖；AUTO 在左，名字在右；点名字看快照 */
