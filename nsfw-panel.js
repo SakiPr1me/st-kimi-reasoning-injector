@@ -637,8 +637,17 @@ export function nsfwParse(text) {
                 const rest0 = s2.slice(s2.indexOf('=') + 1).trim();
                 if (!rest0) return;
                 const sv = splitValueComment(rest0);
+                /* ★W387：用户自己加的字段也认 `[0-100](单位)` —— 有范围就画条，中文名照用 */
+                const head0 = s2.slice(0, s2.indexOf('=')).trim();
+                let tail0 = head0.slice(key0.length).trim();
+                let min0 = null, max0 = null, unit0 = '';
+                const rm0 = /[\[【]\s*(-?\d+(?:\.\d+)?)\s*[-~～—]\s*(-?\d+(?:\.\d+)?)\s*[\]】]/.exec(tail0);
+                if (rm0) { min0 = Number(rm0[1]); max0 = Number(rm0[2]); tail0 = tail0.replace(rm0[0], ' '); }
+                const um0 = /[（(]\s*([^)）]{0,10})\s*[)）]/.exec(tail0);
+                if (um0) { unit0 = um0[1].trim(); tail0 = tail0.replace(um0[0], ' '); }
+                const label0 = tail0.replace(/[\[\]【】]/g, ' ').replace(/\s+/g, ' ').trim();
                 if (!c.extra) c.extra = {};
-                c.extra[key0] = { value: sv.value, comment: sv.comment, group: curGroup };
+                c.extra[key0] = { value: sv.value, comment: sv.comment, group: curGroup, label: label0 || key0, min: min0, max: max0, unit: unit0 };
             });
         } catch (e0) { }
     }
@@ -706,7 +715,7 @@ function applyParsedTo(bucket, parsed) {
         const ex = parsed.chars[name].extra || {};
         Object.keys(ex).forEach((id) => {
             if (!rec.extra) rec.extra = {};
-            rec.extra[id] = { value: ex[id].value, comment: ex[id].comment || "", group: ex[id].group || "其它", at: Date.now() };
+            rec.extra[id] = { value: ex[id].value, comment: ex[id].comment || "", group: ex[id].group || "其它", label: ex[id].label || "", min: (typeof ex[id].min === "number" ? ex[id].min : null), max: (typeof ex[id].max === "number" ? ex[id].max : null), unit: ex[id].unit || "", at: Date.now() };
         });
         rec.updatedAt = Date.now();
         bucket.order = bucket.order.filter((n) => n !== name);
@@ -1438,7 +1447,22 @@ export function nsfwRenderCard(name, profile) {
             const hitTab = tabs.filter((t) => t.label === g)[0];
             const h = Object.keys(ex)
                 .filter((id) => String(ex[id].group || "其它") === g && String(ex[id].value || "").trim())
-                .map((id) => '<div class="yw-nsfw-row" data-id="' + esc(id) + '" data-type="text"><span class="k">' + esc(id) + '</span><span class="v">' + esc(String(ex[id].value)) + '</span><span class="yw-nsfw-c">' + esc(ex[id].comment || "") + '</span></div>').join("");
+                .map((id) => {
+                    const e0 = ex[id] || {};
+                    const lab0 = String(e0.label || id);
+                    const val0 = String(e0.value == null ? "" : e0.value);
+                    const unit0 = String(e0.unit || "");
+                    const valTxt0 = esc(unit0 ? (val0 + " " + unit0) : val0);
+                    const hasRange = (typeof e0.min === "number" && typeof e0.max === "number");
+                    const isNum = hasRange && val0.trim() !== "" && Number.isFinite(Number(val0));
+                    let vHtml = '<span class="v' + (val0.length > 22 ? ' wrap' : '') + '" title="' + valTxt0 + '">' + valTxt0 + '</span>';
+                    if (isNum) {
+                        const span0 = (e0.max - e0.min) || 1;
+                        const pct0 = Math.max(0, Math.min(100, ((Number(val0) - e0.min) / span0) * 100));
+                        vHtml = '<span class="v num" title="' + valTxt0 + '"><span class="n">' + valTxt0 + '</span><span class="bar"><i style="width:' + pct0.toFixed(0) + '%"></i></span></span>';
+                    }
+                    return '<div class="yw-nsfw-row" data-id="' + esc(id) + '" data-type="' + (isNum ? 'num' : 'text') + '"><span class="k">' + esc(lab0) + '</span>' + vHtml + '<span class="yw-nsfw-c">' + esc(e0.comment || "") + '</span></div>';
+                }).join("");
             if (!h) return;
             if (hitTab) hitTab.html += h;
             else tabs.push({ id: "x-" + g, label: g, html: h });
@@ -1501,6 +1525,8 @@ export function nsfwRenderCard(name, profile) {
     const lockPanels = () => {
         try {
             const kids = Array.prototype.slice.call(panels.children);
+            /* ★W388：先摘掉上次铺的横线，再量真实内容高度（否则越量越高） */
+            kids.forEach((k) => { k.querySelectorAll('.yw-nsfw-fill').forEach((f) => f.remove()); });
             let maxH = 0;
             kids.forEach((k) => {
                 const old = k.style.display;
@@ -1509,6 +1535,22 @@ export function nsfwRenderCard(name, profile) {
                 k.style.display = old;
             });
             if (maxH > 0) { panels.style.minHeight = maxH + 'px'; panels.style.height = maxH + 'px'; }
+            /* ★W388：比最高页矮的分页，空白处按行高铺虚线（作者：空的别白着，要有横线） */
+            kids.forEach((k) => {
+                const old = k.style.display;
+                k.style.display = 'block';
+                const used = k.scrollHeight;
+                k.style.display = old;
+                const left = maxH - used;
+                if (left <= 2) return;
+                const sample = k.querySelector('.yw-nsfw-row');
+                const rowH = sample ? Math.max(14, Math.round(sample.getBoundingClientRect().height)) : 27;
+                const f = document.createElement('div');
+                f.className = 'yw-nsfw-fill';
+                f.style.height = left + 'px';
+                f.style.setProperty('--yw-fill-h', rowH + 'px');
+                k.appendChild(f);
+            });
         } catch (e) { }
     };
     wrap._nsfwLock = lockPanels;
@@ -1779,6 +1821,7 @@ const CSS = [
     /* ★W346：这行原来是给 div 布局写的 flex —— 套在 <tr> 上会把 td 变成 block，列宽全失效（值被挤成一字一行）。tr 上只留行距。 */
     /* ★W352 统一行布局：字段(定宽)|值(+条)|评述(右)；字号全继承，只有透明度区分；条用 px 固定，窄屏不缩 */
     '.yw-nsfw-rows{display:block}',
+    '.yw-nsfw-fill{pointer-events:none;background-image:repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--yw-fill-h,27px) - 1px),color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent) calc(var(--yw-fill-h,27px) - 1px),color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent) var(--yw-fill-h,27px))}',
     '.yw-nsfw-row{display:flex;align-items:baseline;gap:8px;padding:3px 2px;line-height:1.5;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
     '.yw-nsfw-row .k{flex:0 0 92px;opacity:.78;white-space:nowrap}',
     '.yw-nsfw-row .v{display:inline-flex;align-items:center;gap:6px;min-width:0;white-space:nowrap;font-variant-numeric:tabular-nums}',
