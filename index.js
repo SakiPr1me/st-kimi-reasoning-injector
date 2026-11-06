@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.187'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.188'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -2299,7 +2299,8 @@ function applyRequestInjections(bodyObj) {
         }
 
         // 1.3) ★W325：NSFW 状态栏 —— 楼层里的旧块不重复发给 AI（不越滚越大）；按悬浮窗模式发送"最新读数"
-        if (settings.enabled && settings.nsfwEnabled && msgs && msgs.length) {
+        /* ★W336：状态栏是独立功能，不受工具箱总开关影响（否则总开关关着时：生成后不解析→无卡、悬浮窗无档案） */
+        if (settings.nsfwEnabled && msgs && msgs.length) {
             try {
                 /* ①历史楼层里我们自己换过外壳的块不进请求（你的正则也可以再兜一层） */
                 for (let i = 0; i < msgs.length; i++) {
@@ -8968,7 +8969,7 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id, type) => {
 const nsfwParsedKeys = new Set();
 eventSource.on(event_types.MESSAGE_RECEIVED, async (id) => {
     try {
-        if (!settings.enabled || !settings.nsfwEnabled) return;
+        if (!settings.nsfwEnabled) return;   /* ★W336：同上，只认状态栏自己的开关 */
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
         const msg = ctx && ctx.chat ? ctx.chat[id] : null;
         if (!msg || msg.is_user || msg.is_system) return;
@@ -8997,12 +8998,15 @@ eventSource.on(event_types.MESSAGE_RECEIVED, async (id) => {
         nsfwApply(nsfwChatId(ctx), parsed);
         try { nsfwMarkMentions(nsfwChatId(ctx), parsed.stripped, id); } catch (e) { }
         try { nsfwSaveSnap(nsfwChatId(ctx), id); } catch (e) { }
+        /* ★W336：解析完立刻刷新悬浮条，不然它还挂着「无档案」 */
+        try { nsfwMountSender(); } catch (e) { }
         /* ★W315：块不再从 mes 里剥掉 —— 状态就长在楼层里：
            · 小铅笔打开能看到并手改（下一轮注入读的就是它）
            · 重roll / 新分支各生成各的块，互不覆盖
            · 删楼就连块一起没了
            显示层由 nsfwHideRaw 隐藏原始块，卡片从这条消息自己的块解析。 */
-        setTimeout(() => { try { nsfwMountToMessage(id); } catch (e) { } }, 80);
+        /* ★W336：酒馆收尾还会重渲染一两次 —— 多补挂几次，不然卡会被最后一帧冲掉（作者实测「要编辑保存后才出现」） */
+        [80, 400, 900].forEach((ms) => setTimeout(() => { try { nsfwMountToMessage(id); } catch (e) { } }, ms));
     } catch (e) { /* 状态栏失败静默，绝不影响聊天 */ }
 });
 /** 重渲染后补挂状态卡（swipe/编辑/角色渲染共用） */
@@ -9371,7 +9375,7 @@ eventSource.on(event_types.GENERATION_STARTED, () => {
 eventSource.on(event_types.GENERATION_ENDED, () => {
     try {
         if (document && document.body) document.body.classList.remove('yw-nsfw-generating');
-        if (settings.nsfwEnabled) setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, 120);
+        if (settings.nsfwEnabled) [150, 500, 1100].forEach((ms) => setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, ms));
     } catch (e) { }
     lastGenManuallyStopped = false; // 一轮生成彻底结束，清手动停止标记
     // v1.37.56：dry-run 不会发 GENERATION_ENDED（dry-run 在 Generate 里提前 return，从不显示停止按钮，
