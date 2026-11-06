@@ -1332,6 +1332,18 @@ export function nsfwRenderCard(name, profile) {
         b.className = 'yw-nsfw-tab' + (i === 0 ? ' on' : '');
         b.textContent = t.label;
         b.addEventListener('click', () => {
+            /* ★W370：先量一遍目标页，必要时把容器抬高 —— 首次进入最高的「状态」页时整体不再变大 */
+            try {
+                const target0 = panels.querySelector('[data-panel="' + t.id + '"]');
+                if (target0) {
+                    const old0 = target0.style.display;
+                    target0.style.display = 'block';
+                    const h0 = target0.scrollHeight;
+                    target0.style.display = old0;
+                    const cur0 = parseFloat(panels.style.minHeight) || 0;
+                    if (h0 > cur0) panels.style.minHeight = h0 + 'px';
+                }
+            } catch (e) { }
             tabBar.querySelectorAll('.yw-nsfw-tab').forEach((x) => x.classList.remove('on'));
             b.classList.add('on');
             panels.querySelectorAll('.yw-nsfw-panel').forEach((x) => x.classList.remove('on'));
