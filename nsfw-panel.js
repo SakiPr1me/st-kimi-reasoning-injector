@@ -286,6 +286,101 @@ export function nsfwAllFields() {
     return base.concat(custom.map((f) => Object.assign({ custom: true, core: true }, f)));
 }
 
+/* ───────── ★W390：字段字典（只从预设的 <nsfw_state_guide> 里抽，指南说了算） ───────── */
+const GUIDE_STORE_KEY = 'kimi_nsfw_guide_v1';
+let _guideCache = null;
+
+/** 解析 guide 里的 `<nsfw>…</nsfw>` 字段表；`[多行]` 标记多行字段 */
+export function nsfwParseGuide(text) {
+    const map = {};
+    try {
+        const src = String(text || '');
+        const bodyM = /<nsfw>([\s\S]*?)<\/nsfw>/i.exec(src);
+        const body = bodyM ? bodyM[1] : src;
+        let group = '';
+        body.split(/\r?\n/).forEach((line) => {
+            const s0 = String(line || '').trim();
+            if (!s0) return;
+            const gm = /^【([^】]{1,12})】$/.exec(s0);
+            if (gm) { group = gm[1]; return; }
+            const eq = s0.indexOf('=');
+            if (eq <= 0) return;
+            const head = s0.slice(0, eq).trim();
+            const m = /^([A-Za-z][A-Za-z0-9_]*)\s+(\S[\s\S]*)$/.exec(head);
+            if (!m) return;
+            const id = m[1];
+            const rest = m[2];
+            const brackets = [];
+            let bm;
+            const reB = /[\[【]([^\]】]*)[\]】]/g;
+            while ((bm = reB.exec(rest))) brackets.push(bm[1]);
+            const parens = [];
+            let pm;
+            const reP = /[（(]([^)）]*)[)）]/g;
+            while ((pm = reP.exec(rest))) parens.push(pm[1]);
+            const label = rest.replace(/[\[【][^\]】]*[\]】]/g, ' ').replace(/[（(][^)）]*[)）]/g, ' ').replace(/\s*列表.*$/, '').replace(/\s+/g, ' ').trim();
+            let min = null, max = null, multi = false;
+            brackets.forEach((b) => {
+                if (String(b).indexOf('多行') >= 0) multi = true;
+                const rm = /^\s*(-?\d+(?:\.\d+)?)\s*[-~～—]\s*(-?\d+(?:\.\d+)?)\s*$/.exec(String(b));
+                if (rm) { min = Number(rm[1]); max = Number(rm[2]); }
+            });
+            if (/多行/.test(rest)) multi = true;
+            let unit = '';
+            const isUnit = (u) => /^[A-Za-z%‰℃]+$/.test(u) || /^(次|人|天|个|岁|分|秒|小时|毫升|厘米|克|公斤|升|倍|日|周|月)$/.test(u);
+            for (let i = parens.length - 1; i >= 0; i--) {
+                const u = String(parens[i] || '').trim();
+                if (u && isUnit(u)) { unit = u; break; }
+            }
+            map[id] = { id: id, label: label || id, group: group || '其它', min: min, max: max, unit: unit, multi: multi };
+        });
+    } catch (e) { }
+    return map;
+}
+
+/** 收到请求就更新字典（内容没变不写盘） */
+export function nsfwSetGuide(text) {
+    try {
+        const map = nsfwParseGuide(text);
+        const ids = Object.keys(map);
+        if (!ids.length) return false;
+        const sig = ids.map((k) => [k, map[k].label, map[k].min, map[k].max, map[k].unit, map[k].group, map[k].multi ? 1 : 0].join('~')).join('|');
+        if (_guideCache && _guideCache.sig === sig) return true;
+        _guideCache = { sig: sig, map: map };
+        try { localStorage.setItem(GUIDE_STORE_KEY, JSON.stringify(_guideCache)); } catch (e1) { }
+        return true;
+    } catch (e) { return false; }
+}
+
+function nsfwGuide() {
+    if (_guideCache) return _guideCache.map;
+    try {
+        const j = JSON.parse(localStorage.getItem(GUIDE_STORE_KEY) || 'null');
+        if (j && j.map && typeof j.map === 'object') { _guideCache = j; return j.map; }
+    } catch (e) { }
+    return {};
+}
+/** 指南里这个 ID 怎么写的（没有就 null） */
+export function nsfwGuideMeta(id) {
+    const m = nsfwGuide();
+    return m[String(id || '')] || null;
+}
+export function nsfwGuideCount() {
+    try { return Object.keys(nsfwGuide()).length; } catch (e) { return 0; }
+}
+/** 画卡用的「视图字段」：指南里写了中文/范围/单位，以指南为准 */
+function viewField(f) {
+    if (!f) return f;
+    const g = nsfwGuideMeta(f.id);
+    if (!g) return f;
+    const o = Object.assign({}, f);
+    if (g.label) o.label = g.label;
+    if (g.unit) o.unit = g.unit;
+    if (typeof g.min === 'number') o.min = g.min;
+    if (typeof g.max === 'number') o.max = g.max;
+    return o;
+}
+
 /** 字段管理：改内置字段（label/group/type/sex） */
 export function nsfwSetFieldOverride(id, patch) {
     try {
@@ -332,6 +427,11 @@ function fieldByLabel(label) {
 function activeFields(profile) {
     const sex = (profile && profile.sex) || 'female';
     return nsfwAllFields().filter((f) => !f.sex || f.sex === sex);
+}
+/** ★W391：模型偷懒写「未知」时，不拿它覆盖已有的值（相当于没更新） */
+function isUnknownish(v) {
+    const t = String(v == null ? '' : v).trim();
+    return /^(未知|不详|未记录|无记录|未知。?|不清楚|不确定)$/.test(t);
 }
 function clampNum(f, v) {
     let n = Number(v);
@@ -647,7 +747,18 @@ export function nsfwParse(text) {
                 if (um0) { unit0 = um0[1].trim(); tail0 = tail0.replace(um0[0], ' '); }
                 const label0 = tail0.replace(/[\[\]【】]/g, ' ').replace(/\s+/g, ' ').trim();
                 if (!c.extra) c.extra = {};
-                c.extra[key0] = { value: sv.value, comment: sv.comment, group: curGroup, label: label0 || key0, min: min0, max: max0, unit: unit0 };
+                /* ★W391：指南里标了 [多行]（或写在【近况】组里）的字段，同一 ID 出现多次 = 多条 */
+                const gm0 = nsfwGuideMeta(key0) || {};
+                const multi0 = !!gm0.multi || curGroup === '近况';
+                const prev0 = c.extra[key0];
+                if (prev0 && multi0) {
+                    const arr0 = Array.isArray(prev0.list) ? prev0.list.slice() : (String(prev0.value || '').trim() ? [String(prev0.value)] : []);
+                    arr0.push(String(sv.value));
+                    prev0.list = arr0;
+                    if (!prev0.comment) prev0.comment = sv.comment;
+                    return;
+                }
+                c.extra[key0] = { value: sv.value, comment: sv.comment, group: curGroup, label: (label0 || gm0.label || key0), min: (typeof min0 === 'number' ? min0 : (typeof gm0.min === 'number' ? gm0.min : null)), max: (typeof max0 === 'number' ? max0 : (typeof gm0.max === 'number' ? gm0.max : null)), unit: (unit0 || gm0.unit || ''), list: multi0 ? [String(sv.value)] : undefined };
             });
         } catch (e0) { }
     }
@@ -694,9 +805,10 @@ function applyParsedTo(bucket, parsed) {
         const allow = {};
         activeFields(rec).forEach((f) => { allow[f.id] = 1; });
         Object.keys(mm).forEach((id) => {
-            const f = fieldById(id);
-            if (!f) return;
+            const f0 = fieldById(id);
+            if (!f0) return;
             if (!allow[id]) return;   /* ★只收当前启用字段 */
+            const f = viewField(f0);   /* ★W390：范围以指南为准 */
             const item = mm[id] || {};
             let value = item.value;
             if (f.type === 'num') {
@@ -704,6 +816,8 @@ function applyParsedTo(bucket, parsed) {
                 if (n === null) return;
                 value = n;
             }
+            /* ★W391：模型写「未知」而旧值有内容 ⇒ 当作没更新（沿用旧值） */
+            if (f.type !== 'num' && isUnknownish(value) && rec.stats[id] && String((rec.stats[id] || {}).value || '').trim() && !isUnknownish((rec.stats[id] || {}).value)) return;
             if (f.type === 'list') {
                 value = String(value || '').split(/[,，、]/).map((x) => x.trim()).filter(Boolean);
             }
@@ -715,7 +829,17 @@ function applyParsedTo(bucket, parsed) {
         const ex = parsed.chars[name].extra || {};
         Object.keys(ex).forEach((id) => {
             if (!rec.extra) rec.extra = {};
-            rec.extra[id] = { value: ex[id].value, comment: ex[id].comment || "", group: ex[id].group || "其它", label: ex[id].label || "", min: (typeof ex[id].min === "number" ? ex[id].min : null), max: (typeof ex[id].max === "number" ? ex[id].max : null), unit: ex[id].unit || "", at: Date.now() };
+            const inc = ex[id] || {};
+            const old = rec.extra[id] || {};
+            if (Array.isArray(inc.list)) {
+                /* ★W391：近况是累积的 —— 旧条目 + 本轮新条目，去重，只留最近 20 条 */
+                const oldList = Array.isArray(old.list) ? old.list.slice() : (String(old.value || "").trim() ? [String(old.value)] : []);
+                const merged = oldList.concat(inc.list.map(String)).filter((v, i, a) => a.indexOf(v) === i).slice(-20);
+                rec.extra[id] = { value: merged[0] || "", comment: inc.comment || old.comment || "", group: inc.group || old.group || "其它", label: inc.label || old.label || "", min: (typeof inc.min === "number" ? inc.min : (typeof old.min === "number" ? old.min : null)), max: (typeof inc.max === "number" ? inc.max : (typeof old.max === "number" ? old.max : null)), unit: inc.unit || old.unit || "", list: merged, at: Date.now() };
+                return;
+            }
+            if (isUnknownish(inc.value) && old && String(old.value || "").trim() && !isUnknownish(old.value)) return;
+            rec.extra[id] = { value: inc.value, comment: inc.comment || "", group: inc.group || "其它", label: inc.label || "", min: (typeof inc.min === "number" ? inc.min : null), max: (typeof inc.max === "number" ? inc.max : null), unit: inc.unit || "", at: Date.now() };
         });
         rec.updatedAt = Date.now();
         bucket.order = bucket.order.filter((n) => n !== name);
@@ -806,7 +930,13 @@ export function buildCharBlock(name, profile) {
     try {
         const ex = profile.extra || {};
         Object.keys(ex).forEach((id) => {
-            const v = String((ex[id] || {}).value == null ? "" : ex[id].value).trim();
+            const e0 = ex[id] || {};
+            /* ★W391：近况这类多行字段逐条发（最多最近 10 条），别压成一行 */
+            if (Array.isArray(e0.list) && e0.list.length) {
+                e0.list.slice(-10).forEach((v) => { const t0 = String(v == null ? "" : v).trim(); if (t0) lines.push(id + '=' + t0); });
+                return;
+            }
+            const v = String(e0.value == null ? "" : e0.value).trim();
             if (v) lines.push(id + '=' + v);
         });
     } catch (e) { }
@@ -1330,9 +1460,10 @@ function tabRowsHtml(profile, grp, byGroup) {
     activeFields(profile).forEach((f) => {
         if (f.id === 'snapTime') return;   /* ★W344：快照时间放标题栏，不在状态页重复一行 */
         if ((f.tab || f.group) !== grp) return;
+        const fv = viewField(f);   /* ★W390：中文名/范围/单位以预设指南为准 */
         const cell = (profile.stats || {})[f.id];
-        if (!cell || !fmtVal(f, cell)) return;
-        rows.push({ ord: (typeof f.ord === 'number' ? f.ord : 9999), html: rowHtml(f, cell) });
+        if (!cell || !fmtVal(fv, cell)) return;
+        rows.push({ ord: (typeof f.ord === 'number' ? f.ord : 9999), html: rowHtml(fv, cell) });
     });
     rows.sort((a, b) => a.ord - b.ord);
     if (!rows.length) return '';
@@ -1438,20 +1569,27 @@ export function nsfwRenderCard(name, profile) {
     try {
         const ex = profile.extra || {};
         const exGroups = [];
+        const exG = (id) => nsfwGuideMeta(id) || {};
+        const exGroupOf = (id) => String((ex[id] && ex[id].group) || exG(id).group || "其它");
+        const exHas = (id) => { const e = ex[id] || {}; return String(e.value || "").trim() || (Array.isArray(e.list) && e.list.length); };
         Object.keys(ex).forEach((id) => {
-            if (!String((ex[id] || {}).value || "").trim()) return;
-            const g = String(ex[id].group || "其它");
+            if (!exHas(id)) return;
+            const g = exGroupOf(id);
             if (exGroups.indexOf(g) < 0) exGroups.push(g);
         });
         exGroups.forEach((g) => {
             const hitTab = tabs.filter((t) => t.label === g)[0];
             const h = Object.keys(ex)
-                .filter((id) => String(ex[id].group || "其它") === g && String(ex[id].value || "").trim())
+                .filter((id) => exGroupOf(id) === g && exHas(id))
                 .map((id) => {
                     const e0 = ex[id] || {};
-                    const lab0 = String(e0.label || id);
+                    const gm0 = exG(id);
+                    const lab0 = String(e0.label || gm0.label || id);
+                    if (Array.isArray(e0.list) && e0.list.length) {
+                        return e0.list.slice(-10).map((v, i) => '<div class="yw-nsfw-row yw-nsfw-log"><span class="k">' + (i === 0 ? esc(lab0) : '') + '</span><span class="v wrap">' + esc(String(v == null ? '' : v)) + '</span></div>').join('');
+                    }
                     const raw0 = String(e0.value == null ? "" : e0.value).trim();
-                    const unit0 = String(e0.unit || "");
+                    const unit0 = String(e0.unit || gm0.unit || "");
                     /* 值里已经自带单位（7次 / 7 次 / 7（次））⇒ 摘掉再做数字判断，显示时统一补一个 */
                     let core0 = raw0;
                     if (unit0) {
@@ -1461,7 +1599,9 @@ export function nsfwRenderCard(name, profile) {
                     }
                     const val0 = core0;
                     const valTxt0 = esc(unit0 ? (val0.indexOf(unit0) >= 0 ? val0 : (val0 ? (val0 + " " + unit0) : unit0)) : raw0);
-                    const hasRange = (typeof e0.min === "number" && typeof e0.max === "number");
+                    const minE = (typeof e0.min === "number") ? e0.min : (typeof gm0.min === "number" ? gm0.min : null);
+                    const maxE = (typeof e0.max === "number") ? e0.max : (typeof gm0.max === "number" ? gm0.max : null);
+                    const hasRange = (typeof minE === "number" && typeof maxE === "number");
                     let num0 = null;
                     if (val0 !== "") {
                         const n0 = Number(val0);
@@ -1471,8 +1611,8 @@ export function nsfwRenderCard(name, profile) {
                     const isNum = hasRange && num0 !== null;
                     let vHtml = '<span class="v' + (val0.length > 22 ? ' wrap' : '') + '" title="' + valTxt0 + '">' + valTxt0 + '</span>';
                     if (isNum) {
-                        const span0 = (e0.max - e0.min) || 1;
-                        const pct0 = Math.max(0, Math.min(100, ((num0 - e0.min) / span0) * 100));
+                        const span0 = (maxE - minE) || 1;
+                        const pct0 = Math.max(0, Math.min(100, ((num0 - minE) / span0) * 100));
                         vHtml = '<span class="v num" title="' + valTxt0 + '"><span class="n">' + valTxt0 + '</span><span class="bar"><i style="width:' + pct0.toFixed(0) + '%"></i></span></span>';
                     }
                     return '<div class="yw-nsfw-row" data-id="' + esc(id) + '" data-type="' + (isNum ? 'num' : 'text') + '"><span class="k">' + esc(lab0) + '</span>' + vHtml + '<span class="yw-nsfw-c">' + esc(e0.comment || "") + '</span></div>';
