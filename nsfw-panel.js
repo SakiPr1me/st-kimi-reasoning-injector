@@ -604,8 +604,11 @@ export function nsfwParse(text) {
             const known = {};
             const allF = nsfwAllFields();
             allF.forEach((f) => { known[f.id] = 1; });
+            let curGroup = '其它';
             body.split(/\r?\n/).forEach((ln) => {
                 const s2 = ln.trim();
+                const gm = /^【([^】]{1,12})】$/.exec(s2);
+                if (gm) { curGroup = gm[1]; return; }
                 if (!s2 || s2.indexOf('=') < 0) return;
                 const key0 = s2.slice(0, s2.indexOf('=')).trim().split(/\s+/)[0];
                 if (!/^[A-Za-z_\u4e00-\u9fa5][A-Za-z0-9_\-\u4e00-\u9fa5]*$/.test(key0)) return;
@@ -615,7 +618,7 @@ export function nsfwParse(text) {
                 if (!rest0) return;
                 const sv = splitValueComment(rest0);
                 if (!c.extra) c.extra = {};
-                c.extra[key0] = { value: sv.value, comment: sv.comment };
+                c.extra[key0] = { value: sv.value, comment: sv.comment, group: curGroup };
             });
         } catch (e0) { }
     }
@@ -683,7 +686,7 @@ function applyParsedTo(bucket, parsed) {
         const ex = parsed.chars[name].extra || {};
         Object.keys(ex).forEach((id) => {
             if (!rec.extra) rec.extra = {};
-            rec.extra[id] = { value: ex[id].value, comment: ex[id].comment || "", at: Date.now() };
+            rec.extra[id] = { value: ex[id].value, comment: ex[id].comment || "", group: ex[id].group || "其它", at: Date.now() };
         });
         rec.updatedAt = Date.now();
         bucket.order = bucket.order.filter((n) => n !== name);
@@ -1349,14 +1352,24 @@ export function nsfwRenderCard(name, profile) {
         const html = tabRowsHtml(profile, grp, byGroup);
         if (html) tabs.push({ id: grp, label: grp, html: html });
     });
-    /* ★W374：自定义字段单独一页「其它」 */
+    /* ★W375：自定义字段并进它自己所属的【组】分页（作者口径：放哪页就哪页）；组名不在内置列表里就新建一页 */
     try {
         const ex = profile.extra || {};
-        const exIds = Object.keys(ex).filter((id) => String((ex[id] || {}).value || "").trim());
-        if (exIds.length) {
-            const h = exIds.map((id) => '<div class="yw-nsfw-row"><span class="k">' + esc(id) + '</span><span class="v">' + esc(String(ex[id].value)) + '</span><span class="yw-nsfw-c">' + esc(ex[id].comment || "") + '</span></div>').join("");
-            tabs.push({ id: "其它", label: "其它", html: h });
-        }
+        const exGroups = [];
+        Object.keys(ex).forEach((id) => {
+            if (!String((ex[id] || {}).value || "").trim()) return;
+            const g = String(ex[id].group || "其它");
+            if (exGroups.indexOf(g) < 0) exGroups.push(g);
+        });
+        exGroups.forEach((g) => {
+            const hitTab = tabs.filter((t) => t.label === g)[0];
+            const h = Object.keys(ex)
+                .filter((id) => String(ex[id].group || "其它") === g && String(ex[id].value || "").trim())
+                .map((id) => '<div class="yw-nsfw-row"><span class="k">' + esc(id) + '</span><span class="v">' + esc(String(ex[id].value)) + '</span><span class="yw-nsfw-c">' + esc(ex[id].comment || "") + '</span></div>').join("");
+            if (!h) return;
+            if (hitTab) hitTab.html += h;
+            else tabs.push({ id: "x-" + g, label: g, html: h });
+        });
     } catch (e) { }
     const viewRows = NSFW_DESC_FIELDS.map((d) => (profile.desc && profile.desc[d.id] ? { label: d.label, text: profile.desc[d.id].text } : null)).filter(Boolean);
     if (viewRows.length) {
