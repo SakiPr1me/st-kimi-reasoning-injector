@@ -1326,26 +1326,51 @@ export function nsfwRewriteRequest(msgs, chatId) {
 
 /** ★W327 悬浮发送条：一条横条（可拖）+ AUTO 勾 + 名字列表；点名字看最新快照 */
 function nsfwBindSenderDrag(host, grip) {
-    if (!host || !grip || host.dataset.dragBound === '1') return;
-    host.dataset.dragBound = '1';
+    /* ★W410：绑定判据必须落在**把手**上 —— 悬浮条每次刷新都会重建 innerHTML，
+       grip 是新节点；以前把 dragBound 记在 host 上 ⇒ 第二次起把手没有监听 ⇒ 拖不动。 */
+    if (!host || !grip || grip.dataset.dragBound === '1') return;
+    grip.dataset.dragBound = '1';
+    try { grip.style.touchAction = 'none'; } catch (e0) { }
     let on = false, sx = 0, sy = 0, ox = 0, oy = 0;
-    grip.addEventListener('mousedown', (e) => {
-        const r = host.getBoundingClientRect();
-        on = true; sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
-        host.style.right = 'auto'; host.style.bottom = 'auto';
-        e.preventDefault();
-    });
-    document.addEventListener('mousemove', (e) => {
+    const pt = (e) => (e && e.touches && e.touches[0]) ? e.touches[0] : e;
+    const move = (e) => {
         if (!on) return;
-        const x = Math.max(0, Math.min(window.innerWidth - 80, ox + e.clientX - sx));
-        const y = Math.max(0, Math.min(window.innerHeight - 32, oy + e.clientY - sy));
+        const p = pt(e);
+        if (!p) return;
+        const x = Math.max(0, Math.min(window.innerWidth - 80, ox + p.clientX - sx));
+        const y = Math.max(0, Math.min(window.innerHeight - 32, oy + p.clientY - sy));
         host.style.left = x + 'px'; host.style.top = y + 'px';
-    });
-    document.addEventListener('mouseup', () => {
+        try { e.preventDefault(); } catch (e1) { }
+    };
+    const up = () => {
         if (!on) return; on = false;
+        document.removeEventListener('pointermove', move, true);
+        document.removeEventListener('mousemove', move, true);
+        document.removeEventListener('touchmove', move, true);
+        document.removeEventListener('pointerup', up, true);
+        document.removeEventListener('mouseup', up, true);
+        document.removeEventListener('touchend', up, true);
         const r = host.getBoundingClientRect();
         try { localStorage.setItem('kimi_nsfw_sender_pos', JSON.stringify({ x: Math.round(r.left), y: Math.round(r.top) })); } catch (e) { }
-    });
+    };
+    const down = (e) => {
+        const r = host.getBoundingClientRect();
+        const p = pt(e);
+        if (!p) return;
+        on = true; sx = p.clientX; sy = p.clientY; ox = r.left; oy = r.top;
+        host.style.right = 'auto'; host.style.bottom = 'auto';
+        document.addEventListener('pointermove', move, true);
+        document.addEventListener('mousemove', move, true);
+        document.addEventListener('touchmove', move, true);
+        document.addEventListener('pointerup', up, true);
+        document.addEventListener('mouseup', up, true);
+        document.addEventListener('touchend', up, true);
+        try { e.preventDefault(); } catch (e2) { }
+        try { e.stopPropagation(); } catch (e3) { }
+    };
+    grip.addEventListener('pointerdown', down);
+    grip.addEventListener('mousedown', down);
+    grip.addEventListener('touchstart', down, { passive: false });
 }
 /** 点名字 → 用同一套美化卡看最新快照 */
 export function nsfwShowSnapshot(name) {
