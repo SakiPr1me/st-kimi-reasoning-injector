@@ -745,7 +745,7 @@ export function nsfwParse(text) {
                 if (rm0) { min0 = Number(rm0[1]); max0 = Number(rm0[2]); tail0 = tail0.replace(rm0[0], ' '); }
                 const um0 = /[（(]\s*([^)）]{0,10})\s*[)）]/.exec(tail0);
                 if (um0) { unit0 = um0[1].trim(); tail0 = tail0.replace(um0[0], ' '); }
-                const label0 = tail0.replace(/[\[\]【】]/g, ' ').replace(/\s+/g, ' ').trim();
+                const label0 = tail0.replace(/[\[【][^\]】]*[\]】]/g, ' ').replace(/[（(][^)）]*[)）]/g, ' ').replace(/\s+/g, ' ').trim();
                 if (!c.extra) c.extra = {};
                 /* ★W391：指南里标了 [多行]（或写在【近况】组里）的字段，同一 ID 出现多次 = 多条 */
                 const gm0 = nsfwGuideMeta(key0) || {};
@@ -932,7 +932,7 @@ export function buildCharBlock(name, profile) {
             || ((profile.static || {})[f.id] ? { value: profile.static[f.id], comment: '' } : null);
         const val = cell ? fmtVal(f, cell) : '';
         if (!val) return;
-        addTo(f.group, f.id + '=' + val);   /* 评述不发送（省 token） */
+        addTo(f.group, f.id + ' = ' + val);   /* 评述不发送（省 token） */
     });
     /* 自定义字段跟普通字段一起发 */
     try {
@@ -944,7 +944,7 @@ export function buildCharBlock(name, profile) {
             if (id === 'gapLog' || String(e0.group || g0.group || '') === '近况') return;
             if (Array.isArray(e0.list) && e0.list.length) return;   /* 多行字段一律不发送 */
             const v = String(e0.value == null ? "" : e0.value).trim();
-            if (v) addTo(e0.group || g0.group || '其它', id + '=' + v);
+            if (v) addTo(e0.group || g0.group || '其它', id + ' = ' + v);
         });
     } catch (e) { }
     const ordOf = (g) => { const i = GROUP_ORDER.indexOf(g); return i < 0 ? 99 : i; };
@@ -1640,6 +1640,8 @@ export function nsfwRenderCard(name, profile) {
             html: viewRows.map((v) => '<div class="yw-nsfw-viewrow"><span class="lbl">' + esc(v.label) + '</span>' + esc(v.text) + '</div>').join('')
         });
     }
+    /* ★W396：近况永远排在最后一个分页（含「视线」之后） */
+    try { tabs.sort((a, b) => ((a.label === '近况' ? 1 : 0) - (b.label === '近况' ? 1 : 0))); } catch (e) { }
     if (!tabs.length) {
         const empty = document.createElement('div');
         empty.className = 'yw-nsfw-empty';
@@ -2090,7 +2092,11 @@ export function nsfwProfilesFromText(text) {
             Object.keys(c.machine || {}).forEach((id) => { stats[id] = c.machine[id]; });
             const desc = {};
             Object.keys(c.desc || {}).forEach((id) => { desc[id] = { text: c.desc[id] }; });
-            out[name] = { sex: sex, role: role, stats: stats, desc: desc };
+            /* ★W396：楼里的卡是从这段文本重拼的 —— 必须把自定义字段（近况/用户加的分组）一起带上，
+               否则卡上永远没有「近况」分页（bucket 里有、但这里丢了） */
+            const extra = {};
+            Object.keys(c.extra || {}).forEach((id) => { extra[id] = Object.assign({}, c.extra[id]); });
+            out[name] = { sex: sex, role: role, stats: stats, desc: desc, extra: extra };
         });
     } catch (e) { }
     return out;
