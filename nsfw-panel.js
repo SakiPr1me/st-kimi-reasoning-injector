@@ -1172,6 +1172,8 @@ export function nsfwMountSender() {
         const autoCb = host.querySelector('.yw-nsfw-sd-auto input');
         autoCb.addEventListener('change', (e) => {
             st.nsfwAutoSend = !!e.target.checked;
+            /* ★W373：每次「开启 AUTO」= 重新自然判定一次 —— 清掉上一轮的手动追加/排除 */
+            if (st.nsfwAutoSend) { try { nsfwClearSendOnce(chatId); } catch (e3) { } }
             try { if (_save) _save(); } catch (e2) { }
             nsfwMountSender();
         });
