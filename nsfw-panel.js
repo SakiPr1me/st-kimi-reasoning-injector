@@ -1033,8 +1033,7 @@ function tabRowsHtml(profile, grp, byGroup) {
     });
     rows.sort((a, b) => a.ord - b.ord);
     if (!rows.length) return '';
-    return '<table class="yw-nsfw-tbl"><tbody>'
-        + rows.map((r) => r.html).join('') + '</tbody></table>';
+    return '<div class="yw-nsfw-rows">' + rows.map((r) => r.html).join('') + '</div>';
 }
 /** 开发度表格：部位 × 等级/经验/变化 */
 function devTableHtml(profile) {
@@ -1060,7 +1059,7 @@ function rowHtml(f, cell) {
     if (!val && !(f && f.static)) return '';
     const optAttr = Array.isArray(f.options) ? ' data-options="' + esc(f.options.join('|')) + '"' : '';
     const idAttr = ' data-id="' + esc(f.id) + '" data-type="' + esc(f.type) + '"' + optAttr + (f.static ? ' data-static="1"' : '');
-    const c = '<td class="yw-nsfw-c">' + (cell.comment ? esc(cell.comment) : '') + '</td>';
+    const c = '<span class="yw-nsfw-c">' + (cell.comment ? esc(cell.comment) : '') + '</span>';
     /* ★W345：四列固定 —— 字段 | 条 | 值 | 评述；条在左、值在右，值尽量不换行（放不下省略号，悬停看全文） */
     const valTxt = esc(withUnit(f, val));
     const wrapCls = (String(withUnit(f, val)).length > 22) ? ' wrap' : '';   /* ★W348：长值才折行，短值不换行 */
@@ -1075,15 +1074,14 @@ function rowHtml(f, cell) {
         : '';
     const cmtTxt = cell.comment ? esc(cell.comment) : '';
     if (barHtml) {
-        return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
-            + '<td class="v num" title="' + valTxt + '"><span class="n">' + valTxt + '</span>' + barHtml + '</td>'
-            + c + '</tr>';
+        return '<div class="yw-nsfw-row"' + idAttr + '><span class="k">' + esc(f.label) + '</span>'
+            + '<span class="v num" title="' + valTxt + '"><span class="n">' + valTxt + '</span>' + barHtml + '</span>'
+            + c + '</div>';
     }
-    /* ★W351：无条的行 —— 值和评述同在一格（值紧贴标题、评述浮右），长文本按整行宽折行 */
-    return '<tr class="yw-nsfw-row"' + idAttr + '><th class="k">' + esc(f.label) + '</th>'
-        + '<td class="v' + wrapCls + '" colspan="2" title="' + valTxt + '">'
-        + '<span class="vcmt">' + cmtTxt + '</span>' + valTxt + '</td>'
-        + '</tr>';
+    /* ★W352：无条的行：值（可长）在左、评述浮右；窄屏时评述自动换到下一行 */
+    return '<div class="yw-nsfw-row"' + idAttr + '><span class="k">' + esc(f.label) + '</span>'
+        + '<span class="v' + wrapCls + '" title="' + valTxt + '">' + valTxt + '</span>'
+        + c + '</div>';
 }
 
 /** 状态卡（v2：分页 tabs，评述在右） */
@@ -1368,13 +1366,18 @@ const CSS = [
     '.yw-nsfw-panel{display:none}',
     '.yw-nsfw-panel.on{display:block}',
     /* ★W346：这行原来是给 div 布局写的 flex —— 套在 <tr> 上会把 td 变成 block，列宽全失效（值被挤成一字一行）。tr 上只留行距。 */
-    '.yw-nsfw-row{line-height:1.45}',
-    '.yw-nsfw-row .k{opacity:.7;font-size:.84em;white-space:nowrap}',   /* ★W348：标题不再省略 */
-    '.yw-nsfw-row .bar{flex:0 0 4.6em;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden;align-self:center}',
+    /* ★W352 统一行布局：字段(定宽)|值(+条)|评述(右)；字号全继承，只有透明度区分；条用 px 固定，窄屏不缩 */
+    '.yw-nsfw-rows{display:block}',
+    '.yw-nsfw-row{display:flex;align-items:baseline;gap:8px;padding:3px 2px;line-height:1.5;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
+    '.yw-nsfw-row .k{flex:0 0 92px;opacity:.78;white-space:nowrap}',
+    '.yw-nsfw-row .v{display:inline-flex;align-items:center;gap:6px;min-width:0;white-space:nowrap;font-variant-numeric:tabular-nums}',
+    '.yw-nsfw-row .v .n{display:inline-block;min-width:26px;text-align:left}',
+    '.yw-nsfw-row .v.wrap{white-space:normal;overflow-wrap:anywhere;display:inline-block}',
+    '.yw-nsfw-row .bar{flex:0 0 52px;width:52px;height:6px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden;align-self:center}',
     '.yw-nsfw-row .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
-    '.yw-nsfw-row .v{font-variant-numeric:tabular-nums;font-size:.86em}',   /* ★W349：值靠左贴标题，不再右对齐 */
-    '.yw-nsfw-row .t{flex:0 1 auto;min-width:0;overflow-wrap:anywhere}',
-    '.yw-nsfw-row .yw-nsfw-c{flex:1 1 6em;min-width:0;text-align:right;opacity:.6;font-size:.82em;font-style:italic;overflow-wrap:anywhere}',
+
+
+    '.yw-nsfw-row .yw-nsfw-c{flex:1 1 auto;min-width:0;margin-left:auto;text-align:right;opacity:.62;font-style:italic;overflow-wrap:anywhere}',
     '.yw-nsfw-viewrow{padding:3px 2px;font-size:.86em;line-height:1.55;font-style:italic;opacity:.9}',
     '.yw-nsfw-viewrow .lbl{opacity:.55;font-style:normal;margin-right:6px}',
     '.yw-nsfw-empty{padding:10px;opacity:.6;font-size:.86em}',
@@ -1424,9 +1427,9 @@ const CSS = [
     '.yw-nsfw-editing .yw-nsfw-in-c{width:100%}',
     '.yw-nsfw-sub{margin:6px 2px 2px;font-size:.76em;opacity:.5;letter-spacing:.5px}',
     '.yw-nsfw--compact .yw-nsfw-row{padding:0 2px;line-height:1.3}',
-    '.yw-nsfw--compact .yw-nsfw-row .k{font-size:.78em}',
+    '.yw-nsfw--compact .yw-nsfw-row .k{opacity:.68}',
     '.yw-nsfw--loose .yw-nsfw-row{padding:5px 2px;line-height:1.6}',
-    '@media (max-width:600px){.yw-nsfw-row .k{flex-basis:5.4em}.yw-nsfw-row .yw-nsfw-c{flex-basis:100%;text-align:left;padding-left:5.4em}}'
+    '@media (max-width:600px){.yw-nsfw-row{flex-wrap:wrap}.yw-nsfw-row .k{flex-basis:76px}.yw-nsfw-row .yw-nsfw-c{flex:1 1 100%;text-align:left;margin-left:84px}}'
 ].join('');
 
 export function nsfwEnsureStyle() {
