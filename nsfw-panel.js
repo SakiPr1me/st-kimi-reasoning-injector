@@ -1169,6 +1169,18 @@ export function nsfwRenderCard(name, profile) {
 
     wrap.appendChild(tabBar);
     wrap.appendChild(panels);
+    /* ★W354：按「最高一页」把面板高度钉死 —— 切分页时上面的分页条不再跳位 */
+    try {
+        const kids = Array.prototype.slice.call(panels.children);
+        let maxH = 0;
+        kids.forEach((k) => {
+            const old = k.style.display;
+            k.style.display = 'block';
+            maxH = Math.max(maxH, k.offsetHeight);
+            k.style.display = old;
+        });
+        if (maxH > 0) panels.style.minHeight = maxH + 'px';
+    } catch (e) { }
     try { bindCardEdit(wrap, name, profile); } catch (e) { }
     return wrap;
 }
