@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.228'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.229'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -2316,14 +2316,14 @@ function applyRequestInjections(bodyObj) {
 
         // 1.3) ★W325：NSFW 状态栏 —— 楼层里的旧块不重复发给 AI（不越滚越大）；按悬浮窗模式发送"最新读数"
         /* ★W336：状态栏是独立功能，不受工具箱总开关影响（否则总开关关着时：生成后不解析→无卡、悬浮窗无档案） */
-        if (settings.nsfwEnabled && settings.nsfwSenderEnabled !== false && msgs && msgs.length) {
+        if (settings.nsfwEnabled && settings.nsfwCaptureHide !== false && settings.nsfwSenderEnabled !== false && msgs && msgs.length) {   /* ★W379：不捕捉就没有快照，也就没什么可发 */
             try {
                 /* ①历史楼层里我们自己换过外壳的块不进请求（你的正则也可以再兜一层） */
                 for (let i = 0; i < msgs.length; i++) {
                     const mm0 = msgs[i];
                     if (!mm0 || typeof mm0.content !== 'string') continue;
                     if (mm0.role !== 'assistant') continue;
-                    if (mm0.content.indexOf('data-nsfw') < 0) continue;
+                    if (mm0.content.indexOf('data-nsfw') < 0 && mm0.content.indexOf('<nsfw') < 0) continue;   /* ★W379：没捕捉成 div 的裸块也剥，别把原文塞进请求 */
                     if (mm0.content.indexOf('nsfw_state_guide') >= 0) continue;
                     const stripped = nsfwStripBlocks(mm0.content);
                     if (stripped !== mm0.content) { mm0.content = stripped; changed = true; }
@@ -9130,10 +9130,15 @@ function bindNsfwCard() {
         renderRoster();
     });
     const $capHide = $("#" + extensionName + "_nsfw_capturehide");
+    const $senderChk = $("#" + extensionName + "_nsfw_sender");
+    /* ★W379：不捕捉就没有快照 ⇒ 发送开关置灰（不改用户已存的值，重新勾上就恢复） */
+    const syncSenderEnabled = () => { try { $senderChk.prop("disabled", !$capHide.is(":checked")); } catch (e) { } };
+    syncSenderEnabled();
     $capHide.off("change.kimiNsfwCap").on("change.kimiNsfwCap", function () {
         settings.nsfwCaptureHide = $(this).is(":checked");
         saveSettingsDebounced();
         try { if (settings.nsfwCaptureHide) nsfwReattachAll(); } catch (e) { }
+        syncSenderEnabled();
     });
     const $senderOn = $("#" + extensionName + "_nsfw_sender");
     $senderOn.off("change.kimiNsfwSender").on("change.kimiNsfwSender", function () {
