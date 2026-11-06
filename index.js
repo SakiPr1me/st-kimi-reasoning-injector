@@ -10,7 +10,7 @@ import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
-import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 
 
@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.230'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.231'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -588,11 +588,11 @@ const UI = {
         apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效。切换会同步改写 URL、密钥、模型名 三项，预置/采样等其它参数一概不动；命中 limit/quota/rate 即触发。",
         dblSave: "保存",
         dblEditLabel: "双击正文直接改字",
-        nsfwTitle: "状态栏（NSFW）", nsfwEnable: "启用状态栏（每轮注入 + 正文画卡）",
+        nsfwTitle: "状态栏（NSFW）", nsfwEnable: "启用状态栏（每轮画卡+注入）",
         nsfwHint: "开启后：每轮把「在场角色状态 + 更新规则 + 输出协议」注入提示词，AI 在正文末尾回两段（数值带官能评述 + 他人视线），插件解析后把原文剥掉、在消息里画成卡片。默认关。",
         nsfwFullCount: "在场全量人数：", nsfwAllFields: "注入全部字段（更细但更费 token）",
         nsfwRoster: "角色名册", nsfwNewName: "角色名", nsfwAdd: "＋ 建档", nsfwRemove: "删",
-        nsfwCaptureHide: "捕捉并隐藏NSFW状态栏（正文只显示美化卡）", nsfwCaptureHideHint: "开着：读到楼里的快照、藏起原始文字；关了：不解析、不画卡、原文照常显示。", nsfwSenderToggle: "发送悬浮窗", nsfwSenderHint: "右下角那条小横条：勾谁就发谁；AUTO 会按上一楼正文 / 你输入的正文自动判定，勾/取消都只影响这一轮。", nsfwPeekList: "当前聊天（点名字看状态）", nsfwAutoHint: "自动：正文里出现谁就发谁",
+        nsfwCaptureHide: "捕捉并隐藏NSFW状态栏", nsfwCaptureHideHint: "", nsfwSenderToggle: "发送悬浮窗", nsfwSenderHint: "右下角那条小横条：勾谁就发谁；AUTO 会按上一楼正文 / 你输入的正文自动判定，勾/取消都只影响这一轮。", nsfwPeekList: "当前聊天（点名字看状态）", nsfwAutoHint: "自动：正文里出现谁就发谁",
         nsfwInjectMode: "每轮注入", nsfwInjectFull: "完整（规则 + 状态 + 协议）", nsfwInjectState: "仅当前状态（规则/格式在预设里）", nsfwInjectOff: "不注入（状态只看楼层）",
         nsfwRules: "更新规则（每行一条，注入时按顺序发出）", nsfwPreview: "预览本轮注入", nsfwPeek: "看快照", nsfwDemo: "示例填充（先看效果）", nsfwDump: "查看/复制全部状态",
         nsfwNoChars: "还没有角色，先在上面建档。",
@@ -665,7 +665,7 @@ const UI = {
         apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections. Switching syncs three fields: URL, key and model name - presets/sampling untouched. Triggers on limit/quota/rate.",
         dblSave: "Save",
         dblEditLabel: "Double-click message text to edit it in place",
-        nsfwTitle: "Status Panel (NSFW)", nsfwEnable: "Enable status panel (inject + in-message card)",
+        nsfwTitle: "Status Panel (NSFW)", nsfwEnable: "Enable status panel (card + inject every turn)",
         nsfwHint: "When on: every turn injects the in-scene character states + update rules + output protocol; the AI replies with two blocks at the end (values with sensory notes + outsider views); the plugin parses them, strips the raw text and renders a card in the message. Off by default.",
         nsfwFullCount: "Full-state characters: ", nsfwAllFields: "Inject all fields (finer, more tokens)",
         nsfwRoster: "Characters", nsfwNewName: "Name", nsfwAdd: "＋ Add", nsfwRemove: "Del",
@@ -742,7 +742,7 @@ const UI = {
         apiHint: "키는 로컬 settings.json에 평문 저장됨 - 파일 공유 금지. Custom(OpenAI 호환) 연결에서만 동작. 전환 시 URL·키·모델명 세 항목을 함께 변경, 프리셋/샘플링은 불변. limit/quota/rate 에서 트리거.",
         dblSave: "저장",
         dblEditLabel: "메시지 본문을 두 번 클릭하면 그 자리에서 바로 수정",
-        nsfwTitle: "상태 패널 (NSFW)", nsfwEnable: "상태 패널 사용 (매 턴 주입 + 본문 카드)",
+        nsfwTitle: "상태 패널 (NSFW)", nsfwEnable: "상태 패널 사용 (매 턴 카드 + 주입)",
         nsfwHint: "켜면 매 턴 등장 캐릭터 상태 + 갱신 규칙 + 출력 프로토콜을 주입하고, AI가 본문 끝에 두 블록(수치+관능 평가 / 타인 시선)을 출력하며, 플러그인이 이를 파싱해 원문을 지우고 메시지에 카드로 그립니다. 기본 꺼짐.",
         nsfwFullCount: "전체 상태 인원: ", nsfwAllFields: "모든 필드 주입 (더 자세하지만 토큰 소모 큼)",
         nsfwRoster: "캐릭터 목록", nsfwNewName: "이름", nsfwAdd: "＋ 추가", nsfwRemove: "삭제",
@@ -9001,7 +9001,8 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id, type) => {
 const nsfwParsedKeys = new Set();
 eventSource.on(event_types.MESSAGE_RECEIVED, async (id) => {
     try {
-        /* ★W378：捕捉/隐藏独立于总开关 —— 总开关关着也照样把块包起来、藏原文、画卡（只是不发送） */
+        /* ★W381：捕捉只负责隐藏；画卡/注入看总开关 */
+        if (!settings.nsfwEnabled) { try { nsfwInstallFormatterHook(); } catch (e) { } return; }
         if (settings.nsfwCaptureHide === false) return;   /* ★W377：捕捉开关关着 ⇒ 不解析、不换壳、不画卡 */
         /* ★W338：回复已经落地 ⇒ 这一轮不再算「生成中」，立刻取消隐藏（防 ENDED 没来/被下一轮重试覆盖） */
         try { if (document && document.body) document.body.classList.remove('yw-nsfw-generating'); } catch (e) { }
@@ -9079,18 +9080,14 @@ function bindNsfwCard() {
     const esc2 = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     const renderRoster = () => {
+        try { window.__ywNsfwRenderRoster = renderRoster; } catch (e) { }
         const box = document.getElementById(extensionName + "_nsfw_roster");
         if (!box) return;
         let list = [];
         try { nsfwSyncChat(); list = nsfwList(chatId()); } catch (e) { list = []; }
         if (!list.length) { box.innerHTML = '<div class="kimi-hint">' + t('nsfwNoChars') + '</div>'; return; }
-        box.innerHTML = list.map((c) => {
-            const sex = c.sex === 'male' ? t('nsfwSexM') : (c.sex === 'other' ? t('nsfwSexO') : t('nsfwSexF'));
-            return '<div class="kimi-nsfw-item" style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px dashed var(--SmartThemeBorderColor)">'
-                + '<b data-nsfw-peek="' + esc2(c.name) + '" style="cursor:pointer;text-decoration:underline dotted">' + esc2(c.name) + '</b>'
-                + '<span style="opacity:.7;font-size:.85em">' + sex + '</span>'
-                + '</div>';
-        }).join('');
+        box.innerHTML = '<div class="yw-nsfw-sd-items" style="display:flex;flex-wrap:wrap;gap:6px"></div>';
+        try { nsfwChipsRender(box.firstChild, chatId()); } catch (e) { }
     };
 
 
@@ -9636,6 +9633,7 @@ document.addEventListener('click', (e) => {
 
 eventSource.on(event_types.CHAT_CHANGED, () => {
     try { if (settings.nsfwEnabled) { nsfwMountSender(); nsfwStartObserver(); } } catch (e) { }   /* ★W325：换聊天刷新悬浮发送面板 */
+    try { if (typeof window.__ywNsfwRenderRoster === 'function') window.__ywNsfwRenderRoster(); } catch (e) { }   /* ★W381：设置卡里的名册也跟着换 */
     isDryRun = false;
     dryRunSince = 0;
     /* ★W290：换聊天 → 状态卡按新聊天的档案重画 */
@@ -10620,7 +10618,6 @@ ${renderWordReplaceRows()}
 <label class="checkbox_label"><input id="${extensionName}_nsfw_enabled" type="checkbox" ${settings.nsfwEnabled ? 'checked' : ''}/><span>${t('nsfwEnable')}</span></label>
 <div class="kimi-hint">${t('nsfwHint')}</div>
 <label class="checkbox_label" style="margin-top:6px"><input id="${extensionName}_nsfw_capturehide" type="checkbox" ${settings.nsfwCaptureHide !== false ? 'checked' : ''}/><span>${t('nsfwCaptureHide')}</span></label>
-<div class="kimi-hint">${t('nsfwCaptureHideHint')}</div>
 <label class="checkbox_label" style="margin-top:6px"><input id="${extensionName}_nsfw_sender" type="checkbox" ${settings.nsfwSenderEnabled !== false ? 'checked' : ''}/><span>${t('nsfwSenderToggle')}</span></label>
 <div class="kimi-hint">${t('nsfwSenderHint')}</div>
 <div class="kimi-label" style="margin-top:10px">${t('nsfwPeekList')}</div>

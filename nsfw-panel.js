@@ -1158,6 +1158,50 @@ export function nsfwShowSnapshot(name) {
         box.querySelector('.yw-nsfw-pv-x').addEventListener('click', () => { box.style.display = 'none'; });
     } catch (e) { }
 }
+/** ★W381：角色芯片（设置卡「当前聊天」和悬浮条共用同一套外观与勾选逻辑） */
+export function nsfwChipsRender(host, chatId) {
+    try {
+        const st = _getSettings() || {};
+        const auto = (st.nsfwAutoSend !== undefined) ? !!st.nsfwAutoSend : (String(st.nsfwSendMode || 'auto') === 'auto');
+        const { bucket } = nsfwBucket(chatId);
+        const names = (bucket.order || []).filter((n) => bucket.chars[n]);
+        const picks = nsfwSendPicks(chatId);
+        const once = nsfwSendOnce(chatId);
+        const offNow = nsfwSendOff(chatId);
+        let autoPicks = [];
+        if (auto) {
+            try {
+                const ctx0 = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
+                const msgs0 = (ctx0 && Array.isArray(ctx0.chat)) ? ctx0.chat.map((m) => ({ role: m.is_user ? 'user' : 'assistant', content: String(m.mes || '') })) : [];
+                autoPicks = nsfwAutoPicks(chatId, msgs0);
+            } catch (e) { autoPicks = []; }
+        }
+        host.innerHTML = names.map((n) => '<span class="yw-nsfw-sd-item">'
+            + '<input type="checkbox" data-send="' + esc(n) + '"' + ((auto ? (((autoPicks.indexOf(n) >= 0 && offNow.indexOf(n) < 0) || once.indexOf(n) >= 0)) : (picks.indexOf(n) >= 0)) ? ' checked' : '') + '/>'
+            + '<b class="yw-nsfw-sd-name" data-name="' + esc(n) + '" title="点名字看最新快照">' + esc(n) + '</b></span>').join('') || '<span class="yw-nsfw-sd-empty">无档案</span>';
+        host.querySelectorAll('input[data-send]').forEach((cb) => {
+            cb.addEventListener('change', () => {
+                const nm0 = cb.getAttribute('data-send');
+                if (auto) {
+                    if (cb.checked) {
+                        nsfwSetSendOff(chatId, nm0, false);
+                        if (autoPicks.indexOf(nm0) < 0) nsfwSetSendOnce(chatId, nm0, true);
+                    } else {
+                        nsfwSetSendOnce(chatId, nm0, false);
+                        nsfwSetSendOff(chatId, nm0, true);
+                    }
+                } else {
+                    nsfwSetSendPick(chatId, nm0, cb.checked);
+                }
+                nsfwChipsRender(host, chatId);
+                try { nsfwMountSender(); } catch (e) { }
+            });
+        });
+        host.querySelectorAll('.yw-nsfw-sd-name').forEach((el) => {
+            el.addEventListener('click', () => nsfwShowSnapshot(el.getAttribute('data-name')));
+        });
+    } catch (e) { }
+}
 /** 悬浮发送条：一条横条（可拖）+ AUTO 勾 + 名字列表；点名字看最新快照 */
 export function nsfwMountSender() {
     try {
@@ -1889,7 +1933,9 @@ export function nsfwMountToMessage(messageId) {
         const ctx = window.SillyTavern && window.SillyTavern.getContext ? window.SillyTavern.getContext() : null;
         const msg = ctx && ctx.chat ? ctx.chat[messageId] : null;
         if (!msg || msg.is_user || msg.is_system) return false;
-        if ((_getSettings() || {}).nsfwCaptureHide === false) return false;   /* ★W377 */
+        const __st = _getSettings() || {};
+        if (__st.nsfwCaptureHide === false) return false;   /* ★W377 */
+        if (!__st.nsfwEnabled) return false;   /* ★W381：画卡属于「启用状态栏」，捕捉只负责隐藏 */
         const chatId = nsfwChatId(ctx);
         const { bucket } = nsfwBucket(chatId);
         const bucketNames = (bucket.order || []).filter((n) => bucket.chars[n] && bucket.chars[n].updatedAt);
