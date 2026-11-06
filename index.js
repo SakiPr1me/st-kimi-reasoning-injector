@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.235'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.236'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -9085,7 +9085,7 @@ function bindNsfwCard() {
         if (!box) return;
         let list = [];
         try { nsfwSyncChat(); list = nsfwList(chatId()); } catch (e) { list = []; }
-        if (!list.length) { box.innerHTML = '<div class="kimi-hint">' + t('nsfwNoChars') + '</div>'; return; }
+        if (!list.length) { box.innerHTML = ''; return; }
         box.innerHTML = '<div class="yw-nsfw-sd-items" style="display:flex;flex-wrap:wrap;gap:6px"></div>';
         try { nsfwChipsRender(box.firstChild, chatId()); } catch (e) { }
     };
@@ -10616,8 +10616,7 @@ ${renderWordReplaceRows()}
 <label class="checkbox_label" style="margin-top:6px"><input id="${extensionName}_nsfw_sender" type="checkbox" ${settings.nsfwSenderEnabled !== false ? 'checked' : ''}/><span>${t('nsfwSenderToggle')}</span></label>
 <div class="kimi-hint">${t('nsfwSenderHint')}</div>
 <div class="kimi-label" style="margin-top:10px">${t('nsfwPeekList')}</div>
-<div class="kimi-row" style="margin-top:2px"><label class="checkbox_label" style="margin:0"><input id="${extensionName}_nsfw_auto" type="checkbox" ${settings.nsfwAutoSend !== false ? 'checked' : ''}/><span>AUTO</span></label><span class="kimi-hint" style="margin:0 0 0 6px">${t('nsfwAutoHint')}</span></div>
-<div id="${extensionName}_nsfw_roster" class="kimi-nsfw-roster"></div>
+<div class="kimi-row kimi-nsfw-autorow" style="margin-top:2px"><label class="checkbox_label" style="margin:0"><input id="${extensionName}_nsfw_auto" type="checkbox" ${settings.nsfwAutoSend !== false ? 'checked' : ''}/><span>AUTO</span></label><div id="${extensionName}_nsfw_roster" class="kimi-nsfw-roster"></div></div>
 <div id="${extensionName}_nsfw_char_editor"></div>
 </div>
 </details>
