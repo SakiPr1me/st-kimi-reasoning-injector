@@ -1450,15 +1450,29 @@ export function nsfwRenderCard(name, profile) {
                 .map((id) => {
                     const e0 = ex[id] || {};
                     const lab0 = String(e0.label || id);
-                    const val0 = String(e0.value == null ? "" : e0.value);
+                    const raw0 = String(e0.value == null ? "" : e0.value).trim();
                     const unit0 = String(e0.unit || "");
-                    const valTxt0 = esc(unit0 ? (val0 + " " + unit0) : val0);
+                    /* 值里已经自带单位（7次 / 7 次 / 7（次））⇒ 摘掉再做数字判断，显示时统一补一个 */
+                    let core0 = raw0;
+                    if (unit0) {
+                        const uEsc = unit0.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const reU = new RegExp("\\s*[（(]?\\s*" + uEsc + "\\s*[)）]?\\s*$");
+                        core0 = raw0.replace(reU, "").trim();
+                    }
+                    const val0 = core0;
+                    const valTxt0 = esc(unit0 ? (val0.indexOf(unit0) >= 0 ? val0 : (val0 ? (val0 + " " + unit0) : unit0)) : raw0);
                     const hasRange = (typeof e0.min === "number" && typeof e0.max === "number");
-                    const isNum = hasRange && val0.trim() !== "" && Number.isFinite(Number(val0));
+                    let num0 = null;
+                    if (val0 !== "") {
+                        const n0 = Number(val0);
+                        if (Number.isFinite(n0)) num0 = n0;
+                        else { const m0 = /-?\d+(?:\.\d+)?/.exec(val0); if (m0) num0 = Number(m0[0]); }
+                    }
+                    const isNum = hasRange && num0 !== null;
                     let vHtml = '<span class="v' + (val0.length > 22 ? ' wrap' : '') + '" title="' + valTxt0 + '">' + valTxt0 + '</span>';
                     if (isNum) {
                         const span0 = (e0.max - e0.min) || 1;
-                        const pct0 = Math.max(0, Math.min(100, ((Number(val0) - e0.min) / span0) * 100));
+                        const pct0 = Math.max(0, Math.min(100, ((num0 - e0.min) / span0) * 100));
                         vHtml = '<span class="v num" title="' + valTxt0 + '"><span class="n">' + valTxt0 + '</span><span class="bar"><i style="width:' + pct0.toFixed(0) + '%"></i></span></span>';
                     }
                     return '<div class="yw-nsfw-row" data-id="' + esc(id) + '" data-type="' + (isNum ? 'num' : 'text') + '"><span class="k">' + esc(lab0) + '</span>' + vHtml + '<span class="yw-nsfw-c">' + esc(e0.comment || "") + '</span></div>';
