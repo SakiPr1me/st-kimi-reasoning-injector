@@ -918,13 +918,21 @@ export function buildCharBlock(name, profile) {
     const snap0 = String((((profile || {}).stats || {}).snapTime || {}).value || '');
     lines.push('name 角色名 = ' + name);
     lines.push('snapTime 快照时间 = ' + (snap0 || '未知'));
+    /* ★W394：按【组】归拢再输出 —— 组头只出现一次，顺序 状态/身体/穿搭/胸/前穴/后穴/开发，其余组排后面 */
+    const groups = [];
+    const gmap = {};
+    const addTo = (g, line) => {
+        const gg = String(g || '其它').trim() || '其它';
+        if (!gmap[gg]) { gmap[gg] = { g: gg, items: [] }; groups.push(gmap[gg]); }
+        gmap[gg].items.push(line);
+    };
     fields.forEach((f) => {
         if (f.id === 'snapTime') return;   /* 已在块头 */
         const cell = (profile.stats || {})[f.id]
             || ((profile.static || {})[f.id] ? { value: profile.static[f.id], comment: '' } : null);
         const val = cell ? fmtVal(f, cell) : '';
         if (!val) return;
-        lines.push(f.id + '=' + val);   /* 评述不发送（省 token） */
+        addTo(f.group, f.id + '=' + val);   /* 评述不发送（省 token） */
     });
     /* 自定义字段跟普通字段一起发 */
     try {
@@ -936,9 +944,15 @@ export function buildCharBlock(name, profile) {
             if (id === 'gapLog' || String(e0.group || g0.group || '') === '近况') return;
             if (Array.isArray(e0.list) && e0.list.length) return;   /* 多行字段一律不发送 */
             const v = String(e0.value == null ? "" : e0.value).trim();
-            if (v) lines.push(id + '=' + v);
+            if (v) addTo(e0.group || g0.group || '其它', id + '=' + v);
         });
     } catch (e) { }
+    const ordOf = (g) => { const i = GROUP_ORDER.indexOf(g); return i < 0 ? 99 : i; };
+    groups.slice().sort((a, b) => ordOf(a.g) - ordOf(b.g)).forEach((grp) => {
+        if (!grp.items.length) return;
+        lines.push('【' + grp.g + '】');
+        grp.items.forEach((ln) => lines.push(ln));
+    });
     const preg = calcPregRisk(profile);
     if (preg.why) lines.push('怀孕几率: ' + preg.risk + '%（插件计算，不要改写）');
     return '<nsfw>' + NL + lines.join(NL) + NL + '</nsfw>';
@@ -1536,9 +1550,7 @@ export function nsfwRenderCard(name, profile) {
         + '<span class="nm">' + esc(name) + '</span>'
         + '<span class="tag">' + sexTxt + '</span>'   /* ★W369：去掉「受」标签——快照本来就只写被进入方 */
         + (g('snapTime') ? '<span class="kv yw-nsfw-snaptime">⏱ ' + esc(g('snapTime')) + '</span>' : '')
-        + '<span class="kv">理智 ' + esc(g('sanity') == null ? '-' : g('sanity')) + '</span>'
-        + '<span class="kv">欲望 ' + esc(g('libido') == null ? '-' : g('libido')) + '</span>'
-        + '<span class="kv yw-nsfw-preg">怀孕 ' + preg.risk + '%</span>';
+        + '<span class="kv yw-nsfw-preg">怀孕 ' + preg.risk + '%</span>';   /* ★W395：右上角理智/欲望删掉（作者要求） */
     wrap.appendChild(head);
 
     const statsView = Object.assign({}, profile.stats || {});
@@ -1688,7 +1700,7 @@ export function nsfwRenderCard(name, profile) {
                 k.style.display = old;
             });
             if (maxH > 0) { panels.style.minHeight = maxH + 'px'; panels.style.height = maxH + 'px'; }
-            /* ★W388：比最高页矮的分页，空白处按行高铺虚线（作者：空的别白着，要有横线） */
+            /* ★W394：比最高页矮的分页，空白处补「空行」——每行都和上面一样有一条虚线（作者：要统一） */
             kids.forEach((k) => {
                 const old = k.style.display;
                 k.style.display = 'block';
@@ -1696,13 +1708,17 @@ export function nsfwRenderCard(name, profile) {
                 k.style.display = old;
                 const left = maxH - used;
                 if (left <= 2) return;
-                const sample = k.querySelector('.yw-nsfw-row');
+                const rows0 = k.querySelectorAll('.yw-nsfw-row');
+                const sample = rows0.length ? rows0[rows0.length - 1] : null;
                 const rowH = sample ? Math.max(14, Math.round(sample.getBoundingClientRect().height)) : 27;
-                const f = document.createElement('div');
-                f.className = 'yw-nsfw-fill';
-                f.style.height = left + 'px';
-                f.style.setProperty('--yw-fill-h', rowH + 'px');
-                k.appendChild(f);
+                const n = Math.floor(left / rowH);
+                for (let i = 0; i < n; i++) {
+                    const f = document.createElement('div');
+                    f.className = 'yw-nsfw-row yw-nsfw-fill';
+                    f.style.height = rowH + 'px';
+                    k.appendChild(f);
+                }
+                /* 余下不足一行的部分留白（不能再有线，否则页底又多一条） */
             });
         } catch (e) { }
     };
@@ -1974,7 +1990,8 @@ const CSS = [
     /* ★W346：这行原来是给 div 布局写的 flex —— 套在 <tr> 上会把 td 变成 block，列宽全失效（值被挤成一字一行）。tr 上只留行距。 */
     /* ★W352 统一行布局：字段(定宽)|值(+条)|评述(右)；字号全继承，只有透明度区分；条用 px 固定，窄屏不缩 */
     '.yw-nsfw-rows{display:block}',
-    '.yw-nsfw-fill{pointer-events:none;background-image:repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--yw-fill-h,27px) - 1px),color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent) calc(var(--yw-fill-h,27px) - 1px),color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent) var(--yw-fill-h,27px))}',
+    '.yw-nsfw-fill{pointer-events:none;box-sizing:border-box;padding-top:0;padding-bottom:0}',
+    '.yw-nsfw-panel > .yw-nsfw-row:last-child,.yw-nsfw-panel > .yw-nsfw-rows:last-child > .yw-nsfw-row:last-child{border-bottom:0}',
     '.yw-nsfw-row{display:flex;align-items:baseline;gap:8px;padding:3px 2px;line-height:1.5;border-bottom:1px dashed color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 8%,transparent)}',
     '.yw-nsfw-row .k{flex:0 0 92px;opacity:.78;white-space:nowrap}',
     '.yw-nsfw-row .v{display:inline-flex;align-items:center;gap:6px;min-width:0;white-space:nowrap;font-variant-numeric:tabular-nums}',
