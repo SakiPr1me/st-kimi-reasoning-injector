@@ -1847,6 +1847,28 @@ export function nsfwProfilesFromText(text) {
 /** 隐藏正文里的原始块（显示层不改 mes；块本身留在楼层里，小铅笔能看到） */
 /** ★W380：在「显示层」把 <nsfw> 换成带 data-nsfw 的 div（不碰 mes）——
  *  现代酒馆有 messageFormatter.addHook（在 DOMPurify 之前跑），用它就不必改写聊天记录。 */
+/** ★W382：显示层直接把整块删掉（不用 div 外壳）——值和标签都留在 mes 里，只是不渲染 */
+export function nsfwStripForDisplay(text) {
+    let s = String(text || '');
+    if (s.indexOf('<nsfw') < 0) return s;
+    const NLc = String.fromCharCode(10);
+    let guard = 0;
+    while (guard++ < 50) {
+        const i = s.indexOf('<nsfw');
+        if (i < 0) break;
+        const isDesc = s.slice(i, i + 9).toLowerCase() === '<nsfwdesc';
+        const openEnd = s.indexOf('>', i);
+        if (openEnd < 0) break;
+        const closeTag = isDesc ? '</nsfwdesc>' : '</nsfw>';
+        const j = s.toLowerCase().indexOf(closeTag, openEnd);
+        if (j >= 0) { s = s.slice(0, i) + s.slice(j + closeTag.length); continue; }
+        /* 没闭合：只有像块（含换行或 =）才删到结尾，单独一个标签提及保持原样 */
+        const rest = s.slice(openEnd + 1);
+        if (rest.indexOf(NLc) >= 0 || rest.indexOf('=') >= 0) { s = s.slice(0, i); break; }
+        break;
+    }
+    return s;
+}
 export function nsfwInstallFormatterHook() {
     try {
         if (typeof window === 'undefined' || !window.SillyTavern || !window.SillyTavern.getContext) return false;
@@ -1855,7 +1877,7 @@ export function nsfwInstallFormatterHook() {
         if (!fmt || typeof fmt.addHook !== 'function') return false;
         if (window.__ywNsfwFmtHooked) return true;
         fmt.addHook((mes) => {
-            try { return nsfwWrapBlocks(mes); } catch (e) { return mes; }
+            try { return nsfwStripForDisplay(mes); } catch (e) { return mes; }
         }, { order: 0 });
         window.__ywNsfwFmtHooked = true;
         return true;
