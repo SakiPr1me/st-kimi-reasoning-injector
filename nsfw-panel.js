@@ -862,6 +862,7 @@ export function buildInjection(chatId, opts) {
 
 const SEND_KEY = 'kimi_nsfw_send';
 const SEND_ONCE_KEY = 'kimi_nsfw_send_once';
+const SEND_OFF_KEY = 'kimi_nsfw_send_off';
 function readSend() {
     try {
         const raw = localStorage.getItem(SEND_KEY);
@@ -911,6 +912,28 @@ export function nsfwSetSendOnce(chatId, name, on) {
         localStorage.setItem(SEND_ONCE_KEY, JSON.stringify(all));
     } catch (e) { }
 }
+/** ★W368：AUTO 下「本轮临时排除」名单（发完同样清） */
+export function nsfwSendOff(chatId) {
+    try {
+        const raw = localStorage.getItem(SEND_OFF_KEY);
+        const all = raw ? (JSON.parse(raw) || {}) : {};
+        const k = String(chatId || 'default');
+        return Array.isArray(all[k]) ? all[k].slice() : [];
+    } catch (e) { return []; }
+}
+export function nsfwSetSendOff(chatId, name, on) {
+    try {
+        const raw = localStorage.getItem(SEND_OFF_KEY);
+        const all = raw ? (JSON.parse(raw) || {}) : {};
+        const k = String(chatId || 'default');
+        const list = Array.isArray(all[k]) ? all[k].slice() : [];
+        const i = list.indexOf(name);
+        if (on && i < 0) list.push(name);
+        if (!on && i >= 0) list.splice(i, 1);
+        all[k] = list;
+        localStorage.setItem(SEND_OFF_KEY, JSON.stringify(all));
+    } catch (e) { }
+}
 export function nsfwClearSendOnce(chatId) {
     try {
         const raw = localStorage.getItem(SEND_ONCE_KEY);
@@ -918,6 +941,10 @@ export function nsfwClearSendOnce(chatId) {
         const k = String(chatId || 'default');
         delete all[k];
         localStorage.setItem(SEND_ONCE_KEY, JSON.stringify(all));
+        const raw2 = localStorage.getItem(SEND_OFF_KEY);
+        const all2 = raw2 ? (JSON.parse(raw2) || {}) : {};
+        delete all2[k];
+        localStorage.setItem(SEND_OFF_KEY, JSON.stringify(all2));
     } catch (e) { }
 }
 /** ★W366：只看「真实用户输入」——作者用 4A 包裹/<user_input> 把用户楼层包了，小说前缀里的名字不该触发 AUTO */
@@ -974,8 +1001,9 @@ export function nsfwPickForRequest(chatId, msgs) {
         /* AUTO：正文命中的 ∪ 手动追加 */
         const base = nsfwAutoPicks(chatId, msgs);
         const once = nsfwSendOnce(chatId);
-        const union = base.slice();
-        once.forEach((n) => { if (union.indexOf(n) < 0) union.push(n); });
+        const off = nsfwSendOff(chatId);
+        const union = base.filter((n) => off.indexOf(n) < 0);
+        once.forEach((n) => { if (union.indexOf(n) < 0 && off.indexOf(n) < 0) union.push(n); });
         return union;
         const lastA = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') return aiContent(String(msgs[i].content || '')); } return ''; })();
         const lastU = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'user') return realUserInput(String(msgs[i].content || '')); } return ''; })();
@@ -1120,6 +1148,7 @@ export function nsfwMountSender() {
         } catch (e) { }
         /* ★W364：AUTO 下勾选框变成「本轮会发谁」的示意；手动勾一个 = 只加这一轮 */
         const once = nsfwSendOnce(chatId);
+        const offNow = nsfwSendOff(chatId);
         let autoPicks = [];
         if (auto) {
             try {
@@ -1129,7 +1158,7 @@ export function nsfwMountSender() {
             } catch (e) { autoPicks = []; }
         }
         const items = names.map((n) => '<span class="yw-nsfw-sd-item">'
-            + '<input type="checkbox" data-send="' + esc(n) + '"' + ((auto ? (autoPicks.indexOf(n) >= 0 || once.indexOf(n) >= 0) : (picks.indexOf(n) >= 0)) ? ' checked' : '') + '/>'
+            + '<input type="checkbox" data-send="' + esc(n) + '"' + ((auto ? (((autoPicks.indexOf(n) >= 0 && offNow.indexOf(n) < 0) || once.indexOf(n) >= 0)) : (picks.indexOf(n) >= 0)) ? ' checked' : '') + '/>'
             + '<b class="yw-nsfw-sd-name" data-name="' + esc(n) + '" title="点名字看最新快照">' + esc(n) + '</b></span>').join('');
         host.innerHTML = '<span class="yw-nsfw-sd-grip" title="按住拖动">⠿</span>'
             + '<label class="yw-nsfw-sd-auto" title="自动：上一楼正文或你的消息里出现谁就发谁"><input type="checkbox"' + (auto ? ' checked' : '') + '/><span>AUTO</span></label>'
@@ -1147,9 +1176,13 @@ export function nsfwMountSender() {
             cb.addEventListener('change', () => {
                 const nm0 = cb.getAttribute('data-send');
                 if (auto) {
-                    const isAuto = autoPicks.indexOf(nm0) >= 0;
-                    if (!isAuto) nsfwSetSendOnce(chatId, nm0, cb.checked);
-                    else if (!cb.checked) cb.checked = true;   /* AUTO 命中的不能取消，只能追加 */
+                    if (cb.checked) {
+                        nsfwSetSendOff(chatId, nm0, false);
+                        if (autoPicks.indexOf(nm0) < 0) nsfwSetSendOnce(chatId, nm0, true);
+                    } else {
+                        nsfwSetSendOnce(chatId, nm0, false);
+                        nsfwSetSendOff(chatId, nm0, true);   /* ★W368：取消勾选 = 只排除这一轮 */
+                    }
                 } else {
                     nsfwSetSendPick(chatId, nm0, cb.checked);
                 }
