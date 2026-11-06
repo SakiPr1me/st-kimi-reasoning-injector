@@ -945,7 +945,7 @@ export function buildCharBlock(name, profile) {
         const cell = (profile.stats || {})[f.id]
             || ((profile.static || {})[f.id] ? { value: profile.static[f.id], comment: '' } : null);
         const val = cell ? fmtVal(f, cell) : '';
-        if (!val) return;
+        if (!val || isUnknownish(val)) return;   /* ★W408：未知 / N/A 的值不发给 AI */
         addTo(f.group, f.id + ' = ' + val);   /* 评述不发送（省 token） */
     });
     /* 自定义字段跟普通字段一起发 */
@@ -967,8 +967,6 @@ export function buildCharBlock(name, profile) {
         lines.push('【' + grp.g + '】');
         grp.items.forEach((ln) => lines.push(ln));
     });
-    const preg = calcPregRisk(profile);
-    if (preg.why) lines.push('怀孕几率: ' + preg.risk + '%（插件计算，不要改写）');
     return '<nsfw>' + NL + lines.join(NL) + NL + '</nsfw>';
 }
 
@@ -1263,7 +1261,9 @@ export function nsfwBuildSend(chatId, names, msgs, opts) {
             const b = buildCharBlock(n, prof);
             if (!b) return;
             const t0 = String(((prof.stats || {}).snapTime || {}).value || '');
+            const preg0 = calcPregRisk(prof);   /* ★W408：怀孕几率放块外，只作参考，避免 AI 把它当成快照格式的一部分 */
             parts.push('以下是' + n + (t0 ? '于' + t0 : '') + '的NSFW状态快照（出于省token需求评述不作为提示词发送，不代表没有），如进入NSFW剧情则按照以上要求综合剧情与推理完整更新（不进入则不输出）：');
+            if (preg0.why) parts.push('（插件已算好：怀孕几率 ' + preg0.risk + '%，仅作参考；不要在快照里写这一行。）');
             parts.push(b);
         });
         return parts.length > 1 ? parts.join(NL) : '';
