@@ -57,38 +57,38 @@ export const NSFW_FIELDS = [
 
     /* ── 第四组：胸 ── */
     { id: 'milkMl', group: '胸', label: '积乳量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 5, noBar: true },
-    { id: 'stChestSize', group: '胸', label: '罩杯/胸肌', type: 'text', core: true, ord: 10 },
-    { id: 'stChestShape', group: '胸', label: '胸型', type: 'text', core: true, ord: 15 },
-    { id: 'stNippleLen', group: '胸', label: '乳头长', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 20, noBar: true },
-    { id: 'stNippleWid', group: '胸', label: '乳头宽', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 25, noBar: true },
-    { id: 'stAreolaDia', group: '胸', label: '乳晕直径', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 30, noBar: true },
+    { id: 'stChestSize', group: '胸', label: '罩杯/胸肌', type: 'text', core: true, ord: 10, fixed: true },
+    { id: 'stChestShape', group: '胸', label: '胸型', type: 'text', core: true, ord: 15, fixed: true },
+    { id: 'stNippleLen', group: '胸', label: '乳头长', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 20, noBar: true, fixed: true },
+    { id: 'stNippleWid', group: '胸', label: '乳头宽', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 25, noBar: true, fixed: true },
+    { id: 'stAreolaDia', group: '胸', label: '乳晕直径', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 30, noBar: true, fixed: true },
 
     /* ── 第五组：前穴 ── */
-    { id: 'stClitLen', group: '前穴', label: '阴蒂长度', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 5, noBar: true },
-    { id: 'stClitSize', group: '前穴', label: '阴蒂宽', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 10, noBar: true },
+    { id: 'stClitLen', group: '前穴', label: '阴蒂长度', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 5, noBar: true, fixed: true },
+    { id: 'stClitSize', group: '前穴', label: '阴蒂宽', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 10, noBar: true, fixed: true },
     { id: 'clitState', group: '前穴', label: '阴蒂状态', type: 'text', core: true, ord: 15 },
     { id: 'vulvaState', group: '前穴', label: '外阴状态', type: 'text', options: ['紧闭缝隙状', '微张含水状', '红肿充血状', '外翻花唇状', '高度肿胀肉丘', '洞开大张状', '常态半张开'], core: true, ord: 20 },
     { id: 'vLoose', group: '前穴', label: '松弛度', type: 'num', min: 0, max: 100, core: true, ord: 25 },
     { id: 'vLastIn', group: '前穴', label: '最近进入（人/物）', type: 'text', core: true, ord: 27 },
     { id: 'vLastLen', group: '前穴', label: '其长度', type: 'num', unit: 'cm', noBar: true, core: true, ord: 28 },
-    { id: 'stGDepth', group: '前穴', label: 'G点深度', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 30, noBar: true },
-    { id: 'stCervixDepth', group: '前穴', label: '子宫口深度', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 35, noBar: true },
+    { id: 'stGDepth', group: '前穴', label: 'G点深度', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 30, noBar: true, fixed: true },
+    { id: 'stCervixDepth', group: '前穴', label: '子宫口深度', type: 'num', min: 0, max: 20, unit: 'cm', core: true, ord: 35, noBar: true, fixed: true },
     { id: 'cervixState', group: '前穴', label: '子宫口状态', type: 'text', options: ['下沉', '紧闭', '红肿', '受迫位移', '微开', '全开'], core: true, ord: 40 },
     { id: 'vFluidKind', group: '前穴', label: '阴道液体种类', type: 'text', core: true, ord: 45 },
     { id: 'vFluidMl', group: '前穴', label: '阴道液体量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 50, noBar: true },
     { id: 'uterusFluidMl', group: '前穴', label: '子宫液体量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 55, noBar: true },
 
     /* ── 第六组：后穴 ── */
-    { id: 'stPenisLen', group: '后穴', label: '阴茎长度', type: 'num', min: 0, max: 40, unit: 'cm', core: true, ord: 5, noBar: true },
-    { id: 'stPenisGirth', group: '后穴', label: '阴茎粗度', type: 'num', min: 0, max: 40, unit: 'cm', core: true, ord: 10, noBar: true },
-    { id: 'stPenisLook', group: '后穴', label: '阴茎外观', type: 'text', core: true, ord: 15 },
+    { id: 'stPenisLen', group: '后穴', label: '阴茎长度', type: 'num', min: 0, max: 40, unit: 'cm', core: true, ord: 5, noBar: true, fixed: true },
+    { id: 'stPenisGirth', group: '后穴', label: '阴茎粗度', type: 'num', min: 0, max: 40, unit: 'cm', core: true, ord: 10, noBar: true, fixed: true },
+    { id: 'stPenisLook', group: '后穴', label: '阴茎外观', type: 'text', core: true, ord: 15, fixed: true },
     { id: 'aAnusState', group: '后穴', label: '肛门状态', type: 'text', options: ['竖状裂缝', '菊花状', '幼圆环状', '红肿肉环状', '高度肿胀肉丘', '洞开状', '常态半张开'], core: true, ord: 20 },
     { id: 'keyPointState', group: '后穴', label: '后穴G点状态', type: 'text', core: true, ord: 25 },
     { id: 'aLoose', group: '后穴', label: '松弛度', type: 'num', min: 0, max: 100, core: true, ord: 30 },
     { id: 'aLastIn', group: '后穴', label: '最近进入（人/物）', type: 'text', core: true, ord: 32 },
     { id: 'aLastLen', group: '后穴', label: '其长度', type: 'num', unit: 'cm', noBar: true, core: true, ord: 33 },
-    { id: 'stKeyDepth', group: '后穴', label: '前列腺深度', type: 'num', min: 0, max: 40, unit: 'cm', core: true, ord: 35, noBar: true },
-    { id: 'stColonDepth', group: '后穴', label: '结肠口深度', type: 'num', min: 0, max: 40, unit: 'cm', core: true, ord: 40, noBar: true },
+    { id: 'stKeyDepth', group: '后穴', label: '前列腺深度', type: 'num', min: 0, max: 40, unit: 'cm', core: true, ord: 35, noBar: true, fixed: true },
+    { id: 'stColonDepth', group: '后穴', label: '结肠口深度', type: 'num', min: 0, max: 40, unit: 'cm', core: true, ord: 40, noBar: true, fixed: true },
     { id: 'colonState', group: '后穴', label: '结肠口状态', type: 'text', options: ['紧闭', '受迫变形', '微开', '全开'], core: true, ord: 45 },
     { id: 'aFluidKind', group: '后穴', label: '后穴液体种类', type: 'text', core: true, ord: 50 },
     { id: 'aFluidMl', group: '后穴', label: '后穴液体量', type: 'num', min: 0, max: 2000, unit: 'ml', core: true, ord: 55, noBar: true },
@@ -433,6 +433,35 @@ function isUnknownish(v) {
     const t = String(v == null ? '' : v).trim();
     return /^(未知|不详|未记录|无记录|未知。?|不清楚|不确定)$/.test(t);
 }
+/* ★W399：生理期按时间推进 —— 把「距下阶段 N 天」按经过的天数扣掉，跨阶段就换到下一阶段 */
+const CYCLE_PHASES = ['月经期', '卵泡期', '排卵期', '黄体期'];
+const CYCLE_DAYS = { '月经期': 5, '卵泡期': 7, '排卵期': 2, '黄体期': 14 };
+function snapDateOf(v) {
+    const s = String(v || '');
+    const m = /(\d{4})\s*[年\-\/\.]\s*(\d{1,2})\s*[月\-\/\.]\s*(\d{1,2})\s*日?(?:[^\d]{1,10}?(\d{1,2}):(\d{2}))?/.exec(s);
+    if (!m) return null;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4] || 0), Number(m[5] || 0));
+    return isNaN(d.getTime()) ? null : d;
+}
+function dayDiffOf(a, b) {
+    const d1 = snapDateOf(a), d2 = snapDateOf(b);
+    if (!d1 || !d2) return 0;
+    const ms = d2.getTime() - d1.getTime();
+    return ms > 0 ? Math.floor(ms / 86400000) : 0;
+}
+function advanceCycle(phase, daysLeft, elapsed) {
+    let i = CYCLE_PHASES.indexOf(String(phase || '').trim());
+    if (i < 0) return null;
+    let left = Number(daysLeft);
+    if (!isFinite(left)) return null;
+    left -= elapsed;
+    let guard = 0;
+    while (left <= 0 && guard++ < 80) {
+        i = (i + 1) % CYCLE_PHASES.length;
+        left += CYCLE_DAYS[CYCLE_PHASES[i]] || 5;
+    }
+    return { phase: CYCLE_PHASES[i], days: Math.max(1, Math.round(left)) };
+}
 function clampNum(f, v) {
     let n = Number(v);
     if (!Number.isFinite(n)) {
@@ -504,6 +533,7 @@ export function nsfwSetStat(chatId, name, id, value, comment) {
         const f = fieldById(id);
         if (!f) return false;
         rec.stats[id] = { value: value, comment: comment || '', at: Date.now() };
+        if (f.fixed) { if (!rec.fixedOvr) rec.fixedOvr = {}; rec.fixedOvr[id] = String(value == null ? '' : value); }
         rec.updatedAt = Date.now();
         all[key] = bucket;
         writeAll(all);
@@ -802,6 +832,10 @@ function applyParsedTo(bucket, parsed) {
         }
         const rec = bucket.chars[name];
         const mm = parsed.chars[name].machine || {};
+        /* ★W399：先记下这一块之前的值（用来算经过了多少天） */
+        const prevM = String(((rec.stats.menstrual || {}).value) || '').trim();
+        const prevN = ((rec.stats.menstrualNextDays || {}).value);
+        const prevSnap = String(((rec.stats.snapTime || {}).value) || '');
         const allow = {};
         activeFields(rec).forEach((f) => { allow[f.id] = 1; });
         Object.keys(mm).forEach((id) => {
@@ -811,6 +845,16 @@ function applyParsedTo(bucket, parsed) {
             const f = viewField(f0);   /* ★W390：范围以指南为准 */
             const item = mm[id] || {};
             let value = item.value;
+            /* ★W399：身体测量值（st*）是固定值 —— 第一次记下以后，AI 再改也忽略；
+               用户在卡片上手动改过（fixedOvr）则以手动值为准 */
+            if (f.fixed) {
+                const ov = rec.fixedOvr && rec.fixedOvr[id];
+                if (ov !== undefined && String(ov).trim() !== '') {
+                    value = ov;
+                } else if (rec.stats[id] && String((rec.stats[id] || {}).value || '').trim() !== '' && !isUnknownish((rec.stats[id] || {}).value)) {
+                    return;   /* 已有固定值 → 不接受 AI 的新值 */
+                }
+            }
             if (f.type === 'num') {
                 const n = clampNum(f, value);
                 if (n === null) return;
@@ -823,6 +867,21 @@ function applyParsedTo(bucket, parsed) {
             }
             rec.stats[id] = { value: value, comment: item.comment || '', at: Date.now() };
         });
+        /* ★W399：AI 没换阶段、但快照时间往前走了 ⇒ 插件按天数推进生理期 */
+        try {
+            const nowSnap = String(((rec.stats.snapTime || {}).value) || prevSnap || '');
+            const elapsed = dayDiffOf(prevSnap, nowSnap);
+            if (prevM && prevN !== undefined && String(prevN).trim() !== '' && elapsed > 0) {
+                const aiPhase = String(((rec.stats.menstrual || {}).value) || '').trim();
+                if (aiPhase && aiPhase === prevM) {
+                    const adv = advanceCycle(prevM, prevN, elapsed);
+                    if (adv) {
+                        rec.stats.menstrual = { value: adv.phase, comment: '插件按时间推算', at: Date.now() };
+                        rec.stats.menstrualNextDays = { value: String(adv.days), comment: '插件按时间推算', at: Date.now() };
+                    }
+                }
+            }
+        } catch (eC) { }
         const dd = parsed.chars[name].desc || {};
         Object.keys(dd).forEach((id) => { rec.desc[id] = { text: dd[id], at: Date.now() }; });
         /* ★W374：自定义字段一并落盘（原来的值沿用，新的覆盖） */
@@ -887,6 +946,17 @@ export function nsfwRebuildFromChat(chatId, chat) {
                 return;
             }
             next.chars[n].static = JSON.parse(JSON.stringify(old.static || {}));
+            next.chars[n].fixedOvr = JSON.parse(JSON.stringify(old.fixedOvr || {}));   /* ★W399：手动改过的固定值 */
+            /* ★W399b：重建是把楼层重新回放一遍 —— 回放时还没有 override，所以这里要把手动值补回 stats */
+            try {
+                const ov0 = next.chars[n].fixedOvr || {};
+                Object.keys(ov0).forEach((fid) => {
+                    const v0 = ov0[fid];
+                    if (v0 === undefined || String(v0).trim() === '') return;
+                    const oldCell = (next.chars[n].stats || {})[fid];
+                    next.chars[n].stats[fid] = { value: v0, comment: (oldCell && oldCell.comment) || '', at: Date.now() };
+                });
+            } catch (eOv) { }
         });
         all[key] = next;
         writeAll(all);
