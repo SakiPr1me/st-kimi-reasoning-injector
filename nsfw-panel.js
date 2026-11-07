@@ -684,6 +684,13 @@ function resolveFieldKey(rawKey, all) {
     const key = String(rawKey || '').trim();
     if (!key) return null;
     const hit = (k) => all.find((x) => x.id === k) || fieldByLabel(k) || null;
+    /* ★W442：行首 token 先按 ID 认 —— 「松弛度」这类中文名前穴/后穴各有一条，
+       不能被后面的 label 兜底先抢到第一条（作者实测：前穴/后穴的松弛度显示反了）。 */
+    const headTok = key.split(/\s+/)[0];
+    if (headTok && headTok !== key) {
+        const fHead = all.find((x) => x.id === headTok);
+        if (fHead) return fHead;
+    }
     let f = hit(key);
     if (f) return f;
     const alias = NSFW_ALIAS[key];
