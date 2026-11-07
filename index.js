@@ -10,7 +10,7 @@ import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
-import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwGuideSyncFromPreset, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 
 
@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.253'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.254'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -466,7 +466,8 @@ const defaultSettings = {
     nsfwDensity: 'normal',
     nsfwCaptureHide: true,          // 捕捉并隐藏楼里的快照（关了就不解析、不画卡、不隐藏）
     nsfwSenderEnabled: true,        // 发送悬浮窗（关了就不显示、也不发送）
-    nsfwAutoSend: true           // 发给 AI：true=AUTO（正文出现谁发谁）/ false=只发悬浮条里勾选的人            // 卡片行距：compact / normal / loose
+    nsfwAutoSend: true,          // 发给 AI：true=AUTO（正文出现谁发谁）/ false=只发悬浮条里勾选的人            // 卡片行距：compact / normal / loose
+    nsfwCardFold: 'expand'       // ★W412：美化默认态 expand=不折叠 / collapse=折叠
 };
 
 // ===== 双模式三语预设 =====
@@ -592,7 +593,7 @@ const UI = {
         nsfwHint: "将已有状态快照画卡，并注入提示词中",
         nsfwFullCount: "在场全量人数：", nsfwAllFields: "注入全部字段（更细但更费 token）",
         nsfwRoster: "角色名册", nsfwNewName: "角色名", nsfwAdd: "＋ 建档", nsfwRemove: "删",
-        nsfwCaptureHide: "捕捉并隐藏NSFW状态栏", nsfwCaptureHideHint: "", nsfwSenderToggle: "发送悬浮窗", nsfwSenderHint: "新增一个悬浮框，选谁就将谁的状态快照发送；AUTO 为上一轮正文 + 用户发送里有谁的名字，就帮你勾选并发送谁，也可在悬浮窗手动勾选（勾/取消只影响这一轮）。", nsfwPeekList: "当前聊天（点名字看状态）", nsfwAutoHint: "自动：正文里出现谁就发谁",
+        nsfwCaptureHide: "捕捉并隐藏NSFW状态栏", nsfwCaptureHideHint: "", nsfwSenderToggle: "发送悬浮窗", nsfwSenderHint: "新增一个悬浮框，选谁就将谁的状态快照发送；AUTO 为上一轮正文 + 用户发送里有谁的名字，就帮你勾选并发送谁，也可在悬浮窗手动勾选（勾/取消只影响这一轮）。", nsfwPeekList: "当前聊天（点名字看状态）", nsfwAutoHint: "自动：正文里出现谁就发谁", nsfwFoldLabel: "美化默认", nsfwFoldExpand: "默认不折叠美化", nsfwFoldCollapse: "默认折叠美化",
         nsfwInjectMode: "每轮注入", nsfwInjectFull: "完整（规则 + 状态 + 协议）", nsfwInjectState: "仅当前状态（规则/格式在预设里）", nsfwInjectOff: "不注入（状态只看楼层）",
         nsfwRules: "更新规则（每行一条，注入时按顺序发出）", nsfwPreview: "预览本轮注入", nsfwPeek: "看快照", nsfwDemo: "示例填充（先看效果）", nsfwDump: "查看/复制全部状态",
         nsfwNoChars: "还没有角色，先在上面建档。",
@@ -669,7 +670,7 @@ const UI = {
         nsfwHint: "When on: every turn injects the in-scene character states + update rules + output protocol; the AI replies with two blocks at the end (values with sensory notes + outsider views); the plugin parses them, strips the raw text and renders a card in the message. Off by default.",
         nsfwFullCount: "Full-state characters: ", nsfwAllFields: "Inject all fields (finer, more tokens)",
         nsfwRoster: "Characters", nsfwNewName: "Name", nsfwAdd: "＋ Add", nsfwRemove: "Del",
-        nsfwCaptureHide: "Capture & hide the block", nsfwCaptureHideHint: "On: parse the snapshot from the floor and hide the raw text. Off: no parsing, no card, raw text stays.", nsfwSenderToggle: "Sender bar", nsfwSenderHint: "The small bar at bottom right: check who to send. AUTO picks from the last AI content / your input. Checks apply to this round only.", nsfwPeekList: "This chat (click a name)", nsfwAutoHint: "Auto: send whoever appears",
+        nsfwCaptureHide: "Capture & hide the block", nsfwCaptureHideHint: "On: parse the snapshot from the floor and hide the raw text. Off: no parsing, no card, raw text stays.", nsfwSenderToggle: "Sender bar", nsfwSenderHint: "The small bar at bottom right: check who to send. AUTO picks from the last AI content / your input. Checks apply to this round only.", nsfwPeekList: "This chat (click a name)", nsfwAutoHint: "Auto: send whoever appears", nsfwFoldLabel: "Card default", nsfwFoldExpand: "Expanded", nsfwFoldCollapse: "Collapsed",
         nsfwInjectMode: "Per-turn injection", nsfwInjectFull: "Full (rules + state + format)", nsfwInjectState: "State only (rules/format live in the preset)", nsfwInjectOff: "Off (state comes from the floors)",
         nsfwRules: "Update rules (one per line, injected in order)", nsfwPreview: "Preview injection", nsfwPeek: "Snapshot", nsfwDemo: "Fill demo data", nsfwDump: "View / copy all states",
         nsfwNoChars: "No characters yet - add one above.",
@@ -746,7 +747,7 @@ const UI = {
         nsfwHint: "켜면 매 턴 등장 캐릭터 상태 + 갱신 규칙 + 출력 프로토콜을 주입하고, AI가 본문 끝에 두 블록(수치+관능 평가 / 타인 시선)을 출력하며, 플러그인이 이를 파싱해 원문을 지우고 메시지에 카드로 그립니다. 기본 꺼짐.",
         nsfwFullCount: "전체 상태 인원: ", nsfwAllFields: "모든 필드 주입 (더 자세하지만 토큰 소모 큼)",
         nsfwRoster: "캐릭터 목록", nsfwNewName: "이름", nsfwAdd: "＋ 추가", nsfwRemove: "삭제",
-        nsfwCaptureHide: "스냅샷 캡처 및 숨김", nsfwCaptureHideHint: "켜면 층의 스냅샷을 읽고 원문을 숨깁니다. 끄면 파싱/카드 없이 원문 그대로.", nsfwSenderToggle: "전송 바", nsfwSenderHint: "오른쪽 아래 작은 바. 체크한 사람에게 전송. AUTO는 본문/입력에 나온 사람 자동 판정, 체크/해제는 이번 턴만.", nsfwPeekList: "현재 채팅 (이름 클릭)", nsfwAutoHint: "자동: 본문에 나온 사람",
+        nsfwCaptureHide: "스냅샷 캡처 및 숨김", nsfwCaptureHideHint: "켜면 층의 스냅샷을 읽고 원문을 숨깁니다. 끄면 파싱/카드 없이 원문 그대로.", nsfwSenderToggle: "전송 바", nsfwSenderHint: "오른쪽 아래 작은 바. 체크한 사람에게 전송. AUTO는 본문/입력에 나온 사람 자동 판정, 체크/해제는 이번 턴만.", nsfwPeekList: "현재 채팅 (이름 클릭)", nsfwAutoHint: "자동: 본문에 나온 사람", nsfwFoldLabel: "카드 기본값", nsfwFoldExpand: "펼침", nsfwFoldCollapse: "접힘",
         nsfwInjectMode: "매 턴 주입", nsfwInjectFull: "전체 (규칙 + 상태 + 형식)", nsfwInjectState: "현재 상태만 (규칙/형식은 프리셋에)", nsfwInjectOff: "주입 안 함 (층의 상태만 사용)",
         nsfwRules: "갱신 규칙 (한 줄에 하나, 순서대로 주입)", nsfwPreview: "이번 턴 주입 미리보기", nsfwPeek: "스냅샷", nsfwDemo: "예시 데이터 채우기", nsfwDump: "전체 상태 보기/복사",
         nsfwNoChars: "아직 캐릭터가 없습니다. 위에서 추가하세요.",
@@ -1207,6 +1208,7 @@ if (settings.nsfwInjectMode === undefined) settings.nsfwInjectMode = defaultSett
 if (settings.nsfwCaptureHide === undefined) settings.nsfwCaptureHide = defaultSettings.nsfwCaptureHide;
 if (settings.nsfwSenderEnabled === undefined) settings.nsfwSenderEnabled = defaultSettings.nsfwSenderEnabled;
 if (settings.nsfwAutoSend === undefined) settings.nsfwAutoSend = (settings.nsfwSendMode ? settings.nsfwSendMode === 'auto' : defaultSettings.nsfwAutoSend);
+if (settings.nsfwCardFold !== 'collapse') settings.nsfwCardFold = 'expand';   /* ★W412 */
 if (settings.nsfwPin === undefined) settings.nsfwPin = defaultSettings.nsfwPin;
 if (settings.nsfwDensity === undefined) settings.nsfwDensity = defaultSettings.nsfwDensity;
 try { nsfwInit({ t, getSettings: () => settings, save: () => saveSettingsDebounced() }); } catch (e) { }
@@ -1324,7 +1326,7 @@ setInterval(() => {
         if (!isGenerating && document.body && document.body.classList.contains('yw-nsfw-generating')) {
             document.body.classList.remove('yw-nsfw-generating');
             try { nsfwMarkGeneratingFloor(false); } catch (e2) { }
-            if (settings.nsfwEnabled) try { nsfwReattachAll(); } catch (e) { }
+            if (settings.nsfwEnabled) try { const lidW = nsfwLastAssistantId(); if (lidW >= 0) nsfwReattachAll([lidW]); } catch (e) { }
         }
     } catch (e) { }
 }, 800);
@@ -9022,7 +9024,7 @@ eventSource.on(event_types.MESSAGE_RECEIVED, async (id) => {
         if (nsfwParsedKeys.size > 500) nsfwParsedKeys.clear();
         nsfwApply(nsfwChatId(ctx), parsed);
         try { nsfwMarkMentions(nsfwChatId(ctx), parsed.stripped, id); } catch (e) { }
-        try { nsfwSaveSnap(nsfwChatId(ctx), id); } catch (e) { }
+        /* ★W414：按楼快照只写不读（nsfwSnapOf 无调用方），停写以省 localStorage/CPU */
         /* ★W336：解析完立刻刷新悬浮条，不然它还挂着「无档案」 */
         try { nsfwMountSender(); } catch (e) { }
         /* ★W315：块不再从 mes 里剥掉 —— 状态就长在楼层里：
@@ -9124,6 +9126,12 @@ function bindNsfwCard() {
         if (!n) return;
         try { nsfwRemove(chatId(), n); } catch (e) { }
         renderRoster();
+    });
+    const $fold = $("#" + extensionName + "_nsfw_fold");
+    $fold.off("change.kimiNsfwFold").on("change.kimiNsfwFold", function () {
+        settings.nsfwCardFold = String($(this).val()) === 'collapse' ? 'collapse' : 'expand';
+        saveSettingsDebounced();
+        try { nsfwResetFold(); nsfwReattachAll(); } catch (e) { }
     });
     const $capHide = $("#" + extensionName + "_nsfw_capturehide");
     const $senderChk = $("#" + extensionName + "_nsfw_sender");
@@ -9370,6 +9378,38 @@ function nsfwMarkGeneratingFloor(on) {
     } catch (e) { }
 }
 
+/* ★W413：指南即时生效 —— 预设条目一改就重读指南并重画（不等下一次请求） */
+let _nsfwGuideSyncTimer = 0;
+/* ★W414：只重挂最后一条 assistant（生成结束/停止时不需要整聊重挂） */
+function nsfwLastAssistantId() {
+    try {
+        const c = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? SillyTavern.getContext().chat : null;
+        for (let i = (c ? c.length : 0) - 1; i >= 0; i--) {
+            const m = c[i];
+            if (m && !m.is_user && !m.is_system) return i;
+        }
+    } catch (e) { }
+    return -1;
+}
+function nsfwGuideSyncNow(allowClear) {
+    try {
+        const r = nsfwGuideSyncFromPreset({ allowClear: !!allowClear });
+        if (r && r.changed) {
+            try { nsfwReattachAll(); } catch (e1) { }
+            try { nsfwMountSender(); } catch (e2) { }
+            try { if (typeof window.__ywNsfwRenderRoster === 'function') window.__ywNsfwRenderRoster(); } catch (e3) { }
+        }
+    } catch (e) { }
+}
+function nsfwGuideSyncSoon(ms, allowClear) {
+    try { clearTimeout(_nsfwGuideSyncTimer); _nsfwGuideSyncTimer = setTimeout(() => nsfwGuideSyncNow(allowClear), ms || 300); } catch (e) { }
+}
+try { eventSource.on(event_types.SETTINGS_UPDATED, () => { nsfwGuideSyncSoon(250, false); nsfwGuideSyncSoon(1500, false); }); } catch (e) { }
+try { eventSource.on(event_types.PRESET_CHANGED, () => { nsfwGuideSyncSoon(250, true); nsfwGuideSyncSoon(1500, true); }); } catch (e) { }
+try { eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => { nsfwGuideSyncSoon(250, true); nsfwGuideSyncSoon(1500, true); }); } catch (e) { }
+try { eventSource.on(event_types.CHAT_CHANGED, () => nsfwGuideSyncSoon(400, false)); } catch (e) { }
+try { setTimeout(() => nsfwGuideSyncNow(false), 1500); setTimeout(() => nsfwGuideSyncNow(false), 4000); } catch (e) { }
+
 eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     isDryRun = !!dryRun; // ST 提示词查看器 dry-run（Generate 第三个参数）
     if (isDryRun) {
@@ -9464,7 +9504,7 @@ setInterval(() => {
         if (!isGenerating && document.body && document.body.classList.contains('yw-nsfw-generating')) {
             document.body.classList.remove('yw-nsfw-generating');
             try { nsfwMarkGeneratingFloor(false); } catch (e2) { }
-            if (settings.nsfwEnabled) try { nsfwReattachAll(); } catch (e) { }
+            if (settings.nsfwEnabled) try { const lidW = nsfwLastAssistantId(); if (lidW >= 0) nsfwReattachAll([lidW]); } catch (e) { }
         }
     } catch (e) { }
 }, 800);
@@ -9512,14 +9552,14 @@ try {
         try { if (document && document.body) document.body.classList.remove('yw-nsfw-generating'); } catch (e) { }
         try { nsfwMarkGeneratingFloor(false); } catch (e3) { }
         try { nsfwMarkGeneratingFloor(false); } catch (e) { }
-        try { if (settings.nsfwEnabled) setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, 300); } catch (e) { }
+        try { if (settings.nsfwEnabled) setTimeout(() => { try { const lidS = nsfwLastAssistantId(); if (lidS >= 0) nsfwReattachAll([lidS]); } catch (e) { } }, 300); } catch (e) { }
     });
 } catch (e) { }
 eventSource.on(event_types.GENERATION_ENDED, () => {
     try {
         if (document && document.body) document.body.classList.remove('yw-nsfw-generating');
         try { nsfwMarkGeneratingFloor(false); } catch (e) { }
-        if (settings.nsfwEnabled) [150, 500, 1100].forEach((ms) => setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, ms));
+        if (settings.nsfwEnabled) { const lidE = nsfwLastAssistantId(); if (lidE >= 0) [150, 500, 1100].forEach((ms) => setTimeout(() => { try { nsfwReattachAll([lidE]); } catch (e) { } }, ms)); }
     } catch (e) { }
     lastGenManuallyStopped = false; // 一轮生成彻底结束，清手动停止标记
     // v1.37.56：dry-run 不会发 GENERATION_ENDED（dry-run 在 Generate 里提前 return，从不显示停止按钮，
@@ -10708,6 +10748,13 @@ ${renderWordReplaceRows()}
 <div class="kimi-card-body">
 <label class="checkbox_label"><input id="${extensionName}_nsfw_enabled" type="checkbox" ${settings.nsfwEnabled ? 'checked' : ''}/><span>${t('nsfwEnable')}</span></label>
 <div class="kimi-hint">${t('nsfwHint')}</div>
+<div class="kimi-row" style="margin-top:6px;display:flex;align-items:center;gap:8px">
+    <span class="kimi-label" style="margin:0">${t('nsfwFoldLabel')}</span>
+    <select id="${extensionName}_nsfw_fold" class="text_pole" style="width:auto">
+        <option value="expand" ${settings.nsfwCardFold !== 'collapse' ? 'selected' : ''}>${t('nsfwFoldExpand')}</option>
+        <option value="collapse" ${settings.nsfwCardFold === 'collapse' ? 'selected' : ''}>${t('nsfwFoldCollapse')}</option>
+    </select>
+</div>
 <label class="checkbox_label" style="margin-top:6px"><input id="${extensionName}_nsfw_capturehide" type="checkbox" ${settings.nsfwCaptureHide !== false ? 'checked' : ''}/><span>${t('nsfwCaptureHide')}</span></label>
 <label class="checkbox_label" style="margin-top:6px"><input id="${extensionName}_nsfw_sender" type="checkbox" ${settings.nsfwSenderEnabled !== false ? 'checked' : ''}/><span>${t('nsfwSenderToggle')}</span></label>
 <div class="kimi-hint">${t('nsfwSenderHint')}</div>

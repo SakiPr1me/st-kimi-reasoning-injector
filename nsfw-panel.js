@@ -271,6 +271,7 @@ export function nsfwRemove(chatId, name) {
 const GROUP_ORDER = ['状态', '身体', '穿搭', '胸', '前穴', '后穴', '开发'];
 
 /** 全部字段 = 内置 + 用户自定义（settings.nsfwCustomFields） */
+let _fieldsCache = { key: '', arr: null };
 export function nsfwAllFields() {
     let custom = [];
     let overrides = {};
@@ -279,18 +280,24 @@ export function nsfwAllFields() {
         custom = Array.isArray(st.nsfwCustomFields) ? st.nsfwCustomFields : [];
         overrides = (st.nsfwFieldOverrides && typeof st.nsfwFieldOverrides === 'object') ? st.nsfwFieldOverrides : {};
     } catch (e) { custom = []; overrides = {}; }
+    /* ★W414：字段注册表缓存（key 含指南版本/自定义字段/覆盖） */
+    const key0 = _guideRev + '|' + JSON.stringify(custom) + '|' + JSON.stringify(overrides);
+    if (_fieldsCache.arr && _fieldsCache.key === key0) return _fieldsCache.arr;
     const base = NSFW_FIELDS.map((f) => {
         const ov = overrides[f.id];
         return ov ? Object.assign({}, f, ov) : f;
     });
-    return base.concat(custom.map((f) => Object.assign({ custom: true, core: true }, f)));
+    const out0 = base.concat(custom.map((f) => Object.assign({ custom: true, core: true }, f)));
+    _fieldsCache = { key: key0, arr: out0 };
+    return out0;
 }
 
 /* ───────── ★W390：字段字典（只从预设的 <nsfw_state_guide> 里抽，指南说了算） ───────── */
 const GUIDE_STORE_KEY = 'kimi_nsfw_guide_v1';
 let _guideCache = null;
+let _guideRev = 0;
 
-/** 解析 guide 里的 `<nsfw>…</nsfw>` 字段表；`[多行]` 标记多行字段 */
+/** 解析 guide 里的 `<nsfw>…</nsfw>` 字段表；`[多行]` 标记多行、`[a/b]` 记选项、行序记 ord */
 export function nsfwParseGuide(text) {
     const map = {};
     try {
@@ -298,6 +305,7 @@ export function nsfwParseGuide(text) {
         const bodyM = /<nsfw>([\s\S]*?)<\/nsfw>/i.exec(src);
         const body = bodyM ? bodyM[1] : src;
         let group = '';
+        let ord = 0;
         body.split(/\r?\n/).forEach((line) => {
             const s0 = String(line || '').trim();
             if (!s0) return;
@@ -319,37 +327,55 @@ export function nsfwParseGuide(text) {
             const reP = /[（(]([^)）]*)[)）]/g;
             while ((pm = reP.exec(rest))) parens.push(pm[1]);
             const label = rest.replace(/[\[【][^\]】]*[\]】]/g, ' ').replace(/[（(][^)）]*[)）]/g, ' ').replace(/\s*列表.*$/, '').replace(/\s+/g, ' ').trim();
-            let min = null, max = null, multi = false;
+            let min = null, max = null, multi = false, options = null;
             brackets.forEach((b) => {
-                if (String(b).indexOf('多行') >= 0) multi = true;
-                const rm = /^\s*(-?\d+(?:\.\d+)?)\s*[-~～—]\s*(-?\d+(?:\.\d+)?)\s*$/.exec(String(b));
-                if (rm) { min = Number(rm[1]); max = Number(rm[2]); }
+                const bs = String(b);
+                if (bs.indexOf('多行') >= 0) multi = true;
+                const rm = /^\s*(-?\d+(?:\.\d+)?)\s*[-~～—]\s*(-?\d+(?:\.\d+)?)\s*$/.exec(bs);
+                if (rm) { min = Number(rm[1]); max = Number(rm[2]); return; }
+                if (/[\/／]/.test(bs)) {
+                    const ops = bs.split(/[\/／]/).map((x) => x.trim()).filter(Boolean);
+                    if (ops.length >= 2) options = ops;
+                }
             });
             if (/多行/.test(rest)) multi = true;
             let unit = '';
-            const isUnit = (u) => /^[A-Za-z%‰℃]+$/.test(u) || /^(次|人|天|个|岁|分|秒|小时|毫升|厘米|克|公斤|升|倍|日|周|月)$/.test(u);
+            const isUnit = (u) => /^[A-Za-z%‰℃]+$/.test(u)
+                || /^(次|人|天|个|岁|分|秒|小时|毫升|厘米|克|公斤|升|倍|日|周|月|点|级|颗|片|滴)$/.test(u)
+                || (u.length <= 3 && !/[男女列表多行说明可选分隔每行单位值]/.test(u));
             for (let i = parens.length - 1; i >= 0; i--) {
                 const u = String(parens[i] || '').trim();
                 if (u && isUnit(u)) { unit = u; break; }
             }
-            map[id] = { id: id, label: label || id, group: group || '其它', min: min, max: max, unit: unit, multi: multi };
+            ord++;
+            map[id] = { id: id, label: label || id, group: group || '其它', min: min, max: max, unit: unit, multi: multi, options: options, ord: ord };
         });
     } catch (e) { }
     return map;
 }
 
-/** 收到请求就更新字典（内容没变不写盘） */
-export function nsfwSetGuide(text) {
+/** 更新字典；返回 true=真的变了（内容没变返回 false，方便防抖重画） */
+export function nsfwSetGuide(text, opts) {
     try {
         const map = nsfwParseGuide(text);
         const ids = Object.keys(map);
-        if (!ids.length) return false;
-        const sig = ids.map((k) => [k, map[k].label, map[k].min, map[k].max, map[k].unit, map[k].group, map[k].multi ? 1 : 0].join('~')).join('|');
-        if (_guideCache && _guideCache.sig === sig) return true;
+        const usable = ids.filter((k) => k !== 'name' && k !== 'snapTime');
+        if (!usable.length) {
+            /* ★W413：预设里明确读到「有标签但没有字段」⇒ 清空。请求期没带指南（opts 不带 authoritative）⇒ 保持旧字典。 */
+            if (opts && opts.authoritative) { nsfwClearGuide(); return true; }
+            return false;
+        }
+        const sig = ids.map((k) => [k, map[k].label, map[k].min, map[k].max, map[k].unit, map[k].group, map[k].multi ? 1 : 0, (map[k].options || []).join('/'), map[k].ord].join('~')).join('|');
+        if (_guideCache && _guideCache.sig === sig) return false;
         _guideCache = { sig: sig, map: map };
+        _guideRev++;
         try { localStorage.setItem(GUIDE_STORE_KEY, JSON.stringify(_guideCache)); } catch (e1) { }
         return true;
     } catch (e) { return false; }
+}
+/** 清空字典（切到没有指南的预设 / 指南被删空） */
+export function nsfwClearGuide() {
+    try { _guideCache = { sig: '', map: {} }; _guideRev++; localStorage.removeItem(GUIDE_STORE_KEY); } catch (e) { }
 }
 
 function nsfwGuide() {
@@ -368,7 +394,69 @@ export function nsfwGuideMeta(id) {
 export function nsfwGuideCount() {
     try { return Object.keys(nsfwGuide()).length; } catch (e) { return 0; }
 }
-/** 画卡用的「视图字段」：指南里写了中文/范围/单位，以指南为准 */
+export function nsfwGuideRev() { return _guideRev; }
+/** 指南是否可用（至少 3 个展示字段；否则回退内置表，绝不清空卡） */
+function guideUsable() {
+    try {
+        const m = nsfwGuide();
+        let n = 0;
+        Object.keys(m).forEach((k) => { if (k !== 'name' && k !== 'snapTime') n++; });
+        return n >= 3;
+    } catch (e) { return false; }
+}
+/** ★W413：字段取舍的唯一判据 —— 指南可用时，只放行指南里有的 ID；指南不可用则全放行（兼容） */
+export function nsfwGuideAllows(id) {
+    const s0 = String(id || '');
+    if (s0 === 'name' || s0 === 'snapTime') return true;
+    try {
+        if (!guideUsable()) return true;
+        return !!nsfwGuide()[s0];
+    } catch (e) { return true; }
+}
+/** 指南里的分组顺序（分页按它排） */
+export function nsfwGuideGroups() {
+    const out = [];
+    try {
+        const m = nsfwGuide();
+        Object.keys(m).forEach((k) => {
+            const g = String(m[k].group || '').trim();
+            if (g && out.indexOf(g) < 0) out.push(g);
+        });
+    } catch (e) { }
+    return out;
+}
+/** ★W413：从当前预设直接读指南（不靠请求）；返回是否变化，调用方负责重画 */
+export function nsfwGuideSyncFromPreset(opts) {
+    const out = { found: false, changed: false, count: 0 };
+    try {
+        if (typeof window === 'undefined' || !window.SillyTavern || !window.SillyTavern.getContext) return out;
+        const ctx = window.SillyTavern.getContext();
+        const cs = ctx && ctx.chatCompletionSettings;
+        if (!cs || !Array.isArray(cs.prompts)) return out;
+        let enabled = null;
+        try {
+            const pm = (typeof window.promptManager !== 'undefined') ? window.promptManager : null;
+            const gid = (pm && pm.activeCharacter && pm.activeCharacter.id != null) ? pm.activeCharacter.id : 100001;
+            const grp = (cs.prompt_order || []).find((g) => String(g.character_id) === String(gid));
+            if (grp && Array.isArray(grp.order)) {
+                const set0 = new Set();
+                grp.order.forEach((o) => { if (o && o.enabled !== false) set0.add(o.identifier); });
+                if (set0.size) enabled = set0;
+            }
+        } catch (e) { }
+        const hits = cs.prompts.filter((p) => p && typeof p.content === 'string' && p.content.indexOf('<nsfw_state_guide>') >= 0 && (!enabled || enabled.has(p.identifier)));
+        if (!hits.length) {
+            /* 只有「预设已水合」（enabled 足够多）+ 明确是预设切换事件，才敢清空；启动初期不动缓存 */
+            if (opts && opts.allowClear) { nsfwClearGuide(); out.changed = true; }   /* 预设切换事件里没有指南 = 真没有；启动水合期的调用不带 allowClear */
+            return out;
+        }
+        out.found = true;
+        out.changed = nsfwSetGuide(hits.map((p) => p.content).join(String.fromCharCode(10)), { authoritative: true });
+        out.count = nsfwGuideCount();
+    } catch (e) { }
+    return out;
+}
+/** 画卡用的「视图字段」：指南里写了中文/范围/单位/选项/顺序，以指南为准 */
 function viewField(f) {
     if (!f) return f;
     const g = nsfwGuideMeta(f.id);
@@ -379,6 +467,8 @@ function viewField(f) {
     if (g.unit) o.unit = g.unit;
     if (typeof g.min === 'number') o.min = g.min;
     if (typeof g.max === 'number') o.max = g.max;
+    if (g.options && g.options.length) o.options = g.options.slice();   /* ★W413：选项列表也跟指南 */
+    if (typeof g.ord === 'number') o.ord = g.ord;                    /* ★W413：行序跟指南 */
     return o;
 }
 
@@ -427,7 +517,7 @@ function fieldByLabel(label) {
 }
 function activeFields(profile) {
     const sex = (profile && profile.sex) || 'female';
-    return nsfwAllFields().filter((f) => !f.sex || f.sex === sex);
+    return nsfwAllFields().filter((f) => (!f.sex || f.sex === sex) && nsfwGuideAllows(f.id));   /* ★W413：指南删掉的字段不再上卡/发送/入库 */
 }
 /** ★W391：模型偷懒写「未知」时，不拿它覆盖已有的值（相当于没更新） */
 function isUnknownish(v) {
@@ -837,10 +927,11 @@ function applyParsedTo(bucket, parsed) {
             rec.stats[id] = { value: value, comment: item.comment || '', at: Date.now() };
         });
         const dd = parsed.chars[name].desc || {};
-        Object.keys(dd).forEach((id) => { rec.desc[id] = { text: dd[id], at: Date.now() }; });
+        Object.keys(dd).forEach((id) => { if (nsfwGuideAllows(id)) rec.desc[id] = { text: dd[id], at: Date.now() }; });
         /* ★W374：自定义字段一并落盘（原来的值沿用，新的覆盖） */
         const ex = parsed.chars[name].extra || {};
         Object.keys(ex).forEach((id) => {
+            if (!nsfwGuideAllows(id)) return;   /* ★W413：指南里没有的自定义字段不再入库 */
             if (!rec.extra) rec.extra = {};
             const inc = ex[id] || {};
             const old = rec.extra[id] || {};
@@ -956,6 +1047,7 @@ export function buildCharBlock(name, profile) {
     try {
         const ex = profile.extra || {};
         Object.keys(ex).forEach((id) => {
+            if (!nsfwGuideAllows(id)) return;   /* ★W413：指南删掉的字段不发送 */
             const e0 = ex[id] || {};
             /* ★W392：近况只给自己看 —— 不发给 AI（否则它会把上一份照抄/拿正文事件重写一遍） */
             const g0 = nsfwGuideMeta(id) || {};
@@ -1374,6 +1466,51 @@ function nsfwBindSenderDrag(host, grip) {
     grip.addEventListener('mousedown', down);
     grip.addEventListener('touchstart', down, { passive: false });
 }
+/* ★W412：卡片折叠 —— 状态存模块级 Map（卡会被反复销毁重建，只写 DOM 会丢） */
+const _foldMap = new Map();
+export function nsfwResetFold() { try { _foldMap.clear(); } catch (e) { } }
+function _foldKey(chatId, mesid, name) { return String(chatId || '') + '|' + String(mesid == null ? '' : mesid) + '|' + String(name || ''); }
+export function nsfwApplyFold(card, chatId, mesid, name) {
+    try {
+        if (!card) return;
+        const st = _getSettings() || {};
+        const def = st.nsfwCardFold === 'collapse';
+        const key = _foldKey(chatId, mesid, name);
+        const collapsed = _foldMap.has(key) ? !!_foldMap.get(key) : def;
+        card.classList.toggle('is-collapsed', collapsed);
+        const head = card.querySelector('.yw-nsfw-head');
+        if (!head) return;
+        let car = head.querySelector('.yw-nsfw-fold');
+        if (!car) {
+            car = document.createElement('span');
+            car.className = 'yw-nsfw-fold';
+            head.appendChild(car);
+        }
+        car.textContent = collapsed ? '▸' : '▾';
+        car.title = collapsed ? '展开' : '折叠';
+        if (head.dataset.foldBound === '1') return;
+        head.dataset.foldBound = '1';
+        head.addEventListener('click', (e) => {
+            try {
+                if (e.target && e.target.closest && e.target.closest('button,a,input,select,textarea')) return;
+                const sel = (typeof window !== 'undefined' && window.getSelection) ? String(window.getSelection()) : '';
+                if (sel) return;
+                const now = !card.classList.contains('is-collapsed');
+                card.classList.toggle('is-collapsed', now);
+                _foldMap.set(key, now);
+                if (_foldMap.size > 300) { const k0 = _foldMap.keys().next().value; _foldMap.delete(k0); }
+                const c0 = card.querySelector('.yw-nsfw-fold');
+                if (c0) { c0.textContent = now ? '▸' : '▾'; c0.title = now ? '展开' : '折叠'; }
+                if (!now && typeof card._nsfwLock === 'function') {
+                    card._nsfwLock();
+                    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(card._nsfwLock);
+                }
+                e.stopPropagation();
+            } catch (e2) { }
+        });
+    } catch (e) { }
+}
+
 /** 点名字 → 用同一套美化卡看最新快照 */
 export function nsfwShowSnapshot(name) {
     try {
@@ -1390,7 +1527,9 @@ export function nsfwShowSnapshot(name) {
         box.innerHTML = '<div class="yw-nsfw-pv-hd"><span>最新快照 · ' + esc(name) + '</span><button type="button" class="yw-nsfw-pv-x">✕</button></div>';
         const body = document.createElement('div');
         body.className = 'yw-nsfw-pv-body';
-        body.appendChild(nsfwRenderCard(name, rec));
+        const pvCard = nsfwRenderCard(name, rec);
+        body.appendChild(pvCard);
+        try { nsfwApplyFold(pvCard, 'pv', 'pv', name); } catch (eF) { }
         box.appendChild(body);
         box.style.display = 'block';
         /* ★W362：预览浮层可拖动（按住标题栏），位置记住 */
@@ -1471,6 +1610,8 @@ export function nsfwChipsRender(host, chatId) {
     } catch (e) { }
 }
 /** 悬浮发送条：一条横条（可拖）+ AUTO 勾 + 名字列表；点名字看最新快照 */
+let _senderRebuildSig = '';
+let _senderRebuildAt = 0;   /* ★W414 */
 export function nsfwMountSender() {
     try {
         if (typeof document === 'undefined') return;
@@ -1489,10 +1630,20 @@ export function nsfwMountSender() {
             document.body.appendChild(host);
         }
         const chatId = nsfwChatId();
-        /* ★W385：先按楼层重建 —— 历史遗留的、没有楼层块支撑的名字（含示例填充）自动消失 */
+        /* ★W385：先按楼层重建到「没有楼层支撑的旧名字消失」；
+           ★W414：同一份聊天内容只重建一次（挂悬浮条的调用点有 10+ 处） */
         try {
             const ctxR = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
-            if (ctxR && Array.isArray(ctxR.chat)) nsfwRebuildFromChat(chatId, ctxR.chat);
+            if (ctxR && Array.isArray(ctxR.chat)) {
+                const lastR = ctxR.chat[ctxR.chat.length - 1] || {};
+                const mesR = String(lastR.mes || '');
+                const sigR = ctxR.chat.length + '|' + mesR.length + '|' + (typeof lastR.swipe_id === 'number' ? lastR.swipe_id : -1) + '|' + mesR.slice(0, 12) + '|' + mesR.slice(-12);
+                if (sigR !== _senderRebuildSig || Date.now() - _senderRebuildAt > 1500) {
+                    nsfwRebuildFromChat(chatId, ctxR.chat);
+                    _senderRebuildSig = sigR;
+                    _senderRebuildAt = Date.now();
+                }
+            }
         } catch (e) { }
         const { bucket } = nsfwBucket(chatId);
         const names = (bucket.order || []).filter((n) => bucket.chars[n]);
@@ -1642,7 +1793,7 @@ export function nsfwRenderCard(name, profile) {
         + '<span class="nm">' + esc(name) + '</span>'
         + '<span class="tag">' + sexTxt + '</span>'   /* ★W369：去掉「受」标签——快照本来就只写被进入方 */
         + (g('snapTime') ? '<span class="kv yw-nsfw-snaptime">⏱ ' + esc(g('snapTime')) + '</span>' : '')
-        + '<span class="kv yw-nsfw-preg">怀孕 ' + preg.risk + '%</span>';   /* ★W395：右上角理智/欲望删掉（作者要求） */
+        + ((nsfwGuideAllows('pregnancy') || nsfwGuideAllows('menstrual')) ? '<span class="kv yw-nsfw-preg">怀孕 ' + preg.risk + '%</span>' : '');   /* ★W413：字段都被删了就不显示派生值 */
     wrap.appendChild(head);
 
     const statsView = Object.assign({}, profile.stats || {});
@@ -1664,7 +1815,9 @@ export function nsfwRenderCard(name, profile) {
 
     const tabs = [];
     /* ★W411：分页先走内置顺序，再把指南里新造的分组补上（否则把字段挪到新组会从卡上消失） */
-    const tabGroups = GROUP_ORDER.slice();
+    const tabGroups = [];
+    try { nsfwGuideGroups().forEach((g0) => { if (g0 && tabGroups.indexOf(g0) < 0) tabGroups.push(g0); }); } catch (eG) { }   /* ★W413：指南顺序优先 */
+    GROUP_ORDER.forEach((g0) => { if (tabGroups.indexOf(g0) < 0) tabGroups.push(g0); });
     try {
         activeFields(profile).forEach((f) => {
             const fv = viewField(f);
@@ -1685,6 +1838,7 @@ export function nsfwRenderCard(name, profile) {
         const exGroupOf = (id) => String((ex[id] && ex[id].group) || exG(id).group || "其它");
         const exHas = (id) => { const e = ex[id] || {}; return String(e.value || "").trim() || (Array.isArray(e.list) && e.list.length); };
         Object.keys(ex).forEach((id) => {
+            if (!nsfwGuideAllows(id)) return;   /* ★W413 */
             if (!exHas(id)) return;
             const g = exGroupOf(id);
             if (exGroups.indexOf(g) < 0) exGroups.push(g);
@@ -1692,7 +1846,7 @@ export function nsfwRenderCard(name, profile) {
         exGroups.forEach((g) => {
             const hitTab = tabs.filter((t) => t.label === g)[0];
             const h = Object.keys(ex)
-                .filter((id) => exGroupOf(id) === g && exHas(id))
+                .filter((id) => exGroupOf(id) === g && exHas(id) && nsfwGuideAllows(id))
                 .map((id) => {
                     const e0 = ex[id] || {};
                     const gm0 = exG(id);
@@ -1734,7 +1888,7 @@ export function nsfwRenderCard(name, profile) {
             else tabs.push({ id: "x-" + g, label: g, html: h });
         });
     } catch (e) { }
-    const viewRows = NSFW_DESC_FIELDS.map((d) => (profile.desc && profile.desc[d.id] ? { label: d.label, text: profile.desc[d.id].text } : null)).filter(Boolean);
+    const viewRows = NSFW_DESC_FIELDS.map((d) => (profile.desc && profile.desc[d.id] && nsfwGuideAllows(d.id) ? { label: d.label, text: profile.desc[d.id].text } : null)).filter(Boolean);   /* ★W413：指南删了视线就不画 */
     if (viewRows.length) {
         tabs.push({
             id: '视线', label: '视线',
@@ -1792,6 +1946,7 @@ export function nsfwRenderCard(name, profile) {
        渲染当下可能还没排版（宽度为 0），所以 rAF + 150ms 各再锁一次 */
     const lockPanels = () => {
         try {
+            if (wrap.classList.contains('is-collapsed')) { panels.style.minHeight = ''; panels.style.height = ''; return; }   /* ★W412：折叠时不量高度 */
             const kids = Array.prototype.slice.call(panels.children);
             /* ★W388：先摘掉上次铺的横线，再量真实内容高度（否则越量越高） */
             kids.forEach((k) => { k.querySelectorAll('.yw-nsfw-fill').forEach((f) => f.remove()); });
@@ -1848,9 +2003,7 @@ export function nsfwRenderCard(name, profile) {
     wrap._nsfwLock = lockPanels;
     lockPanels();
     try { if (typeof requestAnimationFrame === 'function') requestAnimationFrame(lockPanels); } catch (e) { }
-    try { setTimeout(lockPanels, 150); } catch (e) { }
-    try { setTimeout(lockPanels, 600); } catch (e) { }
-    try { setTimeout(lockPanels, 1200); } catch (e) { }   /* ★W406：字体/排版晚到再锁一次 */
+    try { setTimeout(lockPanels, 200); } catch (e) { }   /* ★W414：只保留一次迟到锁（以前 5 次/卡） */
     try { bindCardEdit(wrap, name, profile); } catch (e) { }
     return wrap;
 }
@@ -2211,15 +2364,21 @@ const CSS = [
     '.yw-nsfw--compact .yw-nsfw-row{padding:0 2px;line-height:1.3}',
     '.yw-nsfw--compact .yw-nsfw-row .k{opacity:.68}',
     '.yw-nsfw--loose .yw-nsfw-row{padding:5px 2px;line-height:1.6}',
+    '.yw-nsfw.is-collapsed .yw-nsfw-tabs,.yw-nsfw.is-collapsed .yw-nsfw-panels{display:none !important}',   /* ★W412 折叠 */
+    '.yw-nsfw-head{cursor:pointer}',
+    '.yw-nsfw-fold{margin-left:auto;opacity:.55;font-size:.95em;padding:0 2px;flex:0 0 auto}',
     '@media (max-width:600px){.yw-nsfw-row{flex-wrap:wrap}.yw-nsfw-row .k{flex-basis:76px}.yw-nsfw-row .yw-nsfw-c{flex:1 1 100%;text-align:left;margin-left:84px}}'
 ].join('');
 
+const NSFW_CSS_VER = 'w414';   /* ★W414：CSS 有改动就改这里；否则不再每挂一张卡就重注入整份样式 */
 export function nsfwEnsureStyle() {
     try {
         const old = document.getElementById('yw-nsfw-style');
+        if (old && old.getAttribute('data-ver') === NSFW_CSS_VER) return;
         if (old) old.remove();
         const st = document.createElement('style');
         st.id = 'yw-nsfw-style';
+        st.setAttribute('data-ver', NSFW_CSS_VER);
         st.textContent = CSS;
         document.head.appendChild(st);
     } catch (e) { }
@@ -2238,10 +2397,11 @@ export function nsfwProfilesFromText(text) {
             const stats = {};
             /* ★W404：楼里的卡也要过一遍「合并层同款」校验 —— 否则 N/A/未知 会照画、条的宽度变 NaN */
             Object.keys(c.machine || {}).forEach((id) => {
+                if (!nsfwGuideAllows(id)) return;   /* ★W413：指南里没有的字段不画 */
                 const cell = c.machine[id] || {};
                 const val0 = String(cell.value == null ? '' : cell.value).trim();
                 if (!val0 || isUnknownish(val0)) return;
-                const f = fieldById(id);
+                const f = viewField(fieldById(id));   /* ★W413：上限也按指南 */
                 if (f && f.type === 'num') {
                     const n = clampNum(f, val0);
                     if (n === null) return;
@@ -2251,11 +2411,11 @@ export function nsfwProfilesFromText(text) {
                 }
             });
             const desc = {};
-            Object.keys(c.desc || {}).forEach((id) => { desc[id] = { text: c.desc[id] }; });
+            Object.keys(c.desc || {}).forEach((id) => { if (nsfwGuideAllows(id)) desc[id] = { text: c.desc[id] }; });
             /* ★W396：楼里的卡是从这段文本重拼的 —— 必须把自定义字段（近况/用户加的分组）一起带上，
                否则卡上永远没有「近况」分页（bucket 里有、但这里丢了） */
             const extra = {};
-            Object.keys(c.extra || {}).forEach((id) => { extra[id] = Object.assign({}, c.extra[id]); });
+            Object.keys(c.extra || {}).forEach((id) => { if (nsfwGuideAllows(id)) extra[id] = Object.assign({}, c.extra[id]); });
             out[name] = { sex: sex, role: role, stats: stats, desc: desc, extra: extra };
         });
     } catch (e) { }
@@ -2408,17 +2568,14 @@ export function nsfwMountToMessage(messageId) {
         show.slice(0, 3).forEach((n) => {
             const card = nsfwRenderCard(n, pick(n));
             card.dataset.mesid = String(messageId);
+            try { nsfwApplyFold(card, chatId, messageId, n); } catch (eF) { }
             const anchor = mesEl.querySelector('.mes_text') || mesEl;
             if (anchor.parentNode) anchor.parentNode.insertBefore(card, anchor.nextSibling);
             else mesEl.appendChild(card);
             /* ★W363：挂进真实 DOM 后再锁一次高度（渲染时还没排版，量到的是 0） */
             try {
-                if (card._nsfwLock) {
-                    card._nsfwLock();
-                    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(card._nsfwLock);
-                    setTimeout(card._nsfwLock, 120);
-                    setTimeout(card._nsfwLock, 500);
-                }
+                /* ★W414：卡自己在渲染时已排了「同步 + rAF + 200ms」——这里不再叠加 */
+                if (card._nsfwLock) setTimeout(card._nsfwLock, 120);
             } catch (e) { }
         });
         return true;
@@ -2460,11 +2617,14 @@ export function nsfwStartObserver() {
         __nsfwObs.observe(chat, { childList: true, subtree: true });
     } catch (e) { }
 }
-export function nsfwReattachAll() {
+export function nsfwReattachAll(onlyIds) {
     try {
+        const want = Array.isArray(onlyIds) ? new Set(onlyIds.map((x) => Number(x))) : null;   /* ★W414：可只重挂指定楼，避免整聊扫 */
         document.querySelectorAll('#chat .mes[mesid]').forEach((el) => {
             const id = Number(el.getAttribute('mesid'));
-            if (Number.isFinite(id)) nsfwMountToMessage(id);
+            if (!Number.isFinite(id)) return;
+            if (want && !want.has(id)) return;
+            nsfwMountToMessage(id);
         });
     } catch (e) { }
 }
