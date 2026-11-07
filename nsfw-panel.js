@@ -1105,7 +1105,7 @@ export function buildCharBlock(name, profile) {
             const v = String(e0.value == null ? "" : e0.value).trim();
             if (!v) return;   /* ★W420：空值交给 W421 补空位 */
             sent0[id] = 1;
-            addTo(e0.group || g0.group || '其它', id + ' = ' + v);
+            addTo(g0.group || e0.group || '其它', id + ' = ' + v);   /* ★W435：组以指南为准 */
         });
     } catch (e) { }
     /* ★W421：指南里有、但这一轮没有任何值的字段 —— 也给 AI 一个空位（它下一轮会补） */
@@ -1975,7 +1975,7 @@ export function nsfwRenderCard(name, profile) {
         const ex = profile.extra || {};
         const exGroups = [];
         const exG = (id) => nsfwGuideMeta(id) || {};
-        const exGroupOf = (id) => String((ex[id] && ex[id].group) || exG(id).group || "其它");
+        const exGroupOf = (id) => String(exG(id).group || (ex[id] && ex[id].group) || "其它");   /* ★W435：指南里有组的字段，分页跟指南走（补录行被追加到块尾时，块里的组不准） */
         const exHas = (id) => { const e = ex[id] || {}; return String(e.value || "").trim() || (Array.isArray(e.list) && e.list.length) || !!e.empty; };
         Object.keys(ex).forEach((id) => {
             if (!nsfwGuideAllows(id)) return;   /* ★W413 */
@@ -2383,7 +2383,28 @@ export function nsfwEditFloor(chatId, mesid, name, changes) {
                 const eq = m0.indexOf('=');
                 return m0.slice(0, eq + 1) + ' ' + val0;
             });
-            else body = body.replace(/\s*$/, '') + String.fromCharCode(10) + line + String.fromCharCode(10);   /* ★W417：补录行后面留换行，收尾标签另起一行 */
+            else {
+                /* ★W435：补录行插进「指南里这一组」的段末 —— 块尾常是【正文之外】的 gapLog，
+                   插在那里会把字段分页带跑偏（作者实测：经验人数（男）改成 1 后从开发页消失）。 */
+                const NL0 = String.fromCharCode(10);
+                const gm1 = nsfwGuideMeta(id) || {};
+                const grp1 = String(gm1.group || '');
+                let put = false;
+                if (grp1) {
+                    const hm1 = new RegExp('【' + esc0(grp1) + '】').exec(body);
+                    if (hm1) {
+                        const after1 = hm1.index + hm1[0].length;
+                        const nre1 = /【[^】]{1,20}】/g;
+                        nre1.lastIndex = after1;
+                        const nm1 = nre1.exec(body);
+                        const cut1 = nm1 ? nm1.index : body.length;
+                        const before1 = body.slice(0, cut1).replace(/\s*$/, '');
+                        body = before1 + NL0 + line + NL0 + body.slice(cut1);
+                        put = true;
+                    }
+                }
+                if (!put) body = body.replace(/\s*$/, '') + NL0 + line + NL0;   /* ★W417：补录行后面留换行，收尾标签另起一行 */
+            }
         });
         const next = src.slice(0, openEnd) + body + src.slice(closeIdx);
         if (next === src) return false;
