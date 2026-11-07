@@ -1486,8 +1486,12 @@ function nsfwBindSenderDrag(host, grip) {
     grip.addEventListener('mousedown', down);
     grip.addEventListener('touchstart', down, { passive: false });
 }
-/* ★W412：卡片折叠 —— 状态存模块级 Map（卡会被反复销毁重建，只写 DOM 会丢） */
+/* ★W412：卡片折叠 —— 状态存模块级 Map（卡会被反复销毁重建，只写 DOM 会丢）
+   ★W424：默认态不再走设置项 —— 用户最后一次手动折叠/展开，就是以后所有新卡的默认态 */
 const _foldMap = new Map();
+const FOLD_LAST_KEY = 'kimi_nsfw_fold_last';
+let _foldDefault = false;
+try { _foldDefault = localStorage.getItem(FOLD_LAST_KEY) === '1'; } catch (e) { }
 export function nsfwResetFold() { try { _foldMap.clear(); } catch (e) { } }
 function _foldKey(chatId, mesid, name) { return String(chatId || '') + '|' + String(mesid == null ? '' : mesid) + '|' + String(name || ''); }
 /* ★W423：记住每张卡停在哪个分页（编辑保存后卡会重建，回到原分页） */
@@ -1523,8 +1527,7 @@ export function nsfwApplyTab(card, chatId, mesid, name) {
 export function nsfwApplyFold(card, chatId, mesid, name) {
     try {
         if (!card) return;
-        const st = _getSettings() || {};
-        const def = st.nsfwCardFold === 'collapse';
+        const def = !!_foldDefault;   /* ★W424：用「上次手动开合」当默认 */
         const key = _foldKey(chatId, mesid, name);
         const collapsed = _foldMap.has(key) ? !!_foldMap.get(key) : def;
         card.classList.toggle('is-collapsed', collapsed);
@@ -1548,6 +1551,8 @@ export function nsfwApplyFold(card, chatId, mesid, name) {
                 const now = !card.classList.contains('is-collapsed');
                 card.classList.toggle('is-collapsed', now);
                 _foldMap.set(key, now);
+                _foldDefault = now;   /* ★W424：以后生成的新卡都按这个默认态 */
+                try { localStorage.setItem(FOLD_LAST_KEY, now ? '1' : '0'); } catch (eD) { }
                 if (_foldMap.size > 300) { const k0 = _foldMap.keys().next().value; _foldMap.delete(k0); }
                 const c0 = card.querySelector('.yw-nsfw-fold');
                 if (c0) { c0.textContent = now ? '▸' : '▾'; c0.title = now ? '展开' : '折叠'; }
