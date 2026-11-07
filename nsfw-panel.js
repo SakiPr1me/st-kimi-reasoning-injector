@@ -2251,17 +2251,21 @@ export function nsfwEditFloor(chatId, mesid, name, changes) {
         try {
             if (Array.isArray(msg.swipes) && typeof msg.swipe_id === "number" && msg.swipes[msg.swipe_id] != null) msg.swipes[msg.swipe_id] = next;
         } catch (e) { }
-        try { if (ctx.saveChat) ctx.saveChat(); } catch (e) { }
-        try { if (typeof ctx.saveChat === "function") ctx.saveChat(); } catch (e) { }
+        /* ★W422：照「双击改字」的保存口径 —— 先发 MESSAGE_EDITED，再只重渲染这一楼 */
+        try { if (ctx.eventSource && ctx.eventTypes) { const p0 = ctx.eventSource.emit(ctx.eventTypes.MESSAGE_EDITED, mesid); if (p0 && p0.catch) p0.catch(() => { }); } } catch (e0) { }
         try {
             const chatEl = document.querySelector(".mes[mesid=\"" + mesid + "\"] .mes_text");
             if (chatEl && ctx.messageFormatting) {
                 chatEl.innerHTML = ctx.messageFormatting(next, msg.name || "", false, false, mesid);
             }
-            /* ★W411：saveChat 可能让酒馆整页重渲染（其它楼的卡一起没）——重挂全部楼层的卡，不只当前楼 */
-            nsfwReattachAll();
-            setTimeout(() => { try { nsfwReattachAll(); } catch (e2) { } }, 200);
+            try { if (ctx.eventSource && ctx.eventTypes) { const p1 = ctx.eventSource.emit(ctx.eventTypes.MESSAGE_UPDATED, mesid); if (p1 && p1.catch) p1.catch(() => { }); } } catch (e1) { }
+            /* 只重挂这一楼；其它楼不动 */
+            nsfwMountToMessage(mesid);
+            setTimeout(() => { try { nsfwMountToMessage(mesid); } catch (e2) { } }, 450);
+            /* 兜底：酒馆若整页重刷，1200ms 后补挂（现在没块的楼不会被误删） */
+            setTimeout(() => { try { nsfwReattachAll(); } catch (e3) { } }, 1200);
         } catch (e) { }
+        try { if (ctx.saveChat) ctx.saveChat(); } catch (e) { }
         return true;
     } catch (e) { return false; }
 }
@@ -2627,8 +2631,7 @@ export function nsfwMountToMessage(messageId) {
 
         const mesEl = document.querySelector('.mes[mesid="' + messageId + '"]');
         if (!mesEl) return false;
-        /* ★W404：先摘旧卡 —— 新分支没块时也要把上一分支的卡拿掉（不能等后面早退） */
-        mesEl.querySelectorAll('.yw-nsfw').forEach((n) => n.remove());
+        /* ★W422：先判断有没有块，再决定要不要动卡（没块的楼保留原卡，别被全量重挂顺手清掉） */
 
         /* ★W315：卡片只认这一楼自己的块（块就在 mes 里，像 todo/remind 一样跟着楼层走）
            ★W332：没有块就不画 —— 以前会退回「档案里最新状态」，导致新楼/新分支正文里随口提到名字就挂出一张旧卡 */
