@@ -2526,10 +2526,8 @@ export function nsfwCompleteLatest(chatId) {
             msg.mes = next;
             try { if (Array.isArray(msg.swipes) && typeof msg.swipe_id === 'number' && msg.swipes[msg.swipe_id] != null) msg.swipes[msg.swipe_id] = next; } catch (e) { }
             try { if (ctx.saveChat) ctx.saveChat(); } catch (e) { }
-            try {
-                const el = document.querySelector('.mes[mesid="' + i + '"] .mes_text');
-                if (el && ctx.messageFormatting) el.innerHTML = ctx.messageFormatting(next, msg.name || '', false, false, i);
-            } catch (e) { }
+            /* ★W440：不再整段替换 .mes_text 的 innerHTML —— 那会把别的插件挂在这一楼里的美化一起抹掉
+               （作者实测：自动补回后「其他的美化没有渲染」）。块是隐藏的，改完 mes 只重挂我们自己的卡就够。 */
             try { nsfwMountToMessage(i); } catch (e) { }
             return { mesid: i, changed: true };
         }
