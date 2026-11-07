@@ -118,6 +118,7 @@ const NSFW_UNITS = {
 NSFW_FIELDS.forEach((f) => { if (!f.unit && NSFW_UNITS[f.id]) f.unit = NSFW_UNITS[f.id]; });
 export const NSFW_DESC_FIELDS = [
     { id: 'viewBody', label: '体态·他人视线' },
+    { id: 'viewExpression', label: '表情·他人视线' },
     { id: 'viewOutfit', label: '穿搭·他人视线' },
     { id: 'viewChannel', label: '通道·他人视线' }
 ];
@@ -1137,7 +1138,7 @@ export function buildProtocolDoc(profile) {
         '字段清单（ID + 中文 + 范围/单位）：',
         spec.join(NL),
         '',
-        '他人视线三行：' + NSFW_DESC_FIELDS.map((d) => d.id + ' ' + d.label).join('；') + '（写在同一个 <nsfw> 块里，整段文字，不用 |）'
+        '他人视线：' + NSFW_DESC_FIELDS.map((d) => d.id + ' ' + d.label).join('；') + '（写在同一个 <nsfw> 块里，整段文字，不用 |）'
     ];
     return out.join(NL);
 }
