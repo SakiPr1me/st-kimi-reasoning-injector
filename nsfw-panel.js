@@ -1076,10 +1076,10 @@ export function buildCharBlock(name, profile) {
     /* ★W394：按【组】归拢再输出 —— 组头只出现一次，顺序 状态/身体/穿搭/胸/前穴/后穴/开发，其余组排后面 */
     const groups = [];
     const gmap = {};
-    const addTo = (g, line) => {
+    const addTo = (g, line, ord) => {
         const gg = String(g || '其它').trim() || '其它';
         if (!gmap[gg]) { gmap[gg] = { g: gg, items: [] }; groups.push(gmap[gg]); }
-        gmap[gg].items.push(line);
+        gmap[gg].items.push({ line: line, ord: (typeof ord === 'number' ? ord : 9999) });
     };
     const sent0 = {};   /* ★W421：这一轮已经写过的 ID */
     fields.forEach((f0) => {
@@ -1090,7 +1090,7 @@ export function buildCharBlock(name, profile) {
         const val = cell ? fmtVal(f, cell) : '';
         sent0[f.id] = 1;
         /* ★W421：没有值的字段也发一个空位 `id = `，让 AI 下一轮自己补 */
-        addTo(f.group, val ? (f.id + ' = ' + val) : (f.id + ' = '));
+        addTo(f.group, val ? (f.id + ' = ' + val) : (f.id + ' = '), f.ord);   /* ★W438：发送顺序跟指南行序 */
     });
     /* 自定义字段跟普通字段一起发 */
     try {
@@ -1105,7 +1105,7 @@ export function buildCharBlock(name, profile) {
             const v = String(e0.value == null ? "" : e0.value).trim();
             if (!v) return;   /* ★W420：空值交给 W421 补空位 */
             sent0[id] = 1;
-            addTo(g0.group || e0.group || '其它', id + ' = ' + v);   /* ★W435：组以指南为准 */
+            addTo(g0.group || e0.group || '其它', id + ' = ' + v, g0.ord);   /* ★W435/W438：组和顺序都跟指南 */
         });
     } catch (e) { }
     /* ★W436：他人视线也「反向补充」—— 指南里的每条都发出；这轮没写就空位，写过把原文带上（指南要求「没变的照抄」） */
@@ -1117,7 +1117,7 @@ export function buildCharBlock(name, profile) {
             const cellV = (profile.desc || {})[id];
             const txtV = String((cellV && cellV.text) || '').trim();
             sent0[id] = 1;
-            addTo(gmV[id].group || '他人视线', id + ' = ' + txtV);
+            addTo(gmV[id].group || '他人视线', id + ' = ' + txtV, gmV[id].ord);
         });
     } catch (eV) { }
     /* ★W421：指南里有、但这一轮没有任何值的字段 —— 也给 AI 一个空位（它下一轮会补） */
@@ -1130,14 +1130,21 @@ export function buildCharBlock(name, profile) {
             if (/^view/i.test(id)) return;   /* ★W431：他人视线是 desc，不发空位 */
             const g = gm0[id] || {};
             if (String(g.group || '') === '近况' || String(g.group || '') === '他人视线' || g.multi) return;
-            addTo(g.group || '其它', id + ' = ');
+            addTo(g.group || '其它', id + ' = ', g.ord);
         });
     } catch (e0) { }
-    const ordOf = (g) => { const i = GROUP_ORDER.indexOf(g); return i < 0 ? 99 : i; };
+    /* ★W438：组顺序 = 指南组顺序（指南没有的组排后面）；组内 = 指南行序 */
+    const gSeq0 = (() => { try { return nsfwGuideGroups(); } catch (e) { return []; } })();
+    const ordOf = (g) => {
+        const i = gSeq0.indexOf(g);
+        if (i >= 0) return i;
+        const j = GROUP_ORDER.indexOf(g);
+        return j < 0 ? 2000 : 1000 + j;
+    };
     groups.slice().sort((a, b) => ordOf(a.g) - ordOf(b.g)).forEach((grp) => {
         if (!grp.items.length) return;
         lines.push('【' + grp.g + '】');
-        grp.items.forEach((ln) => lines.push(ln));
+        grp.items.slice().sort((a, b) => a.ord - b.ord).forEach((it) => lines.push(it.line));
     });
     return '<nsfw>' + NL + lines.join(NL) + NL + '</nsfw>';
 }
@@ -2268,6 +2275,7 @@ function bindCardEdit(wrap, name, profile) {
                             row.setAttribute('data-id', f.id);
                             row.setAttribute('data-type', fv.type || 'text');
                             row.setAttribute('data-new', '1');
+                            row.setAttribute('data-ord', String(typeof fv.ord === 'number' ? fv.ord : 9999));   /* ★W438：编辑态也按指南顺序 */
                             if (Array.isArray(fv.options)) row.setAttribute('data-options', fv.options.join('|'));
                             const k = document.createElement('span'); k.className = 'k'; k.textContent = fv.label;
                             const v = document.createElement('span'); v.className = 'v';
@@ -2367,6 +2375,168 @@ function bindCardEdit(wrap, name, profile) {
         setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, 900);   /* ★W418：等酒馆保存后的整页重刷落定 */
     });
 }
+/** ★W438：找出文本里所有状态块（<div data-nsfw> / <nsfw>），带 body 边界 */
+function nsfwTextBlocks(text) {
+    const src = String(text || '');
+    const out = [];
+    const re = /<div\b[^>]*\bdata-nsfw\s*=\s*"m"[^>]*>|<nsfw\b[^>]*>/gi;
+    let m;
+    while ((m = re.exec(src))) {
+        const isDiv = /^<div/i.test(m[0]);
+        const closeTag = isDiv ? '</div>' : '</nsfw>';
+        const openEnd = m.index + m[0].length;
+        const closeIdx = src.indexOf(closeTag, openEnd);
+        if (closeIdx < 0) continue;
+        const body = src.slice(openEnd, closeIdx);
+        let name = '';
+        const nmAttr = /data-name\s*=\s*"([^"]*)"/i.exec(m[0]);
+        if (nmAttr) name = String(nmAttr[1] || '').trim();
+        if (!name) {
+            const nmLine = /^[ \t]*name(?:[ \t]*[\u4e00-\u9fa5]+)?[ \t]*[=:：][ \t]*(.+)$/mi.exec(body);
+            if (nmLine) name = String(nmLine[1] || '').trim();
+        }
+        out.push({ name: name, openEnd: openEnd, closeIdx: closeIdx, body: body });
+        re.lastIndex = closeIdx + closeTag.length;
+    }
+    return out;
+}
+
+/** 行首的字段 ID（用于补全/排序；续行 `[16:30] …` 不算） */
+function nsfwGuideLineId(line) {
+    const s0 = String(line || '').trim();
+    if (!s0 || s0.indexOf('=') < 0) return '';
+    const m = /^([A-Za-z][A-Za-z0-9_]*)(?![A-Za-z0-9_])[^=]*=/.exec(s0);
+    return m ? m[1] : '';
+}
+
+/** ★W438：块体按指南补全（缺的字段补在正确组、正确位置）并排好序；返回新块体 */
+function nsfwCanonicalBody(body, name, chatId) {
+    try {
+        if (!guideUsable()) return body;
+        const gm = nsfwGuide();
+        const NL0 = String(body).indexOf('\r\n') >= 0 ? '\r\n' : '\n';
+        const src = String(body).split(/\r?\n/);
+        /* name / snapTime 行永远放最上面 */
+        const head = [];
+        const rest = [];
+        src.forEach((ln) => {
+            const t0 = ln.trim();
+            if (/^name(?:[ \t]+[^=]+)?[ \t]*=/.test(t0) || /^snapTime[ \t]*[^=]*=/.test(t0)) head.push(ln);
+            else rest.push(ln);
+        });
+        /* 切段：每个【组】一段；第一个组头之前的内容单独一段（grp=''） */
+        const secs = [];
+        let cur = null;
+        rest.forEach((ln) => {
+            const m = /^【([^】]{1,40})】\s*$/.exec(ln.trim());
+            if (m) { cur = { grp: m[1], lines: [] }; secs.push(cur); return; }
+            if (!cur) { cur = { grp: '', lines: [] }; secs.push(cur); }
+            cur.lines.push(ln);
+        });
+        const ordOfId = (id) => {
+            const g0 = gm[String(id || '')] || {};
+            if (typeof g0.ord === 'number') return g0.ord;
+            const f = fieldById(id);
+            return (f && typeof f.ord === 'number') ? f.ord : 9999;
+        };
+        /* 段内：字段行 + 它后面的续行 = 一块，按 ord 排 */
+        const chunksOf = (sec) => {
+            const pre = [];
+            const chunks = [];
+            let cc = null;
+            sec.lines.forEach((ln) => {
+                const id = nsfwGuideLineId(ln);
+                if (id) { cc = { id: id, ord: ordOfId(id), lines: [ln] }; chunks.push(cc); }
+                else if (cc) cc.lines.push(ln);
+                else pre.push(ln);
+            });
+            return { pre: pre, chunks: chunks };
+        };
+        /* 这个角色可用的指南字段（性别筛掉的内置字段不补） */
+        let sex = 'female';
+        try { const { bucket } = nsfwBucket(chatId); const rec = bucket.chars[name]; if (rec && rec.sex) sex = rec.sex; } catch (e) { }
+        const allow = {};
+        activeFields({ sex: sex }).forEach((f) => { allow[f.id] = 1; });
+        const present = {};
+        secs.forEach((sec) => { chunksOf(sec).chunks.forEach((c) => { present[c.id] = 1; }); });
+        const want = [];
+        Object.keys(gm).forEach((id) => {
+            if (id === 'name' || id === 'snapTime') return;
+            if (!nsfwGuideAllows(id)) return;
+            if (present[id]) return;
+            if (fieldById(id) && !allow[id]) return;
+            const g0 = gm[id] || {};
+            want.push({ id: id, grp: String(g0.group || '其它'), ord: (typeof g0.ord === 'number' ? g0.ord : 9999) });
+        });
+        /* 缺的字段先建好所属组 */
+        const secOf = (grp) => {
+            let s0 = secs.filter((x) => x.grp === grp)[0];
+            if (!s0) { s0 = { grp: grp, lines: [] }; secs.push(s0); }
+            return s0;
+        };
+        want.forEach((w) => { secOf(w.grp); });
+        /* 每段：现有块 + 缺的块 → 按 ord 稳定排序 */
+        secs.forEach((sec) => {
+            const co = chunksOf(sec);
+            want.filter((w) => w.grp === sec.grp).forEach((w) => {
+                co.chunks.push({ id: w.id, ord: w.ord, lines: [w.id + ' = '] });
+            });
+            co.chunks.sort((a, b) => a.ord - b.ord);
+            sec.lines = co.pre.concat.apply(co.pre, co.chunks.map((c) => c.lines));
+        });
+        /* 段顺序：指南组顺序；无组头那段在前；指南没有的组排后面 */
+        const gSeq = (() => { try { return nsfwGuideGroups(); } catch (e) { return []; } })();
+        const gKey = (g) => { if (!g) return -1; const i = gSeq.indexOf(g); return i >= 0 ? i : 9999; };
+        secs.sort((a, b) => gKey(a.grp) - gKey(b.grp));
+        const out = [];
+        head.forEach((ln) => out.push(ln));
+        secs.forEach((sec) => {
+            if (!sec.grp) { sec.lines.forEach((ln) => out.push(ln)); return; }
+            out.push('【' + sec.grp + '】');
+            sec.lines.forEach((ln) => out.push(ln));
+        });
+        return out.join(NL0);
+    } catch (e) { return body; }
+}
+
+/** ★W438：把「最新一条有状态块的楼」按指南补全（缺的字段补回块里，顺序排好） */
+export function nsfwCompleteLatest(chatId) {
+    try {
+        const ctx = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
+        if (!ctx || !Array.isArray(ctx.chat)) return { mesid: -1, changed: false };
+        const cid = chatId || nsfwChatId(ctx);
+        for (let i = ctx.chat.length - 1; i >= 0; i--) {
+            const msg = ctx.chat[i];
+            if (!msg || msg.is_user || msg.is_system) continue;
+            const text = String(msg.mes || '');
+            if (text.indexOf('<nsfw') < 0 && text.indexOf('data-nsfw') < 0) continue;
+            const blocks = nsfwTextBlocks(text);
+            if (!blocks.length) continue;
+            let next = text;
+            let changed = false;
+            for (let b = blocks.length - 1; b >= 0; b--) {
+                const blk = blocks[b];
+                const body2 = nsfwCanonicalBody(blk.body, blk.name, cid);
+                if (body2 !== blk.body) {
+                    next = next.slice(0, blk.openEnd) + body2 + next.slice(blk.closeIdx);
+                    changed = true;
+                }
+            }
+            if (!changed) return { mesid: i, changed: false };
+            msg.mes = next;
+            try { if (Array.isArray(msg.swipes) && typeof msg.swipe_id === 'number' && msg.swipes[msg.swipe_id] != null) msg.swipes[msg.swipe_id] = next; } catch (e) { }
+            try { if (ctx.saveChat) ctx.saveChat(); } catch (e) { }
+            try {
+                const el = document.querySelector('.mes[mesid="' + i + '"] .mes_text');
+                if (el && ctx.messageFormatting) el.innerHTML = ctx.messageFormatting(next, msg.name || '', false, false, i);
+            } catch (e) { }
+            try { nsfwMountToMessage(i); } catch (e) { }
+            return { mesid: i, changed: true };
+        }
+        return { mesid: -1, changed: false };
+    } catch (e) { return { mesid: -1, changed: false }; }
+}
+
 /** ★W362：编辑卡片后写回楼层块（值/评述），并同步 swipes + 存盘 + 重渲染 */
 export function nsfwEditFloor(chatId, mesid, name, changes) {
     try {

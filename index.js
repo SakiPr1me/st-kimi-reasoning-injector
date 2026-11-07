@@ -10,7 +10,7 @@ import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
-import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwSetStat, nsfwEditFloor, nsfwGuideSyncFromPreset, nsfwGuideAllows, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwSetStat, nsfwEditFloor, nsfwCompleteLatest, nsfwGuideSyncFromPreset, nsfwGuideAllows, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 
 
@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.272'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.273'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -9046,6 +9046,7 @@ eventSource.on(event_types.MESSAGE_RECEIVED, async (id) => {
         nsfwParsedKeys.add(key);
         if (nsfwParsedKeys.size > 500) nsfwParsedKeys.clear();
         nsfwApply(nsfwChatId(ctx), parsed);
+        nsfwCompleteLatestSoon(500);   /* ★W438：AI 漏写的字段补回块里 */
         try { nsfwMarkMentions(nsfwChatId(ctx), parsed.stripped, id); } catch (e) { }
         /* ★W414：按楼快照只写不读（nsfwSnapOf 无调用方），停写以省 localStorage/CPU */
         /* ★W336：解析完立刻刷新悬浮条，不然它还挂着「无档案」 */
@@ -9075,11 +9076,12 @@ function nsfwHook(id, rebuild) {
             const mesEl0 = document.querySelector('.mes[mesid="' + id + '"]');
             if (mesEl0) mesEl0.querySelectorAll('.yw-nsfw').forEach((n) => n.remove());
             setTimeout(() => {
-                try { nsfwSyncChat(); nsfwMountToMessage(id); nsfwMountSender(); } catch (e) { }   /* ★W365：切分支/编辑后刷新 AUTO 示意 */
+                try { nsfwSyncChat(); nsfwMountToMessage(id); nsfwMountSender(); nsfwCompleteLatestSoon(300); } catch (e) { }   /* ★W365/W438 */
             }, 400);
             return;
         }
         nsfwMountToMessage(id);
+        nsfwCompleteLatestSoon(700);   /* ★W438 */
     } catch (e) { }
 }
 
@@ -9426,11 +9428,26 @@ function nsfwGuideSyncSoon(ms, allowClear) {
         _nsfwGuideSyncTimers[k] = setTimeout(() => { delete _nsfwGuideSyncTimers[k]; nsfwGuideSyncNow(allowClear); }, ms || 300);
     } catch (e) { }
 }
+/* ★W438：每次刷新/生成/切分支，把最新一条有状态块的楼按指南补全（缺的字段补回块里，顺序排好） */
+let _nsfwCompleteTimer = 0;
+function nsfwCompleteLatestSoon(ms) {
+    try {
+        clearTimeout(_nsfwCompleteTimer);
+        _nsfwCompleteTimer = setTimeout(() => {
+            try {
+                if (settings.nsfwCaptureHide === false) return;
+                const r = nsfwCompleteLatest();
+                if (r && r.changed) { try { nsfwReattachAll(); } catch (e1) { } }
+            } catch (e) { }
+        }, ms || 500);
+    } catch (e) { }
+}
 try { eventSource.on(event_types.SETTINGS_UPDATED, () => { nsfwGuideSyncSoon(250, false); nsfwGuideSyncSoon(1500, false); }); } catch (e) { }
 try { eventSource.on(event_types.PRESET_CHANGED, () => { nsfwGuideSyncSoon(250, true); nsfwGuideSyncSoon(1500, true); }); } catch (e) { }
 try { eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => { nsfwGuideSyncSoon(250, true); nsfwGuideSyncSoon(1500, true); }); } catch (e) { }
-try { eventSource.on(event_types.CHAT_CHANGED, () => nsfwGuideSyncSoon(400, false)); } catch (e) { }
+try { eventSource.on(event_types.CHAT_CHANGED, () => { nsfwGuideSyncSoon(400, false); nsfwCompleteLatestSoon(900); }); } catch (e) { }
 try { setTimeout(() => nsfwGuideSyncNow(false), 1500); setTimeout(() => nsfwGuideSyncNow(false), 4000); } catch (e) { }
+try { nsfwCompleteLatestSoon(2600); setTimeout(() => nsfwCompleteLatestSoon(0), 5200); } catch (e) { }   /* ★W438：刷新后也补 */
 
 eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
     isDryRun = !!dryRun; // ST 提示词查看器 dry-run（Generate 第三个参数）
@@ -9574,14 +9591,14 @@ try {
         try { if (document && document.body) document.body.classList.remove('yw-nsfw-generating'); } catch (e) { }
         try { nsfwMarkGeneratingFloor(false); } catch (e3) { }
         try { nsfwMarkGeneratingFloor(false); } catch (e) { }
-        try { if (settings.nsfwEnabled) setTimeout(() => { try { const lidS = nsfwLastAssistantId(); if (lidS >= 0) nsfwReattachAll([lidS]); } catch (e) { } }, 300); } catch (e) { }
+        try { if (settings.nsfwEnabled) setTimeout(() => { try { const lidS = nsfwLastAssistantId(); if (lidS >= 0) nsfwReattachAll([lidS]); nsfwCompleteLatestSoon(500); } catch (e) { } }, 300); } catch (e) { }
     });
 } catch (e) { }
 eventSource.on(event_types.GENERATION_ENDED, () => {
     try {
         if (document && document.body) document.body.classList.remove('yw-nsfw-generating');
         try { nsfwMarkGeneratingFloor(false); } catch (e) { }
-        if (settings.nsfwEnabled) { const lidE = nsfwLastAssistantId(); if (lidE >= 0) [150, 500, 1100].forEach((ms) => setTimeout(() => { try { nsfwReattachAll([lidE]); } catch (e) { } }, ms)); }
+        if (settings.nsfwEnabled) { const lidE = nsfwLastAssistantId(); if (lidE >= 0) [150, 500, 1100].forEach((ms) => setTimeout(() => { try { nsfwReattachAll([lidE]); } catch (e) { } }, ms)); nsfwCompleteLatestSoon(700); }   /* ★W438 */
     } catch (e) { }
     lastGenManuallyStopped = false; // 一轮生成彻底结束，清手动停止标记
     // v1.37.56：dry-run 不会发 GENERATION_ENDED（dry-run 在 Generate 里提前 return，从不显示停止按钮，
