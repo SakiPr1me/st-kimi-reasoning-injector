@@ -919,14 +919,12 @@ function applyParsedTo(bucket, parsed) {
             let value = item.value;
             /* ★W405：空值/纯空白 = 没更新（否则数值会被 Number('') 变成 0、文本被清空） */
             if (String(value == null ? '' : value).trim() === '') return;
-            /* ★W418/W419：N/A 先于数值钳制处理 —— 存 unknown（卡片显示 N/A、发送照发 N/A）；「未知」仍按老规则不覆盖 */
-            if (isNaish(value)) { rec.stats[id] = { value: 'N/A', comment: item.comment || '', unknown: true, at: Date.now() }; return; }
+            /* ★W420：是什么存什么 —— 未知/N/A/文本都按原文存（数值能解析就钳制，解析不了就存原文） */
             if (f.type === 'num') {
                 const n = clampNum(f, value);
-                if (n === null) return;
+                if (n === null) { rec.stats[id] = { value: String(value), comment: item.comment || '', unknown: true, at: Date.now() }; return; }
                 value = n;
             }
-            if (f.type !== 'num' && isUnknownish(value) && rec.stats[id] && String((rec.stats[id] || {}).value || '').trim() && !isUnknownish((rec.stats[id] || {}).value)) return;
             if (f.type === 'list') {
                 value = String(value || '').split(/[,，、]/).map((x) => x.trim()).filter(Boolean);
             }
@@ -1046,9 +1044,7 @@ export function buildCharBlock(name, profile) {
         const cell = (profile.stats || {})[f.id]
             || ((profile.static || {})[f.id] ? { value: profile.static[f.id], comment: '' } : null);
         const val = cell ? fmtVal(f, cell) : '';
-        if (!val) return;
-        /* ★W419：N/A 要发给 AI（告诉它这项没有）；只跳过「未知」 */
-        if (isUnknownish(val) && !isNaish(val)) return;
+        if (!val) return;   /* ★W420：是什么发什么（未知/N/A 照发） */
         addTo(f.group, f.id + ' = ' + val);   /* 评述不发送（省 token） */
     });
     /* 自定义字段跟普通字段一起发 */
@@ -1062,8 +1058,7 @@ export function buildCharBlock(name, profile) {
             if (id === 'gapLog' || String(e0.group || g0.group || '') === '近况') return;
             if (Array.isArray(e0.list) && e0.list.length) return;   /* 多行字段一律不发送 */
             const v = String(e0.value == null ? "" : e0.value).trim();
-            if (!v) return;
-            if (isUnknownish(v) && !isNaish(v)) return;   /* ★W419：N/A 照发，未知不发 */
+            if (!v) return;   /* ★W420：是什么发什么 */
             addTo(e0.group || g0.group || '其它', id + ' = ' + v);
         });
     } catch (e) { }
@@ -2471,12 +2466,10 @@ export function nsfwProfilesFromText(text) {
                 const cell = c.machine[id] || {};
                 const val0 = String(cell.value == null ? '' : cell.value).trim();
                 if (!val0) return;
-                if (isNaish(val0)) { stats[id] = { value: 'N/A', comment: cell.comment || '', unknown: true }; return; }   /* ★W418：N/A 显示但不参与数值 */
-                if (isUnknownish(val0)) return;
                 const f = viewField(fieldById(id));   /* ★W413：上限也按指南 */
                 if (f && f.type === 'num') {
                     const n = clampNum(f, val0);
-                    if (n === null) return;
+                    if (n === null) { stats[id] = { value: String(val0), comment: cell.comment || '', unknown: true }; return; }   /* ★W420：原文显示 */
                     stats[id] = { value: n, comment: cell.comment || '' };
                 } else {
                     stats[id] = cell;
