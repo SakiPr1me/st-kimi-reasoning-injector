@@ -919,13 +919,13 @@ function applyParsedTo(bucket, parsed) {
             let value = item.value;
             /* ★W405：空值/纯空白 = 没更新（否则数值会被 Number('') 变成 0、文本被清空） */
             if (String(value == null ? '' : value).trim() === '') return;
+            /* ★W418/W419：N/A 先于数值钳制处理 —— 存 unknown（卡片显示 N/A、发送照发 N/A）；「未知」仍按老规则不覆盖 */
+            if (isNaish(value)) { rec.stats[id] = { value: 'N/A', comment: item.comment || '', unknown: true, at: Date.now() }; return; }
             if (f.type === 'num') {
                 const n = clampNum(f, value);
                 if (n === null) return;
                 value = n;
             }
-            /* ★W418：N/A 直接存成 unknown（卡片显示 N/A、发送跳过）；「未知」仍按老规则不覆盖 */
-            if (isNaish(value)) { rec.stats[id] = { value: 'N/A', comment: item.comment || '', unknown: true, at: Date.now() }; return; }
             if (f.type !== 'num' && isUnknownish(value) && rec.stats[id] && String((rec.stats[id] || {}).value || '').trim() && !isUnknownish((rec.stats[id] || {}).value)) return;
             if (f.type === 'list') {
                 value = String(value || '').split(/[,，、]/).map((x) => x.trim()).filter(Boolean);
@@ -1046,7 +1046,9 @@ export function buildCharBlock(name, profile) {
         const cell = (profile.stats || {})[f.id]
             || ((profile.static || {})[f.id] ? { value: profile.static[f.id], comment: '' } : null);
         const val = cell ? fmtVal(f, cell) : '';
-        if (!val || isUnknownish(val)) return;   /* ★W408：未知 / N/A 的值不发给 AI */
+        if (!val) return;
+        /* ★W419：N/A 要发给 AI（告诉它这项没有）；只跳过「未知」 */
+        if (isUnknownish(val) && !isNaish(val)) return;
         addTo(f.group, f.id + ' = ' + val);   /* 评述不发送（省 token） */
     });
     /* 自定义字段跟普通字段一起发 */
@@ -1060,7 +1062,9 @@ export function buildCharBlock(name, profile) {
             if (id === 'gapLog' || String(e0.group || g0.group || '') === '近况') return;
             if (Array.isArray(e0.list) && e0.list.length) return;   /* 多行字段一律不发送 */
             const v = String(e0.value == null ? "" : e0.value).trim();
-            if (v) addTo(e0.group || g0.group || '其它', id + ' = ' + v);
+            if (!v) return;
+            if (isUnknownish(v) && !isNaish(v)) return;   /* ★W419：N/A 照发，未知不发 */
+            addTo(e0.group || g0.group || '其它', id + ' = ' + v);
         });
     } catch (e) { }
     const ordOf = (g) => { const i = GROUP_ORDER.indexOf(g); return i < 0 ? 99 : i; };
