@@ -1064,13 +1064,21 @@ function fmtVal(f, cell) {
     if (f.type === 'list') return Array.isArray(v) ? v.join('、') : String(v || '');
     return String(v == null ? '' : v);
 }
-/** 数值 + 单位（避免 "1.2cm cm"；★W316 量纲字段只存数字，单位在这里补） */
+/** ★W443：把值末尾已经带的单位摘掉（7次 / 7 次 / 7（次）都认） */
+function stripUnitText(val, unit) {
+    const t = String(val == null ? '' : val).trim();
+    if (!t || !unit) return t;
+    const uEsc = String(unit).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return t.replace(new RegExp('\\s*[（(]?\\s*' + uEsc + '\\s*[)）]?\\s*$'), '').trim();
+}
+/** 数值 + 单位（★W443：值自带单位就摘掉再补一次；N/A/未知 不补，显示与文本解耦） */
 function withUnit(f, val) {
     const t = String(val == null ? '' : val).trim();
     if (!t || !f || !f.unit) return t;
-    const u = String(f.unit);
-    if (t.indexOf(u) >= 0) return t;
-    return t + ' ' + u;
+    if (isNaish(t) || /^(未知|unknown)$/i.test(t)) return t;
+    const core = stripUnitText(t, String(f.unit));
+    if (!core) return t;
+    return core + ' ' + String(f.unit);
 }
 
 export function buildCharBlock(name, profile) {
@@ -2032,15 +2040,10 @@ export function nsfwRenderCard(name, profile) {
                     }
                     const raw0 = String(e0.value == null ? "" : e0.value).trim();
                     const unit0 = String(e0.unit || gm0.unit || "");
-                    /* 值里已经自带单位（7次 / 7 次 / 7（次））⇒ 摘掉再做数字判断，显示时统一补一个 */
-                    let core0 = raw0;
-                    if (unit0) {
-                        const uEsc = unit0.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        const reU = new RegExp("\\s*[（(]?\\s*" + uEsc + "\\s*[)）]?\\s*$");
-                        core0 = raw0.replace(reU, "").trim();
-                    }
-                    const val0 = core0;
-                    const valTxt0 = esc(unit0 ? (val0.indexOf(unit0) >= 0 ? val0 : (val0 ? (val0 + " " + unit0) : unit0)) : raw0);
+                    /* ★W443：显示统一「值 + 一次单位」——值里有单位先摘掉，N/A/未知 不补单位 */
+                    const naish0 = isNaish(raw0) || /^(未知|unknown)$/i.test(raw0);
+                    const val0 = (unit0 && !naish0) ? stripUnitText(raw0, unit0) : raw0;
+                    const valTxt0 = esc((!unit0 || naish0) ? raw0 : (val0 ? (val0 + " " + unit0) : raw0));
                     const minE = (typeof e0.min === "number") ? e0.min : (typeof gm0.min === "number" ? gm0.min : null);
                     const maxE = (typeof e0.max === "number") ? e0.max : (typeof gm0.max === "number" ? gm0.max : null);
                     const hasRange = (typeof minE === "number" && typeof maxE === "number");
