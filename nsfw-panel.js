@@ -1810,6 +1810,41 @@ function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+/** ★W433：指南里有、但这一楼没有值的字段 —— 也铺一行「—」占位（新加的字段立刻可见） */
+function guideEmptyRowsHtml(profile, grp) {
+    try {
+        if (!guideUsable()) return '';
+        const gm = nsfwGuide();
+        const allowed = {};
+        activeFields(profile).forEach((f) => { allowed[f.id] = 1; });
+        const has = {};
+        Object.keys(profile.stats || {}).forEach((id) => {
+            const f = fieldById(id);
+            const v = f ? fmtVal(viewField(f), profile.stats[id]) : String((profile.stats[id] || {}).value || '');
+            if (String(v || '').trim()) has[id] = 1;
+        });
+        Object.keys(profile.extra || {}).forEach((id) => {
+            const e = profile.extra[id] || {};
+            if (String(e.value || '').trim() || (Array.isArray(e.list) && e.list.length) || e.empty) has[id] = 1;
+        });
+        Object.keys(profile.desc || {}).forEach((id) => {
+            if (String(((profile.desc || {})[id] || {}).text || '').trim()) has[id] = 1;
+        });
+        const out = [];
+        Object.keys(gm).forEach((id) => {
+            if (id === 'name' || id === 'snapTime' || id === 'gapLog') return;
+            const g = gm[id] || {};
+            if (String(g.group || '') !== grp) return;
+            if (g.multi || /^view/i.test(id)) return;
+            if (has[id]) return;
+            if (fieldById(id) && !allowed[id]) return;   /* 性别筛掉的字段不占位 */
+            const lab = g.label || id;
+            out.push('<div class="yw-nsfw-row yw-nsfw-empty" data-id="' + esc(id) + '" data-type="text" data-ph="1" data-ord="' + esc(String(typeof g.ord === 'number' ? g.ord : 9999)) + '"><span class="k">' + esc(lab) + '</span><span class="v">—</span><span class="yw-nsfw-c"></span></div>');
+        });
+        return out.join('');
+    } catch (e) { return ''; }
+}
+
 /** 一页的行：按 tab 归属取字段（静态参数也进对应分页），顺序 = ord */
 function tabRowsHtml(profile, grp, byGroup) {
     const rows = [];
@@ -1932,7 +1967,7 @@ export function nsfwRenderCard(name, profile) {
     } catch (eT) { }
     tabGroups.forEach((grp) => {
         /* ★W325：「开发」组改成普通计数行（旧的 部位×等级/经验/变化 表已随字段删除） */
-        const html = tabRowsHtml(profile, grp, byGroup);
+        const html = tabRowsHtml(profile, grp, byGroup) + guideEmptyRowsHtml(profile, grp);   /* ★W433 */
         if (html) tabs.push({ id: grp, label: grp, html: html });
     });
     /* ★W375：自定义字段并进它自己所属的【组】分页（作者口径：放哪页就哪页）；组名不在内置列表里就新建一页 */
@@ -2225,6 +2260,7 @@ function bindCardEdit(wrap, name, profile) {
                 const type = row.getAttribute('data-type') || 'text';
                 const optsAttr = row.getAttribute('data-options') || '';
                 if (row.getAttribute('data-new') === '1') return;   /* 补录行已经是输入框，不再转换 */
+                /* ★W433：data-ph 占位行没有输入框，继续走下面的转换 */
                 const cell = isStatic ? { value: (profile.static || {})[id], comment: '' } : ((profile.stats || {})[id] || (profile.extra || {})[id] || {});   /* ★W376：自定义字段从 extra 取原值 */
                 const vEl = row.querySelector('.v') || row.querySelector('.t');
                 if (vEl) {
@@ -2267,7 +2303,7 @@ function bindCardEdit(wrap, name, profile) {
             const v = row.querySelector('.yw-nsfw-in-v');
             const c = row.querySelector('.yw-nsfw-in-c');
             if (!v) return;
-            if (row.getAttribute('data-new') === '1' && !String(v.value || '').trim() && !(c && String(c.value || '').trim())) return;   /* ★W417：补录行没填就不写 */
+            if ((row.getAttribute('data-new') === '1' || row.getAttribute('data-ph') === '1') && !String(v.value || '').trim() && !(c && String(c.value || '').trim())) return;   /* ★W417/W433：补录/占位行没填就不写 */
             if (isStatic) nsfwSetStatic(chatId, name, id, v.value);
             else nsfwSetStat(chatId, name, id, v.value, c ? c.value : '');
         });
@@ -2284,7 +2320,7 @@ function bindCardEdit(wrap, name, profile) {
                 const v = row.querySelector(".yw-nsfw-in-v");
                 const c = row.querySelector(".yw-nsfw-in-c");
                 if (!v) return;
-                if (row.getAttribute('data-new') === '1' && !String(v.value || '').trim() && !(c && String(c.value || '').trim())) return;   /* ★W417 */
+                if ((row.getAttribute('data-new') === '1' || row.getAttribute('data-ph') === '1') && !String(v.value || '').trim() && !(c && String(c.value || '').trim())) return;   /* ★W417/W433 */
                 changes.push({ id: id, value: v.value, comment: c ? c.value : "" });
             });
             if (mesid0 != null && changes.length) nsfwEditFloor(chatId, Number(mesid0), name, changes);
