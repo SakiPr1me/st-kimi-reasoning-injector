@@ -817,13 +817,19 @@ export function nsfwParse(text) {
             sex: attrOf(attrs, 'data-sex') || attrOf(attrs, 'sex'),
             role: attrOf(attrs, 'data-role') || attrOf(attrs, 'role')
         };
-        /* ★W316：他人视线三行写在同一个块里（viewBody/viewOutfit/viewChannel），整段当值、不拆 | */
-        let body = body0;
-        NSFW_DESC_FIELDS.forEach((d) => {
-            const reV = new RegExp('^[ \\t]*(?:[^=:：\\n]{1,12}[ \\t]+)?' + d.id + '[^=:：\\n]*[=:：]\\s*(.+)$', 'mi');
-            const mv = reV.exec(body);
-            if (mv) { c.desc[d.id] = String(mv[1] || '').trim(); body = body.replace(mv[0], ''); }
-        });
+        /* ★W431：他人视线不再写死三条 —— 所有 `view* 中文 = 值` 都收（加/删/改名/换序全跟指南） */
+        let body = String(body0).split(/\r?\n/).map((line) => {
+            const m0 = /^[ \t]*(?:[^=:：]{1,12}[ \t]+)?(view[A-Za-z0-9_]*)([^=:：]*)[=:：]\s*(.+)$/i.exec(line.trim());
+            if (!m0) return line;
+            const id0 = m0[1];
+            let lab0 = String(m0[2] || '').trim();
+            if (!lab0) {
+                const d0 = NSFW_DESC_FIELDS.find((x) => x.id === id0) || {};
+                lab0 = d0.label || (nsfwGuideMeta(id0) || {}).label || id0;
+            }
+            c.desc[id0] = { text: String(m0[3] || '').trim(), label: lab0 };
+            return '';
+        }).join('\n');
         const parsed = parseMachineBody(body);
         Object.keys(parsed).forEach((k) => { c.machine[k] = parsed[k]; });
         /* ★W374：清单之外的自定义字段也吞进来（形如 `foo 中文 = 值|评述` 或 `foo=值`） */
@@ -943,7 +949,13 @@ function applyParsedTo(bucket, parsed) {
             rec.stats[id] = { value: value, comment: item.comment || '', at: Date.now() };
         });
         const dd = parsed.chars[name].desc || {};
-        Object.keys(dd).forEach((id) => { if (nsfwGuideAllows(id)) rec.desc[id] = { text: dd[id], at: Date.now() }; });
+        Object.keys(dd).forEach((id) => {
+            if (!nsfwGuideAllows(id)) return;
+            const dv = dd[id];
+            const txt0 = (dv && typeof dv === 'object') ? String(dv.text || '') : String(dv || '');
+            const lab0 = (dv && typeof dv === 'object') ? String(dv.label || '') : '';
+            rec.desc[id] = { text: txt0, label: lab0, at: Date.now() };
+        });
         /* ★W374：自定义字段一并落盘（原来的值沿用，新的覆盖） */
         const ex = parsed.chars[name].extra || {};
         Object.keys(ex).forEach((id) => {
@@ -1089,8 +1101,9 @@ export function buildCharBlock(name, profile) {
             if (id === 'name' || id === 'snapTime' || id === 'gapLog') return;
             if (sent0[id]) return;
             if (!nsfwGuideAllows(id)) return;
+            if (/^view/i.test(id)) return;   /* ★W431：他人视线是 desc，不发空位 */
             const g = gm0[id] || {};
-            if (String(g.group || '') === '近况' || g.multi) return;
+            if (String(g.group || '') === '近况' || String(g.group || '') === '他人视线' || g.multi) return;
             addTo(g.group || '其它', id + ' = ');
         });
     } catch (e0) { }
@@ -1969,7 +1982,12 @@ export function nsfwRenderCard(name, profile) {
             else tabs.push({ id: "x-" + g, label: g, html: h });
         });
     } catch (e) { }
-    const viewRows = NSFW_DESC_FIELDS.map((d) => (profile.desc && profile.desc[d.id] && nsfwGuideAllows(d.id) ? { label: d.label, text: profile.desc[d.id].text } : null)).filter(Boolean);   /* ★W413：指南删了视线就不画 */
+    const viewRows = Object.keys(profile.desc || {}).filter((id) => nsfwGuideAllows(id)).map((id) => {
+        const cell = profile.desc[id] || {};
+        const d0 = NSFW_DESC_FIELDS.find((x) => x.id === id) || {};
+        const g0 = nsfwGuideMeta(id) || {};
+        return { label: (cell.label || d0.label || g0.label || id), text: String(cell.text || '') };
+    }).filter((x) => String(x.text || '').trim());   /* ★W431：视线字段全跟指南，不再写死三条 */
     if (viewRows.length) {
         tabs.push({
             id: '视线', label: '视线',
@@ -2568,7 +2586,12 @@ export function nsfwProfilesFromText(text) {
                 }
             });
             const desc = {};
-            Object.keys(c.desc || {}).forEach((id) => { if (nsfwGuideAllows(id)) desc[id] = { text: c.desc[id] }; });
+            Object.keys(c.desc || {}).forEach((id) => {
+                if (!nsfwGuideAllows(id)) return;
+                const dv = c.desc[id];
+                if (dv && typeof dv === 'object') desc[id] = { text: String(dv.text || ''), label: String(dv.label || '') };
+                else desc[id] = { text: String(dv || ''), label: '' };
+            });
             /* ★W396：楼里的卡是从这段文本重拼的 —— 必须把自定义字段（近况/用户加的分组）一起带上，
                否则卡上永远没有「近况」分页（bucket 里有、但这里丢了） */
             const extra = {};
