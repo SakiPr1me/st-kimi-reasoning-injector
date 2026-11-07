@@ -10,7 +10,7 @@ import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
-import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwGuideSyncFromPreset, nsfwGuideAllows, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwSetStat, nsfwEditFloor, nsfwGuideSyncFromPreset, nsfwGuideAllows, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 
 
@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.271'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.272'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -9022,7 +9022,7 @@ eventSource.on(event_types.MESSAGE_RECEIVED, async (id) => {
         if (!msg || msg.is_user || msg.is_system) return;
         let mes = String(msg.mes || '');
         if (mes.indexOf('<nsfw') < 0) { try { nsfwMountToMessage(id); } catch (e) { } return; }
-        const key = id + '|' + (typeof msg.swipe_id === 'number' ? msg.swipe_id : -1) + '|' + mes.length;
+        const key = nsfwChatId(ctx) + '|' + id + '|' + (typeof msg.swipe_id === 'number' ? msg.swipe_id : -1) + '|' + mes.length;   /* ★W437b：换聊天不串 */
         if (nsfwParsedKeys.has(key)) return;
         /* ★W380：优先「显示层换外壳」——不改聊天记录（小铅笔里仍是 <nsfw>），
            只在渲染时换成 <div data-nsfw> 让 CSS 藏起来；老酒馆没有 messageFormatter 才退回改写 mes */
@@ -9397,7 +9397,7 @@ function nsfwMarkGeneratingFloor(on) {
 }
 
 /* ★W413：指南即时生效 —— 预设条目一改就重读指南并重画（不等下一次请求） */
-let _nsfwGuideSyncTimer = 0;
+const _nsfwGuideSyncTimers = {};   /* ★W437：250ms / 1500ms 各一个句柄，别互相顶掉 */
 /* ★W414：只重挂最后一条 assistant（生成结束/停止时不需要整聊重挂） */
 function nsfwLastAssistantId() {
     try {
@@ -9420,7 +9420,11 @@ function nsfwGuideSyncNow(allowClear) {
     } catch (e) { }
 }
 function nsfwGuideSyncSoon(ms, allowClear) {
-    try { clearTimeout(_nsfwGuideSyncTimer); _nsfwGuideSyncTimer = setTimeout(() => nsfwGuideSyncNow(allowClear), ms || 300); } catch (e) { }
+    try {
+        const k = String(ms || 300);
+        clearTimeout(_nsfwGuideSyncTimers[k]);
+        _nsfwGuideSyncTimers[k] = setTimeout(() => { delete _nsfwGuideSyncTimers[k]; nsfwGuideSyncNow(allowClear); }, ms || 300);
+    } catch (e) { }
 }
 try { eventSource.on(event_types.SETTINGS_UPDATED, () => { nsfwGuideSyncSoon(250, false); nsfwGuideSyncSoon(1500, false); }); } catch (e) { }
 try { eventSource.on(event_types.PRESET_CHANGED, () => { nsfwGuideSyncSoon(250, true); nsfwGuideSyncSoon(1500, true); }); } catch (e) { }

@@ -324,7 +324,7 @@ export function nsfwParseGuide(text) {
         body.split(/\r?\n/).forEach((line) => {
             const s0 = String(line || '').trim();
             if (!s0) return;
-            const gm = /^【([^】]{1,12})】$/.exec(s0);
+            const gm = /^【([^】]{1,40})】$/.exec(s0);   /* ★W437b：组名别卡 12 字 */
             if (gm) { group = gm[1]; return; }
             const eq = s0.indexOf('=');
             if (eq <= 0) return;
@@ -462,7 +462,7 @@ export function nsfwGuideSyncFromPreset(opts) {
         const hits = cs.prompts.filter((p) => p && typeof p.content === 'string' && p.content.indexOf('<nsfw_state_guide>') >= 0 && (!enabled || enabled.has(p.identifier)));
         if (!hits.length) {
             /* 只有「预设已水合」（enabled 足够多）+ 明确是预设切换事件，才敢清空；启动初期不动缓存 */
-            if (opts && opts.allowClear) { nsfwClearGuide(); out.changed = true; }   /* 预设切换事件里没有指南 = 真没有；启动水合期的调用不带 allowClear */
+            if (opts && opts.allowClear && enabled) { nsfwClearGuide(); out.changed = true; }   /* ★W437：读不到启用组时宁可不清理，别把指南清丢 */
             return out;
         }
         out.found = true;
@@ -833,7 +833,7 @@ export function nsfwParse(text) {
         };
         /* ★W431：他人视线不再写死三条 —— 所有 `view* 中文 = 值` 都收（加/删/改名/换序全跟指南） */
         let body = String(body0).split(/\r?\n/).map((line) => {
-            const m0 = /^[ \t]*(?:[^=:：]{1,12}[ \t]+)?(view[A-Za-z0-9_]*)([^=:：]*)[=:：]\s*(.+)$/i.exec(line.trim());
+            const m0 = /^[ \t]*(?:[^=:：]{1,12}[ \t]+)?(view[A-Za-z0-9_]*)([^=:：]*)[=:：]\s*(.*)$/i.exec(line.trim());   /* ★W437：空值也吃掉 */
             if (!m0) return line;
             const id0 = m0[1];
             let lab0 = String(m0[2] || '').trim();
@@ -855,7 +855,7 @@ export function nsfwParse(text) {
             let lastMulti = '';   /* ★W427：上一个多行字段，续行挂到它下面 */
             body.split(/\r?\n/).forEach((ln) => {
                 const s2 = ln.trim();
-                const gm = /^【([^】]{1,12})】$/.exec(s2);
+                const gm = /^【([^】]{1,40})】$/.exec(s2);   /* ★W437b：组名别卡 12 字 */
                 if (gm) { curGroup = gm[1]; return; }
                 if (!s2) return;
                 if (s2.indexOf('=') < 0) {
@@ -886,7 +886,7 @@ export function nsfwParse(text) {
                 if (!c.extra) c.extra = {};
                 /* ★W391：指南里标了 [多行]（或写在【近况】组里）的字段，同一 ID 出现多次 = 多条 */
                 const gm0 = nsfwGuideMeta(key0) || {};
-                const multi0 = !!gm0.multi || curGroup === '近况';
+                const multi0 = !!gm0.multi || (!gm0.id && curGroup === '近况');   /* ★W437：指南声明过的字段只认 [多行] */
                 lastMulti = multi0 ? key0 : '';   /* ★W427 */
                 const prev0 = c.extra[key0];
                 if (prev0 && multi0) {
@@ -1100,7 +1100,7 @@ export function buildCharBlock(name, profile) {
             const e0 = ex[id] || {};
             /* ★W392：近况只给自己看 —— 不发给 AI（否则它会把上一份照抄/拿正文事件重写一遍） */
             const g0 = nsfwGuideMeta(id) || {};
-            if (id === 'gapLog' || String(e0.group || g0.group || '') === '近况') return;
+            if (id === 'gapLog' || String(g0.group || e0.group || '') === '近况') return;   /* ★W437：组以指南为准 */
             if (Array.isArray(e0.list) && e0.list.length) return;   /* 多行字段一律不发送 */
             const v = String(e0.value == null ? "" : e0.value).trim();
             if (!v) return;   /* ★W420：空值交给 W421 补空位 */
@@ -1108,11 +1108,23 @@ export function buildCharBlock(name, profile) {
             addTo(g0.group || e0.group || '其它', id + ' = ' + v);   /* ★W435：组以指南为准 */
         });
     } catch (e) { }
+    /* ★W436：他人视线也「反向补充」—— 指南里的每条都发出；这轮没写就空位，写过把原文带上（指南要求「没变的照抄」） */
+    try {
+        const gmV = nsfwGuide();
+        Object.keys(gmV).forEach((id) => {
+            if (!/^view/i.test(id)) return;
+            if (!nsfwGuideAllows(id)) return;
+            const cellV = (profile.desc || {})[id];
+            const txtV = String((cellV && cellV.text) || '').trim();
+            sent0[id] = 1;
+            addTo(gmV[id].group || '他人视线', id + ' = ' + txtV);
+        });
+    } catch (eV) { }
     /* ★W421：指南里有、但这一轮没有任何值的字段 —— 也给 AI 一个空位（它下一轮会补） */
     try {
         const gm0 = nsfwGuide();
         Object.keys(gm0).forEach((id) => {
-            if (id === 'name' || id === 'snapTime' || id === 'gapLog') return;
+            if (id === 'name' || id === 'snapTime') return;   /* ★W436：gapLog 没值时也占一行 */
             if (sent0[id]) return;
             if (!nsfwGuideAllows(id)) return;
             if (/^view/i.test(id)) return;   /* ★W431：他人视线是 desc，不发空位 */
@@ -1416,7 +1428,11 @@ export function nsfwBuildSend(chatId, names, msgs, opts) {
         const live = Array.isArray(msgs) ? nsfwStateFromMsgs(msgs) : null;
         const parts = [];
         (names || []).forEach((n) => {
-            const prof = live ? (live.chars[n] || null) : bucket.chars[n];
+            /* ★W437：请求历史被预算裁掉带块旧楼时，别整条静默跳过 —— 用当前分支缓存兜底（只补 static，不覆盖本轮值） */
+            const prof = live ? (live.chars[n] || bucket.chars[n] || null) : bucket.chars[n];
+            if (prof && live && live.chars[n] && bucket.chars[n] && (!prof.static || !Object.keys(prof.static || {}).length)) {
+                prof.static = bucket.chars[n].static || {};
+            }
             if (!prof) return;
             const b = buildCharBlock(n, prof);
             if (!b) return;
@@ -1737,7 +1753,7 @@ export function nsfwMountSender() {
             if (ctxR && Array.isArray(ctxR.chat)) {
                 const lastR = ctxR.chat[ctxR.chat.length - 1] || {};
                 const mesR = String(lastR.mes || '');
-                const sigR = ctxR.chat.length + '|' + mesR.length + '|' + (typeof lastR.swipe_id === 'number' ? lastR.swipe_id : -1) + '|' + mesR.slice(0, 12) + '|' + mesR.slice(-12);
+                const sigR = chatId + '|' + ctxR.chat.length + '|' + mesR.length + '|' + (typeof lastR.swipe_id === 'number' ? lastR.swipe_id : -1) + '|' + mesR.slice(0, 12) + '|' + mesR.slice(-12);   /* ★W437b：换聊天也要重建 */
                 if (sigR !== _senderRebuildSig || Date.now() - _senderRebuildAt > 1500) {
                     nsfwRebuildFromChat(chatId, ctxR.chat);
                     _senderRebuildSig = sigR;
@@ -1832,10 +1848,10 @@ function guideEmptyRowsHtml(profile, grp) {
         });
         const out = [];
         Object.keys(gm).forEach((id) => {
-            if (id === 'name' || id === 'snapTime' || id === 'gapLog') return;
+            if (id === 'name' || id === 'snapTime') return;   /* ★W436：gapLog 没值时也占一行 */
             const g = gm[id] || {};
             if (String(g.group || '') !== grp) return;
-            if (g.multi || /^view/i.test(id)) return;
+            if (/^view/i.test(id)) return;   /* ★W436：多行字段也占位（视线单独画） */
             if (has[id]) return;
             if (fieldById(id) && !allowed[id]) return;   /* 性别筛掉的字段不占位 */
             const lab = g.label || id;
@@ -2031,16 +2047,35 @@ export function nsfwRenderCard(name, profile) {
             else tabs.push({ id: "x-" + g, label: g, html: h });
         });
     } catch (e) { }
-    const viewRows = Object.keys(profile.desc || {}).filter((id) => nsfwGuideAllows(id)).map((id) => {
-        const cell = profile.desc[id] || {};
-        const d0 = NSFW_DESC_FIELDS.find((x) => x.id === id) || {};
-        const g0 = nsfwGuideMeta(id) || {};
-        return { label: (cell.label || d0.label || g0.label || id), text: String(cell.text || '') };
-    }).filter((x) => String(x.text || '').trim());   /* ★W431：视线字段全跟指南，不再写死三条 */
+    /* ★W436：他人视线也「反向补充」—— 指南里有、这轮没写的，也留一行「—」（不再整页消失）
+       ★W437：指南不可用时退回「楼里出现过的视线」；每条按自己的指南组进页（不再全挤第一组） */
+    const viewRows = (() => {
+        try {
+            const gmV = nsfwGuide();
+            const ids = Object.keys(gmV).filter((id) => /^view/i.test(id) && nsfwGuideAllows(id));
+            Object.keys(profile.desc || {}).forEach((id) => { if (ids.indexOf(id) < 0 && nsfwGuideAllows(id)) ids.push(id); });
+            return ids.map((id) => {
+                const cell = (profile.desc || {})[id] || {};
+                const d0 = NSFW_DESC_FIELDS.find((x) => x.id === id) || {};
+                const g0 = gmV[id] || {};
+                return { id: id, label: (cell.label || d0.label || g0.label || id), text: String(cell.text || '').trim(), group: String(g0.group || '') };
+            });
+        } catch (eV) { return []; }
+    })();
     if (viewRows.length) {
-        tabs.push({
-            id: '视线', label: '视线',
-            html: viewRows.map((v) => '<div class="yw-nsfw-viewrow"><span class="lbl">' + esc(v.label) + '</span>' + esc(v.text) + '</div>').join('')
+        const vGroups = [];
+        const vGmap = {};
+        viewRows.forEach((v) => {
+            const gg = String(v.group || '视线') || '视线';
+            if (!vGmap[gg]) { vGmap[gg] = { grp: gg, html: '' }; vGroups.push(vGmap[gg]); }
+            vGmap[gg].html += (v.text
+                ? '<div class="yw-nsfw-viewrow"><span class="lbl">' + esc(v.label) + '</span>' + esc(v.text) + '</div>'
+                : '<div class="yw-nsfw-row yw-nsfw-ph" data-id="' + esc(v.id) + '" data-type="text" data-ph="1"><span class="k">' + esc(v.label) + '</span><span class="v">—</span><span class="yw-nsfw-c"></span></div>');
+        });
+        vGroups.forEach((x) => {
+            const hitV = tabs.filter((t) => t.label === x.grp)[0];
+            if (hitV) hitV.html += x.html;
+            else tabs.push({ id: 'view-' + x.grp, label: x.grp, html: x.html });
         });
     }
     /* ★W429：分页顺序 = 提示词里的组顺序（不再强制近况最后；指南怎么写就怎么排） */
@@ -2377,7 +2412,7 @@ export function nsfwEditFloor(chatId, mesid, name, changes) {
             if (!id) return;
             const val0 = String(ch.value == null ? '' : ch.value) + (ch.comment ? '|' + ch.comment : '');
             const line = id + '=' + val0;
-            const re = new RegExp('^[ \\t]*' + esc0(id) + '[^=\\n]*=[^\\n]*$', 'mi');
+            const re = new RegExp('^[ \\t]*' + esc0(id) + '(?![A-Za-z0-9_])[^=\\n]*=[^\\n]*$', 'mi');   /* ★W437：id 必须有边界，别把 menstrual 写成 menstrualNextDays */
             /* 保留原来的「ID 中文 [范围]」前缀，只换 = 后面的值 */
             if (re.test(body)) body = body.replace(re, (m0) => {
                 const eq = m0.indexOf('=');
@@ -2394,7 +2429,7 @@ export function nsfwEditFloor(chatId, mesid, name, changes) {
                     const hm1 = new RegExp('【' + esc0(grp1) + '】').exec(body);
                     if (hm1) {
                         const after1 = hm1.index + hm1[0].length;
-                        const nre1 = /【[^】]{1,20}】/g;
+                        const nre1 = /【[^】]{1,40}】/g;
                         nre1.lastIndex = after1;
                         const nm1 = nre1.exec(body);
                         const cut1 = nm1 ? nm1.index : body.length;
@@ -2403,7 +2438,7 @@ export function nsfwEditFloor(chatId, mesid, name, changes) {
                         put = true;
                     }
                 }
-                if (!put) body = body.replace(/\s*$/, '') + NL0 + line + NL0;   /* ★W417：补录行后面留换行，收尾标签另起一行 */
+                if (!put) body = body.replace(/\s*$/, '') + NL0 + (grp1 ? ('【' + grp1 + '】' + NL0) : '') + line + NL0;   /* ★W437：没有这个组头就新建一段，别被上一段（常见是【近况】）吞掉 */
             }
         });
         const next = src.slice(0, openEnd) + body + src.slice(closeIdx);
