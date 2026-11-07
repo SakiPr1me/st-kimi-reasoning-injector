@@ -1975,11 +1975,23 @@ export function nsfwRenderCard(name, profile) {
             html: viewRows.map((v) => '<div class="yw-nsfw-viewrow"><span class="lbl">' + esc(v.label) + '</span>' + esc(v.text) + '</div>').join('')
         });
     }
-    /* ★W396：近况永远排在最后一个分页（含「视线」之后） */
+    /* ★W429：分页顺序 = 提示词里的组顺序（不再强制近况最后；指南怎么写就怎么排） */
     try {
-        const isGapTab = (t) => t && (t.label === '近况' || String(t.html || '').indexOf('data-id="gapLog"') >= 0);
-        tabs.sort((a, b) => ((isGapTab(a) ? 1 : 0) - (isGapTab(b) ? 1 : 0)));
-    } catch (e) { }   /* ★W427：近况页永远最后（不管组名改成什么） */
+        const order0 = nsfwGuideGroups();
+        if (order0.length) {
+            const gm0 = nsfwGuide();
+            const groupOfTab = (t) => {
+                const lab = String((t && t.label) || '');
+                if (lab === '视线') {
+                    const k = Object.keys(gm0).find((id) => /^view/.test(id) && gm0[id] && gm0[id].group);
+                    if (k) return String(gm0[k].group);
+                }
+                return lab;
+            };
+            const keyOf = (t) => { const i0 = order0.indexOf(groupOfTab(t)); return i0 < 0 ? 999 : i0; };
+            tabs.sort((a, b) => keyOf(a) - keyOf(b));
+        }
+    } catch (eOrder) { }
     if (!tabs.length) {
         const empty = document.createElement('div');
         empty.className = 'yw-nsfw-empty';
