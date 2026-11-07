@@ -298,6 +298,20 @@ const GUIDE_STORE_KEY = 'kimi_nsfw_guide_v1';
 let _guideCache = null;
 let _guideRev = 0;
 
+/** ★W432：标签清洗 —— 去掉范围/单位/说明，但保留「（男）/（女）」这种性别后缀 */
+function labelClean(t) {
+    let s0 = String(t == null ? '' : t);
+    const keep = [];
+    s0 = s0.replace(/[（(]\s*([男女])\s*[)）]/g, (m, g) => { keep.push(g); return '\u0001' + (keep.length - 1) + '\u0002'; });
+    s0 = s0.replace(/[\[【][^\]】]*[\]】]/g, ' ')
+        .replace(/[（(][^)）]*[)）]/g, ' ')
+        .replace(/\s*列表.*$/, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    s0 = s0.replace(/\u0001(\d+)\u0002/g, (m, i) => '（' + keep[Number(i)] + '）');
+    return s0;
+}
+
 /** 解析 guide 里的 `<nsfw>…</nsfw>` 字段表；`[多行]` 标记多行、`[a/b]` 记选项、行序记 ord */
 export function nsfwParseGuide(text) {
     const map = {};
@@ -327,7 +341,7 @@ export function nsfwParseGuide(text) {
             let pm;
             const reP = /[（(]([^)）]*)[)）]/g;
             while ((pm = reP.exec(rest))) parens.push(pm[1]);
-            const label = rest.replace(/[\[【][^\]】]*[\]】]/g, ' ').replace(/[（(][^)）]*[)）]/g, ' ').replace(/\s*列表.*$/, '').replace(/\s+/g, ' ').trim();
+            const label = labelClean(rest);
             let min = null, max = null, multi = false, options = null;
             brackets.forEach((b) => {
                 const bs = String(b);
@@ -882,7 +896,7 @@ export function nsfwParse(text) {
                     if (!prev0.comment) prev0.comment = sv.comment;
                     return;
                 }
-                c.extra[key0] = { value: sv.value, comment: sv.comment, group: curGroup, label: (label0 || gm0.label || key0), min: (typeof min0 === 'number' ? min0 : (typeof gm0.min === 'number' ? gm0.min : null)), max: (typeof max0 === 'number' ? max0 : (typeof gm0.max === 'number' ? gm0.max : null)), unit: (unit0 || gm0.unit || ''), list: multi0 ? [String(sv.value)] : undefined, empty: empty0 ? true : undefined };
+                c.extra[key0] = { value: sv.value, comment: sv.comment, group: curGroup, label: (gm0.label || label0 || key0), min: (typeof min0 === 'number' ? min0 : (typeof gm0.min === 'number' ? gm0.min : null)), max: (typeof max0 === 'number' ? max0 : (typeof gm0.max === 'number' ? gm0.max : null)), unit: (gm0.unit || unit0 || ''), list: multi0 ? [String(sv.value)] : undefined, empty: empty0 ? true : undefined };
             });
         } catch (e0) { }
     }
