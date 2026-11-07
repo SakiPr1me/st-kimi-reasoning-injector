@@ -841,8 +841,8 @@ export function nsfwParse(text) {
                 if (known[key0]) return;
                 if (/^(name|snapTime)$/.test(key0)) return;
                 const rest0 = s2.slice(s2.indexOf('=') + 1).trim();
-                if (!rest0) return;
-                const sv = splitValueComment(rest0);
+                const sv = rest0 ? splitValueComment(rest0) : { value: '', comment: '' };   /* ★W425：空值也收（卡片显示占位） */
+                const empty0 = !rest0;
                 /* ★W387：用户自己加的字段也认 `[0-100](单位)` —— 有范围就画条，中文名照用 */
                 const head0 = s2.slice(0, s2.indexOf('=')).trim();
                 let tail0 = head0.slice(key0.length).trim();
@@ -864,7 +864,7 @@ export function nsfwParse(text) {
                     if (!prev0.comment) prev0.comment = sv.comment;
                     return;
                 }
-                c.extra[key0] = { value: sv.value, comment: sv.comment, group: curGroup, label: (label0 || gm0.label || key0), min: (typeof min0 === 'number' ? min0 : (typeof gm0.min === 'number' ? gm0.min : null)), max: (typeof max0 === 'number' ? max0 : (typeof gm0.max === 'number' ? gm0.max : null)), unit: (unit0 || gm0.unit || ''), list: multi0 ? [String(sv.value)] : undefined };
+                c.extra[key0] = { value: sv.value, comment: sv.comment, group: curGroup, label: (label0 || gm0.label || key0), min: (typeof min0 === 'number' ? min0 : (typeof gm0.min === 'number' ? gm0.min : null)), max: (typeof max0 === 'number' ? max0 : (typeof gm0.max === 'number' ? gm0.max : null)), unit: (unit0 || gm0.unit || ''), list: multi0 ? [String(sv.value)] : undefined, empty: empty0 ? true : undefined };
             });
         } catch (e0) { }
     }
@@ -944,6 +944,11 @@ function applyParsedTo(bucket, parsed) {
                 const oldList = Array.isArray(old.list) ? old.list.slice() : (String(old.value || "").trim() ? [String(old.value)] : []);
                 const merged = oldList.concat(inc.list.map(String)).filter((v, i, a) => a.indexOf(v) === i).slice(-20);
                 rec.extra[id] = { value: merged[0] || "", comment: inc.comment || old.comment || "", group: inc.group || old.group || "其它", label: inc.label || old.label || "", min: (typeof inc.min === "number" ? inc.min : (typeof old.min === "number" ? old.min : null)), max: (typeof inc.max === "number" ? inc.max : (typeof old.max === "number" ? old.max : null)), unit: inc.unit || old.unit || "", list: merged, at: Date.now() };
+                return;
+            }
+            if (inc.empty) {
+                if (old && String(old.value || '').trim()) return;   /* 旧值优先 */
+                rec.extra[id] = { value: '', comment: '', group: inc.group || (nsfwGuideMeta(id) || {}).group || '其它', label: inc.label || old.label || '', min: (typeof inc.min === 'number' ? inc.min : null), max: (typeof inc.max === 'number' ? inc.max : null), unit: inc.unit || '', empty: true, at: Date.now() };
                 return;
             }
             if (isUnknownish(inc.value) && old && String(old.value || "").trim() && !isUnknownish(old.value)) return;
@@ -1060,8 +1065,8 @@ export function buildCharBlock(name, profile) {
             if (id === 'gapLog' || String(e0.group || g0.group || '') === '近况') return;
             if (Array.isArray(e0.list) && e0.list.length) return;   /* 多行字段一律不发送 */
             const v = String(e0.value == null ? "" : e0.value).trim();
+            if (!v) return;   /* ★W420：空值交给 W421 补空位 */
             sent0[id] = 1;
-            if (!v) return;   /* ★W420：是什么发什么 */
             addTo(e0.group || g0.group || '其它', id + ' = ' + v);
         });
     } catch (e) { }
@@ -1897,7 +1902,7 @@ export function nsfwRenderCard(name, profile) {
         const exGroups = [];
         const exG = (id) => nsfwGuideMeta(id) || {};
         const exGroupOf = (id) => String((ex[id] && ex[id].group) || exG(id).group || "其它");
-        const exHas = (id) => { const e = ex[id] || {}; return String(e.value || "").trim() || (Array.isArray(e.list) && e.list.length); };
+        const exHas = (id) => { const e = ex[id] || {}; return String(e.value || "").trim() || (Array.isArray(e.list) && e.list.length) || !!e.empty; };
         Object.keys(ex).forEach((id) => {
             if (!nsfwGuideAllows(id)) return;   /* ★W413 */
             if (!exHas(id)) return;
@@ -1912,6 +1917,9 @@ export function nsfwRenderCard(name, profile) {
                     const e0 = ex[id] || {};
                     const gm0 = exG(id);
                     const lab0 = String(e0.label || gm0.label || id);
+                    if (e0.empty && !String(e0.value || '').trim()) {
+                        return '<div class="yw-nsfw-row yw-nsfw-empty" data-id="' + esc(id) + '" data-type="text" data-ord="' + esc(String(typeof gm0.ord === 'number' ? gm0.ord : 9999)) + '"><span class="k">' + esc(lab0) + '</span><span class="v">—</span><span class="yw-nsfw-c"></span></div>';
+                    }
                     if (Array.isArray(e0.list) && e0.list.length) {
                         return e0.list.slice(-10).map((v, i) => '<div class="yw-nsfw-row yw-nsfw-log"><span class="k">' + (i === 0 ? esc(lab0) : '') + '</span><span class="v wrap">' + esc(String(v == null ? '' : v)) + '</span></div>').join('');
                     }
@@ -2488,6 +2496,7 @@ const CSS = [
     '.yw-nsfw.is-collapsed .yw-nsfw-tabs,.yw-nsfw.is-collapsed .yw-nsfw-panels{display:none !important}',   /* ★W412 折叠 */
     '.yw-nsfw-head{cursor:pointer}',
     '.yw-nsfw-fold{margin-left:auto;opacity:.55;font-size:.95em;padding:0 2px;flex:0 0 auto}',
+    '.yw-nsfw-row.yw-nsfw-empty .v{opacity:.4}',
     '@media (max-width:600px){.yw-nsfw-row{flex-wrap:wrap}.yw-nsfw-row .k{flex-basis:76px}.yw-nsfw-row .yw-nsfw-c{flex:1 1 100%;text-align:left;margin-left:84px}}'
 ].join('');
 
