@@ -831,11 +831,21 @@ export function nsfwParse(text) {
             const allF = nsfwAllFields();
             allF.forEach((f) => { known[f.id] = 1; });
             let curGroup = '';   /* ★W416：块里没写【组】就留空，渲染时回落到指南的组 */
+            let lastMulti = '';   /* ★W427：上一个多行字段，续行挂到它下面 */
             body.split(/\r?\n/).forEach((ln) => {
                 const s2 = ln.trim();
                 const gm = /^【([^】]{1,12})】$/.exec(s2);
                 if (gm) { curGroup = gm[1]; return; }
-                if (!s2 || s2.indexOf('=') < 0) return;
+                if (!s2) return;
+                if (s2.indexOf('=') < 0) {
+                    /* ★W427：多行字段的续行（AI 常只给第一行带 ID，后面直接 [时间] …） */
+                    if (lastMulti && /^\[/.test(s2) && c.extra && c.extra[lastMulti]) {
+                        const ent0 = c.extra[lastMulti];
+                        if (!Array.isArray(ent0.list)) ent0.list = String(ent0.value || '').trim() ? [String(ent0.value)] : [];
+                        ent0.list.push(s2);
+                    }
+                    return;
+                }
                 const key0 = s2.slice(0, s2.indexOf('=')).trim().split(/\s+/)[0];
                 if (!/^[A-Za-z_\u4e00-\u9fa5][A-Za-z0-9_\-\u4e00-\u9fa5]*$/.test(key0)) return;
                 if (known[key0]) return;
@@ -856,6 +866,7 @@ export function nsfwParse(text) {
                 /* ★W391：指南里标了 [多行]（或写在【近况】组里）的字段，同一 ID 出现多次 = 多条 */
                 const gm0 = nsfwGuideMeta(key0) || {};
                 const multi0 = !!gm0.multi || curGroup === '近况';
+                lastMulti = multi0 ? key0 : '';   /* ★W427 */
                 const prev0 = c.extra[key0];
                 if (prev0 && multi0) {
                     const arr0 = Array.isArray(prev0.list) ? prev0.list.slice() : (String(prev0.value || '').trim() ? [String(prev0.value)] : []);
@@ -1965,7 +1976,10 @@ export function nsfwRenderCard(name, profile) {
         });
     }
     /* ★W396：近况永远排在最后一个分页（含「视线」之后） */
-    try { tabs.sort((a, b) => ((a.label === '近况' ? 1 : 0) - (b.label === '近况' ? 1 : 0))); } catch (e) { }
+    try {
+        const isGapTab = (t) => t && (t.label === '近况' || String(t.html || '').indexOf('data-id="gapLog"') >= 0);
+        tabs.sort((a, b) => ((isGapTab(a) ? 1 : 0) - (isGapTab(b) ? 1 : 0)));
+    } catch (e) { }   /* ★W427：近况页永远最后（不管组名改成什么） */
     if (!tabs.length) {
         const empty = document.createElement('div');
         empty.className = 'yw-nsfw-empty';

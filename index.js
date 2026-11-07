@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.263'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.264'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -3638,6 +3638,31 @@ function msgHasThinking(msg) {
 // 用 swipe 而不是 /trigger——/trigger 在连续生成时可能 roll 成新一楼（参考插件「自动PVP」的 bug）。
 // v1.37.65：加 cause 参数（可选，只影响日志/横幅措辞）——便于区分「真·零 token 空回」和
 //   「swipe 没生效（8 秒里既没有新生成、也没多出分支槽）」，后者根本不是空回，是对一个不存在的生成做动作。
+/** ★W428：接口失败（报错/被拦截）没有新消息 —— 直接重试（受连续上限约束）。
+ *  和「空回」分开记账：横幅写清楚是接口失败，不冒充空回。 */
+function handleFailureReroll() {
+    try {
+        if (rerollFiredThisGen) return;
+        if (!settings.enabled || settings.rerollPaused) return;
+        if (autoRerollCount >= settings.autoRerollLimit) {
+            if (!rerollBlockedNotified) { rerollBlockedNotified = true; notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll`, 'error'); }
+            return;
+        }
+        const ctxF = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? SillyTavern.getContext() : null;
+        const chatF = (ctxF && Array.isArray(ctxF.chat)) ? ctxF.chat : [];
+        const target = chatF.length - 1;
+        if (target < 0) return;
+        rerollFiredThisGen = true;
+        autoRerollCount++;
+        lastAutoRerollTime = Date.now();
+        console.log(`[余温工具箱] 接口失败 → 自动重试（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${target}`);
+        notifyReroll(`🔄 接口失败，自动重试 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
+        try { rerollGuard.arm(target, curChatKey(), Date.now(), 2500); } catch (e) { }
+        updateRerollStatus();
+        triggerAutoSwipe(target);
+    } catch (e) { }
+}
+
 function handleEmptyReroll(messageId, cause) {
     const why = cause || '空回（零token）';
     if (rerollFiredThisGen) return; // 总闸
@@ -9558,6 +9583,7 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
     // v1.37.56：dry-run 不会发 GENERATION_ENDED（dry-run 在 Generate 里提前 return，从不显示停止按钮，
     //   hideStopButton 的"按钮可见才 emit"条件不成立）→ 收到的 ENDED 一定是真实生成的收尾，必须照常处理。
     //   原实现直接 return，一旦 dry-run 标记残留就会把真实 ENDED 吞掉 → 截断兜底重roll/空回重roll 全部失效。
+    const wasDryRun = !!isDryRun;   /* ★W428：先记下，后面判断"接口失败"要用 */
     if (isDryRun) { isDryRun = false; dryRunSince = 0; }
     console.log(`[余温工具箱] ENDED 触发: manualStop=${manualStopClicked} token=${streamGotToken} emptyHandled=${emptyRerollHandled} early=${earlyStopTriggered}`);
     isGenerating = false; // 生成结束无论何种路径都退出"生成中"，防残留导致历史加载误判空回
@@ -9586,7 +9612,7 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
     }
     if (emptyRerollHandled) { emptyRerollHandled = false; return; }
     console.log('[余温工具箱] ENDED 守卫: enabled/rerollOnEmpty 挡住');
-    if (!settings.enabled || !settings.rerollOnEmpty) return;
+    if (!settings.enabled) return;   /* ★W428：接口失败重试不依赖「空回」这一勾，下面真正空回再判 */
     console.log('[余温工具箱] ENDED 守卫: 手动停止，跳过');
     if (manualStopClicked) return; // 用户手动停止：不当作空回
     console.log('[余温工具箱] ENDED 守卫: 已收到token，非空回');
@@ -9667,10 +9693,18 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
     const lastUnchanged = (generationStartLastMes !== null && lastMesNow !== null && lastMesNow === generationStartLastMes);
     generationStartLastMes = null;
     if (lastUnchanged) {
-        console.log('[余温工具箱] 空回但最后一条消息未变化（提示词查看器/无新消息）→ 跳过自动重roll');
+        /* ★W428：API 报错/被拦截时酒馆不产生新消息 —— 以前和 dry-run 一起被跳过，看起来就是「重roll一次就停」。
+           dry-run 和手动停止不重试；其余按「接口失败」处理，直接重试（受连续上限约束）。 */
+        if (!wasDryRun && !manualStopClicked && settings.enabled && !settings.rerollPaused && autoRerollCount < settings.autoRerollLimit) {
+            console.log('[余温工具箱] 接口失败/无新消息（非 dry-run、非手动停止）→ 自动重试');
+            try { handleFailureReroll(); } catch (eF) { }
+        } else {
+            console.log('[余温工具箱] 空回但最后一条消息未变化（dry-run/手动停止/已停）→ 跳过');
+        }
         return;
     }
 
+    if (!settings.rerollOnEmpty) return;   /* ★W428：真正的空回才看这一勾 */
     console.log(`[余温工具箱] 空回 → 自动重roll target=${rerollTargetId}`);
     if (rerollTargetId >= 0) handleEmptyReroll(rerollTargetId);
 });
