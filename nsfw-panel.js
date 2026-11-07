@@ -896,7 +896,7 @@ export function nsfwParse(text) {
                     if (!prev0.comment) prev0.comment = sv.comment;
                     return;
                 }
-                c.extra[key0] = { value: sv.value, comment: sv.comment, group: curGroup, label: (gm0.label || label0 || key0), min: (typeof min0 === 'number' ? min0 : (typeof gm0.min === 'number' ? gm0.min : null)), max: (typeof max0 === 'number' ? max0 : (typeof gm0.max === 'number' ? gm0.max : null)), unit: (gm0.unit || unit0 || ''), list: multi0 ? [String(sv.value)] : undefined, empty: empty0 ? true : undefined };
+                c.extra[key0] = { value: sv.value, comment: sv.comment, group: curGroup, label: (gm0.label || label0 || key0), min: (typeof min0 === 'number' ? min0 : (typeof gm0.min === 'number' ? gm0.min : null)), max: (typeof max0 === 'number' ? max0 : (typeof gm0.max === 'number' ? gm0.max : null)), unit: (gm0.unit || unit0 || ''), list: multi0 ? (String(sv.value || '').trim() ? [String(sv.value)] : []) : undefined, empty: empty0 ? true : undefined };   /* ★W441：只有续行时 list 从空开始 */
             });
         } catch (e0) { }
     }
@@ -980,7 +980,7 @@ function applyParsedTo(bucket, parsed) {
             if (Array.isArray(inc.list)) {
                 /* ★W391：近况是累积的 —— 旧条目 + 本轮新条目，去重，只留最近 20 条 */
                 const oldList = Array.isArray(old.list) ? old.list.slice() : (String(old.value || "").trim() ? [String(old.value)] : []);
-                const merged = oldList.concat(inc.list.map(String)).filter((v, i, a) => a.indexOf(v) === i).slice(-20);
+                const merged = oldList.concat(inc.list.map(String)).filter((v) => String(v == null ? '' : v).trim()).filter((v, i, a) => a.indexOf(v) === i).slice(-20);   /* ★W441：空行不入列 */
                 rec.extra[id] = { value: merged[0] || "", comment: inc.comment || old.comment || "", group: inc.group || old.group || "其它", label: inc.label || old.label || "", min: (typeof inc.min === "number" ? inc.min : (typeof old.min === "number" ? old.min : null)), max: (typeof inc.max === "number" ? inc.max : (typeof old.max === "number" ? old.max : null)), unit: inc.unit || old.unit || "", list: merged, at: Date.now() };
                 return;
             }
@@ -2014,11 +2014,14 @@ export function nsfwRenderCard(name, profile) {
                     const e0 = ex[id] || {};
                     const gm0 = exG(id);
                     const lab0 = String(e0.label || gm0.label || id);
+                    /* ★W441：多行字段先看 list —— gapLog 的「值」本来就是空的（内容全在续行），
+                       以前先判 empty 就直接画一行「—」，正文之外一条都收不进来。 */
+                    const list0 = Array.isArray(e0.list) ? e0.list.filter((v) => String(v == null ? '' : v).trim()) : [];
+                    if (list0.length) {
+                        return list0.slice(-10).map((v, i) => '<div class="yw-nsfw-row yw-nsfw-log"><span class="k">' + (i === 0 ? esc(lab0) : '') + '</span><span class="v wrap">' + esc(String(v == null ? '' : v)) + '</span></div>').join('');
+                    }
                     if (e0.empty && !String(e0.value || '').trim()) {
                         return '<div class="yw-nsfw-row yw-nsfw-ph" data-id="' + esc(id) + '" data-type="text" data-ord="' + esc(String(typeof gm0.ord === 'number' ? gm0.ord : 9999)) + '"><span class="k">' + esc(lab0) + '</span><span class="v">—</span><span class="yw-nsfw-c"></span></div>';
-                    }
-                    if (Array.isArray(e0.list) && e0.list.length) {
-                        return e0.list.slice(-10).map((v, i) => '<div class="yw-nsfw-row yw-nsfw-log"><span class="k">' + (i === 0 ? esc(lab0) : '') + '</span><span class="v wrap">' + esc(String(v == null ? '' : v)) + '</span></div>').join('');
                     }
                     const raw0 = String(e0.value == null ? "" : e0.value).trim();
                     const unit0 = String(e0.unit || gm0.unit || "");
