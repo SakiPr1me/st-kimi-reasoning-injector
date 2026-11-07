@@ -519,6 +519,11 @@ function activeFields(profile) {
     const sex = (profile && profile.sex) || 'female';
     return nsfwAllFields().filter((f) => (!f.sex || f.sex === sex) && nsfwGuideAllows(f.id));   /* ★W413：指南删掉的字段不再上卡/发送/入库 */
 }
+/** ★W418：N/A 是「没有/不适用」——卡片上要显示 N/A，但不参与数值、不发送 */
+function isNaish(v) {
+    const t = String(v == null ? '' : v).trim();
+    return /^(n\/a|n\.a\.?|na|—|-)$/i.test(t);
+}
 /** ★W391：模型偷懒写「未知」时，不拿它覆盖已有的值（相当于没更新） */
 function isUnknownish(v) {
     const t = String(v == null ? '' : v).trim();
@@ -919,7 +924,8 @@ function applyParsedTo(bucket, parsed) {
                 if (n === null) return;
                 value = n;
             }
-            /* ★W391：模型写「未知」而旧值有内容 ⇒ 当作没更新（沿用旧值） */
+            /* ★W418：N/A 直接存成 unknown（卡片显示 N/A、发送跳过）；「未知」仍按老规则不覆盖 */
+            if (isNaish(value)) { rec.stats[id] = { value: 'N/A', comment: item.comment || '', unknown: true, at: Date.now() }; return; }
             if (f.type !== 'num' && isUnknownish(value) && rec.stats[id] && String((rec.stats[id] || {}).value || '').trim() && !isUnknownish((rec.stats[id] || {}).value)) return;
             if (f.type === 'list') {
                 value = String(value || '').split(/[,，、]/).map((x) => x.trim()).filter(Boolean);
@@ -1750,6 +1756,11 @@ function rowHtml(f, cell) {
     const optAttr = Array.isArray(f.options) ? ' data-options="' + esc(f.options.join('|')) + '"' : '';
     const idAttr = ' data-id="' + esc(f.id) + '" data-type="' + esc(f.type) + '"' + optAttr + (f.static ? ' data-static="1"' : '') + ' data-ord="' + esc(String(typeof f.ord === 'number' ? f.ord : 9999)) + '"';   /* ★W416：按指南行序排 */
     const c = '<span class="yw-nsfw-c">' + (cell.comment ? esc(cell.comment) : '') + '</span>';
+    if (cell.unknown || isNaish(val)) {
+        /* ★W418：N/A 行：只显示值，不画条、不补单位 */
+        return '<div class="yw-nsfw-row yw-nsfw-na"' + idAttr + '><span class="k">' + esc(f.label) + '</span>' +
+            '<span class="v">' + esc(val || 'N/A') + '</span>' + c + '</div>';
+    }
     /* ★W345：四列固定 —— 字段 | 条 | 值 | 评述；条在左、值在右，值尽量不换行（放不下省略号，悬停看全文） */
     const valTxt = esc(withUnit(f, val));
     const wrapCls = (String(withUnit(f, val)).length > 22) ? ' wrap' : '';   /* ★W348：长值才折行，短值不换行 */
@@ -2164,6 +2175,7 @@ function bindCardEdit(wrap, name, profile) {
         /* ★W411：同样重挂全部（编辑只改了当前楼，但酒馆可能整页重刷） */
         setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, 30);
         setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, 300);
+        setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, 900);   /* ★W418：等酒馆保存后的整页重刷落定 */
     });
 }
 /** ★W362：编辑卡片后写回楼层块（值/评述），并同步 swipes + 存盘 + 重渲染 */
@@ -2454,7 +2466,9 @@ export function nsfwProfilesFromText(text) {
                 if (!nsfwGuideAllows(id)) return;   /* ★W413：指南里没有的字段不画 */
                 const cell = c.machine[id] || {};
                 const val0 = String(cell.value == null ? '' : cell.value).trim();
-                if (!val0 || isUnknownish(val0)) return;
+                if (!val0) return;
+                if (isNaish(val0)) { stats[id] = { value: 'N/A', comment: cell.comment || '', unknown: true }; return; }   /* ★W418：N/A 显示但不参与数值 */
+                if (isUnknownish(val0)) return;
                 const f = viewField(fieldById(id));   /* ★W413：上限也按指南 */
                 if (f && f.type === 'num') {
                     const n = clampNum(f, val0);
