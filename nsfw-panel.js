@@ -1839,7 +1839,7 @@ function guideEmptyRowsHtml(profile, grp) {
             if (has[id]) return;
             if (fieldById(id) && !allowed[id]) return;   /* 性别筛掉的字段不占位 */
             const lab = g.label || id;
-            out.push('<div class="yw-nsfw-row yw-nsfw-empty" data-id="' + esc(id) + '" data-type="text" data-ph="1" data-ord="' + esc(String(typeof g.ord === 'number' ? g.ord : 9999)) + '"><span class="k">' + esc(lab) + '</span><span class="v">—</span><span class="yw-nsfw-c"></span></div>');
+            out.push('<div class="yw-nsfw-row yw-nsfw-ph" data-id="' + esc(id) + '" data-type="text" data-ph="1" data-ord="' + esc(String(typeof g.ord === 'number' ? g.ord : 9999)) + '"><span class="k">' + esc(lab) + '</span><span class="v">—</span><span class="yw-nsfw-c"></span></div>');
         });
         return out.join('');
     } catch (e) { return ''; }
@@ -1931,7 +1931,7 @@ export function nsfwRenderCard(name, profile) {
     head.innerHTML = '<button type="button" class="yw-nsfw-copy-btn" title="复制全部内容">⧉</button>'
         + '<button type="button" class="yw-nsfw-edit-btn" title="编辑这张卡">✎</button>'
         + '<span class="nm">' + esc(name) + '</span>'
-        + '<span class="tag">' + sexTxt + '</span>'   /* ★W369：去掉「受」标签——快照本来就只写被进入方 */
+
         + (g('snapTime') ? '<span class="kv yw-nsfw-snaptime">⏱ ' + esc(g('snapTime')) + '</span>' : '')
         + ((nsfwGuideAllows('pregnancy') || nsfwGuideAllows('menstrual')) ? '<span class="kv yw-nsfw-preg">怀孕 ' + preg.risk + '%</span>' : '');   /* ★W413：字段都被删了就不显示派生值 */
     wrap.appendChild(head);
@@ -1992,7 +1992,7 @@ export function nsfwRenderCard(name, profile) {
                     const gm0 = exG(id);
                     const lab0 = String(e0.label || gm0.label || id);
                     if (e0.empty && !String(e0.value || '').trim()) {
-                        return '<div class="yw-nsfw-row yw-nsfw-empty" data-id="' + esc(id) + '" data-type="text" data-ord="' + esc(String(typeof gm0.ord === 'number' ? gm0.ord : 9999)) + '"><span class="k">' + esc(lab0) + '</span><span class="v">—</span><span class="yw-nsfw-c"></span></div>';
+                        return '<div class="yw-nsfw-row yw-nsfw-ph" data-id="' + esc(id) + '" data-type="text" data-ord="' + esc(String(typeof gm0.ord === 'number' ? gm0.ord : 9999)) + '"><span class="k">' + esc(lab0) + '</span><span class="v">—</span><span class="yw-nsfw-c"></span></div>';
                     }
                     if (Array.isArray(e0.list) && e0.list.length) {
                         return e0.list.slice(-10).map((v, i) => '<div class="yw-nsfw-row yw-nsfw-log"><span class="k">' + (i === 0 ? esc(lab0) : '') + '</span><span class="v wrap">' + esc(String(v == null ? '' : v)) + '</span></div>').join('');
@@ -2591,7 +2591,7 @@ const CSS = [
     '.yw-nsfw.is-collapsed .yw-nsfw-tabs,.yw-nsfw.is-collapsed .yw-nsfw-panels{display:none !important}',   /* ★W412 折叠 */
     '.yw-nsfw-head{cursor:pointer}',
     '.yw-nsfw-fold{margin-left:auto;opacity:.55;font-size:.95em;padding:0 2px;flex:0 0 auto}',
-    '.yw-nsfw-row.yw-nsfw-empty .v{opacity:.4}',
+    '.yw-nsfw-row.yw-nsfw-ph .v{opacity:.4}',
     '@media (max-width:600px){.yw-nsfw-row{flex-wrap:wrap}.yw-nsfw-row .k{flex-basis:76px}.yw-nsfw-row .yw-nsfw-c{flex:1 1 100%;text-align:left;margin-left:84px}}'
 ].join('');
 
