@@ -1038,14 +1038,16 @@ export function buildCharBlock(name, profile) {
         if (!gmap[gg]) { gmap[gg] = { g: gg, items: [] }; groups.push(gmap[gg]); }
         gmap[gg].items.push(line);
     };
+    const sent0 = {};   /* ★W421：这一轮已经写过的 ID */
     fields.forEach((f0) => {
         const f = viewField(f0);   /* ★W411：中文/范围/单位/分组都以指南为准 */
         if (f.id === 'snapTime') return;   /* 已在块头 */
         const cell = (profile.stats || {})[f.id]
             || ((profile.static || {})[f.id] ? { value: profile.static[f.id], comment: '' } : null);
         const val = cell ? fmtVal(f, cell) : '';
-        if (!val) return;   /* ★W420：是什么发什么（未知/N/A 照发） */
-        addTo(f.group, f.id + ' = ' + val);   /* 评述不发送（省 token） */
+        sent0[f.id] = 1;
+        /* ★W421：没有值的字段也发一个空位 `id = `，让 AI 下一轮自己补 */
+        addTo(f.group, val ? (f.id + ' = ' + val) : (f.id + ' = '));
     });
     /* 自定义字段跟普通字段一起发 */
     try {
@@ -1058,10 +1060,23 @@ export function buildCharBlock(name, profile) {
             if (id === 'gapLog' || String(e0.group || g0.group || '') === '近况') return;
             if (Array.isArray(e0.list) && e0.list.length) return;   /* 多行字段一律不发送 */
             const v = String(e0.value == null ? "" : e0.value).trim();
+            sent0[id] = 1;
             if (!v) return;   /* ★W420：是什么发什么 */
             addTo(e0.group || g0.group || '其它', id + ' = ' + v);
         });
     } catch (e) { }
+    /* ★W421：指南里有、但这一轮没有任何值的字段 —— 也给 AI 一个空位（它下一轮会补） */
+    try {
+        const gm0 = nsfwGuide();
+        Object.keys(gm0).forEach((id) => {
+            if (id === 'name' || id === 'snapTime' || id === 'gapLog') return;
+            if (sent0[id]) return;
+            if (!nsfwGuideAllows(id)) return;
+            const g = gm0[id] || {};
+            if (String(g.group || '') === '近况' || g.multi) return;
+            addTo(g.group || '其它', id + ' = ');
+        });
+    } catch (e0) { }
     const ordOf = (g) => { const i = GROUP_ORDER.indexOf(g); return i < 0 ? 99 : i; };
     groups.slice().sort((a, b) => ordOf(a.g) - ordOf(b.g)).forEach((grp) => {
         if (!grp.items.length) return;
