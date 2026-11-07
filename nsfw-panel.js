@@ -1490,6 +1490,36 @@ function nsfwBindSenderDrag(host, grip) {
 const _foldMap = new Map();
 export function nsfwResetFold() { try { _foldMap.clear(); } catch (e) { } }
 function _foldKey(chatId, mesid, name) { return String(chatId || '') + '|' + String(mesid == null ? '' : mesid) + '|' + String(name || ''); }
+/* ★W423：记住每张卡停在哪个分页（编辑保存后卡会重建，回到原分页） */
+const _tabMap = new Map();
+export function nsfwResetTabs() { try { _tabMap.clear(); } catch (e) { } }
+export function nsfwApplyTab(card, chatId, mesid, name) {
+    try {
+        if (!card) return;
+        const bar = card.querySelector('.yw-nsfw-tabs');
+        if (!bar) return;
+        const key = _foldKey(chatId, mesid, name);
+        if (bar.dataset.tabBound !== '1') {
+            bar.dataset.tabBound = '1';
+            bar.addEventListener('click', (e) => {
+                try {
+                    const b = (e.target && e.target.closest) ? e.target.closest('.yw-nsfw-tab') : null;
+                    if (!b) return;
+                    const id = b.getAttribute('data-tab');
+                    if (!id) return;
+                    _tabMap.set(key, id);
+                    if (_tabMap.size > 300) { const k0 = _tabMap.keys().next().value; _tabMap.delete(k0); }
+                } catch (e2) { }
+            }, true);
+        }
+        const want = _tabMap.get(key);
+        if (!want) return;
+        const btns = Array.prototype.slice.call(bar.querySelectorAll('.yw-nsfw-tab'));
+        const hit = btns.filter((x) => x.getAttribute('data-tab') === want)[0];
+        if (hit && !hit.classList.contains('on')) hit.click();
+    } catch (e) { }
+}
+
 export function nsfwApplyFold(card, chatId, mesid, name) {
     try {
         if (!card) return;
@@ -1550,6 +1580,7 @@ export function nsfwShowSnapshot(name) {
         const pvCard = nsfwRenderCard(name, rec);
         body.appendChild(pvCard);
         try { nsfwApplyFold(pvCard, 'pv', 'pv', name); } catch (eF) { }
+        try { nsfwApplyTab(pvCard, 'pv', 'pv', name); } catch (eT) { }
         box.appendChild(body);
         box.style.display = 'block';
         /* ★W362：预览浮层可拖动（按住标题栏），位置记住 */
@@ -1934,6 +1965,7 @@ export function nsfwRenderCard(name, profile) {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'yw-nsfw-tab' + (i === 0 ? ' on' : '');
+        b.setAttribute('data-tab', t.id);   /* ★W423：记住当前分页 */
         b.textContent = t.label;
         b.addEventListener('click', () => {
             /* ★W370：先量一遍目标页，必要时把容器抬高 —— 首次进入最高的「状态」页时整体不再变大 */
@@ -2652,6 +2684,7 @@ export function nsfwMountToMessage(messageId) {
             const card = nsfwRenderCard(n, pick(n));
             card.dataset.mesid = String(messageId);
             try { nsfwApplyFold(card, chatId, messageId, n); } catch (eF) { }
+            try { nsfwApplyTab(card, chatId, messageId, n); } catch (eT) { }
             const anchor = mesEl.querySelector('.mes_text') || mesEl;
             if (anchor.parentNode) anchor.parentNode.insertBefore(card, anchor.nextSibling);
             else mesEl.appendChild(card);
