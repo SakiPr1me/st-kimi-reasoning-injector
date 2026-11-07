@@ -825,7 +825,7 @@ export function nsfwParse(text) {
             const known = {};
             const allF = nsfwAllFields();
             allF.forEach((f) => { known[f.id] = 1; });
-            let curGroup = '其它';
+            let curGroup = '';   /* ★W416：块里没写【组】就留空，渲染时回落到指南的组 */
             body.split(/\r?\n/).forEach((ln) => {
                 const s2 = ln.trim();
                 const gm = /^【([^】]{1,12})】$/.exec(s2);
@@ -943,7 +943,7 @@ function applyParsedTo(bucket, parsed) {
                 return;
             }
             if (isUnknownish(inc.value) && old && String(old.value || "").trim() && !isUnknownish(old.value)) return;
-            rec.extra[id] = { value: inc.value, comment: inc.comment || "", group: inc.group || "其它", label: inc.label || "", min: (typeof inc.min === "number" ? inc.min : null), max: (typeof inc.max === "number" ? inc.max : null), unit: inc.unit || "", at: Date.now() };
+            rec.extra[id] = { value: inc.value, comment: inc.comment || "", group: inc.group || (nsfwGuideMeta(id) || {}).group || "其它", label: inc.label || "", min: (typeof inc.min === "number" ? inc.min : null), max: (typeof inc.max === "number" ? inc.max : null), unit: inc.unit || "", at: Date.now() };
         });
         rec.updatedAt = Date.now();
         bucket.order = bucket.order.filter((n) => n !== name);
@@ -1719,7 +1719,7 @@ function tabRowsHtml(profile, grp, byGroup) {
         if ((fv.tab || fv.group) !== grp) return;
         const cell = (profile.stats || {})[f.id];
         if (!cell || !fmtVal(fv, cell)) return;
-        rows.push({ ord: (typeof f.ord === 'number' ? f.ord : 9999), html: rowHtml(fv, cell) });
+        rows.push({ ord: (typeof fv.ord === 'number' ? fv.ord : 9999), html: rowHtml(fv, cell) });   /* ★W415：行序也跟指南 */
     });
     rows.sort((a, b) => a.ord - b.ord);
     if (!rows.length) return '';
@@ -1748,7 +1748,7 @@ function rowHtml(f, cell) {
     const val = fmtVal(f, cell);
     if (!val && !(f && f.static)) return '';
     const optAttr = Array.isArray(f.options) ? ' data-options="' + esc(f.options.join('|')) + '"' : '';
-    const idAttr = ' data-id="' + esc(f.id) + '" data-type="' + esc(f.type) + '"' + optAttr + (f.static ? ' data-static="1"' : '');
+    const idAttr = ' data-id="' + esc(f.id) + '" data-type="' + esc(f.type) + '"' + optAttr + (f.static ? ' data-static="1"' : '') + ' data-ord="' + esc(String(typeof f.ord === 'number' ? f.ord : 9999)) + '"';   /* ★W416：按指南行序排 */
     const c = '<span class="yw-nsfw-c">' + (cell.comment ? esc(cell.comment) : '') + '</span>';
     /* ★W345：四列固定 —— 字段 | 条 | 值 | 评述；条在左、值在右，值尽量不换行（放不下省略号，悬停看全文） */
     const valTxt = esc(withUnit(f, val));
@@ -1881,7 +1881,7 @@ export function nsfwRenderCard(name, profile) {
                         const pct0 = Math.max(0, Math.min(100, ((num0 - minE) / span0) * 100));
                         vHtml = '<span class="v num" title="' + valTxt0 + '"><span class="n">' + valTxt0 + '</span><span class="bar"><i style="width:' + pct0.toFixed(0) + '%"></i></span></span>';
                     }
-                    return '<div class="yw-nsfw-row" data-id="' + esc(id) + '" data-type="' + (isNum ? 'num' : 'text') + '"><span class="k">' + esc(lab0) + '</span>' + vHtml + '<span class="yw-nsfw-c">' + esc(e0.comment || "") + '</span></div>';
+                    return '<div class="yw-nsfw-row" data-id="' + esc(id) + '" data-type="' + (isNum ? 'num' : 'text') + '" data-ord="' + esc(String(typeof gm0.ord === 'number' ? gm0.ord : 9999)) + '"><span class="k">' + esc(lab0) + '</span>' + vHtml + '<span class="yw-nsfw-c">' + esc(e0.comment || "") + '</span></div>';
                 }).join("");
             if (!h) return;
             if (hitTab) hitTab.html += h;
@@ -1939,6 +1939,17 @@ export function nsfwRenderCard(name, profile) {
         p.innerHTML = t.html;
         panels.appendChild(p);
     });
+
+    /* ★W416：把每个分页里的行按 data-ord 重排（内置行 + 指南新增的自定义行混在一起也按指南顺序） */
+    try {
+        panels.querySelectorAll('.yw-nsfw-panel').forEach((p) => {
+            const rows0 = Array.prototype.slice.call(p.querySelectorAll('.yw-nsfw-row[data-ord]'));
+            if (rows0.length < 2) return;
+            const host0 = p.querySelector('.yw-nsfw-rows') || p;
+            rows0.sort((a, b) => (Number(a.getAttribute('data-ord')) || 9999) - (Number(b.getAttribute('data-ord')) || 9999));
+            rows0.forEach((r) => host0.appendChild(r));
+        });
+    } catch (eOrd) { }
 
     wrap.appendChild(tabBar);
     wrap.appendChild(panels);
@@ -2040,11 +2051,51 @@ function bindCardEdit(wrap, name, profile) {
             btn.textContent = '✓';
             btn.title = '保存';
             wrap.classList.add('yw-nsfw-editing');
+            /* ★W417：先把「指南里有、这一楼没有值」的字段补成空行（N/A 被丢掉后也能在这里补录） */
+            try {
+                if (guideUsable()) {
+                    wrap.querySelectorAll('.yw-nsfw-panel').forEach((panel) => {
+                        const grp = panel.getAttribute('data-panel');
+                        const host0 = panel.querySelector('.yw-nsfw-rows') || panel;
+                        activeFields(profile).forEach((f) => {
+                            if (!f || f.id === 'snapTime') return;
+                            const fv = viewField(f);
+                            if ((fv.tab || fv.group) !== grp) return;
+                            if (panel.querySelector('.yw-nsfw-row[data-id="' + f.id + '"]')) return;
+                            const cur = (profile.stats || {})[f.id];
+                            if (cur && fmtVal(fv, cur)) return;
+                            const row = document.createElement('div');
+                            row.className = 'yw-nsfw-row';
+                            row.setAttribute('data-id', f.id);
+                            row.setAttribute('data-type', fv.type || 'text');
+                            row.setAttribute('data-new', '1');
+                            if (Array.isArray(fv.options)) row.setAttribute('data-options', fv.options.join('|'));
+                            const k = document.createElement('span'); k.className = 'k'; k.textContent = fv.label;
+                            const v = document.createElement('span'); v.className = 'v';
+                            if (Array.isArray(fv.options)) {
+                                const sel = document.createElement('select'); sel.className = 'yw-nsfw-in yw-nsfw-in-v';
+                                fv.options.forEach((op) => { const o = document.createElement('option'); o.value = op; o.textContent = op; sel.appendChild(o); });
+                                v.appendChild(sel);
+                            } else {
+                                const inp = document.createElement('input'); inp.className = 'yw-nsfw-in yw-nsfw-in-v'; inp.type = 'text'; if (fv.type === 'num') inp.inputMode = 'decimal';
+                                v.appendChild(inp);
+                            }
+                            const c = document.createElement('span'); c.className = 'yw-nsfw-c';
+                            const inp2 = document.createElement('input'); inp2.className = 'yw-nsfw-in yw-nsfw-in-c'; inp2.placeholder = '评述';
+                            c.appendChild(inp2);
+                            row.appendChild(k); row.appendChild(v); row.appendChild(c);
+                            host0.appendChild(row);
+                        });
+                    });
+                }
+            } catch (eNew) { }
+
             wrap.querySelectorAll('.yw-nsfw-row[data-id]').forEach((row) => {
                 const id = row.getAttribute('data-id');
                 const isStatic = row.getAttribute('data-static') === '1';
                 const type = row.getAttribute('data-type') || 'text';
                 const optsAttr = row.getAttribute('data-options') || '';
+                if (row.getAttribute('data-new') === '1') return;   /* 补录行已经是输入框，不再转换 */
                 const cell = isStatic ? { value: (profile.static || {})[id], comment: '' } : ((profile.stats || {})[id] || (profile.extra || {})[id] || {});   /* ★W376：自定义字段从 extra 取原值 */
                 const vEl = row.querySelector('.v') || row.querySelector('.t');
                 if (vEl) {
@@ -2063,7 +2114,8 @@ function bindCardEdit(wrap, name, profile) {
                         const inp = document.createElement('input');
                         inp.className = 'yw-nsfw-in yw-nsfw-in-v';
                         inp.value = cell.value == null ? '' : String(cell.value);
-                        if (type === 'num') inp.type = 'number';
+                        /* ★W415：不再强制 number —— 允许输入 N/A / 18cm / 无（保存后能解析的按数字收，不能的按原文留在楼层） */
+                        if (type === 'num') { inp.type = 'text'; inp.inputMode = 'decimal'; }
                         vEl.appendChild(inp);
                     }
                 }
@@ -2086,6 +2138,7 @@ function bindCardEdit(wrap, name, profile) {
             const v = row.querySelector('.yw-nsfw-in-v');
             const c = row.querySelector('.yw-nsfw-in-c');
             if (!v) return;
+            if (row.getAttribute('data-new') === '1' && !String(v.value || '').trim() && !(c && String(c.value || '').trim())) return;   /* ★W417：补录行没填就不写 */
             if (isStatic) nsfwSetStatic(chatId, name, id, v.value);
             else nsfwSetStat(chatId, name, id, v.value, c ? c.value : '');
         });
@@ -2102,6 +2155,7 @@ function bindCardEdit(wrap, name, profile) {
                 const v = row.querySelector(".yw-nsfw-in-v");
                 const c = row.querySelector(".yw-nsfw-in-c");
                 if (!v) return;
+                if (row.getAttribute('data-new') === '1' && !String(v.value || '').trim() && !(c && String(c.value || '').trim())) return;   /* ★W417 */
                 changes.push({ id: id, value: v.value, comment: c ? c.value : "" });
             });
             if (mesid0 != null && changes.length) nsfwEditFloor(chatId, Number(mesid0), name, changes);
@@ -2163,7 +2217,7 @@ export function nsfwEditFloor(chatId, mesid, name, changes) {
                 const eq = m0.indexOf('=');
                 return m0.slice(0, eq + 1) + ' ' + val0;
             });
-            else body = body.replace(/\s*$/, '') + String.fromCharCode(10) + line;
+            else body = body.replace(/\s*$/, '') + String.fromCharCode(10) + line + String.fromCharCode(10);   /* ★W417：补录行后面留换行，收尾标签另起一行 */
         });
         const next = src.slice(0, openEnd) + body + src.slice(closeIdx);
         if (next === src) return false;
