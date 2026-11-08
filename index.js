@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.287'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.288'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -1801,7 +1801,9 @@ function applyClineProvider(bodyObj) {
 // ===== 请求注入（单一入口，由 CHAT_COMPLETION_SETTINGS_READY 事件调用）=====
 // ST 在 emit 该事件后才会 fetch(JSON.stringify(generate_data))——监听器同步改 generate_data 即进请求。
 // 不依赖 window.fetch 链（其它插件覆盖 fetch 时注入仍生效）；fetch 拦截器不再做注入（防双写）。
-/** ★W167：把「最后一条 user」的消息内容包成 前置 + ————/本轮真实输入/———— + 后置。
+/** ★W167：塞小说 —— 把「真实用户输入」包成 前置 + ————/本轮真实输入/———— + 后置。
+ *  ★W459（作者报：世界书 D0 会把世界书内容包进去）：优先找用户消息里**最新的 `<user_input>…</user_input>`**，
+ *  只包它里面的真实输入；世界书在它后面追加的 user 消息一个字不动。找不到 `<user_input>` 才退回旧行为（包最后一条 user）。
  *  只改请求副本（bodyObj.messages），聊天记录/气泡/滑动全都不动。 */
 function wrapLastUserMessage(msgs) {
     try {
@@ -1809,17 +1811,37 @@ function wrapLastUserMessage(msgs) {
         const pre = String(settings.wrap4aPrefix || '').trim();
         const suf = String(settings.wrap4aSuffix || '').trim();
         if (!pre && !suf) return false;
+        const NLC = String.fromCharCode(10);
+        const wrapInner = (inner) => (pre ? pre + NLC + NLC : '') + '————' + NLC + '本轮真实输入：' + NLC + inner + NLC + '————' + (suf ? NLC + NLC + suf : '');
+        const already = (t) => (pre && String(t).indexOf(pre) === 0) || (suf && String(t).slice(-suf.length) === suf);
+
+        /* ① 从最后一条 user 往前找最新一个 <user_input>…</user_input>（世界书 D0 的 user 消息会被跳过） */
+        for (let i = msgs.length - 1; i >= 0; i--) {
+            const m = msgs[i];
+            if (!m || m.role !== 'user' || typeof m.content !== 'string') continue;
+            const body = m.content;
+            const re = /<user_input\b[^>]*>([\s\S]*?)<\/user_input>/gi;
+            let last = null, mm;
+            while ((mm = re.exec(body))) last = mm;
+            if (!last) continue;
+            const inner = last[1];
+            if (!String(inner).trim()) continue;
+            if (already(inner)) return false;                 // 已经包过（幂等）
+            const openTag = last[0].slice(0, last[0].indexOf('>') + 1);
+            m.content = body.slice(0, last.index) + openTag + wrapInner(inner) + '</user_input>' + body.slice(last.index + last[0].length);
+            try { console.log('[余温工具箱] 4A 包裹已生效（<user_input> 内）：前缀 ' + pre.length + ' 字 · 正文 ' + inner.length + ' 字 · 后缀 ' + suf.length + ' 字'); } catch (e) { }
+            return true;
+        }
+
+        /* ② 没有 <user_input> 标记 → 退回旧行为：包最后一条非空 user */
         for (let i = msgs.length - 1; i >= 0; i--) {
             const m = msgs[i];
             if (!m || m.role !== 'user') continue;
             if (typeof m.content !== 'string' || !m.content.trim()) return false;
             const body = m.content;
-            if (pre && body.indexOf(pre) === 0) return false;                 // 已经包过
-            if (suf && body.lastIndexOf(suf) === body.length - suf.length) return false;
-            const NLC = String.fromCharCode(10);
-            const mid = '————' + NLC + '本轮真实输入：' + NLC + body + NLC + '————';
-            m.content = (pre ? pre + NLC + NLC : '') + mid + (suf ? NLC + NLC + suf : '');
-            try { console.log('[余温工具箱] 4A 破限包裹已生效：前缀 ' + pre.length + ' 字 · 正文 ' + body.length + ' 字 · 后缀 ' + suf.length + ' 字'); } catch (e) { }
+            if (already(body)) return false;
+            m.content = wrapInner(body);
+            try { console.log('[余温工具箱] 4A 包裹已生效（无 <user_input> 标记，包最后一条 user）：前缀 ' + pre.length + ' 字 · 正文 ' + body.length + ' 字 · 后缀 ' + suf.length + ' 字'); } catch (e) { }
             return true;
         }
     } catch (e) { }
