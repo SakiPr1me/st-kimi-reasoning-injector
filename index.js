@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.283'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.284'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -2469,6 +2469,8 @@ let rerollFiredThisGen = false;      // 总闸：本次生成是否已触发过�
    取值：`english`（英文思维链）/ `nothink`（无思考直接出正文 或 思考太短 —— 两者同属一个勾）/ `keyword`。
    ★只在武装点写；不需要在每个收尾点清（它只在 `earlyStopTriggered` 为真时被读，而那些标志位本来就到处在清）。 */
 let earlyRerollReason = '';
+let earlyRerollDetail = '';   // ★W455：最近一次流式截断的具体原因（英文/关键词/正文标记/思考太短…）
+let lastRerollReason = '';    // ★W455：最近一次自动重roll的原因（上限/兜底横幅复用）
 let pendingSwipeConfirm = -1;
 // ===== v1.37.65（AQ 定性）空回路的硬保险 =====
 // 用户实机：什么都出不来（连思考时间都没有）→ 判定空回 → 重roll → **没换来有内容的分支** →
@@ -2495,7 +2497,7 @@ function emptyRerollGiveUp(cause) {
     console.log(`[余温工具箱] ${cause}：连续 ${emptyRerollStreak} 次都没能把分支切过去 → 停手并暂停自动重roll`);
     try { settings.rerollPaused = true; saveSettingsDebounced(); } catch (e) { }
     rerollBlockedNotified = true; // 复用"已提示过、别反复弹"标记
-    notifyReroll(`⚠ 自动重roll 连续 ${emptyRerollStreak} 次都没进入新分支 → 已暂停自动重roll；请手动点「开新分支」或检查 API`, 'error');
+    notifyReroll(`⚠ 自动重roll 连续 ${emptyRerollStreak} 次都没进入新分支 → 已暂停自动重roll；请手动点「开新分支」或检查 API${rerollLastReasonSuffix()}`, 'error');
     try { rerollGuard.clear(); } catch (e) { }
     updateRerollStatus();
 }
@@ -2840,6 +2842,7 @@ function checkStreamingAbort(messageId) {
             try { stopped = stopGeneration(); } catch (e) { console.warn('[余温工具箱] 截断失败:', e); }
             if (stopped) {
                 earlyStopTriggered = true;
+                earlyRerollDetail = stopReason;   /* ★W455：横幅要说清是哪条判据 */
                 earlyRerollMessageId = messageId;
                 try { rerollGuard.arm(messageId, curChatKey(), Date.now(), 2500); } catch (e) { } // v1.37.54
                 earlyRerollHandled = false;
@@ -3247,6 +3250,7 @@ function checkNativeReroll(messageId) {
         }
 
         if (shouldReroll) {
+            lastRerollReason = reason;
             if (rerollFiredThisGen) { console.log('[余温工具箱] 半截楼命中但本次生成已触发过重roll（总闸）→ 跳过'); return; }
             if (settings.rerollPaused) { console.log('[余温工具箱] 半截楼命中但「暂停自动重roll」开关开启 → 跳过'); return; }
             // 防重复：同一消息刚触发过重roll（如 MESSAGE_RECEIVED 连发）→ 冷却 3 秒内跳过；
@@ -3260,14 +3264,15 @@ function checkNativeReroll(messageId) {
                 lastAutoRerollTime = now;
                 console.log(`[余温工具箱] 检测到${reason}，自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${messageId}`);
                 rerollFiredThisGen = true;
-                notifyReroll(`🔄 自动重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}（${reason}）`);
+                lastRerollReason = reason;
+                notifyReroll(`🔄 自动重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}${rerollReasonSuffix(reason)}`);
                 try { rerollGuard.arm(messageId, curChatKey(), Date.now(), 2500); } catch (e) { } // v1.37.54
                 updateRerollStatus();
                 triggerAutoSwipe(messageId);
             } else {
                 // 达到连续上限：暂停（不重置计数，避免反复刷）；等一条通过检测的消息把计数归零
                 console.log(`[余温工具箱] 检测到${reason}，已达连续上限（${settings.autoRerollLimit}），暂停自动重roll`);
-                if (!rerollBlockedNotified) { rerollBlockedNotified = true; notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll`, 'error'); }
+                if (!rerollBlockedNotified) { rerollBlockedNotified = true; notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll${rerollLastReasonSuffix()}`, 'error'); }
                 updateRerollStatus();
             }
         } else {
@@ -3559,7 +3564,7 @@ async function triggerAutoSwipe(messageId) {
                                 rerollRetryTarget = targetId;
                                 emptyRerollStreak++; // 切换连败计数（只在"确认没切成功"时 +1；成功/用户接管/换聊天清零）
                                 console.log('[余温工具箱] swipe 没生效（8 秒内无新生成、也无新分支槽；' + stuckWhat + '）→ 继续把分支切过去（还剩 ' + rerollRetryLeft + ' 次补试；切换连败 ' + emptyRerollStreak + '/' + emptyRerollGiveUpK() + '），消息#' + targetId);
-                                notifyReroll('🔄 上次没进新分支，正在重试…（剩 ' + rerollRetryLeft + ' 次）');
+                                notifyReroll('🔄 上次没进新分支，正在重试…（剩 ' + rerollRetryLeft + ' 次）' + rerollReasonSuffix(lastRerollReason || '上次重roll没进入新分支'));
                                 rerollFiredThisGen = true;   // 补试期间别让自然事件再叠加一次 swipe
                                 setTimeout(() => {
                                     try { if (anyRerollSwitchOn() && autoRerollCount < settings.autoRerollLimit && settings.enabled && !settings.rerollPaused) triggerAutoSwipe(targetId); } catch (e) { }   // ★A1-修法2（同一个理由）
@@ -3570,7 +3575,7 @@ async function triggerAutoSwipe(messageId) {
                             } else {
                                 // ★v1.37.61：补试也打完了、还是没进新分支 → **明确出声**，别让用户对着黄色横幅干等
                                 console.log('[余温工具箱] 自动重roll 试了 ' + REROLL_RETRY_BUDGET + ' 次都没进新分支（ST 在回滚 swipe）→ 请手动点「开新分支」');
-                                notifyReroll('⚠ 自动重roll 没成功（ST 回滚了 swipe）→ 请手动点「开新分支」', 'error');
+                                notifyReroll('⚠ 自动重roll 没成功（ST 回滚了 swipe）→ 请手动点「开新分支」' + rerollReasonSuffix(lastRerollReason), 'error');
                                 try { rerollGuard.clear(); } catch (e) { }
                             }
                         }
@@ -3672,10 +3677,11 @@ function msgHasThinking(msg) {
  *  和「空回」分开记账：横幅写清楚是接口失败，不冒充空回。 */
 function handleFailureReroll() {
     try {
+        lastRerollReason = '接口失败/被拦截，没有生成出新消息';
         if (rerollFiredThisGen) return;
         if (!settings.enabled || settings.rerollPaused) return;
         if (autoRerollCount >= settings.autoRerollLimit) {
-            if (!rerollBlockedNotified) { rerollBlockedNotified = true; notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll`, 'error'); }
+            if (!rerollBlockedNotified) { rerollBlockedNotified = true; notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll${rerollLastReasonSuffix()}`, 'error'); }
             return;
         }
         const ctxF = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? SillyTavern.getContext() : null;
@@ -3686,7 +3692,8 @@ function handleFailureReroll() {
         autoRerollCount++;
         lastAutoRerollTime = Date.now();
         console.log(`[余温工具箱] 接口失败 → 自动重试（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${target}`);
-        notifyReroll(`🔄 接口失败，自动重试 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
+        lastRerollReason = '接口失败/被拦截，没有生成出新消息';
+        notifyReroll(`🔄 接口失败，自动重试 连续 ${autoRerollCount}/${settings.autoRerollLimit}${rerollReasonSuffix(lastRerollReason)}`);
         try { rerollGuard.arm(target, curChatKey(), Date.now(), 2500); } catch (e) { }
         updateRerollStatus();
         triggerAutoSwipe(target);
@@ -3695,7 +3702,8 @@ function handleFailureReroll() {
 
 
 function handleEmptyReroll(messageId, cause) {
-    const why = cause || '空回（零token）';
+    const why = cause || '空回：生成结束仍没有正文';
+    lastRerollReason = why;
     if (rerollFiredThisGen) return; // 总闸
     if (settings.rerollPaused) { console.log('[余温工具箱] 自动重roll已暂停，跳过空回重roll'); return; }
     if (!settings.enabled || !settings.rerollOnEmpty) {
@@ -3707,7 +3715,7 @@ function handleEmptyReroll(messageId, cause) {
     if (!gateAllowsJudgment(messageId, '空回')) return;
     if (autoRerollCount >= settings.autoRerollLimit) {
         console.log(`[余温工具箱] 空回，但已达连续上限（${settings.autoRerollLimit}），暂停自动重roll`);
-        if (!rerollBlockedNotified) { rerollBlockedNotified = true; notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll`, 'error'); }
+        if (!rerollBlockedNotified) { rerollBlockedNotified = true; notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll${rerollLastReasonSuffix()}`, 'error'); }
         return;
     }
     // ★v1.37.66（§AZ 作者纠正）：这里**不再**做"连败就停手"的闸 —— 那等于把目标从"切进新分支"改成"放弃"。
@@ -3717,7 +3725,8 @@ function handleEmptyReroll(messageId, cause) {
     autoRerollCount++;
     lastAutoRerollTime = Date.now();
     console.log(`[余温工具箱] ${why}→ 自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${messageId}`);
-    notifyReroll(`🔄 空回自动重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
+    lastRerollReason = why;
+    notifyReroll(`🔄 空回自动重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}${rerollReasonSuffix(why)}`);
     try { rerollGuard.arm(messageId, curChatKey(), Date.now(), 2500); } catch (e) { } // v1.37.54
     updateRerollStatus();
     triggerAutoSwipe(messageId);
@@ -3943,6 +3952,22 @@ function clearRerollBanner() {
 }
 
 // 主界面横幅提醒：同一条横幅内原地更新（不新建、不堆叠）。
+/** ★W455：所有自动重roll横幅统一带原因（截断、空回、接口失败、兜底…都要说清楚为什么） */
+function rerollReasonText(r, max) {
+    const t = String(r == null ? '' : r).trim();
+    if (!t) return '';
+    const m = Number(max) > 0 ? Number(max) : 70;
+    return t.length > m ? t.slice(0, m) + '…' : t;
+}
+function rerollReasonSuffix(r) {
+    const t = rerollReasonText(r == null || r === '' ? lastRerollReason : r);
+    return t ? '（原因：' + t + '）' : '（原因：未记录）';
+}
+function rerollLastReasonSuffix() {
+    const t = rerollReasonText(lastRerollReason);
+    return '（最后原因：' + (t || '未记录') + '）';
+}
+
 function notifyReroll(msg, level = 'warning') {
     try {
         if (typeof toastr === 'undefined') return;
@@ -8978,7 +9003,7 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id, type) => {
             rerollFiredThisGen = true;
             autoRerollCount++;
             console.log(`[余温工具箱] 流式截断后自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${rerollId}`);
-            notifyReroll(`🔄 流式截断重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
+            notifyReroll(`🔄 流式截断重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}${rerollReasonSuffix(earlyRerollDetail || '流式命中')}`);
             updateRerollStatus();
             triggerAutoSwipe(rerollId);
         } else {
@@ -9501,6 +9526,8 @@ try { rerollGuard.confirmBranch(); } catch (e) { } // v1.37.54 真实生成开�
     lastGenManuallyStopped = false;
     rerollFiredThisGen = false;
     earlyStopTriggered = false;
+    earlyRerollDetail = '';
+    lastRerollReason = '';
     earlyRerollMessageId = -1;
     streamGotToken = false;    // 本次生成是否收到过 token（空回检测）
     isGenerating = true;
@@ -9597,7 +9624,8 @@ setInterval(() => {
         lastAutoRerollTime = Date.now();
         rerollFiredThisGen = true;
         console.log(`[余温工具箱] 卡死看门狗：空楼层 + 没有生成在跑 → 再切一次（连续 ${autoRerollCount}/${settings.autoRerollLimit}）`);
-        notifyReroll(`🔄 卡住兜底：再切一次分支（连续 ${autoRerollCount}/${settings.autoRerollLimit}）`);
+        lastRerollReason = '卡住兜底：8 秒内没进入新分支 / 最后一条仍是空占位';
+        notifyReroll(`🔄 卡住兜底：再切一次分支（连续 ${autoRerollCount}/${settings.autoRerollLimit}）${rerollReasonSuffix(lastRerollReason)}`);
         updateRerollStatus();
         triggerAutoSwipe(rid);
     } catch (e) { }
@@ -9646,7 +9674,7 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
                 rerollFiredThisGen = true;
                 autoRerollCount++;
                 console.log(`[余温工具箱] 流式截断后自动重roll（GENERATION_ENDED 兜底，连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${targetId}`);
-                notifyReroll(`🔄 流式截断重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
+                notifyReroll(`🔄 流式截断重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}${rerollReasonSuffix(earlyRerollDetail || '流式命中')}`);
                 updateRerollStatus();
                 if (targetId >= 0) triggerAutoSwipe(targetId);
             } else {
@@ -9689,7 +9717,7 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
         if (rid >= 0 && emptyNow && settings.enabled && settings.rerollOnEmpty && !autoStopTriggered && !emptyRerollHandled && !rerollFiredThisGen && !settings.rerollPaused) {
             console.log('[余温工具箱] ENDED 收尾是空占位 → 按空回兜底重roll（消息#' + rid + '）');
             emptyRerollHandled = true;
-            handleEmptyReroll(rid, '空回（收尾兜底）');
+            handleEmptyReroll(rid, '空回：收尾兜底（生成结束仍为空）');
             return;
         }
         // 半截楼兜底（v1.34.2）：流式中途断流（网络断/超时/服务器中断——「输出到一半截断」的典型形态）时
@@ -12591,7 +12619,8 @@ eventSource.on(event_types.GENERATION_ENDED, function () {
                 }
                 // ★W167d（作者 2026-10-26）：**取消 3 次上限、也不再等几秒** —— 失败就立刻再试，一直试。
                 __apiFailRetry++;
-                notifyReroll('🔄 这次没生成出内容，立刻重试（第 ' + __apiFailRetry + ' 次）');
+                lastRerollReason = '接口没有返回新内容（疑似接口失败/429/被拦截）';
+                notifyReroll('🔄 这次没生成出内容，立刻重试（第 ' + __apiFailRetry + ' 次）' + rerollReasonSuffix(lastRerollReason));
                 console.log('[余温工具箱] 本次生成没有产生 AI 消息（疑似接口失败/429）→ 立刻重试，第 ' + __apiFailRetry + ' 次');
                 setTimeout(function () {
                     try {
