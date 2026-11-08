@@ -1978,7 +1978,12 @@ function rowHtml(f, cell) {
     const idAttr = ' data-id="' + esc(f.id) + '" data-type="' + esc(f.type) + '"' + optAttr + (f.static ? ' data-static="1"' : '') + ' data-ord="' + esc(String(typeof f.ord === 'number' ? f.ord : 9999)) + '"';   /* ★W416：按指南行序排 */
     const c = '<span class="yw-nsfw-c">' + (cell.comment ? esc(cell.comment) : '') + '</span>';
     if (cell.unknown || isNaish(val)) {
-        /* ★W418：N/A 行：只显示值，不画条、不补单位 */
+        /* ★W418：N/A 行：不画条、不补单位
+           ★W461（作者：N/A 在卡上也显示成「—」，跟没值时一样更好看）——只改显示，值/发送仍是 N/A */
+        if (isNaish(val)) {
+            return '<div class="yw-nsfw-row yw-nsfw-na yw-nsfw-ph"' + idAttr + '><span class="k">' + esc(f.label) + '</span>' +
+                '<span class="v">—</span><span class="yw-nsfw-c"></span></div>';
+        }
         return '<div class="yw-nsfw-row yw-nsfw-na"' + idAttr + '><span class="k">' + esc(f.label) + '</span>' +
             '<span class="v">' + esc(val || 'N/A') + '</span>' + c + '</div>';
     }
@@ -2098,8 +2103,12 @@ export function nsfwRenderCard(name, profile, opts) {
                     }
                     const raw0 = String(e0.value == null ? "" : e0.value).trim();
                     const unit0 = String(e0.unit || gm0.unit || "");
-                    /* ★W443：显示统一「值 + 一次单位」——值里有单位先摘掉，N/A/未知 不补单位 */
-                    const naish0 = isNaish(raw0) || /^(未知|unknown)$/i.test(raw0);
+                    /* ★W461：N/A 在卡上与“没值”同款「—」（值/发送仍是 N/A）；未知保留文字 */
+                    if (isNaish(raw0)) {
+                        return '<div class="yw-nsfw-row yw-nsfw-na yw-nsfw-ph" data-id="' + esc(id) + '" data-type="text" data-ord="' + esc(String(typeof gm0.ord === 'number' ? gm0.ord : 9999)) + '"><span class="k">' + esc(lab0) + '</span><span class="v">—</span><span class="yw-nsfw-c"></span></div>';
+                    }
+                    /* ★W443：显示统一「值 + 一次单位」——值里有单位先摘掉，未知 不补单位 */
+                    const naish0 = /^(未知|unknown)$/i.test(raw0);
                     const val0 = (unit0 && !naish0) ? stripUnitText(raw0, unit0) : raw0;
                     const valTxt0 = esc((!unit0 || naish0) ? raw0 : (val0 ? (val0 + " " + unit0) : raw0));
                     const minE = (typeof e0.min === "number") ? e0.min : (typeof gm0.min === "number" ? gm0.min : null);
