@@ -1612,6 +1612,15 @@ export function nsfwResetFold() { try { _foldMap.clear(); } catch (e) { } }
 function _foldKey(chatId, mesid, name) { return String(chatId || '') + '|' + String(mesid == null ? '' : mesid) + '|' + String(name || ''); }
 /* ★W423：记住每张卡停在哪个分页（编辑保存后卡会重建，回到原分页） */
 const _tabMap = new Map();
+/* ★W451：这一楼当前停在哪一页 —— 切人/重建都以它为准（不再只靠“上一个名字”的分页记忆） */
+const _mesTabMap = new Map();
+function _mesTabKey(chatId, mesid) { return String(chatId || '') + '|' + String(mesid == null ? '' : mesid); }
+function _mesTabSet(chatId, mesid, id) {
+    try {
+        _mesTabMap.set(_mesTabKey(chatId, mesid), String(id || ''));
+        if (_mesTabMap.size > 300) { const k0 = _mesTabMap.keys().next().value; _mesTabMap.delete(k0); }
+    } catch (e) { }
+}
 /* ★W445：一楼多个角色只画一张卡 —— 记住这一楼当前选中的是谁（切换名字用） */
 const _charSelMap = new Map();
 function _charSelKey(chatId, mesid) { return String(chatId || '') + '|' + String(mesid == null ? '' : mesid); }
@@ -1622,7 +1631,7 @@ function _charSelSet(chatId, mesid, name) {
         if (_charSelMap.size > 300) { const k0 = _charSelMap.keys().next().value; _charSelMap.delete(k0); }
     } catch (e) { }
 }
-export function nsfwResetTabs() { try { _tabMap.clear(); } catch (e) { } }
+export function nsfwResetTabs() { try { _tabMap.clear(); _mesTabMap.clear(); } catch (e) { } }
 export function nsfwApplyTab(card, chatId, mesid, name) {
     try {
         if (!card) return;
@@ -1639,10 +1648,11 @@ export function nsfwApplyTab(card, chatId, mesid, name) {
                     if (!id) return;
                     _tabMap.set(key, id);
                     if (_tabMap.size > 300) { const k0 = _tabMap.keys().next().value; _tabMap.delete(k0); }
+                    _mesTabSet(chatId, mesid, id);   /* ★W451：这一楼当前页 */
                 } catch (e2) { }
             }, true);
         }
-        const want = _tabMap.get(key);
+        const want = _mesTabMap.get(_mesTabKey(chatId, mesid)) || _tabMap.get(key);
         if (!want) return;
         const btns = Array.prototype.slice.call(bar.querySelectorAll('.yw-nsfw-tab'));
         const hit = btns.filter((x) => x.getAttribute('data-tab') === want)[0];
@@ -3113,6 +3123,7 @@ export function nsfwMountToMessage(messageId, onlyIfMissing) {
             const prevTabBtn = prev ? prev.card.querySelector('.yw-nsfw-tab.on') : null;
             const prevTabId = prevTabBtn ? prevTabBtn.getAttribute('data-tab') : '';
             const prevTabIdx = prevTabBtn ? Array.prototype.indexOf.call(prev.card.querySelectorAll('.yw-nsfw-tab'), prevTabBtn) : -1;
+            if (prevTabId) _mesTabSet(chatId, messageId, prevTabId);   /* ★W451：这一楼停在哪个页，跟人无关 */
             selName = nn;
             _charSelSet(chatId, messageId, nn);
             cards.forEach((x) => {
