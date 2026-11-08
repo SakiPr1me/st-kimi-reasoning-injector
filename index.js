@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.288'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.289'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -1815,7 +1815,17 @@ function wrapLastUserMessage(msgs) {
         const wrapInner = (inner) => (pre ? pre + NLC + NLC : '') + '————' + NLC + '本轮真实输入：' + NLC + inner + NLC + '————' + (suf ? NLC + NLC + suf : '');
         const already = (t) => (pre && String(t).indexOf(pre) === 0) || (suf && String(t).slice(-suf.length) === suf);
 
-        /* ① 从最后一条 user 往前找最新一个 <user_input>…</user_input>（世界书 D0 的 user 消息会被跳过） */
+        /* ① 从最后一条 user 往前找最新一个 <user_input>…</user_input>（世界书 D0 的 user 消息会被跳过）
+              ★W460（作者定的版式）：小说/———— 在标签外面，<user_input> 只包「本轮真实输入：真实内容」：
+                【前置】
+                ————
+                <user_input>
+                本轮真实输入：
+                真实内容
+                </user_input>
+                ————
+                【后置】 */
+        const tagDone = (b) => String(b).indexOf('本轮真实输入：') >= 0 && (!pre || String(b).indexOf(pre) >= 0) && (!suf || String(b).indexOf(suf) >= 0);
         for (let i = msgs.length - 1; i >= 0; i--) {
             const m = msgs[i];
             if (!m || m.role !== 'user' || typeof m.content !== 'string') continue;
@@ -1824,12 +1834,15 @@ function wrapLastUserMessage(msgs) {
             let last = null, mm;
             while ((mm = re.exec(body))) last = mm;
             if (!last) continue;
-            const inner = last[1];
-            if (!String(inner).trim()) continue;
-            if (already(inner)) return false;                 // 已经包过（幂等）
+            const inner = String(last[1] || '').trim();
+            if (!inner) continue;
+            if (tagDone(body)) return false;                 // 已经包过（幂等）
             const openTag = last[0].slice(0, last[0].indexOf('>') + 1);
-            m.content = body.slice(0, last.index) + openTag + wrapInner(inner) + '</user_input>' + body.slice(last.index + last[0].length);
-            try { console.log('[余温工具箱] 4A 包裹已生效（<user_input> 内）：前缀 ' + pre.length + ' 字 · 正文 ' + inner.length + ' 字 · 后缀 ' + suf.length + ' 字'); } catch (e) { }
+            const wrappedTag = (pre ? pre + NLC + NLC : '') + '————' + NLC
+                + openTag + NLC + '本轮真实输入：' + NLC + inner + NLC + '</user_input>' + NLC
+                + '————' + (suf ? NLC + NLC + suf : '');
+            m.content = body.slice(0, last.index) + wrappedTag + body.slice(last.index + last[0].length);
+            try { console.log('[余温工具箱] 4A 包裹已生效（<user_input> 外置版式）：前缀 ' + pre.length + ' 字 · 正文 ' + inner.length + ' 字 · 后缀 ' + suf.length + ' 字'); } catch (e) { }
             return true;
         }
 
