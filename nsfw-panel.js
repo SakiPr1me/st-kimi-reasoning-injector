@@ -1480,8 +1480,10 @@ export function nsfwBuildSend(chatId, names, msgs, opts) {
                不能再拿缓存状态补发（否则 AI 会收到一个已经被丢弃的角色，以为要新建）。只有历史里一个块都读不到时
                （旧楼被预算裁光）才退回缓存兜底。 */
             const liveNames = live ? Object.keys(live.chars || {}) : [];
+            const fallbackNames = (opts && Array.isArray(opts.fallbackNames)) ? opts.fallbackNames : [];
+            const allowFallback = fallbackNames.indexOf(n) >= 0;
             const prof = live
-                ? (live.chars[n] || (liveNames.length ? null : (bucket.chars[n] || null)))
+                ? (live.chars[n] || ((allowFallback || !liveNames.length) ? (bucket.chars[n] || null) : null))
                 : bucket.chars[n];
             if (prof && live && live.chars[n] && bucket.chars[n] && (!prof.static || !Object.keys(prof.static || {}).length)) {
                 prof.static = bucket.chars[n].static || {};
@@ -1493,6 +1495,7 @@ export function nsfwBuildSend(chatId, names, msgs, opts) {
             parts.push('以下是' + n + (t0 ? '于' + t0 : '') + '的NSFW状态快照（这是前文已有的状态，不是示例；请当作续写底稿直接更新，不要当成新建。出于省token需求评述不作为提示词发送，不代表没有），如进入NSFW剧情则按照以上要求综合剧情与推理完整更新（不进入则不输出）：');
             parts.push(b);
         });
+        try { console.log('[余温工具箱] NSFW发送名单：选择=' + (names || []).join('、') + ' 请求历史里有=' + (live ? Object.keys(live.chars || {}).join('、') : '(无 msgs)') + ' 兜底可用=' + ((opts && Array.isArray(opts.fallbackNames)) ? opts.fallbackNames.join('、') : '')); } catch (eL) { }
         return parts.length > 1 ? parts.join(NL) : '';
     } catch (e) { return ''; }
 }
@@ -1524,7 +1527,13 @@ export function nsfwRewriteRequest(msgs, chatId) {
         if (!Array.isArray(msgs) || !msgs.length) return out;
         /* ① 拼状态：必须在剥块之前（历史里还留着块） */
         out.names = nsfwPickForRequest(chatId, msgs);
-        out.text = out.names.length ? nsfwBuildSend(chatId, out.names, msgs) : '';
+        let fallbackNames = [];
+        try {
+            const stS = _getSettings() || {};
+            const autoS = (stS.nsfwAutoSend !== undefined) ? !!stS.nsfwAutoSend : (String(stS.nsfwSendMode || 'auto') === 'auto');
+            fallbackNames = autoS ? nsfwSendOnce(chatId) : nsfwSendPicks(chatId);   /* ★W457：用户亲勾的人优先，历史里没块也发缓存 */
+        } catch (eS) { fallbackNames = []; }
+        out.text = out.names.length ? nsfwBuildSend(chatId, out.names, msgs, { fallbackNames: fallbackNames }) : '';
         /* ★W447b：只把真的写进注入段的人算作“这次发了”（历史里没块的人已被 nsfwBuildSend 跳过） */
         if (out.text) out.names = out.names.filter((n) => out.text.indexOf('以下是' + n) >= 0 || out.text.indexOf('name 角色名 = ' + n) >= 0);
         else out.names = [];
