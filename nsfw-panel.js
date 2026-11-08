@@ -1482,6 +1482,37 @@ export function nsfwStateFromMsgs(msgs) {
     });
     return tmp;
 }
+/** ★W463：合并「请求历史里的状态」和「整段聊天缓存」——
+ *  live 可能只是被裁剩的半截块/只有 name 的空块，不能让它把缓存里完整的状态遮住；
+ *  同名状态下 live 的新值优先，live 缺的字段用缓存补齐（缓存是按整段聊天重建的）。 */
+function mergeSendProfile(base, over) {
+    try {
+        if (!base) return over || null;
+        if (!over) return base;
+        const out = JSON.parse(JSON.stringify(base));
+        out.stats = Object.assign({}, base.stats || {});
+        Object.keys(over.stats || {}).forEach((id) => {
+            const c = over.stats[id] || {};
+            if (String(c.value == null ? '' : c.value).trim() !== '' || c.unknown) out.stats[id] = c;
+        });
+        out.desc = Object.assign({}, base.desc || {});
+        Object.keys(over.desc || {}).forEach((id) => {
+            const d = over.desc[id] || {};
+            const tx = (d && typeof d === 'object') ? String(d.text || '') : String(d || '');
+            if (tx.trim() || !out.desc[id]) out.desc[id] = d;
+        });
+        out.extra = Object.assign({}, base.extra || {});
+        Object.keys(over.extra || {}).forEach((id) => {
+            const e = over.extra[id] || {};
+            const has = String(e.value == null ? '' : e.value).trim() || (Array.isArray(e.list) && e.list.length);
+            if (has || !out.extra[id]) out.extra[id] = e;
+        });
+        out.static = Object.assign({}, base.static || {}, over.static || {});
+        out.sex = base.sex || over.sex;
+        out.role = base.role || over.role;
+        return out;
+    } catch (e) { return over || base || null; }
+}
 export function nsfwBuildSend(chatId, names, msgs, opts) {
     try {
         const { bucket } = nsfwBucket(chatId);
@@ -1493,12 +1524,10 @@ export function nsfwBuildSend(chatId, names, msgs, opts) {
             /* ★W458：勾了谁就发谁 —— 请求 msgs 可能被酒馆预算裁掉/被处理后少了旧块；
                请求历史里没有这个人的块时，回「按整段聊天重建的缓存」找他的最近一份状态。
                这样 6 楼 A、8 楼 B、10 楼 A+B、14 楼只写了 A：勾 B 也能从 8/10 楼的状态补出来。 */
-            const prof = live
-                ? (live.chars[n] || bucket.chars[n] || null)
-                : bucket.chars[n];
-            if (prof && live && live.chars[n] && bucket.chars[n] && (!prof.static || !Object.keys(prof.static || {}).length)) {
-                prof.static = bucket.chars[n].static || {};
-            }
+            const lRec = live ? (live.chars[n] || null) : null;
+            const bRec = bucket.chars[n] || null;
+            const prof = mergeSendProfile(bRec, lRec);
+            try { console.log('[余温工具箱] NSFW发送·' + n + '：历史块=' + (lRec ? '有' : '无') + ' 缓存块=' + (bRec ? '有' : '无') + ' 合并字段=' + Object.keys((prof && prof.stats) || {}).length + ' 扩展=' + Object.keys((prof && prof.extra) || {}).length); } catch (eM) { }
             if (!prof) return;
             const b = buildCharBlock(n, prof);
             if (!b) return;
