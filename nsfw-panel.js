@@ -1612,6 +1612,7 @@ export function nsfwApplyFold(card, chatId, mesid, name) {
         const def = !!_foldDefault;   /* ★W424：用「上次手动开合」当默认 */
         const key = _foldKey(chatId, mesid, name);
         const collapsed = _foldMap.has(key) ? !!_foldMap.get(key) : def;
+        if (!_foldMap.has(key)) { _foldMap.set(key, collapsed); if (_foldMap.size > 300) { const k0 = _foldMap.keys().next().value; _foldMap.delete(k0); } }   /* ★W444c：卡一挂上就定住自己的折叠态，别的卡折叠/重渲染不再把它带跑 */
         card.classList.toggle('is-collapsed', collapsed);
         const head = card.querySelector('.yw-nsfw-head');
         if (!head) return;
@@ -2541,7 +2542,10 @@ export function nsfwCompleteLatest(chatId) {
             try { if (ctx.saveChat) ctx.saveChat(); } catch (e) { }
             /* ★W440：不再整段替换 .mes_text 的 innerHTML —— 那会把别的插件挂在这一楼里的美化一起抹掉
                （作者实测：自动补回后「其他的美化没有渲染」）。块是隐藏的，改完 mes 只重挂我们自己的卡就够。 */
-            try { nsfwMountToMessage(i); } catch (e) { }
+            /* ★W444d：正在编辑这张卡时不要重挂，免得把没保存的输入冲掉 */
+            let editing0 = false;
+            try { editing0 = !!document.querySelector('.mes[mesid="' + i + '"] .yw-nsfw-editing'); } catch (e) { }
+            if (!editing0) { try { nsfwMountToMessage(i); } catch (e) { } }
             return { mesid: i, changed: true };
         }
         return { mesid: -1, changed: false };
@@ -3031,14 +3035,15 @@ export function nsfwMountToMessage(messageId) {
         nsfwEnsureStyle();
         mesEl.querySelectorAll('.yw-nsfw').forEach((n) => n.remove());
         nsfwHideRaw(mesEl);
-        show.slice(0, 3).forEach((n) => {
+        let insertAfter = mesEl.querySelector('.mes_text') || mesEl;   /* ★W444：多角色时按块顺序排，不能每张都插在 mes_text 后面（会倒序） */
+        show.slice(0, 6).forEach((n) => {   /* ★W444b：多角色最多画 6 张，别让第 4 个直接消失 */
             const card = nsfwRenderCard(n, pick(n));
             card.dataset.mesid = String(messageId);
             try { nsfwApplyFold(card, chatId, messageId, n); } catch (eF) { }
             try { nsfwApplyTab(card, chatId, messageId, n); } catch (eT) { }
-            const anchor = mesEl.querySelector('.mes_text') || mesEl;
-            if (anchor.parentNode) anchor.parentNode.insertBefore(card, anchor.nextSibling);
+            if (insertAfter.parentNode) insertAfter.parentNode.insertBefore(card, insertAfter.nextSibling);
             else mesEl.appendChild(card);
+            insertAfter = card;
             /* ★W363：挂进真实 DOM 后再锁一次高度（渲染时还没排版，量到的是 0） */
             try {
                 /* ★W414：卡自己在渲染时已排了「同步 + rAF + 200ms」——这里不再叠加 */
