@@ -1982,7 +1982,7 @@ function rowHtml(f, cell) {
            ★W461（作者：N/A 在卡上也显示成「—」，跟没值时一样更好看）——只改显示，值/发送仍是 N/A */
         if (isNaish(val)) {
             return '<div class="yw-nsfw-row yw-nsfw-na yw-nsfw-ph"' + idAttr + '><span class="k">' + esc(f.label) + '</span>' +
-                '<span class="v">—</span><span class="yw-nsfw-c"></span></div>';
+                '<span class="v">—</span>' + c + '</div>';
         }
         return '<div class="yw-nsfw-row yw-nsfw-na"' + idAttr + '><span class="k">' + esc(f.label) + '</span>' +
             '<span class="v">' + esc(val || 'N/A') + '</span>' + c + '</div>';
@@ -2099,7 +2099,7 @@ export function nsfwRenderCard(name, profile, opts) {
                         return list0.slice(-10).map((v, i) => '<div class="yw-nsfw-row yw-nsfw-log"><span class="k">' + (i === 0 ? esc(lab0) : '') + '</span><span class="v wrap">' + esc(String(v == null ? '' : v)) + '</span></div>').join('');
                     }
                     if (e0.empty && !String(e0.value || '').trim()) {
-                        return '<div class="yw-nsfw-row yw-nsfw-ph" data-id="' + esc(id) + '" data-type="text" data-ord="' + esc(String(typeof gm0.ord === 'number' ? gm0.ord : 9999)) + '"><span class="k">' + esc(lab0) + '</span><span class="v">—</span><span class="yw-nsfw-c"></span></div>';
+                        return '<div class="yw-nsfw-row yw-nsfw-ph" data-id="' + esc(id) + '" data-type="text" data-ord="' + esc(String(typeof gm0.ord === 'number' ? gm0.ord : 9999)) + '"><span class="k">' + esc(lab0) + '</span><span class="v">—</span><span class="yw-nsfw-c">' + esc(e0.comment || '') + '</span></div>';
                     }
                     const raw0 = String(e0.value == null ? "" : e0.value).trim();
                     const unit0 = String(e0.unit || gm0.unit || "");
