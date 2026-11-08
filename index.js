@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.281'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.282'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -2726,6 +2726,12 @@ function checkStreamingAbort(messageId) {
         const reasoning = String(msg.extra?.reasoning ?? '').trim();
         const mes = String(msg.mes ?? '');
         const marker = settings.foldMarker || '<scene>';
+        /* ★W453：只判「本次新写出来的部分」—— swipe/regenerate 时这一楼还挂着上一分支的正文/思维链，
+           拿整段判会在新分支第一拍就命中上一版（无思考/关键词/正文标记/英文），表现“第一轮不管怎样都重roll”。 */
+        const startMes0 = (generationStartLastMes === null ? null : String(generationStartLastMes));
+        const startRs0 = (genStartReasoning === null ? null : String(genStartReasoning).trim());
+        const newMes0 = (startMes0 !== null && mes.startsWith(startMes0)) ? mes.slice(startMes0.length) : ((startMes0 === null || mes !== startMes0) ? mes : '');
+        const newRs0 = (startRs0 !== null && reasoning.startsWith(startRs0)) ? reasoning.slice(startRs0.length) : ((startRs0 === null || reasoning !== startRs0) ? reasoning : '');
         let stopReason = '';
 
         // ① 英文思维链（原生 reasoning 通道；partial 模式思考在 content，用 <scene> 前文本兜底）
@@ -2734,24 +2740,14 @@ function checkStreamingAbort(messageId) {
         // = 历史/静态内容（用户手动填的英文/CSAM、加载的旧分支），本次模型还没输出 → 跳过；
         // 只有本次新写入（mes 或 reasoning 相对快照有变化）才检测，防静态残留反复误截断死循环。
         if (settings.rerollOnEnglishThinking && settings.injectTarget === 'kimi' && !seedIsEnglish()) {
-            const mesChangedEn = (generationStartLastMes !== null) ? (mes !== generationStartLastMes) : true;
-            const rsChangedEn = (genStartReasoning !== null) ? (reasoning !== String(genStartReasoning)) : true;
-            if (mesChangedEn || rsChangedEn) {
-                let sample = '';
-                if (reasoning.length > 0) {
-                    // v1.37.51：只检测「本次新增的思维链」——swipe 开新分支时 reasoning 会保留上一分支的英文
-                    //（ST 的 extra.reasoning 跟随消息、不随分支清空），旧逻辑取整段开头 → 每次都判英文 → 死循环。
-                    // 现改为与「生成开始快照」对比、只取增量；本次还没产出新思维链（增量为空）→ 跳过检测。
-                    const _oldRs = String(genStartReasoning ?? '');
-                    sample = (_oldRs && reasoning.startsWith(_oldRs)) ? reasoning.slice(_oldRs.length) : reasoning;
-                    sample = stripUrlsAndTags(sample).trim().slice(0, 120); // v1.37.66：先剥 URL/HTML 标签再取样（治"正文以 HTML 开头"误杀）
-                } else {
-                    // partial：思考在 content（mes）里，取 <scene> 前的正文开头检测
-                    // 边界取最后一个 marker（与折叠边界一致）：思考里可能打出 <scene> 字样，取第一个会误切
-                    const markerIdx = mes.lastIndexOf(marker);
-                    sample = markerIdx > 0 ? mes.slice(0, markerIdx) : mes;
-                    sample = stripUrlsAndTags(sample).slice(0, 120); // v1.37.66：同上（E1/E4 的 0.755→≈0 就发生在这里）
+            if (newRs0 || newMes0) {
+                let sample = newRs0;
+                if (!sample) {
+                    // partial：思考在 content（newMes0）里，取 <scene> 前的正文开头检测
+                    const markerIdx = newMes0.lastIndexOf(marker);
+                    sample = markerIdx > 0 ? newMes0.slice(0, markerIdx) : newMes0;
                 }
+                sample = stripUrlsAndTags(sample).trim().slice(0, 120); // v1.37.66：先剥 URL/HTML 标签再取样
                 if (sample) {
                     const meaningful = sample.replace(/\s/g, '');
                     const latin = (sample.match(/[A-Za-z]/g) || []).length;
@@ -2764,8 +2760,8 @@ function checkStreamingAbort(messageId) {
         // ② 无思考直接出正文：content 以 <scene> 开头 且 reasoning_content 通道也空（非原生楼）
         //    → 真·无思考出正文，立即截断（由 rerollOnNoThinking 开关控制；原生楼 reasoning 有内容不误伤）
         if (!stopReason && settings.rerollOnNoThinking) {
-            const markerIdx = mes.lastIndexOf(marker); // 与折叠边界一致（思考里可能打出 marker 字样）
-            if (markerIdx === 0 && reasoning.length === 0 && mes.length > marker.length) {
+            const markerIdx = newMes0.lastIndexOf(marker); // 只看本次新写出的正文
+            if (markerIdx === 0 && newRs0.length === 0 && newMes0.length > marker.length) {
                 stopReason = `无思考直接出了<${marker}>`; earlyRerollReason = 'nothink';   // ★W66
             }
         }
@@ -2778,9 +2774,9 @@ function checkStreamingAbort(messageId) {
         // ★W45A：本判据归「无思维链直接出正文（没思考 or 少思考）」这一勾（勾选文案里的"少思考"就是它）。
         //   以前它不受任何勾选控制 ⇒ 勾全关也照样截断重roll（作者实机：没开重roll 但还是自动重roll了）。
         if (!stopReason && settings.rerollOnNoThinking && settings.rerollMinThinkingTokens > 0) {
-            const markerIdx = mes.lastIndexOf(marker); // 与折叠边界一致（思考里可能打出 marker 字样）
+            const markerIdx = newMes0.lastIndexOf(marker); // 只看本次新写出的正文
             if (markerIdx >= 0) { // 正文已开始（<scene> 已出现，无论前缀有没有内容）
-                const thinkingPart = reasoning + (markerIdx > 0 ? mes.slice(0, markerIdx) : '');
+                const thinkingPart = newRs0 + (markerIdx > 0 ? newMes0.slice(0, markerIdx) : '');
                 const estTokens = Math.round(thinkingPart.replace(/\s/g, '').length / 1.5);
                 if (estTokens < settings.rerollMinThinkingTokens) {
                     stopReason = `思考只有${estTokens}token就出了<${marker}>`; earlyRerollReason = 'nothink';   // ★W66（与"无思考"同一个勾）
@@ -2798,16 +2794,14 @@ function checkStreamingAbort(messageId) {
             if (kwRaw) {
                 const kws = kwRaw.split(',').map(k => k.trim()).filter(Boolean);
                 if (kws.length) {
-                    const mesChanged = (generationStartLastMes !== null) ? (mes !== generationStartLastMes) : true;
-                    const rsChanged = (genStartReasoning !== null) ? (reasoning !== String(genStartReasoning)) : true;
-                    if (mesChanged || rsChanged) { // 本次有新增内容才检测，防静态残留反复命中
-                        const kwText = (reasoning + '\n' + mes).toLowerCase();
+                    if (newRs0 || newMes0) { // 只扫本次新写出的部分，防上一分支残留反复命中
+                        const kwText = (newRs0 + '\n' + newMes0).toLowerCase();
                         const hitKw = kws.find(k => k && kwText.includes(k.toLowerCase()));
                         if (hitKw) {
                             stopReason = `出现关键词「${hitKw}」`; earlyRerollReason = 'keyword';   // ★W66
                             // v1.37.66（§AY-4）：命中位置 + 前后 40 字（判据不变）。关键词是**全表**匹配，
                             // URL/HTML 里的字符（http、jpg、<…>）也会命中 —— 这一行就是让作者一眼看出是不是配置问题。
-                            console.log(`[余温工具箱] 关键词命中「${hitKw}」${hitContext(reasoning + '\n' + mes, hitKw)}（全表匹配，URL/HTML 里的字符同样会命中）`);
+                            console.log(`[余温工具箱] 关键词命中「${hitKw}」${hitContext(newRs0 + '\n' + newMes0, hitKw)}（全表匹配，URL/HTML 里的字符同样会命中）`);
                         }
                     }
                 }
@@ -2825,14 +2819,13 @@ function checkStreamingAbort(messageId) {
         if (!stopReason && bodyMarkerArmed()) {
             const bmRaw = String(settings.rerollBodyMarkers ?? '').trim();
             const bms = bmRaw.split(',').map(k => k.trim()).filter(Boolean);
-            const mesChangedBm = (generationStartLastMes !== null) ? (mes !== generationStartLastMes) : true;
-            if (bms.length && mesChangedBm) {
-                const bmText = mes.toLowerCase();   // ★只 lower mes：命中源=正文
+            if (bms.length && newMes0) {   // 只扫本次新写出的正文
+                const bmText = newMes0.toLowerCase();   // ★只 lower 正文：命中源=正文
                 const hitBm = bms.find(k => k && bmText.includes(k.toLowerCase()));
                 if (hitBm) {
                     stopReason = `正文出现「${hitBm}」`; earlyRerollReason = 'bodymarker';   // ★W66 按路径作废用（与 keyword 同构）
-                    // 与 keyword 同款可见性：命中位置 + 前后 40 字（上下文取自 mes 原文）—— 写明"正文匹配"，一眼可判
-                    console.log(`[余温工具箱] 正文标记命中「${hitBm}」${hitContext(mes, hitBm)}（正文匹配，不检测思维链）`);
+                    // 与 keyword 同款可见性：命中位置 + 前后 40 字（上下文取自新正文原文）—— 写明"正文匹配"，一眼可判
+                    console.log(`[余温工具箱] 正文标记命中「${hitBm}」${hitContext(newMes0, hitBm)}（正文匹配，不检测思维链）`);
                 }
             }
         }
@@ -3700,30 +3693,6 @@ function handleFailureReroll() {
     } catch (e) { }
 }
 
-/** ★W428：接口失败（报错/被拦截）没有新消息 —— 直接重试（受连续上限约束）。
- *  和「空回」分开记账：横幅写清楚是接口失败，不冒充空回。 */
-function handleFailureReroll() {
-    try {
-        if (rerollFiredThisGen) return;
-        if (!settings.enabled || settings.rerollPaused) return;
-        if (autoRerollCount >= settings.autoRerollLimit) {
-            if (!rerollBlockedNotified) { rerollBlockedNotified = true; notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll`, 'error'); }
-            return;
-        }
-        const ctxF = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? SillyTavern.getContext() : null;
-        const chatF = (ctxF && Array.isArray(ctxF.chat)) ? ctxF.chat : [];
-        const target = chatF.length - 1;
-        if (target < 0) return;
-        rerollFiredThisGen = true;
-        autoRerollCount++;
-        lastAutoRerollTime = Date.now();
-        console.log(`[余温工具箱] 接口失败 → 自动重试（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${target}`);
-        notifyReroll(`🔄 接口失败，自动重试 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
-        try { rerollGuard.arm(target, curChatKey(), Date.now(), 2500); } catch (e) { }
-        updateRerollStatus();
-        triggerAutoSwipe(target);
-    } catch (e) { }
-}
 
 function handleEmptyReroll(messageId, cause) {
     const why = cause || '空回（零token）';
@@ -9567,7 +9536,7 @@ try { rerollGuard.confirmBranch(); } catch (e) { } // v1.37.54 真实生成开�
         generationStartLastMes = (lastStart && typeof lastStart.mes === 'string') ? lastStart.mes : null;
         // v1.37.15：记录最后一条 assistant 的 reasoning 快照——流式英文检测只在 reasoning 本次新增时触发，
         // 防止 extra.reasoning 里的静态残留（如用户测试手动填的 English）在每次生成时被误判成"本次输出英文"。
-        genStartReasoning = (lastStart && !lastStart.is_user && lastStart.extra?.reasoning) ? String(lastStart.extra.reasoning) : '';
+        genStartReasoning = (lastStart && !lastStart.is_user && lastStart.extra?.reasoning) ? String(lastStart.extra.reasoning).trim() : '';
     } catch (e) { generationStartLastMes = null; genStartReasoning = ''; }
     manualStopClicked = false;
     emptyRerollHandled = false;
@@ -9666,7 +9635,6 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
     // v1.37.56：dry-run 不会发 GENERATION_ENDED（dry-run 在 Generate 里提前 return，从不显示停止按钮，
     //   hideStopButton 的"按钮可见才 emit"条件不成立）→ 收到的 ENDED 一定是真实生成的收尾，必须照常处理。
     //   原实现直接 return，一旦 dry-run 标记残留就会把真实 ENDED 吞掉 → 截断兜底重roll/空回重roll 全部失效。
-    const wasDryRun = !!isDryRun;   /* ★W428：先记下，后面判断"接口失败"要用 */
     const wasDryRun = !!isDryRun;   /* ★W428：先记下，后面判断"接口失败"要用 */
     if (isDryRun) { isDryRun = false; dryRunSince = 0; }
     console.log(`[余温工具箱] ENDED 触发: manualStop=${manualStopClicked} token=${streamGotToken} emptyHandled=${emptyRerollHandled} early=${earlyStopTriggered}`);
