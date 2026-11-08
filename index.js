@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.284'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.285'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -2455,7 +2455,8 @@ let lastObservedMesId = -1;              // 本次生成期间 DOM 有变化的�
 let emptyRerollTargetId = -1;            // GENERATION_ENDED 判定空回时的目标消息 id（fallback 用）
 let isDryRun = false;                  // 提示词查看器 dry-run 模式（不参与生成状态管理）
 let dryRunSince = 0;                   // v1.37.34 最近一次 dry-run 开始时间：防 dry-run ENDED 缺失残留 true 永久挡检测
-let generationStartLastMes = null;     // GENERATION_STARTED 时最后一条消息的 mes（空回重roll判别：最后一条没变=查看器/无新消息→跳过）
+let generationStartLastMes = null;
+let generationStartBranchSig = null;   // ★W456：生成开始时的分支身份（长度/swipe_id/分支数/gen_started）     // GENERATION_STARTED 时最后一条消息的 mes（空回重roll判别：最后一条没变=查看器/无新消息→跳过）
 let genStartAt = 0;                    // 本次真实生成开始时间戳（ms）——判断流式检测目标是否"本次生成的消息"而非历史/静态内容
 let genStartReasoning = null;          // 本次生成开始时最后一条 assistant 的 reasoning 快照——流式英文检测要求 reasoning 本次有新写入才检测（防静态残留误判）
 const origMesMap = new Map(); // messageId -> 修正前的原始 mes（「修正回退」用）
@@ -3557,24 +3558,28 @@ async function triggerAutoSwipe(messageId) {
                             const lastEmpty = isEmptyMes(lastW.mes);
                             const stuckWhat = lastEmpty ? '这条还是空占位' : '这条还挂着坏内容';
                             if (anyRerollSwitchOn()          // ★A1-修法2：五勾全关 ⇒ 补试链也要停（别"关了还在 roll"）
-                                && rerollRetryLeft > 0
                                 && settings.enabled && !settings.rerollPaused
                                 && autoRerollCount < settings.autoRerollLimit) {
-                                rerollRetryLeft--;
+                                /* ★W456：用户拍板 —— 只按「连续上限」停，取消 2 次补试 / 3 次连败就停。
+                                   每一次切不进去都算一次连续次数（和内容重roll共用同一个上限）。 */
+                                autoRerollCount++;
+                                lastAutoRerollTime = Date.now();
                                 rerollRetryTarget = targetId;
-                                emptyRerollStreak++; // 切换连败计数（只在"确认没切成功"时 +1；成功/用户接管/换聊天清零）
-                                console.log('[余温工具箱] swipe 没生效（8 秒内无新生成、也无新分支槽；' + stuckWhat + '）→ 继续把分支切过去（还剩 ' + rerollRetryLeft + ' 次补试；切换连败 ' + emptyRerollStreak + '/' + emptyRerollGiveUpK() + '），消息#' + targetId);
-                                notifyReroll('🔄 上次没进新分支，正在重试…（剩 ' + rerollRetryLeft + ' 次）' + rerollReasonSuffix(lastRerollReason || '上次重roll没进入新分支'));
+                                lastRerollReason = '上次重roll没进入新分支（' + stuckWhat + '）';
+                                console.log('[余温工具箱] swipe 没生效（8 秒内无新生成、也无新分支槽；' + stuckWhat + '）→ 继续把分支切过去（连续 ' + autoRerollCount + '/' + settings.autoRerollLimit + '），消息#' + targetId);
+                                notifyReroll(`🔄 上次没进新分支，正在重试…（连续 ${autoRerollCount}/${settings.autoRerollLimit}）` + rerollReasonSuffix(lastRerollReason));
                                 rerollFiredThisGen = true;   // 补试期间别让自然事件再叠加一次 swipe
                                 setTimeout(() => {
                                     try { if (anyRerollSwitchOn() && autoRerollCount < settings.autoRerollLimit && settings.enabled && !settings.rerollPaused) triggerAutoSwipe(targetId); } catch (e) { }   // ★A1-修法2（同一个理由）
                                 }, 900);
-                            } else if (emptyRerollStreak >= emptyRerollGiveUpK()) {
-                                // 最后兜底：连败达到阈值（正常路径用不到 —— 上面那条预算是 2 次）
-                                emptyRerollGiveUp('swipe 没生效（补试与连败都用完）');
+                            } else if (autoRerollCount >= settings.autoRerollLimit) {
+                                if (!rerollBlockedNotified) {
+                                    rerollBlockedNotified = true;
+                                    lastRerollReason = lastRerollReason || 'swipe 没生效（没进入新分支）';
+                                    notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll${rerollLastReasonSuffix()}`, 'error');
+                                }
                             } else {
-                                // ★v1.37.61：补试也打完了、还是没进新分支 → **明确出声**，别让用户对着黄色横幅干等
-                                console.log('[余温工具箱] 自动重roll 试了 ' + REROLL_RETRY_BUDGET + ' 次都没进新分支（ST 在回滚 swipe）→ 请手动点「开新分支」');
+                                console.log('[余温工具箱] 自动重roll补试被关闭（开关/暂停）→ 停手');
                                 notifyReroll('⚠ 自动重roll 没成功（ST 回滚了 swipe）→ 请手动点「开新分支」' + rerollReasonSuffix(lastRerollReason), 'error');
                                 try { rerollGuard.clear(); } catch (e) { }
                             }
@@ -9559,7 +9564,15 @@ try { rerollGuard.confirmBranch(); } catch (e) { } // v1.37.54 真实生成开�
         // v1.37.15：记录最后一条 assistant 的 reasoning 快照——流式英文检测只在 reasoning 本次新增时触发，
         // 防止 extra.reasoning 里的静态残留（如用户测试手动填的 English）在每次生成时被误判成"本次输出英文"。
         genStartReasoning = (lastStart && !lastStart.is_user && lastStart.extra?.reasoning) ? String(lastStart.extra.reasoning).trim() : '';
-    } catch (e) { generationStartLastMes = null; genStartReasoning = ''; }
+        generationStartBranchSig = (function () {
+            try {
+                const c0 = ctxStart?.chat || [];
+                const m0 = c0[c0.length - 1];
+                if (!m0) return null;
+                return c0.length + '|' + (typeof m0.swipe_id === 'number' ? m0.swipe_id : '') + '|' + (Array.isArray(m0.swipes) ? m0.swipes.length : '') + '|' + String(m0.gen_started || '');
+            } catch (e) { return null; }
+        })();
+    } catch (e) { generationStartLastMes = null; genStartReasoning = ''; generationStartBranchSig = null; }
     manualStopClicked = false;
     emptyRerollHandled = false;
     emptyRerollTargetId = -1;
@@ -9624,7 +9637,7 @@ setInterval(() => {
         lastAutoRerollTime = Date.now();
         rerollFiredThisGen = true;
         console.log(`[余温工具箱] 卡死看门狗：空楼层 + 没有生成在跑 → 再切一次（连续 ${autoRerollCount}/${settings.autoRerollLimit}）`);
-        lastRerollReason = '卡住兜底：8 秒内没进入新分支 / 最后一条仍是空占位';
+        lastRerollReason = '之前自动重roll没成功：12 秒内没有生成在跑、最后一条仍是空占位 → 再切一次';
         notifyReroll(`🔄 卡住兜底：再切一次分支（连续 ${autoRerollCount}/${settings.autoRerollLimit}）${rerollReasonSuffix(lastRerollReason)}`);
         updateRerollStatus();
         triggerAutoSwipe(rid);
@@ -9765,7 +9778,21 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
             return (lastNow && typeof lastNow.mes === 'string') ? lastNow.mes : null;
         } catch (e) { return null; }
     })();
-    const lastUnchanged = (generationStartLastMes !== null && lastMesNow !== null && lastMesNow === generationStartLastMes);
+    const branchSigNow = (function () {
+        try {
+            const ctxN = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? SillyTavern.getContext() : null;
+            const cN = ctxN?.chat || [];
+            const mN = cN[cN.length - 1];
+            if (!mN) return null;
+            return cN.length + '|' + (typeof mN.swipe_id === 'number' ? mN.swipe_id : '') + '|' + (Array.isArray(mN.swipes) ? mN.swipes.length : '') + '|' + String(mN.gen_started || '');
+        } catch (e) { return null; }
+    })();
+    /* ★W456：同样一段文字重写/同文本新分支也是“有新消息”，不能当接口失败 */
+    const branchSame = (generationStartBranchSig !== null && branchSigNow !== null && branchSigNow === generationStartBranchSig);
+    const lastUnchanged = (generationStartBranchSig === null)
+        ? (generationStartLastMes !== null && lastMesNow !== null && lastMesNow === generationStartLastMes)
+        : (branchSame && generationStartLastMes !== null && lastMesNow !== null && lastMesNow === generationStartLastMes);
+    generationStartBranchSig = null;
     generationStartLastMes = null;
     if (lastUnchanged) {
         /* ★W428：API 报错/被拦截时酒馆不产生新消息 —— 以前和 dry-run 一起被跳过，看起来就是「重roll一次就停」。
