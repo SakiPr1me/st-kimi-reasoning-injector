@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.280'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.281'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -2562,6 +2562,35 @@ function gateAllowsJudgment(messageId, tag) {
 let streamGateSeq = -1, streamGateAllowed = true, streamGateDesc = '';
 function streamingGateAllows(messageId) {
     if (settings.rerollNewBranchGate === false) return true;
+    /* ★W452：本次生成已经写出新内容 ⇒ 流式这一档必须按“新分支”放行。
+       新分支的槽位 / gen_started 往往晚一拍才落到 chat 上；第一拍拿旧分支身份会把**整轮**流式判定关掉，
+       表现就是“进入新分支后的第一轮怎么都不截断/不重roll”。只在生成中且有新内容时走这条，绝不放过查看旧分支。 */
+    try {
+        if (isGenerating) {
+            const ctx0 = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
+            const chat0 = ctx0?.chat;
+            const m0 = chat0?.[messageId];
+            if (m0 && !m0.is_user && !m0.is_system) {
+                let lastAi0 = -1;
+                for (let i = (chat0?.length || 1) - 1; i >= 0; i--) { const mm = chat0?.[i]; if (mm && !mm.is_user && !mm.is_system) { lastAi0 = i; break; } }
+                if (lastAi0 === Number(messageId)) {
+                    const mes0 = String(m0.mes || '');
+                    const rs0 = String(m0.extra?.reasoning || '');
+                    const changed0 = (generationStartLastMes !== null && mes0 !== generationStartLastMes)
+                        || (genStartReasoning !== null && rs0 !== String(genStartReasoning));
+                    if (changed0) {
+                        if (streamGateSeq !== genStartSeq || !streamGateAllowed) {
+                            streamGateSeq = genStartSeq;
+                            streamGateAllowed = true;
+                            gateStats.streamOpened++;
+                            console.log('[余温工具箱] 通用门（§BA）·流式：本次生成已有新内容 → 按新分支开判定（' + branchDesc(messageId) + '）');
+                        }
+                        return true;
+                    }
+                }
+            }
+        }
+    } catch (e0) { }
     if (streamGateSeq === genStartSeq) {
         if (streamGateAllowed) return true;
         if (!isFreshBranch(messageId)) return false;
@@ -2673,7 +2702,15 @@ function checkStreamingAbort(messageId) {
         if (lastAiMsg && genStartAt > 0) {
             const gs = lastAiMsg.gen_started ? new Date(lastAiMsg.gen_started).getTime() : 0;
             // 容差 2s：ST 的 gen_started 可能略早于 GENERATION_STARTED 事件；历史消息则远早于本次
-            if (Number.isFinite(gs) && gs > 0 && gs < genStartAt - 2000) { dbgSkip = 'old-gen_started(gs=' + gs + ',genStartAt=' + genStartAt + ')'; return; } // 历史消息（本次生成前就存在）→ 跳过
+            if (Number.isFinite(gs) && gs > 0 && gs < genStartAt - 2000) {
+                /* ★W452：gen_started 还是旧的时候，只要这一楼**已经写出本次的新内容**，就按当前生成判；
+                   否则才当历史消息跳过（进入新分支第一拍 gen_started 常常还没更新）。 */
+                const mesNow0 = String(lastAiMsg.mes || '');
+                const rsNow0 = String(lastAiMsg.extra?.reasoning || '');
+                const changedNow0 = (generationStartLastMes !== null && mesNow0 !== generationStartLastMes)
+                    || (genStartReasoning !== null && rsNow0 !== String(genStartReasoning));
+                if (!changedNow0) { dbgSkip = 'old-gen_started(gs=' + gs + ',genStartAt=' + genStartAt + ')'; return; } // 历史消息（本次生成前就存在）→ 跳过
+            }
         }
     } catch (e) { /* 静默：拿不到 chat 时不拦截 */ }
     // ★v1.37.66 通用门（§BA）：**先确认"这条是不是还没判定过的新分支"，再开流式判定** ——
@@ -3638,6 +3675,31 @@ function msgHasThinking(msg) {
 // 用 swipe 而不是 /trigger——/trigger 在连续生成时可能 roll 成新一楼（参考插件「自动PVP」的 bug）。
 // v1.37.65：加 cause 参数（可选，只影响日志/横幅措辞）——便于区分「真·零 token 空回」和
 //   「swipe 没生效（8 秒里既没有新生成、也没多出分支槽）」，后者根本不是空回，是对一个不存在的生成做动作。
+/** ★W428：接口失败（报错/被拦截）没有新消息 —— 直接重试（受连续上限约束）。
+ *  和「空回」分开记账：横幅写清楚是接口失败，不冒充空回。 */
+function handleFailureReroll() {
+    try {
+        if (rerollFiredThisGen) return;
+        if (!settings.enabled || settings.rerollPaused) return;
+        if (autoRerollCount >= settings.autoRerollLimit) {
+            if (!rerollBlockedNotified) { rerollBlockedNotified = true; notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll`, 'error'); }
+            return;
+        }
+        const ctxF = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? SillyTavern.getContext() : null;
+        const chatF = (ctxF && Array.isArray(ctxF.chat)) ? ctxF.chat : [];
+        const target = chatF.length - 1;
+        if (target < 0) return;
+        rerollFiredThisGen = true;
+        autoRerollCount++;
+        lastAutoRerollTime = Date.now();
+        console.log(`[余温工具箱] 接口失败 → 自动重试（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${target}`);
+        notifyReroll(`🔄 接口失败，自动重试 连续 ${autoRerollCount}/${settings.autoRerollLimit}`);
+        try { rerollGuard.arm(target, curChatKey(), Date.now(), 2500); } catch (e) { }
+        updateRerollStatus();
+        triggerAutoSwipe(target);
+    } catch (e) { }
+}
+
 /** ★W428：接口失败（报错/被拦截）没有新消息 —— 直接重试（受连续上限约束）。
  *  和「空回」分开记账：横幅写清楚是接口失败，不冒充空回。 */
 function handleFailureReroll() {
@@ -9604,6 +9666,7 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
     // v1.37.56：dry-run 不会发 GENERATION_ENDED（dry-run 在 Generate 里提前 return，从不显示停止按钮，
     //   hideStopButton 的"按钮可见才 emit"条件不成立）→ 收到的 ENDED 一定是真实生成的收尾，必须照常处理。
     //   原实现直接 return，一旦 dry-run 标记残留就会把真实 ENDED 吞掉 → 截断兜底重roll/空回重roll 全部失效。
+    const wasDryRun = !!isDryRun;   /* ★W428：先记下，后面判断"接口失败"要用 */
     const wasDryRun = !!isDryRun;   /* ★W428：先记下，后面判断"接口失败"要用 */
     if (isDryRun) { isDryRun = false; dryRunSince = 0; }
     console.log(`[余温工具箱] ENDED 触发: manualStop=${manualStopClicked} token=${streamGotToken} emptyHandled=${emptyRerollHandled} early=${earlyStopTriggered}`);
