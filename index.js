@@ -342,7 +342,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.282'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.283'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -8987,15 +8987,10 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id, type) => {
         return;
     }
 
-    // ③ 空回主路径（v1.11.5 核心修复）：零 token + 消息空（'' 或 '...'）→ 立即重roll，不等 2 秒 fallback。
-    //    手动停止时序：stopGeneration → GENERATION_ENDED → GENERATION_STOPPED（streamGotToken=true）→ MESSAGE_RECEIVED，
-    //    所以手动停止时 streamGotToken 已是 true，不会走到这里 → 不误判。
-    if (settings.enabled && settings.rerollOnEmpty && isGenerating && !streamGotToken && isEmpty && !msgHasThinking(msg)) {   // ★W175：思维链流式中不算空回
-        console.log(`[余温工具箱] 空回主路径：消息#${id} 零token且为空 → 自动重roll`);
-        handleEmptyReroll(id);
-        emptyRerollHandled = true;
-        return;
-    }
+    // ③ ★W454：**不再在 MESSAGE_RECEIVED 里立即按空回重roll**。
+    //    ST 1.13 在 swipe 建新分支槽后、真生成开始前会先发一条「空占位」MESSAGE_RECEIVED（mes 为 ''/'...'、零 token）；
+    //    旧逻辑把它当空回 ⇒ **每次进入新分支都白重roll一次**（跟内容有没有命中任何条件无关）。
+    //    真空回收尾统一交给 GENERATION_ENDED 的空回兜底（那里看生成结束后的最终正文，不会误伤占位）。
 
     // ④ 正常消息：非空 = 生成成功 → 再走夺舍失败检测
     // v1.37.56：这里不再无条件清零连续计数——被截断/被空回后的"残留消息"也会走到这里，
