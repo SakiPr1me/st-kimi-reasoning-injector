@@ -1423,11 +1423,26 @@ export function nsfwAutoPicks(chatId, msgs) {
         const live = nsfwStateFromMsgs(msgs);
         const names = (bucket.order || []).filter((n) => bucket.chars[n]);
         Object.keys(live.chars).forEach((n) => { if (names.indexOf(n) < 0) names.push(n); });
-        /* 块里的 `name 角色名 = X` 也算“这一楼有她”——她刚在这楼出过场，状态要继续发（否则正文用代词时状态会断）。 */
-        const lastA = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') return aiContent(String(msgs[i].content || '')); } return ''; })();
+        /* ★W462：AUTO 不只认最后一条 assistant —— 往上找最近 4 条 assistant（含块里的 name 行），
+           32 楼有 A、34 楼 B、36 楼只写 B 时，A 仍算在场；否则 UI 勾着 A、请求时却按最后一条文本把 A 丢了。 */
+        const AUTO_RECENT_ASSISTANTS = 4;
+        const texts = [];
+        const blockNames = [];
+        let aSeen = 0;
+        for (let i = (msgs || []).length - 1; i >= 0 && aSeen < AUTO_RECENT_ASSISTANTS; i--) {
+            const m = msgs[i];
+            if (!m || m.role !== 'assistant') continue;
+            aSeen++;
+            const raw = String(m.content || '');
+            texts.push(aiContent(raw));
+            try {
+                const p = nsfwParse(raw);
+                Object.keys((p && p.chars) || {}).forEach((bn) => { if (blockNames.indexOf(bn) < 0) blockNames.push(bn); });
+            } catch (eP) { }
+        }
         const lastU = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'user') return realUserInput(String(msgs[i].content || '')); } return ''; })();
-        const text = lastA + String.fromCharCode(10) + lastU;
-        return names.filter((n) => n && text.indexOf(n) >= 0);
+        const text = texts.join(String.fromCharCode(10)) + String.fromCharCode(10) + lastU;
+        return names.filter((n) => n && (text.indexOf(n) >= 0 || blockNames.indexOf(n) >= 0));
     } catch (e) { return []; }
 }
 /** 本轮该发送谁：AUTO=正文提到的人 + 手动一次性追加；手动=勾选的 */
