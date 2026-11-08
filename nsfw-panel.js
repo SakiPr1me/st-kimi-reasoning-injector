@@ -634,6 +634,31 @@ export function nsfwSetStatic(chatId, name, id, value) {
         return true;
     } catch (e) { return false; }
 }
+/** ★W446e：批量写卡片编辑 —— 只落盘一次（逐个字段写会把整份档案反复序列化，长聊天直接卡死） */
+export function nsfwSetStats(chatId, name, edits) {
+    try {
+        const { all, bucket, key } = nsfwBucket(chatId);
+        const rec = bucket.chars[name];
+        if (!rec) return false;
+        let touched = false;
+        (Array.isArray(edits) ? edits : []).forEach((e0) => {
+            const id = String((e0 && e0.id) || '');
+            if (!id) return;
+            if (e0.static) {
+                if (!rec.static) rec.static = {};
+                rec.static[id] = String(e0.value == null ? '' : e0.value);
+                touched = true;
+                return;
+            }
+            const f = fieldById(id);
+            if (!f) return;
+            rec.stats[id] = { value: e0.value, comment: e0.comment || '', at: Date.now() };
+            touched = true;
+        });
+        if (touched) { rec.updatedAt = Date.now(); all[key] = bucket; writeAll(all); }
+        return touched;
+    } catch (e) { return false; }
+}
 /** 字段管理：新增自定义字段 */
 export function nsfwAddCustomField(def) {
     try {
@@ -1451,7 +1476,13 @@ export function nsfwBuildSend(chatId, names, msgs, opts) {
         const parts = [];
         (names || []).forEach((n) => {
             /* ★W437：请求历史被预算裁掉带块旧楼时，别整条静默跳过 —— 用当前分支缓存兜底（只补 static，不覆盖本轮值） */
-            const prof = live ? (live.chars[n] || bucket.chars[n] || null) : bucket.chars[n];
+            /* ★W447：只认「这次请求历史里真有块」的人 —— 切新分支/重roll 后，上一版里那个新角色的块已经不在历史里，
+               不能再拿缓存状态补发（否则 AI 会收到一个已经被丢弃的角色，以为要新建）。只有历史里一个块都读不到时
+               （旧楼被预算裁光）才退回缓存兜底。 */
+            const liveNames = live ? Object.keys(live.chars || {}) : [];
+            const prof = live
+                ? (live.chars[n] || (liveNames.length ? null : (bucket.chars[n] || null)))
+                : bucket.chars[n];
             if (prof && live && live.chars[n] && bucket.chars[n] && (!prof.static || !Object.keys(prof.static || {}).length)) {
                 prof.static = bucket.chars[n].static || {};
             }
@@ -1459,7 +1490,7 @@ export function nsfwBuildSend(chatId, names, msgs, opts) {
             const b = buildCharBlock(n, prof);
             if (!b) return;
             const t0 = String(((prof.stats || {}).snapTime || {}).value || '');
-            parts.push('以下是' + n + (t0 ? '于' + t0 : '') + '的NSFW状态快照（出于省token需求评述不作为提示词发送，不代表没有），如进入NSFW剧情则按照以上要求综合剧情与推理完整更新（不进入则不输出）：');
+            parts.push('以下是' + n + (t0 ? '于' + t0 : '') + '的NSFW状态快照（这是前文已有的状态，不是示例；请当作续写底稿直接更新，不要当成新建。出于省token需求评述不作为提示词发送，不代表没有），如进入NSFW剧情则按照以上要求综合剧情与推理完整更新（不进入则不输出）：');
             parts.push(b);
         });
         return parts.length > 1 ? parts.join(NL) : '';
@@ -1494,6 +1525,9 @@ export function nsfwRewriteRequest(msgs, chatId) {
         /* ① 拼状态：必须在剥块之前（历史里还留着块） */
         out.names = nsfwPickForRequest(chatId, msgs);
         out.text = out.names.length ? nsfwBuildSend(chatId, out.names, msgs) : '';
+        /* ★W447b：只把真的写进注入段的人算作“这次发了”（历史里没块的人已被 nsfwBuildSend 跳过） */
+        if (out.text) out.names = out.names.filter((n) => out.text.indexOf('以下是' + n) >= 0 || out.text.indexOf('name 角色名 = ' + n) >= 0);
+        else out.names = [];
         /* ② 剥掉历史 assistant 楼层里的旧块（不重复发给 AI） */
         if (nsfwStripHistory(msgs)) out.changed = true;
         /* ③ 插到 </nsfw_state_guide> 前；找不到就第一条 system 最前；再没有就 unshift */
@@ -1578,6 +1612,16 @@ export function nsfwResetFold() { try { _foldMap.clear(); } catch (e) { } }
 function _foldKey(chatId, mesid, name) { return String(chatId || '') + '|' + String(mesid == null ? '' : mesid) + '|' + String(name || ''); }
 /* ★W423：记住每张卡停在哪个分页（编辑保存后卡会重建，回到原分页） */
 const _tabMap = new Map();
+/* ★W445：一楼多个角色只画一张卡 —— 记住这一楼当前选中的是谁（切换名字用） */
+const _charSelMap = new Map();
+function _charSelKey(chatId, mesid) { return String(chatId || '') + '|' + String(mesid == null ? '' : mesid); }
+function _charSelGet(chatId, mesid) { try { return _charSelMap.get(_charSelKey(chatId, mesid)) || ''; } catch (e) { return ''; } }
+function _charSelSet(chatId, mesid, name) {
+    try {
+        _charSelMap.set(_charSelKey(chatId, mesid), String(name || ''));
+        if (_charSelMap.size > 300) { const k0 = _charSelMap.keys().next().value; _charSelMap.delete(k0); }
+    } catch (e) { }
+}
 export function nsfwResetTabs() { try { _tabMap.clear(); } catch (e) { } }
 export function nsfwApplyTab(card, chatId, mesid, name) {
     try {
@@ -1953,8 +1997,8 @@ function rowHtml(f, cell) {
         + c + '</div>';
 }
 
-/** 状态卡（v2：分页 tabs，评述在右） */
-export function nsfwRenderCard(name, profile) {
+/** 状态卡（v2：分页 tabs，评述在右）；★W445 opts.names = 这一楼所有角色（>1 时卡头出名字切换） */
+export function nsfwRenderCard(name, profile, opts) {
     const wrap = document.createElement('div');
     const dens = String((_getSettings() || {}).nsfwDensity || 'normal');
     wrap.className = 'yw-nsfw yw-nsfw--' + (dens === 'compact' || dens === 'loose' ? dens : 'normal');
@@ -1967,9 +2011,13 @@ export function nsfwRenderCard(name, profile) {
     wrap.dataset.char = name;
     const head = document.createElement('div');
     head.className = 'yw-nsfw-head';
+    const allNames = (opts && Array.isArray(opts.names) && opts.names.length) ? opts.names : [name];   /* ★W445 */
+    const nmHtml = allNames.length > 1
+        ? '<span class="nm yw-nsfw-names">' + allNames.map((n) => '<button type="button" class="yw-nsfw-name' + (String(n) === String(name) ? ' on' : '') + '" data-name="' + esc(n) + '">' + esc(n) + '</button>').join('') + '</span>'
+        : '<span class="nm">' + esc(name) + '</span>';
     head.innerHTML = '<button type="button" class="yw-nsfw-copy-btn" title="复制全部内容">⧉</button>'
         + '<button type="button" class="yw-nsfw-edit-btn" title="编辑这张卡">✎</button>'
-        + '<span class="nm">' + esc(name) + '</span>'
+        + nmHtml
 
         + (g('snapTime') ? '<span class="kv yw-nsfw-snaptime">⏱ ' + esc(g('snapTime')) + '</span>' : '')
         + ((nsfwGuideAllows('pregnancy') || nsfwGuideAllows('menstrual')) ? '<span class="kv yw-nsfw-preg">怀孕 ' + preg.risk + '%</span>' : '');   /* ★W413：字段都被删了就不显示派生值 */
@@ -2176,6 +2224,7 @@ export function nsfwRenderCard(name, profile) {
     /* ★W354/W362：按「最高一页」把面板高度钉死 —— 切分页时上面的分页条不跳位；
        渲染当下可能还没排版（宽度为 0），所以 rAF + 150ms 各再锁一次 */
     const lockPanels = () => {
+        if (wrap.dataset && wrap.dataset.nolock === '1') return;   /* ★W450：一楼多角色时不锁高（只显示一张，避免布局卡死） */
         try {
             if (wrap.classList.contains('is-collapsed')) { panels.style.minHeight = ''; panels.style.height = ''; return; }   /* ★W412：折叠时不量高度 */
             const kids = Array.prototype.slice.call(panels.children);
@@ -2185,7 +2234,7 @@ export function nsfwRenderCard(name, profile) {
             kids.forEach((k) => {
                 const old = k.style.display;
                 k.style.display = 'block';
-                maxH = Math.max(maxH, k.scrollHeight);
+                maxH = Math.max(maxH, Math.min(6000, k.scrollHeight || 0));   /* ★W445b：布局读疯时封顶，别把补空行循环撑爆 */
                 k.style.display = old;
             });
             if (maxH > 0) {
@@ -2208,7 +2257,7 @@ export function nsfwRenderCard(name, profile) {
                     /* 行高必须在「显示着」的时候量 —— 先 restore 再量会得到 0 */
                     const rows0 = k.querySelectorAll('.yw-nsfw-row');
                     const sample = rows0.length ? rows0[rows0.length - 1] : null;
-                    const rowH = sample ? Math.max(14, Math.round(sample.getBoundingClientRect().height)) : 27;
+                    const rowH = sample ? Math.min(80, Math.max(14, Math.round(sample.getBoundingClientRect().height) || 27)) : 27;   /* ★W445b：行高保护 */
                     k.style.display = old;
                     const left = maxH - used;
                     if (left <= 2) break;
@@ -2220,7 +2269,7 @@ export function nsfwRenderCard(name, profile) {
                         k.appendChild(f2);
                         break;
                     }
-                    const n = Math.floor(left / rowH);
+                    const n = Math.min(120, Math.floor(left / rowH));   /* ★W445b：最多补 120 行，绝不让布局异常把主线程卡死 */
                     for (let i = 0; i < n; i++) {
                         const f = document.createElement('div');
                         f.className = 'yw-nsfw-row yw-nsfw-fill';
@@ -2271,6 +2320,9 @@ function bindCardEdit(wrap, name, profile) {
             btn.textContent = '✓';
             btn.title = '保存';
             wrap.classList.add('yw-nsfw-editing');
+            /* ★W446b：进编辑前先摘掉补空行/释放钉死高度 —— 输入框和固定高度一起容易把布局拖死 */
+            try { wrap.querySelectorAll('.yw-nsfw-fill').forEach((f) => f.remove()); } catch (e0) { }
+            try { const pn0 = wrap.querySelector('.yw-nsfw-panels'); if (pn0) { pn0.style.minHeight = ''; pn0.style.height = ''; } } catch (e1) { }
             /* ★W417：先把「指南里有、这一楼没有值」的字段补成空行（N/A 被丢掉后也能在这里补录） */
             try {
                 if (guideUsable()) {
@@ -2353,7 +2405,8 @@ function bindCardEdit(wrap, name, profile) {
             });
             return;
         }
-        /* 保存 */
+        /* 保存：先把所有行的值收齐，一次性写盘（★W446e：以前每行写一次 localStorage，档案一大就把主线程卡死） */
+        const edits = [];
         wrap.querySelectorAll('.yw-nsfw-row[data-id]').forEach((row) => {
             const id = row.getAttribute('data-id');
             const isStatic = row.getAttribute('data-static') === '1';
@@ -2361,32 +2414,27 @@ function bindCardEdit(wrap, name, profile) {
             const c = row.querySelector('.yw-nsfw-in-c');
             if (!v) return;
             if ((row.getAttribute('data-new') === '1' || row.getAttribute('data-ph') === '1') && !String(v.value || '').trim() && !(c && String(c.value || '').trim())) return;   /* ★W417/W433：补录/占位行没填就不写 */
-            if (isStatic) nsfwSetStatic(chatId, name, id, v.value);
-            else nsfwSetStat(chatId, name, id, v.value, c ? c.value : '');
+            edits.push({ id: id, value: v.value, comment: c ? c.value : '', static: isStatic });
         });
-        editing = false;
-        btn.textContent = '✎';
-        btn.title = '编辑这张卡';
-        wrap.classList.remove('yw-nsfw-editing');
+        try { nsfwSetStats(chatId, name, edits); } catch (eBatch) { }
+
         /* ★W362：把改动写回这一楼的块 —— 卡片是「读楼层」画的，只改 bucket 会被下次挂载覆盖 */
         try {
             const mesid0 = wrap.dataset.mesid;
-            const changes = [];
-            wrap.querySelectorAll(".yw-nsfw-row[data-id]").forEach((row) => {
-                const id = row.getAttribute("data-id");
-                const v = row.querySelector(".yw-nsfw-in-v");
-                const c = row.querySelector(".yw-nsfw-in-c");
-                if (!v) return;
-                if ((row.getAttribute('data-new') === '1' || row.getAttribute('data-ph') === '1') && !String(v.value || '').trim() && !(c && String(c.value || '').trim())) return;   /* ★W417/W433 */
-                changes.push({ id: id, value: v.value, comment: c ? c.value : "" });
-            });
+            const changes = edits.map((x) => ({ id: x.id, value: x.value, comment: x.comment }));
+
             if (mesid0 != null && changes.length) nsfwEditFloor(chatId, Number(mesid0), name, changes);
+
         } catch (e) { }
+        /* ★W448b：等重建完再收编辑态（和“直接改楼层”同序：重建时卡还带着 editing，布局不会卡） */
+        editing = false;
+        btn.textContent = '✎';
+        btn.title = '编辑这张卡';
+        try { wrap.classList.remove('yw-nsfw-editing'); } catch (eCls) { }
         const mesid = wrap.dataset.mesid;
-        /* ★W411：同样重挂全部（编辑只改了当前楼，但酒馆可能整页重刷） */
-        setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, 30);
-        setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, 300);
-        setTimeout(() => { try { nsfwReattachAll(); } catch (e) { } }, 900);   /* ★W418：等酒馆保存后的整页重刷落定 */
+        setTimeout(() => { try { nsfwReattachAll(null, true); } catch (e) { } }, 30);
+        setTimeout(() => { try { nsfwReattachAll(null, true); } catch (e) { } }, 300);
+        setTimeout(() => { try { nsfwReattachAll(null, true); } catch (e) { } }, 900);
     });
 }
 /** ★W438：找出文本里所有状态块（<div data-nsfw> / <nsfw>），带 body 边界 */
@@ -2635,16 +2683,14 @@ export function nsfwEditFloor(chatId, mesid, name, changes) {
         /* ★W422：照「双击改字」的保存口径 —— 先发 MESSAGE_EDITED，再只重渲染这一楼 */
         try { if (ctx.eventSource && ctx.eventTypes) { const p0 = ctx.eventSource.emit(ctx.eventTypes.MESSAGE_EDITED, mesid); if (p0 && p0.catch) p0.catch(() => { }); } } catch (e0) { }
         try {
-            const chatEl = document.querySelector(".mes[mesid=\"" + mesid + "\"] .mes_text");
-            if (chatEl && ctx.messageFormatting) {
-                chatEl.innerHTML = ctx.messageFormatting(next, msg.name || "", false, false, mesid);
-            }
+            /* ★W449：不再重写 .mes_text —— 正文没变（只是隐藏块里的值改了），
+               重写整段会把别的插件的美化和布局一起翻搅（作者实测编辑保存后卡死）。 */
             try { if (ctx.eventSource && ctx.eventTypes) { const p1 = ctx.eventSource.emit(ctx.eventTypes.MESSAGE_UPDATED, mesid); if (p1 && p1.catch) p1.catch(() => { }); } } catch (e1) { }
             /* 只重挂这一楼；其它楼不动 */
             nsfwMountToMessage(mesid);
-            setTimeout(() => { try { nsfwMountToMessage(mesid); } catch (e2) { } }, 450);
+            setTimeout(() => { try { nsfwMountToMessage(mesid, true); } catch (e2) { } }, 450);   /* ★W448：卡还在就不重建 */
             /* 兜底：酒馆若整页重刷，1200ms 后补挂（现在没块的楼不会被误删） */
-            setTimeout(() => { try { nsfwReattachAll(); } catch (e3) { } }, 1200);
+            setTimeout(() => { try { nsfwReattachAll(null, true); } catch (e3) { } }, 1200);
         } catch (e) { }
         try { if (ctx.saveChat) ctx.saveChat(); } catch (e) { }
         return true;
@@ -2743,6 +2789,10 @@ const CSS = [
     '.yw-nsfw{margin:6px 0 8px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 16%,transparent);border-radius:12px;overflow:hidden;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 3%,transparent);font-size:0.86em}',
     '.yw-nsfw-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:6px 9px;border-bottom:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 10%,transparent);background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 5%,transparent)}',
     '.yw-nsfw-head .nm{font-weight:700;letter-spacing:.5px}',
+    '.yw-nsfw-head .nm.yw-nsfw-names{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;letter-spacing:0}',
+    '.yw-nsfw-name{font:inherit;font-weight:400;color:inherit;background:transparent;border:1px solid transparent;border-radius:7px;padding:0 7px;line-height:1.5;cursor:pointer;opacity:.55;transition:opacity .12s,background .12s,border-color .12s}',
+    '.yw-nsfw-name:hover{opacity:.9}',
+    '.yw-nsfw-name.on{opacity:1;font-weight:700;border-color:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 30%,transparent);background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent)}',
     '.yw-nsfw-head .tag{font-size:.78em;opacity:.75;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 24%,transparent);border-radius:999px;padding:0 6px}',
     '.yw-nsfw-head .kv{margin-left:auto;font-size:.8em;opacity:.8}',
     '.yw-nsfw-head .kv+.kv{margin-left:8px}',
@@ -3004,7 +3054,7 @@ export function nsfwSnapOf(chatId, msgId) {
 }
 /* ────────────────────────── 消息挂载 ────────────────────────── */
 
-export function nsfwMountToMessage(messageId) {
+export function nsfwMountToMessage(messageId, onlyIfMissing) {
     try {
         const ctx = window.SillyTavern && window.SillyTavern.getContext ? window.SillyTavern.getContext() : null;
         const msg = ctx && ctx.chat ? ctx.chat[messageId] : null;
@@ -3018,6 +3068,11 @@ export function nsfwMountToMessage(messageId) {
 
         const mesEl = document.querySelector('.mes[mesid="' + messageId + '"]');
         if (!mesEl) return false;
+        /* ★W448：只在“卡丢了”时补挂 —— 卡还在就别再重建（编辑后 450ms 的兜底重建会把布局卡死） */
+        if (onlyIfMissing) {
+            const ex0 = mesEl.querySelector('.yw-nsfw');
+            if (ex0 && ex0.dataset && String(ex0.dataset.mesid || '') === String(messageId)) return true;
+        }
         /* ★W422：先判断有没有块，再决定要不要动卡（没块的楼保留原卡，别被全量重挂顺手清掉） */
 
         /* ★W315：卡片只认这一楼自己的块（块就在 mes 里，像 todo/remind 一样跟着楼层走）
@@ -3030,25 +3085,73 @@ export function nsfwMountToMessage(messageId) {
            那张快照还是上一个分支的 ⇒ 绝不能把旧图表挂到新分支上。 */
         if (!ownNames.length) return false;
         const pick = (n) => own[n] || bucket.chars[n] || { sex: 'female', role: 'bottom', stats: {}, desc: {} };
-        const show = ownNames;
 
         nsfwEnsureStyle();
         mesEl.querySelectorAll('.yw-nsfw').forEach((n) => n.remove());
         nsfwHideRaw(mesEl);
-        let insertAfter = mesEl.querySelector('.mes_text') || mesEl;   /* ★W444：多角色时按块顺序排，不能每张都插在 mes_text 后面（会倒序） */
-        show.slice(0, 6).forEach((n) => {   /* ★W444b：多角色最多画 6 张，别让第 4 个直接消失 */
-            const card = nsfwRenderCard(n, pick(n));
+        /* ★W446：一楼多个块 —— 只把选中的那张插进 DOM，其它卡先留在内存里；名字按钮只换卡，不重建（编辑/折叠/分页都不丢） */
+        let selName = _charSelGet(chatId, messageId);
+        if (ownNames.indexOf(selName) < 0) selName = ownNames[0];
+        _charSelSet(chatId, messageId, selName);
+        const cards = [];
+        const anchorNode = mesEl.querySelector('.mes_text') || mesEl;
+        ownNames.slice(0, 6).forEach((n) => {
+            const card = nsfwRenderCard(n, pick(n), { names: ownNames });
             card.dataset.mesid = String(messageId);
             try { nsfwApplyFold(card, chatId, messageId, n); } catch (eF) { }
             try { nsfwApplyTab(card, chatId, messageId, n); } catch (eT) { }
-            if (insertAfter.parentNode) insertAfter.parentNode.insertBefore(card, insertAfter.nextSibling);
-            else mesEl.appendChild(card);
-            insertAfter = card;
-            /* ★W363：挂进真实 DOM 后再锁一次高度（渲染时还没排版，量到的是 0） */
-            try {
-                /* ★W414：卡自己在渲染时已排了「同步 + rAF + 200ms」——这里不再叠加 */
-                if (card._nsfwLock) setTimeout(card._nsfwLock, 120);
-            } catch (e) { }
+            cards.push({ name: n, card: card });
+            if (n === selName) {
+                if (anchorNode.parentNode) anchorNode.parentNode.insertBefore(card, anchorNode.nextSibling);
+                else mesEl.appendChild(card);
+                try { if (card._nsfwLock) setTimeout(card._nsfwLock, 120); } catch (e) { }
+            }
+        });
+        const applySel = (nn) => {
+            const prev = cards.filter((x) => x.card.isConnected)[0];
+            const wasCollapsed = !!(prev && prev.card.classList.contains('is-collapsed'));
+            const prevTabBtn = prev ? prev.card.querySelector('.yw-nsfw-tab.on') : null;
+            const prevTabId = prevTabBtn ? prevTabBtn.getAttribute('data-tab') : '';
+            const prevTabIdx = prevTabBtn ? Array.prototype.indexOf.call(prev.card.querySelectorAll('.yw-nsfw-tab'), prevTabBtn) : -1;
+            selName = nn;
+            _charSelSet(chatId, messageId, nn);
+            cards.forEach((x) => {
+                try { x.card.remove(); } catch (eR) { }
+                x.card.querySelectorAll('.yw-nsfw-name').forEach((b) => {
+                    b.classList.toggle('on', b.getAttribute('data-name') === nn);
+                });
+            });
+            const hit = cards.filter((x) => x.name === nn)[0];
+            if (hit) {
+                if (anchorNode.parentNode) anchorNode.parentNode.insertBefore(hit.card, anchorNode.nextSibling);
+                else mesEl.appendChild(hit.card);
+            }
+            /* 折叠是「这张卡」的事：切名字时保持当前折叠态（别一切换就自动展开） */
+            if (hit && prev && prev !== hit) {
+                try { _foldMap.set(_foldKey(chatId, messageId, nn), wasCollapsed); nsfwApplyFold(hit.card, chatId, messageId, nn); } catch (eF) { }
+                /* ★W447：切人时停在同一页（第二页切过去还是第二页），并把这一页记到新名字上 */
+                try {
+                    const tabs = Array.prototype.slice.call(hit.card.querySelectorAll('.yw-nsfw-tab'));
+                    let tb = tabs.filter((t) => t.getAttribute('data-tab') === prevTabId)[0];
+                    if (!tb && prevTabIdx >= 0) tb = tabs[prevTabIdx];
+                    if (tb) { tb.click(); _tabMap.set(_foldKey(chatId, messageId, nn), tb.getAttribute('data-tab')); }
+                } catch (eT2) { }
+            }
+            /* ★W446d：切换时不立刻量高（先在下一帧量，避免和输入/布局抢主线程） */
+            if (hit && typeof hit.card._nsfwLock === 'function') { try { setTimeout(() => { try { hit.card._nsfwLock(); } catch (e2) { } }, 60); } catch (e0) { } }
+        };
+        /* 名字切换（有卡在编辑就不切，免得丢输入） */
+        cards.forEach((x) => {
+            x.card.querySelectorAll('.yw-nsfw-name[data-name]').forEach((b) => {
+                b.addEventListener('click', (ev) => {
+                    try { ev.stopPropagation(); } catch (e0) { }
+                    if (cards.some((y) => y.card.classList.contains('yw-nsfw-editing'))) return;
+                    const nn = b.getAttribute('data-name');
+                    if (!nn || nn === selName) return;
+                    /* ★W446c：等这次点击走完再切（同步把当前卡的按钮藏起来，Chromium 会卡在奇怪的焦点态） */
+                    setTimeout(() => { try { applySel(nn); } catch (e1) { } }, 0);
+                });
+            });
         });
         return true;
     } catch (e) { return false; }
@@ -3089,14 +3192,14 @@ export function nsfwStartObserver() {
         __nsfwObs.observe(chat, { childList: true, subtree: true });
     } catch (e) { }
 }
-export function nsfwReattachAll(onlyIds) {
+export function nsfwReattachAll(onlyIds, onlyMissing) {
     try {
         const want = Array.isArray(onlyIds) ? new Set(onlyIds.map((x) => Number(x))) : null;   /* ★W414：可只重挂指定楼，避免整聊扫 */
         document.querySelectorAll('#chat .mes[mesid]').forEach((el) => {
             const id = Number(el.getAttribute('mesid'));
             if (!Number.isFinite(id)) return;
             if (want && !want.has(id)) return;
-            nsfwMountToMessage(id);
+            nsfwMountToMessage(id, !!onlyMissing);
         });
     } catch (e) { }
 }
