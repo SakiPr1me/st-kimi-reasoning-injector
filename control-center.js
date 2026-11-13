@@ -5,7 +5,7 @@
    - 不写业务数据；只通过 getSettings/saveSettings 保存 controlCenter.favorites/recent。
    ========================================================================== */
 
-export const CONTROL_CENTER_VERSION = '1.3.6';
+export const CONTROL_CENTER_VERSION = '1.3.7';
 export const PANEL_SELECTOR = '#ywcc-root .ywcc-panel';
 
 const ROOT_ID = 'ywcc-root';
@@ -443,8 +443,7 @@ export function createControlCenter(options) {
         const root = H('div', 'ywcc-root');
         root.id = ROOT_ID;
         root.tabIndex = -1;
-        root.setAttribute('role', 'dialog');
-        root.setAttribute('aria-modal', 'false');
+        // Closed shell stays mounted for transitions, but must not advertise an active dialog.
         root.setAttribute('aria-label', '余温总控台');
         root.setAttribute('aria-labelledby', 'ywcc-title');
         root.setAttribute('aria-hidden', 'true');
@@ -640,6 +639,8 @@ export function createControlCenter(options) {
         state.open = true;
         state.lastFocus = doc.activeElement;
         state.root.classList.add('ywcc-is-open');
+        state.root.setAttribute('role', 'dialog');
+        state.root.setAttribute('aria-modal', 'false');
         state.root.setAttribute('aria-hidden', 'false');
         try { state.root.inert = false; } catch (err) { /* 忽略 */ }
         syncViewport();
@@ -698,6 +699,8 @@ export function createControlCenter(options) {
         if (state.headerHost) state.headerHost.replaceChildren();
         if (state.root) {
             state.root.classList.remove('ywcc-is-open');
+            state.root.removeAttribute('role');
+            state.root.removeAttribute('aria-modal');
             state.root.setAttribute('aria-hidden', 'true');
             try { state.root.inert = true; } catch (err) { /* 忽略 */ }
         }
