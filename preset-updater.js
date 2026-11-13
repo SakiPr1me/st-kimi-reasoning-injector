@@ -102,7 +102,7 @@ const EXT = 'preset_updater';
    读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md §修订；台账 §XXVIII） */
 /* ★★feedback11（2026-11-13 · 商店官方更新提醒）：5.3.57 → **5.3.58** ——
    只在商店会话里捕获 card rev/fp 快照并随 `sp.stitched()` 第三参回传；与 index.js 的 updaterBuild 成对升。 */
-const VERSION = '5.3.60';   // 更新器模块版本（随工具箱一起发布）
+const VERSION = '5.3.61';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -187,7 +187,7 @@ const VERSION = '5.3.60';   // 更新器模块版本（随工具箱一起发布�
      正文顶上说明 · **删掉「按原顺序全收」**（用途已被②整份覆盖，避免语义重叠的按钮）。
      判据仍全走既有 `source:'custom'` + `customText` 通路 ⇒ **内核改动继续为 0**；与 index.js 的 updaterBuild 成对升） */
 /* ★W279a（2026-10-29 · 收口补救）：BUILD 从 v5.3.43 追平 VERSION=5.3.54（W256~W263 四波只升 VERSION 漏了 BUILD；纯显示对齐，逻辑零改动） */
-const BUILD = 'v5.3.60';
+const BUILD = 'v5.3.61';
 const API_ID = 'openai';                       // 对话补全预设（用户只使用对话补全）
 
 // ---------------------------------------------------------------- 设置
@@ -3948,6 +3948,11 @@ function storeBarHtml() {
            这里只留**它管不到的两条"同名"** —— 那是另一件事（你已经有同名条目），不是位置问题。
            ⇒ 灰蓝块在"只是位置待定"的场景里**整块不渲染**（省 2 行），信息一条都没丢。 */
         if (r.storeSameName && r.storeSameName.length) notes.push('有 ' + r.storeSameName.length + ' 条你已经有同名的了（' + r.storeSameName.slice(0, 3).map(String).join('、') + (r.storeSameName.length > 3 ? '…' : '') + '）→ 按「改你那条」进对比，你可以选用我的 / 用新版 / 保存为两版');
+        if (r.storeFieldDefaults && r.storeFieldDefaults.length) {
+            const fd = r.storeFieldDefaults;
+            notes.push('有 ' + fd.length + ' 条是你漏缝后补进来的（' + fd.slice(0, 3).map(x => String(x && x.name || '')).join('、') + (fd.length > 3 ? '…' : '')
+                + '）：包里只带了名字和正文，角色 / 系统提示 / 注入位置·深度·顺序 / 触发词 / 禁止覆盖 / marker / 开关这些按酒馆默认值补全了——进对比可以核对。');
+        }
         if (r.sameName && r.sameName.length) notes.push('有 ' + r.sameName.length + ' 条你已经有同名的了（会照常加一条，你自己删一个）');
     }
     return notes.length
@@ -8480,7 +8485,7 @@ async function doGenerateInner() {
         toast('success', '已生成「' + name + '」——' + savedWhereText(name, '（你原来那份没动，还在下拉里）'));
         // ★P7（§15）：商店来的这次缝，写盘成功后回商店记账（"已缝入"标记 + 服务端 sews 计数 + 提示"你缝过的这条变了"）。
         //   商店模块没加载起来（发布隔离）→ 静默跳过，只留痕：预设已经写好了，不能因为记账失败就报错。
-        notifyStoreStitched(name, storeContext);   // ★feedback11：用打开时那份副本，不读此刻的全局 S.store
+        notifyStoreStitched(name, storeContext, report);   // ★feedback11：用打开时那份副本，不读此刻的全局 S.store；★累计补丁：带上最终 buildMerged 报告（危险正则跳过不清提醒）
         /* ★feedback11：只清**这一次**那个会话；期间若已换成另一张卡（identity 不同）不许清别人的。 */
         if (S.store === storeRef) { S.store = null; S.storeNextSource = null; }  // 这一次商店会话结束
         // ★F2：商店「一键更新全部」带过来的一批 → 写盘成功后**自动带出下一张**（没有批量就照常关窗）
@@ -8495,7 +8500,9 @@ async function doGenerateInner() {
     }
 }
 
-/** 条目与正则各有独立报告，两处都没有遗漏才可确认整包完成。 */
+/** 条目与正则各有独立报告，两处都没有遗漏才可确认整包完成。
+ *  ★累计补丁：最终 buildMerged 的 regex 报告里 `safetySkipped` = 危险正则被默认跳过 —— 这也算"没缝全"，
+ *    不能因为 storePackToNext 那份报告干净就回商店记"已缝入"（那会假清提醒）。 */
 function storeReportIncomplete(report) {
     const failed = (r) => !!r && (
         (Array.isArray(r.unresolved) && r.unresolved.length > 0)
@@ -8503,18 +8510,33 @@ function storeReportIncomplete(report) {
         || (Array.isArray(r.errors) && r.errors.length > 0)
         || !!r.error
     );
-    return failed(report) || failed(report && report.regex);
+    if (failed(report)) return true;
+    const rx = report && report.regex;
+    if (failed(rx)) return true;
+    if (rx && Array.isArray(rx.safetySkipped) && rx.safetySkipped.length > 0) return true;
+    return false;
 }
 
-/** ★P7：写盘成功后回商店记账（生成 / 缝入当前预设**两条路共用**，一个字不差）。 */
-function notifyStoreStitched(name, storeContext) {
+/** ★P7：写盘成功后回商店记账（生成 / 缝入当前预设**两条路共用**，一个字不差）。
+ *  @param {object} [mergedReport] 最终 `buildMerged()` 的报告（可选；老调用不传 = 老行为）。
+ *     ★累计补丁：它里面的 `regex.safetySkipped` 也是"没缝全" —— 有就保留提醒，绝不假清。 */
+function notifyStoreStitched(name, storeContext, mergedReport) {
     /* ★★feedback11：第二参**显式传入**时一律用它（哪怕传 null = 这次不是商店会话 / 已过期），
        绝不回退到此刻的全局 `S.store` —— 那是"await 期间换了卡就记错卡"的入口。
        不传第二参的老调用才退回全局（兼容）。 */
     const ctx = (storeContext !== undefined) ? storeContext : S.store;
     if (!ctx) return;
-    if (storeReportIncomplete(ctx.report)) {
-        console.warn('[预设更新器] 包里仍有未应用的内容 → 保留更新提醒');
+    const rxSkip = (mergedReport && mergedReport.regex && Array.isArray(mergedReport.regex.safetySkipped))
+        ? mergedReport.regex.safetySkipped : [];
+    if (storeReportIncomplete(ctx.report) || storeReportIncomplete(mergedReport)) {
+        const what = rxSkip.length
+            ? ('有 ' + rxSkip.length + ' 条正则安全性检查没过、默认没缝进去（' + rxSkip.slice(0, 3).map(String).join('、') + (rxSkip.length > 3 ? '…' : '') + '）')
+            : '还有内容没能应用（在你这份里没找到）';
+        toast('warning', '预设已经写好了，但包里' + what + ' → 商店的更新提醒会保留，别把这张卡当成已全部完成。', { timeOut: 18000 });
+        console.warn('[预设更新器] 包里仍有未应用/被安全跳过的内容 → 保留更新提醒', {
+            未应用: ctx.report ? { 条目: (ctx.report.unresolved || []).length, 正则: (ctx.report.regex && ctx.report.regex.unresolved || []).length } : null,
+            安全跳过: rxSkip,
+        });
         return;
     }
     try {
@@ -8741,7 +8763,7 @@ async function stitchIntoCurrentInner() {
     try {
         S.busy = true;
         const params = Object.entries(S.params).map(([key, use]) => ({ key, use }));
-        const { preset } = PM.buildMerged({
+        const { preset, report: mergedReport } = PM.buildMerged({
             mine: S.mine, next: S.next, items: S.analysis.items,
             decisions: S.decisions, params, orderMode: S.orderMode,
             orderOverride: ord.override,
@@ -8791,7 +8813,7 @@ async function stitchIntoCurrentInner() {
             : '已直接改 ' + name + '，没有备份。（下次想留一份退路，在确认框里把「同时自动备份」勾上再缝）',
             { timeOut: 15000 });
         console.info('[预设更新器] 缝入当前预设', { 目标: name, 备份: r.backedUp ? r.backupName : '（没备份：用户没勾）', 条目数: r.entries });
-        notifyStoreStitched(name, storeContext);   // ★feedback11：同上，回传打开对比时的会话副本
+        notifyStoreStitched(name, storeContext, mergedReport);   // ★feedback11：同上，回传打开对比时的会话副本；★累计补丁：最终报告（危险正则跳过不清提醒）
         closeWindow();
         renderSource();
         /* ★feedback11：只有 identity 仍是这一次那个对象才清；期间换过卡就别动新会话。 */
@@ -9851,13 +9873,30 @@ async function exportPatch() {
  *  · mismatch / match 只是"给界面看的说明"，判定本身由调用方负责
  *  @returns {false|{ok:true, report:object}} */
 function openPatchPage({ pack, match, mismatch, fileName, name }) {
-    const ops = (pack.ops || []).filter(o => o && typeof o === 'object');
+    /* ★★B10b（独立验收 2026-11-13）：文件导入也是用户路径 —— 必须和商店走**同一套补丁归一**
+       （缺目标且有完整正文 → 按新增补），不能在这里直接拿裸 op 调 `PM.applyPatch`。
+       归一后仍保留文件包自己的 `from/to/baseFingerprint`（版本判定/基线提示不变）。 */
+    let use = pack;
+    let normDefaulted = [];
+    try {
+        const norm = storePackToPatch({ ...pack, kind: 'ywp-patch' }, S.mine);
+        if (norm && norm.patch) {
+            use = { ...pack, ...norm.patch, from: pack.from, to: pack.to, baseFingerprint: pack.baseFingerprint, ops: norm.patch.ops };
+            normDefaulted = Array.isArray(norm.defaulted) ? norm.defaulted : [];
+        }
+    } catch (e) {
+        /* ★主自检：归一失败**不能回退裸包**（否则绕过缺目标/歧义 guard）。这次明确失败，什么都不改。 */
+        toast('error', '这个更新包没法安全归一：' + ((e && e.message) || e) + ' —— 这次先不应用，你手上这份一个字没动。', { timeOut: 14000 });
+        console.warn('[预设更新器] 文件更新包归一失败 → fail-closed，不应用裸包', e, pack);
+        return false;
+    }
+    const ops = (use.ops || []).filter(o => o && typeof o === 'object');
     if (!ops.length) { toast('info', '这个包里没有要改的地方'); return false; }
     let preview = null;
-    try { preview = PM.applyPatch({ preset: S.mine, patch: { ...pack, ops }, decisions: {} }); }
-    catch (e) { toast('error', '这个更新应用不了：' + (e?.message || e)); console.warn('[预设更新器] 更新包干跑失败', e, pack); return false; }
+    try { preview = PM.applyPatch({ preset: S.mine, patch: { ...use, ops }, decisions: {} }); }
+    catch (e) { toast('error', '这个更新应用不了：' + (e?.message || e)); console.warn('[预设更新器] 更新包干跑失败', e, use); return false; }
     S.patch = {
-        fileName: String(fileName || ''), pack: { ...pack, ops },
+        fileName: String(fileName || ''), pack: { ...use, ops },
         decisions: {},                    // key -> 'next'|'mine'|{use,customText}
         pick: {},                         // key -> { choices: {块号: 'mine'|'next'} }
         open: {},                         // key -> true（逐处挑展开）
@@ -9867,6 +9906,10 @@ function openPatchPage({ pack, match, mismatch, fileName, name }) {
         mismatch: mismatch || '',
         name: name || patchDefaultName(),
     };
+    if (normDefaulted.length) {
+        preview.report.storeFieldDefaults = normDefaulted;   // 走既有报告位（页顶提示），不新增 UI
+        console.info('[预设更新器] 文件包里有 ' + normDefaulted.length + ' 条漏缝条目是按默认字段补的', normDefaulted);
+    }
     S.storeNextSource = null;
     S.store = null;                       // ★P7：P1 文件路 / P6 云端路 = 自己的会话（别把"来自商店"那套带进来）
     // 默认全选（跟官方）——"你也改过"的那几条仍然默认用新的，但会被显眼标出来
@@ -10409,6 +10452,207 @@ function storePackToPatch(pack, mine) {
     } catch (e) { /* 同上 */ }
     const haveText = (nk) => (haveMap.has(nk) ? haveMap.get(nk) : null);
     const haveEnabled = (nk) => (haveEn.has(nk) ? haveEn.get(nk) : null);
+    /* ★★累计补丁（2026-11-13）：你漏缝了"它第一次新增"的那一版时，后来的包里只剩 patch/update。
+       只要包里带了完整新正文，就按"新增"补进去，别让你永远缺这一条。
+       判"目标在不在"必须跟内核 `locate()` 同一套：名字 / wasName 命中（1 条或多条都算找得到 ——
+       多条是歧义，交给内核挑最像的，**绝不另加一条**）；没名字命中时按正文相似度的 0.75/0.05 门槛。
+       读不出 `mine` ⇒ 一律不猜，保持原样。缺名字/缺正文 ⇒ 不补（补出来只会是空条目），
+       仍按"没找到"报告，不假一致。 */
+    let mineEntriesForTarget = [];
+    try { mineEntriesForTarget = PM.indexPreset(mine).entries || []; } catch (e) { mineEntriesForTarget = null; }
+    const entryTargetExists = (name, wasName, base, planned) => {
+        const names = [name, wasName].map(PM.normalizeName).filter(Boolean);
+        if (planned && names.some(n => planned.has(n))) return true;
+        if (!mineEntriesForTarget) return true;
+        if (!mineEntriesForTarget.length) return false;
+        if (names.length && mineEntriesForTarget.some(e => names.includes(PM.normalizeName(e.name)))) return true;
+        const b = String(base || '');
+        if (b) {
+            for (const pool of [mineEntriesForTarget.filter(e => e.orderIndex >= 0), mineEntriesForTarget]) {
+                if (!pool.length) continue;
+                const scored = pool.map(e => ({ s: PM.similarity(String(e.text || ''), b) })).sort((a, c) => c.s - a.s);
+                if (scored.length && scored[0].s > 0.75 && (scored.length === 1 || scored[0].s - scored[1].s > 0.05)) return true;
+            }
+        }
+        return false;
+    };
+    /* 缺目标补成新增时的条目快照：包里**有的字段逐字段原样保留**；缺的按酒馆预设的主流默认补，
+       并把"哪几个字段是补的"单独记下来（页顶如实提示，不冒充包里带了完整快照）。
+       ★默认值取自真实余温预设的主流值（197 条：role=system 186、system_prompt=false 185、
+         pos=0/depth=4/order=100 各 191、forbid=false 197、marker=false 189、trigger 全空）。
+       ★enabled（顺序表开关）沿用产品新增的老口径：包里没给就是开。 */
+    const ENTRY_DEFAULT_FIELDS = [
+        ['role', 'system'], ['system_prompt', false], ['injection_position', 0], ['injection_depth', 4],
+        ['injection_order', 100], ['injection_trigger', []], ['forbid_overrides', false], ['marker', false],
+    ];
+    const entrySnapshotForAdd = (entry, name, text, enabled) => {
+        const out = (entry && typeof entry === 'object') ? { ...entry } : {};
+        const defaulted = [];
+        if (!out.name) out.name = String(name || '');
+        const hasSP = Object.prototype.hasOwnProperty.call(out, 'system_prompt');
+        const hasContent = Object.prototype.hasOwnProperty.call(out, 'content');
+        if (!hasContent && hasSP && typeof out.system_prompt === 'string') out.system_prompt = text;
+        else out.content = text;
+        for (const [k, v] of ENTRY_DEFAULT_FIELDS) {
+            if (out[k] === undefined || out[k] === null) {
+                out[k] = (k === 'injection_trigger') ? [] : v;
+                defaulted.push(k);
+            }
+        }
+        if (typeof out.enabled !== 'boolean') { out.enabled = (typeof enabled === 'boolean' ? enabled : true); defaulted.push('enabled'); }
+        return { entry: out, defaulted };
+    };
+    /* 正则侧同一套身份尺子：id 唯一命中优先（用户改过名也认得出），其次名字，再按 base.findRegex。 */
+    const plannedRxIds = new Set();
+    const plannedRxNames = new Set();
+    const buildMineRxIndex = () => {
+        const idx = { byId: new Map(), byIdAll: new Map(), byName: new Map(), byNameAll: new Map(), byFind: new Map(), known: true };
+        let list = [];
+        try { list = (PM.getRegexList(mine) || []).map((x) => PM.normalizeRegexScript(x)); } catch (e) { idx.known = false; return idx; }
+        for (const x of list) {
+            const id = String(x.id || '');
+            if (id && !idx.byId.has(id)) idx.byId.set(id, x);
+            if (id) { if (!idx.byIdAll.has(id)) idx.byIdAll.set(id, []); idx.byIdAll.get(id).push(x); }
+            const nm = PM.normalizeName(String(x.scriptName || ''));
+            if (nm && !idx.byName.has(nm)) idx.byName.set(nm, x);
+            if (nm) { if (!idx.byNameAll.has(nm)) idx.byNameAll.set(nm, []); idx.byNameAll.get(nm).push(x); }
+            const f = PM.normalizeText(String(x.findRegex || ''));
+            if (f && !idx.byFind.has(f)) idx.byFind.set(f, x);
+        }
+        return idx;
+    };
+    const regexTargetExists = (op, rxIdx) => {
+        const base = (op.base && typeof op.base === 'object') ? op.base : {};
+        const next = (op.next && typeof op.next === 'object') ? op.next : ((op.reg && typeof op.reg === 'object') ? op.reg : {});
+        const names = [op.name, op.wasName, base.scriptName, next.scriptName].map(PM.normalizeName).filter(Boolean);
+        if (names.some(n => plannedRxNames.has(n))) return true;
+        if (String(next.id || '') && plannedRxIds.has(String(next.id))) return true;
+        if (!rxIdx.known) return true;
+        if (String(base.id || '') && rxIdx.byIdAll.has(String(base.id))) return true;
+        if (String(next.id || '') && rxIdx.byIdAll.has(String(next.id))) return true;
+        if (names.some(n => (rxIdx.byNameAll.get(n) || []).length)) return true;
+        const bf = PM.normalizeText(String(base.findRegex || ''));
+        if (bf && rxIdx.byFind.has(bf)) return true;
+        return false;
+    };
+    /** 一条内核格式的 regex-update：id 唯一命中 → 用你这边现在的名字定位；目标确实没有且 next 完整 → regex-add。
+     *  ★★E6d（独立验收 2026-11-13）：同名正则**不止一条**、又没有唯一 id 能认人 ⇒ **歧义**，
+     *    必须保持 unresolved、一条都不改（绝不按"最像的"去改第一条副本）。 */
+    const repairRegexUpdate = (op0, i, rxIdx, fallbackReg) => {
+        let cur = op0;
+        const base = (cur.base && typeof cur.base === 'object') ? cur.base : {};
+        const next = (cur.next && typeof cur.next === 'object') ? cur.next : ((fallbackReg && typeof fallbackReg === 'object') ? fallbackReg : {});
+        const idHits = (id) => (String(id || '') ? (rxIdx.byIdAll.get(String(id)) || []) : []);
+        const hitsOf = (nm) => (String(nm || '') ? (rxIdx.byNameAll.get(PM.normalizeName(nm)) || []) : []);
+        const idPick = (() => {
+            for (const id of [base.id, next.id]) {
+                const hits = idHits(id);
+                if (hits.length === 1) return String(hits[0].scriptName || '');
+            }
+            return '';
+        })();
+        if (idPick) {
+            /* id 是 ST 里最硬的身份；但内核 locate 只认名字 —— 这个名字若同名多条，内核仍会挑"最像的"
+               ⇒ 宁可记 unresolved，也不能让它改到副本。名字唯一才允许按 id 定位。 */
+            if (hitsOf(idPick).length === 1) cur = { ...cur, name: idPick, wasName: idPick };
+            else {
+                const real = String(cur.name || cur.wasName || idPick || '');
+                console.info('[预设更新器] 正则「' + real + '」有唯一 id，但这个名字同名 ' + hitsOf(idPick).length + ' 条、内核无法唯一定位 → 不猜，保留未找到');
+                return {
+                    op: 'regex-update', key: String(cur.key || ('store:regex-update#' + i)),
+                    name: '（同名正则 ' + hitsOf(idPick).length + ' 条，无法确定改哪条）', wasName: '', base: null, next, rename: false,
+                    ambiguous: true, ambiguousName: real, place: cur.place || {},
+                };
+            }
+        } else {
+            const nHits = hitsOf(cur.name);
+            const wHits = hitsOf(cur.wasName);
+            if (nHits.length > 1 && wHits.length === 1) {
+                /* 新名字撞了多条、旧名字只对上一条 ⇒ 用旧名字（唯一）定位，别按新名字挑"最像的"。 */
+                cur = { ...cur, name: cur.wasName };
+            } else if (nHits.length > 1 || (nHits.length === 0 && wHits.length > 1)) {
+                /* 同名多条、没有唯一 id/名字 ⇒ 歧义：产一条内核**定位不到**的 update（name 用提示串、base 置空），
+                   让内核记 unresolved、原样不动；绝不猜"改第一条"。 */
+                const real = String(cur.name || cur.wasName || '');
+                console.info('[预设更新器] 正则「' + real + '」同名有 ' + Math.max(nHits.length, wHits.length) + ' 条、又没有唯一 id → 不猜改哪条，保留未找到');
+                return {
+                    op: 'regex-update', key: String(cur.key || ('store:regex-update#' + i)),
+                    name: '（同名正则 ' + Math.max(nHits.length, wHits.length) + ' 条，无法确定改哪条）',
+                    wasName: '', base: null, next, rename: false, ambiguous: true, ambiguousName: real, place: cur.place || {},
+                };
+            }
+        }
+        if (regexTargetExists(cur, rxIdx)) return cur;
+        const bodyOk = next && String(next.findRegex || '') !== '';
+        const idDup = String(next.id || '') && idHits(next.id).length > 0;
+        if (!bodyOk || idDup) {
+            console.info('[预设更新器] 正则「' + (cur.name || '') + '」缺目标，但正文不完整/同 id 已有副本 → 保留未找到，不乱加');
+            return cur;
+        }
+        const a = { op: 'regex-add', key: String(cur.key || ('store:regex-add#' + i)), name: String(next.scriptName || cur.name || ''), reg: { ...next }, place: cur.place || {} };
+        plannedRxIds.add(String(next.id || ''));
+        plannedRxNames.add(PM.normalizeName(String(next.scriptName || '')));
+        console.info('[预设更新器] 正则「' + (a.name || '') + '」你这份里没有（漏缝了它新增的那一版）→ 按完整快照补成新增');
+        return a;
+    };
+    const regexOpForMine = (r, i, rxIdx) => {
+        let op = regexOpOf(r, i);
+        if (!op) return op;
+        if (op.op === 'regex-update') return repairRegexUpdate(op, i, rxIdx, r && r.reg);
+        /* ★★switch 缺目标：包里带了**完整 reg**（新增后只改开关）⇒ 按新增补进来，开关用包里的；
+           只有名字/开关、没有正文 ⇒ 保持 regex-switch（内核记 unresolved），不补空条。 */
+        if (op.op !== 'regex-switch') return op;
+        const base = (op.base && typeof op.base === 'object') ? op.base : {};
+        const reg = (r && r.reg && typeof r.reg === 'object') ? r.reg : null;
+        const idHits = (id) => (String(id || '') ? (rxIdx.byIdAll.get(String(id)) || []) : []);
+        const hitsOf = (nm) => (String(nm || '') ? (rxIdx.byNameAll.get(PM.normalizeName(nm)) || []) : []);
+        const idPick = (() => {
+            for (const id of [base.id, reg && reg.id]) {
+                const hits = idHits(id);
+                if (hits.length === 1) return String(hits[0].scriptName || '');
+            }
+            return '';
+        })();
+        if (idPick) {
+            if (hitsOf(idPick).length === 1) op = { ...op, name: idPick, wasName: idPick };
+            else {
+                const real = String(op.name || op.wasName || idPick || '');
+                console.info('[预设更新器] 正则开关「' + real + '」有唯一 id，但这个名字同名 ' + hitsOf(idPick).length + ' 条、内核无法唯一定位 → 不猜，保留未找到');
+                return { ...op, name: '（同名正则 ' + hitsOf(idPick).length + ' 条，无法确定改哪条）', wasName: '', base: null, ambiguous: true, ambiguousName: real };
+            }
+        } else {
+            const nHits = hitsOf(op.name);
+            const wHits = hitsOf(op.wasName);
+            if (nHits.length > 1 && wHits.length === 1) {
+                op = { ...op, name: op.wasName };
+            } else if (nHits.length > 1 || (nHits.length === 0 && wHits.length > 1)) {
+                const real = String(op.name || op.wasName || '');
+                console.info('[预设更新器] 正则开关「' + real + '」同名有 ' + Math.max(nHits.length, wHits.length) + ' 条、又没有唯一 id → 不猜改哪条，保留未找到');
+                return { ...op, name: '（同名正则 ' + Math.max(nHits.length, wHits.length) + ' 条，无法确定改哪条）', wasName: '', base: null, ambiguous: true, ambiguousName: real };
+            }
+        }
+        if (regexTargetExists(op, rxIdx)) return op;
+        if (!reg || String(reg.findRegex || '') === '') return op;          // 无内容：留 unresolved
+        if (String(reg.id || '') && idHits(reg.id).length) return op;      // 同 id 已有副本：不加第二条
+        /* ★主自检：`reg` 可能是"旧快照"（disabled 与这次开关相反）；显式开关（r.enabled）优先，写进补进来的那条。 */
+        const wantEnabled = (typeof op.enabled === 'boolean') ? op.enabled : !(reg.disabled === true);
+        const addReg = { ...reg, disabled: !wantEnabled };
+        const a = { op: 'regex-add', key: String(op.key || ('store:regex-add#' + i)), name: String(addReg.scriptName || op.name || ''), reg: addReg, place: op.place || {} };
+        plannedRxIds.add(String(reg.id || ''));
+        plannedRxNames.add(PM.normalizeName(String(reg.scriptName || '')));
+        console.info('[预设更新器] 正则「' + (a.name || '') + '」你这份里没有（只改了开关、但包里带了完整正则）→ 按完整快照补成新增');
+        return a;
+    };
+    /** 包里两种已有格式都认：regexOps（内核 op 列表）优先；否则把上传格式 regexes 翻成同一套 op。 */
+    const normalizePackRegexOps = (p, rxIdx) => {
+        if (Array.isArray(p.regexOps) && p.regexOps.length) {
+            return p.regexOps.map((op, i) => ((op && typeof op === 'object' && op.op === 'regex-update')
+                ? repairRegexUpdate(op, i, rxIdx, op.reg) : op)).filter(Boolean);
+        }
+        return (Array.isArray(p.regexes) ? p.regexes : []).map((r, i) => regexOpForMine(r, i, rxIdx)).filter(Boolean);
+    };
+    const defaultedAdds = [];       // 缺目标补成新增时，哪些字段是按默认补的（页顶如实提示，不冒充完整快照）
+    const plannedEntryNames = new Set();
     /* ★★W261（作者 2026-10-29 截图："我对比的是 余温V1008（云端 2026-10-08），😺尾部2·Gmn3.8(择1) 我预设里有这个，
        但是点开预览还是显示 新增 而不是 改名 和 打开了"）——
 
@@ -10497,6 +10741,21 @@ function storePackToPatch(pack, mine) {
         });
         if (mode === 'update' && e.mode === 'patch') {
             /* ★W234：`wasName` 优先用包里带回来的旧名字（改名场景），内核 `locate()` 会先按它找你手上那条 */
+            const nextText = String((e.next !== undefined && e.next !== null) ? e.next
+                : (((e.entry && e.entry.content) !== undefined && (e.entry && e.entry.content) !== null) ? e.entry.content : ''));
+            /* ★★累计补丁（2026-11-13）：你漏缝了它第一次新增的那一版 ⇒ 包里只剩 patch。目标确实不在
+               （名字/wasName/正文相似度都找不到）时，只要包里带完整正文，就补成新增；否则仍按未找到报告。 */
+            if (!entryTargetExists(nm, (wasNameIn || nm), e.base, plannedEntryNames)) {
+                if (PM.normalizeName(nm) && nextText !== '') {
+                    const snap = entrySnapshotForAdd(e.entry, nm, nextText, packEn);
+                    plannedEntryNames.add(PM.normalizeName(nm));
+                    if (snap.defaulted.length) defaultedAdds.push({ name: nm, fields: snap.defaulted });
+                    console.info('[预设更新器] 「' + nm + '」你这份里没有（漏缝了它新增的那一版）→ 按包里内容补成新增', { 按默认补的字段: snap.defaulted });
+                    const a = { op: 'add', key, name: nm, entry: snap.entry, enabled: (packEn === null ? true : packEn), place: e.place || {}, ...(snap.defaulted.length ? { defaultedFields: snap.defaulted } : {}) };
+                    return enDiff ? [a, swOp()] : [a];
+                }
+                console.info('[预设更新器] 「' + nm + '」包里只有改动、没带完整正文或名字 → 不能补成新增，保留未找到');
+            }
             const u = { op: 'update', key, name: nm, wasName: (renamedFrom || nm), base: String(e.base ?? ''), next: String(e.next ?? ''), place: e.place || {} };
             return enDiff ? [u, swOp()] : [u];
         }
@@ -10527,9 +10786,56 @@ function storePackToPatch(pack, mine) {
     };
     if (kind === 'ywp-patch') {
         /* ★★W230：这一支同样要补 `switch` —— 与 `conv()` 里那条注释同一个理由（开关差异不进补丁
-           ⇒ 内容一样时界面显示"没有可缝的"，开关那件事永远做不到）。 */
-        const ops = (Array.isArray(pack.ops) ? pack.ops : []).flatMap((op, i) => {
-            if (!op || typeof op !== 'object' || op.op !== 'add' || !PM.normalizeName(String(op.name || '')) || !have.has(PM.normalizeName(String(op.name || '')))) return [op];
+           ⇒ 内容一样时界面显示"没有可缝的"，开关那件事永远做不到）。
+           ★★累计补丁（2026-11-13）：update 缺目标 + 包里有完整 next ⇒ 补成 add；
+             remove / switch 缺目标**保持原样**（内核记 unresolved，绝不能当成功）。 */
+        const planned = new Set();
+        const ops = (Array.isArray(pack.ops) ? pack.ops : []).flatMap((op0, i) => {
+            if (!op0 || typeof op0 !== 'object') return [op0];
+            let op = op0;
+            if (op.op === 'update') {
+                const nm = String(op.name || '');
+                const was = String(op.wasName || nm);
+                const nextText = String((op.next !== undefined && op.next !== null) ? op.next
+                    : (((op.entry && op.entry.content) !== undefined && (op.entry && op.entry.content) !== null) ? op.entry.content : ''));
+                if (!entryTargetExists(nm, was, op.base, planned)) {
+                    if (PM.normalizeName(nm) && nextText !== '') {
+                        const fields = (op.fields && typeof op.fields === 'object') ? op.fields : {};
+                        const packEn = (op.entry && typeof op.entry.enabled === 'boolean') ? op.entry.enabled
+                            : (typeof op.enabled === 'boolean' ? op.enabled : null);
+                        const snap = entrySnapshotForAdd(Object.assign({}, op.entry || {}, fields), nm, nextText, packEn);
+                        planned.add(PM.normalizeName(nm));
+                        if (snap.defaulted.length) defaultedAdds.push({ name: nm, fields: snap.defaulted });
+                        console.info('[预设更新器] 「' + nm + '」更新包缺目标（漏缝了它新增的那一版）→ 按完整 next 补成新增', { 按默认补的字段: snap.defaulted });
+                        op = { op: 'add', key: String(op.key || ('store:update#' + i)), name: nm, entry: snap.entry, enabled: (packEn === null ? true : packEn), place: op.place || {}, ...(snap.defaulted.length ? { defaultedFields: snap.defaulted } : {}) };
+                    } else {
+                        console.info('[预设更新器] 「' + nm + '」更新包缺目标且没带完整 next → 保留未找到，不补空条');
+                    }
+                }
+            }
+            /* ★★switch 缺目标：包里带了**完整条目内容**（新增后只改开关）⇒ 按新增补进来，开关用包里的；
+               只有名字/开关、没有正文 ⇒ 保持 switch（内核 unresolved），不补空条。 */
+            if (op.op === 'switch') {
+                const nm = String(op.name || '');
+                const was = String(op.wasName || nm);
+                const text = String(((op.entry && op.entry.content !== undefined && op.entry.content !== null) ? op.entry.content
+                    : (op.next !== undefined && op.next !== null ? op.next : '')));
+                if (!entryTargetExists(nm, was, op.base, planned)) {
+                    if (PM.normalizeName(nm) && text !== '') {
+                        const packEn = (typeof op.enabled === 'boolean') ? op.enabled
+                            : ((op.entry && typeof op.entry.enabled === 'boolean') ? op.entry.enabled : true);
+                        const snap = entrySnapshotForAdd(op.entry, nm, text, packEn);
+                        snap.entry.enabled = packEn;         // ★显式开关优先，别让条目里的旧 enabled 盖掉这次 switch
+                        planned.add(PM.normalizeName(nm));
+                        if (snap.defaulted.length) defaultedAdds.push({ name: nm, fields: snap.defaulted });
+                        console.info('[预设更新器] 「' + nm + '」只改开关、但包里带了完整条目 → 按新增补进来', { 按默认补的字段: snap.defaulted });
+                        op = { op: 'add', key: String(op.key || ('store:switch#' + i)), name: nm, entry: snap.entry, enabled: packEn, place: op.place || {}, ...(snap.defaulted.length ? { defaultedFields: snap.defaulted } : {}) };
+                    } else {
+                        console.info('[预设更新器] 「' + nm + '」只改开关且没带条目内容 → 保留未找到，不补空条');
+                    }
+                }
+            }
+            if (op.op !== 'add' || !PM.normalizeName(String(op.name || '')) || !have.has(PM.normalizeName(String(op.name || '')))) return [op];
             sameName.push(String(op.name || ''));                        // 同一个口径：新增撞名 → 改你那条
             const _nk = PM.normalizeName(String(op.name || ''));
             const _mt = haveText(_nk);
@@ -10541,7 +10847,8 @@ function storePackToPatch(pack, mine) {
             }
             return [u];
         });
-        return { patch: { ...pack, ops }, sameName };
+        const rxOps = normalizePackRegexOps(pack, buildMineRxIndex());
+        return { patch: { ...pack, ...(rxOps.length ? { regexOps: rxOps } : {}), ops }, sameName, defaulted: defaultedAdds };
     }
     if (kind !== 'ywp-entry') throw new Error('这个包不是能缝进来的类型（kind=' + (kind || '没写') + '）');
     const list = Array.isArray(pack.entries) ? pack.entries : [];
@@ -10563,54 +10870,85 @@ function storePackToPatch(pack, mine) {
           · 内容不同 ⇒ `regex-update`（对比页只出一行，你在那儿选 用我的 / 两条都留 / 用新版）；
           · 认不到 ⇒ 保持 `regex-add`（真·新增，与改前一致）。
        ★只影响「包里 mode=new 且你这边已有同 id / 同名」的情形；patch / remove / switch 一律原样。 */
-    const myRxList = (() => {
-        try { return (PM.getRegexList(mine) || []).map((x) => PM.normalizeRegexScript(x)); } catch (e) { return []; }
-    })();
-    const myRxById = new Map();
-    const myRxByName = new Map();
-    for (const x of myRxList) {
-        const k = String(x.id || '');
-        if (k && !myRxById.has(k)) myRxById.set(k, x);
-        const kk = PM.normalizeName(String(x.scriptName || ''));
-        if (kk && !myRxByName.has(kk)) myRxByName.set(kk, x);
-    }
-    const regexOps = (Array.isArray(pack.regexes) ? pack.regexes : []).map((r, i) => {
-        const op = regexOpOf(r, i);
+    const rxIdx = buildMineRxIndex();
+    const myRxById = rxIdx.byId;
+    const myRxByName = rxIdx.byName;
+    /** 一条"同名多条/同 id 多副本、内核无法唯一定位"的正则：转成定位不到的 update，保原、记 unresolved。 */
+    const regexAmbiguousUpdate = (op, i, count, real) => ({
+        op: 'regex-update', key: String(op.key || ('store:regex-update#' + i)),
+        name: '（同名正则 ' + count + ' 条，无法确定改哪条）', wasName: '', base: null,
+        next: (op.reg && typeof op.reg === 'object') ? op.reg : null, rename: false,
+        ambiguous: true, ambiguousName: String(real || ''), place: op.place || {},
+    });
+    /** 包里的 regex-add 先按 id / 唯一名字认一遍（W246/W247）；
+     *  ★E6d（2026-11-13 独立验收真红）：同名多条 / 同 id 多副本、内核无法唯一定位 ⇒ 一律转歧义 unresolved，
+     *    **绝不按 myRxByName 的第一条去 update/switch**（那会覆盖用户的同名副本）。 */
+    const dedupeRegexAdd = (op, i) => {
         if (!op || op.op !== 'regex-add') return op;
         const reg = op.reg || null;
         if (!reg) return op;
-        /* ★★W247（作者："以后有什么问题你要**同时修复正则和条目**，不能修一半"）——
-           **正则改名**：包里带了旧名字（`reg.wasName`，由上传侧 W247 写入）= 这是同一条改了名。
-           此时按**旧名字**去找你手上那条（条目侧 W234/W240 就是这么干的），找到 ⇒ 走 update 就地改名，**不新增**。
-           ★服务端 `sanitizeRegexReg()` 对未知字段原样保留 ⇒ `reg.wasName` 能穿过。 */
-        const wasNm = String((reg && reg.wasName) || '');
-        const byWas = wasNm ? (myRxByName.get(PM.normalizeName(wasNm)) || null) : null;
-        if (byWas && PM.normalizeName(byWas.scriptName) !== PM.normalizeName(String(reg.scriptName || ''))) {
-            return {
-                op: 'regex-update', key: String(op.key || ('store:regex-update#' + i)),
-                name: String(reg.scriptName || op.name || ''),
-                wasName: String(byWas.scriptName || ''),
-                base: { ...byWas }, next: { ...reg }, rename: !(PM.regexBodySig(byWas) === PM.regexBodySig(reg)), place: op.place || {},
-            };
+        const idHits = (id) => (String(id || '') ? (rxIdx.byIdAll.get(String(id)) || []) : []);
+        const hitsOf = (nm) => (String(nm || '') ? (rxIdx.byNameAll.get(PM.normalizeName(nm)) || []) : []);
+        const idKey = String(reg.id || '');
+        const idRow = idHits(idKey);
+        if (idKey && idRow.length > 1) {
+            console.info('[预设更新器] 正则「' + (reg.scriptName || '') + '」同 id 有 ' + idRow.length + ' 份副本 → 不猜，保留未找到');
+            return regexAmbiguousUpdate(op, i, idRow.length, reg.scriptName);
         }
-        const mineRx = myRxById.get(String(reg.id || '')) || myRxByName.get(PM.normalizeName(String(reg.scriptName || ''))) || null;
-        if (!mineRx) return op;                                   // 真·新增
+        let base = null, via = '';
+        if (idKey && idRow.length === 1) { base = idRow[0]; via = 'id'; }
+        if (!base) {
+            const wasNm = String(reg.wasName || '');
+            const wHits = hitsOf(wasNm);
+            if (wasNm && wHits.length > 1) {
+                console.info('[预设更新器] 正则「' + (reg.scriptName || '') + '」旧名字同名 ' + wHits.length + ' 条 → 不猜，保留未找到');
+                return regexAmbiguousUpdate(op, i, wHits.length, reg.scriptName);
+            }
+            if (wasNm && wHits.length === 1
+                && PM.normalizeName(wHits[0].scriptName) !== PM.normalizeName(String(reg.scriptName || ''))) {
+                base = wHits[0]; via = 'was';
+            }
+        }
+        if (!base) {
+            const nHits = hitsOf(reg.scriptName);
+            if (nHits.length > 1) {
+                console.info('[预设更新器] 正则「' + (reg.scriptName || '') + '」同名 ' + nHits.length + ' 条 → 不猜改哪条，保留未找到');
+                return regexAmbiguousUpdate(op, i, nHits.length, reg.scriptName);
+            }
+            if (nHits.length === 1) { base = nHits[0]; via = 'name'; }
+        }
+        if (!base) return op;                                   // 真·新增
+        /* 找到唯一目标后，还要确认**内核要用的名字**唯一（内核 locate 只认名字；同 id 但同名副本仍会猜错）。 */
+        const locName = String(base.scriptName || '');
+        const locCount = hitsOf(locName).length;
+        if (locCount !== 1) {
+            console.info('[预设更新器] 正则「' + (reg.scriptName || '') + '」定位名字「' + locName + '」有 ' + locCount + ' 条 → 不猜，保留未找到');
+            return regexAmbiguousUpdate(op, i, Math.max(1, locCount), reg.scriptName || locName);
+        }
+        /* ★安全缺口（2026-11-13 主复核）：id 已选定真实目标（base）时，内核 locate 只能用**它现在的名字**；
+           新名字即使在全清单里唯一，也可能正好是**另一条 B** 的名字 → 内核会先改 B。
+           所以定位名永远用 locName；新名字由 `next` 承载、内核写回时自然改名。 */
+        const useName = locName;
         let bodySame = false;
-        try { bodySame = PM.regexBodySig(mineRx) === PM.regexBodySig(reg); } catch (e) { bodySame = false; }
-        const myDis = (mineRx.disabled === true);
+        try { bodySame = PM.regexBodySig(base) === PM.regexBodySig(reg); } catch (e) { bodySame = false; }
+        const myDis = (base.disabled === true);
         const newDis = (reg.disabled === true);
         const place = op.place || {};
-        if (bodySame && myDis === newDis) return null;            // 一字不差 ⇒ 不占一行
+        if (bodySame && myDis === newDis) return null;          // 一字不差 ⇒ 不占一行
         if (bodySame) {
-            return { op: 'regex-switch', key: String(op.key || ('store:regex-switch#' + i)), name: String(reg.scriptName || op.name || ''), base: { ...mineRx }, enabled: !newDis, place };
+            return { op: 'regex-switch', key: String(op.key || ('store:regex-switch#' + i)), name: useName, wasName: locName, base: { ...base }, enabled: !newDis, place };
         }
         return {
             op: 'regex-update', key: String(op.key || ('store:regex-update#' + i)),
-            name: String(reg.scriptName || op.name || ''),
-            wasName: String(mineRx.scriptName || ''),
-            base: { ...mineRx }, next: { ...reg }, rename: false, place,
+            name: useName, wasName: locName, base: { ...base }, next: { ...reg }, rename: false, place,
         };
-    }).filter(Boolean);
+    };
+    /* 包里的两种**已有**格式都认：regexOps（内核 op 列表）优先，其次 regexes（上传格式）。
+       两条来源的"新增"都过同一道识别，避免同 id 不同正文被加成两条。不扩其它格式。 */
+    const rawRegexOps = (Array.isArray(pack.regexOps) && pack.regexOps.length)
+        ? normalizePackRegexOps(pack, rxIdx)
+        : (Array.isArray(pack.regexes) ? pack.regexes.map((r, i) => regexOpForMine(r, i, rxIdx)) : []);
+    const regexOps = rawRegexOps.map((op, i) => dedupeRegexAdd(op, i)).filter(Boolean);
     return {
         patch: {
             kind: 'ywp-patch', v: 1, from: '商店条目', to: String(pack.title || ''), ops,
@@ -10620,6 +10958,7 @@ function storePackToPatch(pack, mine) {
             note: '',
         },
         sameName,
+        defaulted: defaultedAdds,
     };
 }
 
@@ -10631,7 +10970,13 @@ function regexOpOf(r, i) {
     const key = String(r.key || ('store:regex-' + mode + '#' + i));
     const name = String((r.reg && r.reg.scriptName) || (r.next && r.next.scriptName) || (r.base && r.base.scriptName) || '');
     if (mode === 'remove') return { op: 'regex-remove', key, name, base: r.base || r.reg || null };
-    if (mode === 'switch') return { op: 'regex-switch', key, name, base: r.base || r.reg || null, enabled: r.enabled !== false, place: r.place || {} };
+    if (mode === 'switch') {
+        /* 服务端 sanitizeRegexPack 只留 mode/reg/place，`enabled` 可能被丢掉；
+           `reg.disabled` 是它保留的合法布尔 ⇒ 用它恢复开关，别把"关"误当"开"。 */
+        const enabled = (typeof r.enabled === 'boolean') ? r.enabled
+            : ((r.reg && typeof r.reg.disabled === 'boolean') ? !r.reg.disabled : true);
+        return { op: 'regex-switch', key, name, base: r.base || r.reg || null, enabled, place: r.place || {} };
+    }
     if (mode === 'patch') {
         const next = r.next || r.reg || null;
         if (!next) return null;
@@ -10650,13 +10995,19 @@ function storePackToNext(pack, mine) {
         if (!PM.isValidPreset(pack.preset)) throw new Error('这份整份预设读不出来（缺 prompts / prompt_order）');
         return { next: PM.clonePreset(pack.preset), report: null, how: '整份预设直接当新版', anchors: null };
     }
-    const { patch, sameName } = storePackToPatch(pack, mine);
+    const { patch, sameName, defaulted } = storePackToPatch(pack, mine);
     const hasRegex = Array.isArray(patch.regexOps) && patch.regexOps.length;
     const hasRegexInput = String(pack.kind || '') === 'ywp-entry'
         && Array.isArray(pack.regexes) && pack.regexes.some((r, i) => !!regexOpOf(r, i));
     if (!Array.isArray(patch.ops) || (!patch.ops.length && !hasRegex && !hasRegexInput)) throw new Error('这个包里没有能缝进来的条目');
     const r = PM.applyPatch({ preset: mine, patch, decisions: {} });     // 纯函数：跑一遍 = 把包全应用上
     if (sameName.length) r.report.storeSameName = sameName;              // 同名那几条给页顶提示用（不静默）
+    /* ★★累计补丁：漏缝后按新增补进来的条目，如果包里只带了名字/正文，其余字段是按酒馆默认补的
+       —— 在页顶如实说（不冒充"作者原样带的完整快照"），用户可进对比核对。 */
+    if (defaulted && defaulted.length) {
+        r.report.storeFieldDefaults = defaulted;
+        console.info('[预设更新器] 有 ' + defaulted.length + ' 条漏缝条目是按默认字段补的', defaulted);
+    }
     const anchors = patch.ops.map(o => ({ name: String((o && o.name) || ''), place: (o && o.place) || {} }));
     // ★R8：正则的"三方基准"（作者旧版那份）——由包里的 base + 我的清单拼出来，
     //   这样对比页才分得清"作者改的"（默认跟作者）和"你改的"（默认保你的）。
@@ -10710,7 +11061,7 @@ function openStorePack(opt) {
             console.warn('[预设更新器] 没有生成差异，但包内仍有未应用内容', rep);
             return false;
         }
-        if (same) toast('info', '这份预设已包含包内内容，仍可进入核对；保存成功后才会确认已处理。');
+        if (same) console.info('[预设更新器] 包内容和你这份一致（没有可改的）→ 仍可进入核对，但保存成功后才记账');
         // 这次会话 = "从商店来的"：头部写来源、生成时绝不覆盖同名、写盘后回商店记账
         S.base = null; S.baseName = ''; S.baseFrom = '';      // 商店路是两方对比（别残留上次的③）
         S.extraEntries = []; S.selIdents = []; S.orderVisibleIds = null; S.orderOverride = null; S.unpair = [];   // ★W9-5：新会话 = 选择与"看得见的那份"都重来
@@ -10751,10 +11102,15 @@ function openStorePack(opt) {
         openWindow();
         runAnalyze();                                   // 复用更新器**现成**的对比（一栏正文+上下两组底色 / 三颗按钮 / 顺序页…）
         const n = rep ? (rep.summary.update + rep.summary.add + rep.summary.remove + rep.summary.switch) : built.next.prompts.length;
-        const bad = rep ? (rep.unresolved.length) : 0;
-        toast('success', '「' + title + '」已经拼成一份新版了（' + built.how + '）：共 ' + n + ' 处要你看'
-            + (bad ? ' · 有 ' + bad + ' 条在你这份里没找到（跳过）' : '')
-            + (preview ? ' —— ★这是**预览（伪缝入）**：随便看，按钮都不会写盘' : ' —— 在下面挑完点「生成新预设」= 另存新名，你手上这份一个字不动'));
+        const bad = rep ? (rep.unresolved.length + ((rep.regex && Array.isArray(rep.regex.unresolved)) ? rep.regex.unresolved.length : 0)) : 0;
+        if (same) {
+            /* ★342 review 窄修：一致时不要再说"共 N 处要你看"（N 常为 0，与"已包含"打架）。 */
+            toast('info', '「' + title + '」和你这份内容一致：没有要改的地方。打开对比只是核对；保存成功后才记为已处理。', { timeOut: 14000 });
+        } else {
+            toast('success', '「' + title + '」已经拼成一份新版了（' + built.how + '）：共 ' + n + ' 处要你看'
+                + (bad ? ' · 有 ' + bad + ' 条在你这份里没找到（跳过）' : '')
+                + (preview ? ' —— ★这是**预览（伪缝入）**：随便看，按钮都不会写盘' : ' —— 在下面挑完点「生成新预设」= 另存新名，你手上这份一个字不动'));
+        }
         console.info('[预设更新器] 商店的包已拼成临时新版（不落盘）', {
             卡片: title, 包种类: pack.kind, 缝进: mine.name, 怎么拼的: built.how, 预览: preview || undefined,
             报告: rep ? { 改: rep.summary.update, 新增: rep.summary.add, 删除: rep.summary.remove, 开关: rep.summary.switch, 没找到: rep.unresolved.length, 位置不确定: rep.lowConf.length, 同名: rep.sameName.length } : '（整份预设直接当新版）',
