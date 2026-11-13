@@ -17,6 +17,7 @@ import {
   PRESET_CONTROLS_VERSION,
   CHARACTER_ID,
   LENGTH_PROMPT_ID,
+  STORE_PROMPT_ALIASES,
   ID,
   SECTIONS,
   SECTION_ORDER,
@@ -36,7 +37,7 @@ import {
   NARRATION_PROMPT_IDS,
   TOOLBOX_FLAG_RAND_HEAD,
   TOOLBOX_FLAG_KEYS,
-} from './preset-control-defs.js?b=v1.4.13';
+} from './preset-control-defs.js?b=v1.4.14';
 import { readEditableLengthRule, replaceLengthRule } from './preset-length.js?b=v1.0.1';
 import {
   LAYOUT_SETTINGS_KEY,
@@ -1607,6 +1608,17 @@ export function createPresetControls(deps = {}) {
       }
     }
 
+    const actualIds = Object.create(null);
+    for (const alias of STORE_PROMPT_ALIASES) {
+      if (promptById.has(alias.canonical) || hasOwn(orderMap, alias.canonical)) continue;
+      const matches = (prompts || []).filter(prompt => prompt && prompt.identifier === alias.actual && prompt.name === alias.name);
+      if (matches.length !== 1 || !hasOwn(orderMap, alias.actual)) continue;
+      // 读模型补一个规范引用，真实条目/顺序表/编号一个字不写；点击时再翻译回实际ID。
+      actualIds[alias.canonical] = alias.actual;
+      promptById.set(alias.canonical, matches[0]);
+      orderMap[alias.canonical] = orderMap[alias.actual];
+      toggles[alias.canonical] = toggles[alias.actual];
+    }
     const wordPrompt = promptById.get(LENGTH_PROMPT_ID) || null;
     let wordState = 'missing';
     let wordValue = null;
@@ -1624,7 +1636,9 @@ export function createPresetControls(deps = {}) {
     }
 
     const savedLayout = readSavedLayout(settings, name, CHARACTER_ID);
-    const baseSections = sectionsForOrder(orderMap, scenario && scenario.order);
+    const canonicalByActual = new Map(Object.entries(actualIds).map(([canonical, actual]) => [actual, canonical]));
+    const definitionOrder = (Array.isArray(scenario?.order) ? scenario.order : []).map(row => row && ({ ...row, identifier: canonicalByActual.get(row.identifier) || row.identifier }));
+    const baseSections = sectionsForOrder(orderMap, definitionOrder);
     const effectiveSavedLayout = migrateSavedLayoutForDefs(savedLayout, baseSections);
     const resolved = resolveLayout({
       saved: effectiveSavedLayout,
@@ -1651,6 +1665,7 @@ export function createPresetControls(deps = {}) {
       scenario,
       scenarioFound: !!scenario,
       orderMap,
+      actualIds,
       name,
       isV1028: isV1028Name(name),
       toggles,
@@ -2106,7 +2121,10 @@ export function createPresetControls(deps = {}) {
       return false;
     }
     try {
-      deps.writeToggles(map);
+      const current = buildModel();
+      const actualMap = {};
+      for (const [id, value] of Object.entries(map)) actualMap[current.actualIds[id] || id] = value;
+      deps.writeToggles(actualMap);
     } catch (e) {
       showToast('写入失败，没有保存：' + humanError(e), 'error');
       return false;
@@ -3927,7 +3945,7 @@ export function createPresetControls(deps = {}) {
       });
     }
     for (const id of Object.keys(m.orderMap || {})) {
-      if (seen.has(id)) continue;
+      if (seen.has(id) || m.actualIds?.[id]) continue;
       seen.add(id);
       rows.push({
         id,

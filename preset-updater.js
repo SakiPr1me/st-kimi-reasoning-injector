@@ -102,7 +102,7 @@ const EXT = 'preset_updater';
    读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md §修订；台账 §XXVIII） */
 /* ★★feedback11（2026-11-13 · 商店官方更新提醒）：5.3.57 → **5.3.58** ——
    只在商店会话里捕获 card rev/fp 快照并随 `sp.stitched()` 第三参回传；与 index.js 的 updaterBuild 成对升。 */
-const VERSION = '5.3.58';   // 更新器模块版本（随工具箱一起发布）
+const VERSION = '5.3.59';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -187,7 +187,7 @@ const VERSION = '5.3.58';   // 更新器模块版本（随工具箱一起发布�
      正文顶上说明 · **删掉「按原顺序全收」**（用途已被②整份覆盖，避免语义重叠的按钮）。
      判据仍全走既有 `source:'custom'` + `customText` 通路 ⇒ **内核改动继续为 0**；与 index.js 的 updaterBuild 成对升） */
 /* ★W279a（2026-10-29 · 收口补救）：BUILD 从 v5.3.43 追平 VERSION=5.3.54（W256~W263 四波只升 VERSION 漏了 BUILD；纯显示对齐，逻辑零改动） */
-const BUILD = 'v5.3.58';
+const BUILD = 'v5.3.59';
 const API_ID = 'openai';                       // 对话补全预设（用户只使用对话补全）
 
 // ---------------------------------------------------------------- 设置
@@ -224,7 +224,7 @@ const saveSettings = () => saveSettingsDebounced();
 
 const S = {
     mine: null, mineName: '', mineFrom: '', mineRawDigest: '',   // mineFrom: 'preset' | 'file'；mineRawDigest = 开对比时**文件原样**摘要（不是混了 live 的 S.mine）
-    next: null, nextName: '', nextFrom: '',
+    next: null, nextName: '', nextFrom: '', storeNextSource: null,
     base: null, baseName: '', baseFrom: '',
     analysis: null,
     /* ★W94（F3 修 C）：被这次对比**动到的"隐藏条目"**（不在顺序表里 ⇒ 对比列表看不到它们）
@@ -1773,7 +1773,12 @@ function startCompare() {
     /* ★Wave H₂ ②（同一族残留）：`S.regexBase` 是**商店那条路**专用的正则三方基准（只有 openStorePack 设它）。
        不清的话，商店会话之后再来一次手动对比，正则那一层会拿着**上一张卡**的基准去归因（假归属）。
        手点「开始对比」= 一次全新的手动会话（跟上面 `S.store` / `S.orderOverride` 同一个口径）。 */
+    try { rebaseStoreNext(); } catch (e) {
+        toast('error', '无法根据当前预设重新生成商店对比，这次没有缝入。');
+        return;
+    }
     S.regexBase = null;
+    S.storeNextSource = null;
     if (!S.mine) { toast('warning', '先选「① 你的预设」'); return; }
     if (!S.next) { toast('warning', '先选「② 新版预设」'); return; }
     S.store = null;      // ★P7：手动「开始对比」= 一次新的对比会话（别把"来自商店"那套和"绝不覆盖同名"带进来）
@@ -1801,10 +1806,32 @@ function startCompare() {
     runAnalyze();
 }
 
+/* ==== store-rebase-core:start ==== */
+function rebaseStoreNext() {
+    const source = S.storeNextSource;
+    if (S.nextFrom !== 'store' || !source || !S.mine) return false;
+    const digest = presetDigestOf(S.mine);
+    if (digest === source.mineDigest) return false;
+    const built = storePackToNext(source.pack, S.mine);
+    S.next = built.next;
+    S.regexBase = built.regexBase || null;
+    if (S.store) {
+        S.store.report = built.report || null;
+        S.store.anchors = built.anchors || null;
+        S.store.target = S.mineName;
+    }
+    source.mineDigest = digest;
+    S.decisions = {}; S.blocks = {}; S.unpair = []; S.posMap = null;
+    S.orderOverride = null; S.orderVisibleIds = null; S.selIdents = []; S.dragUndo = null;
+    return true;
+}
+/* ==== store-rebase-core:end ==== */
+
 function runAnalyze(preserve = false) {
-    const keep = preserve ? { ...S.decisions } : null;
-    const keepRx = preserve ? { ...S.regexDecisions } : null;
     try {
+        if (rebaseStoreNext()) preserve = false;
+        const keep = preserve ? { ...S.decisions } : null;
+        const keepRx = preserve ? { ...S.regexDecisions } : null;
         const an = PM.analyze({ mine: S.mine, next: S.next, base: S.base || undefined, unpairKeys: S.unpair });
         S.analysis = an;
         S.posMap = null;
@@ -8455,7 +8482,7 @@ async function doGenerateInner() {
         //   商店模块没加载起来（发布隔离）→ 静默跳过，只留痕：预设已经写好了，不能因为记账失败就报错。
         notifyStoreStitched(name, storeContext);   // ★feedback11：用打开时那份副本，不读此刻的全局 S.store
         /* ★feedback11：只清**这一次**那个会话；期间若已换成另一张卡（identity 不同）不许清别人的。 */
-        if (S.store === storeRef) S.store = null;  // 这一次商店的会话结束了（下次点卡片再建）
+        if (S.store === storeRef) { S.store = null; S.storeNextSource = null; }  // 这一次商店会话结束
         // ★F2：商店「一键更新全部」带过来的一批 → 写盘成功后**自动带出下一张**（没有批量就照常关窗）
         const advanced = storeBatchAdvance('这一张已经写好了：' + name);
         if (!advanced) closeWindow();
@@ -8753,7 +8780,7 @@ async function stitchIntoCurrentInner() {
         closeWindow();
         renderSource();
         /* ★feedback11：只有 identity 仍是这一次那个对象才清；期间换过卡就别动新会话。 */
-        if (S.store === storeRef) S.store = null;
+        if (S.store === storeRef) { S.store = null; S.storeNextSource = null; }
     } catch (e) {
         toast('error', '缝入失败：' + (e?.message || e));
         console.warn('[预设更新器] 缝入当前预设炸了', e);
@@ -9825,6 +9852,7 @@ function openPatchPage({ pack, match, mismatch, fileName, name }) {
         mismatch: mismatch || '',
         name: name || patchDefaultName(),
     };
+    S.storeNextSource = null;
     S.store = null;                       // ★P7：P1 文件路 / P6 云端路 = 自己的会话（别把"来自商店"那套带进来）
     // 默认全选（跟官方）——"你也改过"的那几条仍然默认用新的，但会被显眼标出来
     for (const op of ops) S.patch.decisions[op.key] = 'next';
@@ -10678,6 +10706,7 @@ function openStorePack(opt) {
             cardFp: String(card.fp || ''),
             target: mine.name, at: Date.now(), report: rep, anchors: built.anchors || null, preview,
         };
+        S.storeNextSource = { pack: JSON.parse(JSON.stringify(pack)), mineDigest: presetDigestOf(mine.preset) };
         S.next = built.next;                            // ★B（临时新版）——不落盘，就是把包应用出来的那份
         S.regexBase = built.regexBase || null;          // ★R8：正则的三方基准（有才判得出"作者改的"/"你改的"）
         /* ★W107-②：原来这里写 `S.regexOpen = false`（新一次对比，正则块回到收起）—— 该键已退役；

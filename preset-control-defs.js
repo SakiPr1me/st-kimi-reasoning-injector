@@ -6,10 +6,16 @@
      本文件里的 enabled 一律不写死。
    ========================================================================== */
 
-export const PRESET_CONTROLS_VERSION = '1.4.13';
+export const PRESET_CONTROLS_VERSION = '1.4.14';
 export const CHARACTER_ID = 100001;
 export const LENGTH_PROMPT_ID = 'e54f6cda-5eee-421c-921f-1bb405f9e968';
 export const LENGTH_PROMPT_NAME = '🔢字数要求';
+/* 官方条目包缺少原生ID时，内核按名称生成的已核实别名；不按任意同名条目猜绑定。 */
+export const STORE_PROMPT_ALIASES = Object.freeze([
+  Object.freeze({ canonical: 'dca16a62-e3fa-43ef-9372-64126602938f', actual: 'ywp-fcfc2c8c', name: '🍃鲜活叙述' }),
+  Object.freeze({ canonical: '16f4ad31-a1db-4094-9ec7-0bf96e4f161b', actual: 'ywp-09d73a69', name: '🥀酸涩叙述' }),
+  Object.freeze({ canonical: '9c36b49e-b1e1-4a52-a6e4-54517fccbf68', actual: 'ywp-4c10fb25', name: '🍑NSFW状态快照' }),
+]);
 export const LENGTH_SENTENCE = /- 字数要求:正文的字数控制在(\d+)字以上。/g;
 
 /* 工具箱 flag 控件（不是预设条目）：只允许这两个显式 deps 读写。
