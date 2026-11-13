@@ -10,7 +10,7 @@ import { stTagMountSettings } from "./tag-fixer.js";
 import { mountApiPoolCard } from "./api-pool.js?b=v1.46.327";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
-import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwStopObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwSetStat, nsfwSetStats, nsfwProfilesFromText, nsfwEditFloor, nsfwCompleteLatest, nsfwGuideSyncFromPreset, nsfwGuideAllows, NSFW_DEFAULT_RULES } from "./nsfw-panel.js?b=v1.46.328"; // ★W290 NSFW 状态栏
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwStopObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwSetStat, nsfwSetStats, nsfwProfilesFromText, nsfwEditFloor, nsfwCompleteLatest, nsfwGuideSyncFromPreset, nsfwGuideAllows, NSFW_DEFAULT_RULES } from "./nsfw-panel.js?b=v1.46.346"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 import { createCustomModelManager } from './custom-models.js?b=v1.0.3';
 import { createSelfUpdater } from './self-update.js?b=v1.0.0';
@@ -20,7 +20,7 @@ import { createCompanion, COMPANION_DEFAULTS } from './companion.js?b=v1.3.4';
 import { applyConsoleHomeDefaults, HOME_ACTION_FAVORITES, HOME_SCHEME_IDS } from './console-home-defaults.js?b=v1.0.2';
 import { getChatCompletionPreset } from '../../../openai.js';
 import { ID as YW_PRESET_ID } from './preset-control-defs.js?b=v1.4.15';
-import { placeAfter, syncLinkedSetting } from './console-linked-controls.js?b=v1.0.0';
+import { placeAfter, syncLinkedSetting, selectStrictPromptScenario, resolveNsfwPresetLink, nsfwLinkSignature, shouldApplyNsfwLink, clearNsfwLinkState, applyNsfwDefaults, applyNsfwLink, applyNsfwMaster, planNsfwMasterAction, NSFW_PROMPT_ID, NSFW_PROMPT_ALIAS_ID } from './console-linked-controls.js?b=v1.0.1';
 
 
 // SWIPE 常量本地兜底：ST 1.15.0 才引入（1.13 无 SWIPE_DIRECTION/SWIPE_SOURCE），
@@ -376,7 +376,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.343'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.346'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -502,7 +502,7 @@ const defaultSettings = {
     presetControlShortcuts: [],
     presetControlLayouts: {},
     ywpcTheaterMemory: {},
-    nsfwEnabled: false,              // 总开关
+    nsfwEnabled: true,               // 总开关（★2026-11-13 作者：状态栏模块 4 勾选默认全开；与预设「🍑NSFW状态快照」开关联动）
     nsfwFullCount: 2,                // 每轮注入几个「在场」角色的完整状态（1-3）
     nsfwShowAllFields: false,        // 是否注入扩展字段（默认只注入核心组，省 token）
     nsfwRules: null,                 // 自定义规则数组；null = 用内置 NSFW_DEFAULT_RULES
@@ -1250,15 +1250,15 @@ if (settings.inlineInsSaveInit !== true) {
 /* ★W135（作者 2026-10-13 拍板 · 铁律 32：升级态必须与新装态一致）：双击正文就地改字（新键）——
    缺键（老用户/首次升级）就按 `defaultSettings` **同一个来源**补默认（开）；他自己关过的 `false` 永远尊重。 */
 if (settings.dblEditInPlace === undefined) settings.dblEditInPlace = defaultSettings.dblEditInPlace;
-/* ★W290（铁律 32）：NSFW 状态栏的新键 —— 缺键就按 defaultSettings 补（默认关），用户自己开过的永远尊重 */
-if (settings.nsfwEnabled === undefined) settings.nsfwEnabled = defaultSettings.nsfwEnabled;
+/* ★W290 / ★NSFW联动（2026-11-13 · 铁律 32）：NSFW 状态栏模块 4 键（nsfwEnabled / nsfwCaptureHide /
+   nsfwSenderEnabled / nsfwAutoSend）缺键时一律按 defaultSettings **同一个来源**补默认（现在全 true）。
+   nsfwAutoSend 的历史 nsfwSendMode 只在这里按值迁移一次；用户显式写过的 true/false 永不覆盖。
+   nsfwShowAllFields 不属于联动 4 键，保持原默认（不参与预设联动）。 */
+try { applyNsfwDefaults(settings, defaultSettings); } catch (e) { }
 if (settings.nsfwFullCount === undefined) settings.nsfwFullCount = defaultSettings.nsfwFullCount;
 if (settings.nsfwShowAllFields === undefined) settings.nsfwShowAllFields = defaultSettings.nsfwShowAllFields;
 if (settings.nsfwRules === undefined) settings.nsfwRules = defaultSettings.nsfwRules;
 if (settings.nsfwInjectMode === undefined) settings.nsfwInjectMode = defaultSettings.nsfwInjectMode;
-if (settings.nsfwCaptureHide === undefined) settings.nsfwCaptureHide = defaultSettings.nsfwCaptureHide;
-if (settings.nsfwSenderEnabled === undefined) settings.nsfwSenderEnabled = defaultSettings.nsfwSenderEnabled;
-if (settings.nsfwAutoSend === undefined) settings.nsfwAutoSend = (settings.nsfwSendMode ? settings.nsfwSendMode === 'auto' : defaultSettings.nsfwAutoSend);
 if (settings.nsfwPin === undefined) settings.nsfwPin = defaultSettings.nsfwPin;
 if (settings.nsfwDensity === undefined) settings.nsfwDensity = defaultSettings.nsfwDensity;
 try { nsfwInit({ t, getSettings: () => settings, save: () => saveSettingsDebounced() }); } catch (e) { }
@@ -4525,6 +4525,137 @@ function getPromptScenario() {
 function ywResolvedPromptId(id) {
     return ywUnifiedConsole?.presets.resolvePromptId(id) || id;
 }
+/* ===== ★NSFW 状态栏模块 ↔ 预设「🍑NSFW状态快照」联动（2026-11-13） =====
+ * 权威方向：当前预设 character_id 100001 里该条目 enabled === true/false
+ *   → 模块 4 键全 true / 全 false（只动这 4 键；不动 nsfwShowAllFields，不碰本轮角色发送勾选）。
+ * 严格口径：只认唯一 100001 场景 + 唯一解析行 + 布尔 enabled；缺失/坏/歧义一律不猜、不写。
+ * 解析：一律走 ywUnifiedConsole.presets.resolvePromptId（canonical / ywp-4c10fb25 / 准确名兜底）。
+ * 收敛时机：初始一次、预设切换、该条目真实翻转、刚缝入保存事件；不按每次 SETTINGS_UPDATED 强改。
+ * 用户在同一预设同一开关下当次手动改的子勾，保留到主开关或预设发生变化。 */
+const ywNsfwLinkState = { signature: '', presetName: '', id: '', enabled: null, applying: false, lastReason: '' };
+function ywReadNsfwLink(pickedArg) {
+    const picked = pickedArg || selectStrictPromptScenario(oai_settings?.prompt_order);
+    if (!picked.ok) return { ok: false, reason: picked.reason, scenario: null };
+    const presets = ywUnifiedConsole?.presets;
+    const resolve = presets && typeof presets.resolvePromptId === 'function'
+        ? (id) => { try { return presets.resolvePromptId(id); } catch (e) { return null; } }
+        : null;
+    if (!resolve) return { ok: false, reason: 'resolver-unavailable', scenario: picked.scenario };
+    const linked = resolveNsfwPresetLink(picked.scenario, resolve, { canonicalId: NSFW_PROMPT_ID, aliasId: NSFW_PROMPT_ALIAS_ID });
+    return { ...linked, scenario: picked.scenario };
+}
+function ywNsfwLinkQuickMatch(presetName, scenario) {
+    const state = ywNsfwLinkState;
+    if (!state.signature || state.presetName !== presetName || !state.id || typeof state.enabled !== 'boolean') return false;
+    if (!scenario || !Array.isArray(scenario.order)) return false;
+    let hit = null;
+    for (const item of scenario.order) {
+        if (!item || item.identifier !== state.id) continue;
+        if (hit) return false;
+        hit = item;
+    }
+    return !!hit && hit.enabled === state.enabled;
+}
+function ywRefreshNsfwDom() {
+    const put = (suffix, checked, disabled) => {
+        const el = document.getElementById(extensionName + suffix);
+        if (!el) return;
+        if (el.checked !== !!checked) el.checked = !!checked;
+        if (disabled !== undefined && el.disabled !== !!disabled) el.disabled = !!disabled;
+    };
+    put('_nsfw_enabled', settings.nsfwEnabled === true);
+    put('_nsfw_capturehide', settings.nsfwCaptureHide !== false);
+    put('_nsfw_sender', settings.nsfwSenderEnabled !== false, settings.nsfwCaptureHide === false);
+    put('_nsfw_auto', settings.nsfwAutoSend !== false);
+}
+function ywApplyNsfwRuntime(changed) {
+    const keys = new Set(Array.isArray(changed) ? changed : []);
+    if (!keys.size) return;
+    try { if (keys.has('nsfwEnabled') || keys.has('nsfwCaptureHide')) kimiSyncCaptureObserver(); } catch (e) { }
+    try {
+        if (keys.has('nsfwEnabled')) {
+            if (settings.nsfwEnabled) {
+                try { const lid = nsfwLastAssistantId(); if (lid >= 0) nsfwReattachAll([lid]); } catch (e) { }
+                try { nsfwMountSender(); } catch (e) { }
+            } else {
+                document.querySelectorAll('.yw-nsfw').forEach((n) => n.remove());
+                try { nsfwMountSender(); } catch (e) { }
+            }
+        } else {
+            try { nsfwMountSender(); } catch (e) { }
+            /* ★2026-11-13 主自检：nsfwEnabled 本已 true、只有 captureHide 从 false→true 时，
+               也要把最新一楼按新开关重新挂卡（旧的手动关捕捉后再主开能回来）。 */
+            if (keys.has('nsfwCaptureHide') && settings.nsfwCaptureHide !== false && settings.nsfwEnabled) {
+                try { const lid = nsfwLastAssistantId(); if (lid >= 0) nsfwReattachAll([lid]); } catch (e) { }
+            }
+        }
+    } catch (e) { }
+    if (keys.has('nsfwCaptureHide') && settings.nsfwCaptureHide === false) {
+        /* 关捕捉：沿既有 W402 行为摘卡并重渲染带 NSFW 标记的楼层；该路径可能触发宿主重画，本轮不改变既有行为。 */
+        try { document.querySelectorAll('.yw-nsfw').forEach((n) => n.remove()); } catch (e) { }
+        try {
+            const ctx = (window.SillyTavern && SillyTavern.getContext) ? SillyTavern.getContext() : null;
+            const chat = (ctx && Array.isArray(ctx.chat)) ? ctx.chat : [];
+            chat.forEach((m, i) => {
+                if (!m || m.is_user || m.is_system) return;
+                const text = String(m.mes || '');
+                if (text.indexOf('<nsfw') < 0 && text.indexOf('data-nsfw') < 0) return;
+                if (typeof reRenderMessage === 'function') { try { reRenderMessage(i); } catch (e) { } }
+            });
+        } catch (e) { }
+    }
+}
+function ywSyncNsfwLinked(options = {}) {
+    if (ywNsfwLinkState.applying) return false;
+    const picked = selectStrictPromptScenario(oai_settings?.prompt_order);
+    const presetName = getCurrentPresetName() || '';
+    /* 轻量快路径：同一预设、同一实际条目、同一开关值 ⇒ 不重建模型、不碰用户当次手调的子勾。 */
+    if (options.force !== true && picked.ok && ywNsfwLinkQuickMatch(presetName, picked.scenario)) return false;
+    const linked = ywReadNsfwLink(picked);
+    if (!linked.ok) { ywNsfwLinkState.lastReason = linked.reason || 'unresolved'; clearNsfwLinkState(ywNsfwLinkState); return false; }
+    if (!shouldApplyNsfwLink(ywNsfwLinkState.signature, linked, presetName, options.force === true)) return false;
+    const changed = applyNsfwLink(settings, linked);
+    ywNsfwLinkState.signature = nsfwLinkSignature(linked, presetName);
+    ywNsfwLinkState.presetName = presetName;
+    ywNsfwLinkState.id = linked.id;
+    ywNsfwLinkState.enabled = linked.enabled;
+    ywNsfwLinkState.lastReason = '';
+    ywNsfwLinkState.applying = true;
+    try {
+        ywRefreshNsfwDom();
+        if (changed.length) ywApplyNsfwRuntime(changed);
+    } finally {
+        ywNsfwLinkState.applying = false;
+    }
+    if (changed.length && options.persist !== false) saveSettingsDebounced();
+    return changed.length > 0;
+}
+function ywSetNsfwMaster(want) {
+    const next = want === true;
+    const linked = ywReadNsfwLink();
+    const action = planNsfwMasterAction(linked, next);
+    const changed = applyNsfwMaster(settings, next);
+    if (action.toggle && linked.scenario) {
+        /* 反向写预设走既有 writePromptToggles（含 saveSettingsDebounced / DOM disabled 类 / 订阅广播）；
+           显式把 strict 100001 场景传进去，避免它内部 fallback 到 po[0]。 */
+        writePromptToggles(action.toggle, linked.scenario);
+        if (settings.inlineInsertSavePreset === true) {
+            try { ywUnifiedConsole?.presets?.requestPresetSave('yw-nsfw-linked'); } catch (e) { }
+        }
+    } else {
+        saveSettingsDebounced();
+    }
+    if (linked.ok) {
+        const presetName = getCurrentPresetName() || '';
+        ywNsfwLinkState.signature = nsfwLinkSignature({ ...linked, enabled: next }, presetName);
+        ywNsfwLinkState.presetName = presetName;
+        ywNsfwLinkState.id = linked.id;
+        ywNsfwLinkState.enabled = next;
+    }
+    ywRefreshNsfwDom();
+    ywApplyNsfwRuntime(changed.length ? changed : ['nsfwEnabled']);
+    return changed;
+}
 function ywSyncLinkedControls() {
     const scenario = getPromptScenario();
     const rows = scenario?.order;
@@ -4532,16 +4663,17 @@ function ywSyncLinkedControls() {
     const part2Id = ywResolvedPromptId(YW_PRESET_ID.break2);
     const reordered = placeAfter(rows, niahId, part2Id);
     const changed = syncLinkedSetting(settings, rows, niahId);
+    const nsfwChanged = ywSyncNsfwLinked({ persist: false });
     const input = document.getElementById(extensionName + '_wrap4a');
     if (input) input.checked = !!settings.wrap4aEnabled;
-    if (changed) saveSettingsDebounced();
+    if (changed || nsfwChanged) saveSettingsDebounced();
     if (reordered) {
         const name = getCurrentPresetName();
         inlineInsGetPm().then(pm => {
             if (getPromptScenario() === scenario && getCurrentPresetName() === name) pm?.render(false);
         }).catch(() => {});
     }
-    return reordered || changed;
+    return reordered || changed || nsfwChanged;
 }
 function ywSetWrap4a(want) {
     const scenario = getPromptScenario();
@@ -4572,8 +4704,8 @@ function readPromptToggles() {
     for (const o of scenario.order) map[o.identifier] = !!o.enabled;
     return map;
 }
-function writePromptToggles(toggleMap) {
-    const scenario = getPromptScenario();
+function writePromptToggles(toggleMap, scenarioOverride) {
+    const scenario = scenarioOverride || getPromptScenario();
     if (!scenario || !Array.isArray(scenario.order) || !toggleMap || typeof toggleMap !== 'object') return;
     for (const o of scenario.order) {
         if (o.identifier in toggleMap) o.enabled = !!toggleMap[o.identifier];
@@ -9019,17 +9151,8 @@ function bindNsfwCard() {
 
 
     $en.on("change", function () {
-        settings.nsfwEnabled = $(this).is(":checked");
-        saveSettingsDebounced();
-        try {
-            kimiSyncCaptureObserver();
-            if (settings.nsfwEnabled) { nsfwReattachAll(); nsfwMountSender(); }
-            else {
-                /* ★W404：关掉就不要再画画了 —— 已挂出来的卡一并摘掉 */
-                document.querySelectorAll(".yw-nsfw").forEach((n) => n.remove());
-                nsfwMountSender();
-            }
-        } catch (e) { }
+        /* ★NSFW联动：主开关反向同步预设「🍑NSFW状态快照」+ 模块 4 项；缺项/坏/歧义不写预设。 */
+        try { ywSetNsfwMaster($(this).is(":checked")); } catch (e) { }
     });
     $("#" + extensionName + "_nsfw_fullcount").on("change", function () {
         settings.nsfwFullCount = Math.max(1, Math.min(3, Number($(this).val()) || 2));
@@ -10467,7 +10590,8 @@ function getYwUnifiedConsole() {
     const events = [event_types.OAI_PRESET_CHANGED_AFTER, event_types.PRESET_CHANGED, event_types.CHAT_CHANGED, event_types.SETTINGS_UPDATED].filter(Boolean);
     for (const event of new Set(events)) eventSource.on(event, () => { ywSyncLinkedControls(); subscribers.forEach(fn => fn()); ywConsoleChanged(); });
     document.addEventListener('click', event => { if (event.target?.closest?.('#completion_prompt_manager .prompt-manager-toggle-action')) queueMicrotask(() => { ywSyncLinkedControls(); subscribers.forEach(fn => fn()); ywConsoleChanged(); }); });
-    window.addEventListener('yw-store-official-update', ywConsoleChanged);
+    /* 列表广播不是强制重置：仍走签名门槛；刚缝入新增条目/改开关会因签名变化自然应用。 */
+    window.addEventListener('yw-store-official-update', () => { ywSyncLinkedControls(); ywConsoleChanged(); });
     ywSyncLinkedControls();
     actor.start();
     return ywUnifiedConsole;

@@ -1980,6 +1980,16 @@ function nsfwFloatRefresh() {
         if (!el) return;
         el.style.maxWidth = Math.max(0, v.w - 16) + 'px';
         el.style.maxHeight = Math.max(32, Math.min(v.h - 16, v.h * (id === 'yw-nsfw-preview' ? .7 : .4))) + 'px';
+        if (id === 'yw-nsfw-preview' && el.style.display !== 'none') {
+            const card = el.querySelector('.yw-nsfw');
+            if (card && typeof card._nsfwLock === 'function') {
+                const layout = card.clientWidth + '|' + getComputedStyle(card).fontSize;
+                if (el._nsfwPreviewLayout !== layout) {
+                    el._nsfwPreviewLayout = layout;
+                    card._nsfwLock();
+                }
+            }
+        }
         nsfwFloatPlace(el);
     });
     nsfwFloatFocus();
@@ -2411,6 +2421,9 @@ export function nsfwMountSender() {
             host = document.createElement('div');
             host.id = 'yw-nsfw-sender';
             host.className = 'yw-nsfw-sd';
+            host.title = '发送NSFW状态给AI';
+            host.setAttribute('role', 'group');
+            host.setAttribute('aria-label', '发送NSFW状态给AI');
             nsfwFloatMount(host);
         }
         nsfwFloatMount(host);
@@ -2447,14 +2460,14 @@ export function nsfwMountSender() {
             } catch (e) { autoPicks = []; }
         }
         const items = names.map((n) => '<span class="yw-nsfw-sd-item">'
-            + '<input type="checkbox" data-send="' + esc(n) + '"' + ((auto ? (((autoPicks.indexOf(n) >= 0 && offNow.indexOf(n) < 0) || once.indexOf(n) >= 0)) : (picks.indexOf(n) >= 0)) ? ' checked' : '') + '/>'
+            + '<label class="yw-nsfw-sd-check" title="发送' + esc(n) + '的状态"><input type="checkbox" aria-label="发送' + esc(n) + '的状态" data-send="' + esc(n) + '"' + ((auto ? (((autoPicks.indexOf(n) >= 0 && offNow.indexOf(n) < 0) || once.indexOf(n) >= 0)) : (picks.indexOf(n) >= 0)) ? ' checked' : '') + '/></label>'
             + '<b class="yw-nsfw-sd-name" data-name="' + esc(n) + '" title="点名字看最新快照">' + esc(n) + '</b></span>').join('');
         if (host._nsfwDisposeDrag) host._nsfwDisposeDrag();
-        host.innerHTML = '<span class="yw-nsfw-sd-grip" title="按住拖动">⠿</span>'
+        host.innerHTML = '<div class="yw-nsfw-sd-main"><span class="yw-nsfw-sd-grip" title="按住拖动">⠿</span>'
             + '<label class="yw-nsfw-sd-auto" title="自动：上一楼正文或你的消息里出现谁就发谁"><input type="checkbox"' + (auto ? ' checked' : '') + '/><span>AUTO</span></label>'
             + '<span class="yw-nsfw-sd-sep"></span>'
             + (items || '<span class="yw-nsfw-sd-empty">无档案</span>')
-            + '<span class="yw-nsfw-sd-tip">发送NSFW状态给AI</span>';
+            + '</div><span class="yw-nsfw-sd-tip">发送NSFW状态给AI</span>';
         if (!host._nsfwRootBound) {
             host._nsfwRootBound = true;
             host.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -3523,19 +3536,24 @@ const CSS = [
     '.yw-nsfw-tbl td.v .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
     /* ★W327 悬浮发送条：一条横条，可拖；AUTO 在左，名字在右；点名字看快照 */
     '#yw-nsfw-viewport{position:fixed;left:0;top:0;width:100vw;height:100vh;height:100dvh;pointer-events:none;z-index:30040;overflow:visible}',
-    '#yw-nsfw-sender{position:absolute;pointer-events:auto;box-sizing:border-box;width:max-content;flex-wrap:wrap;overflow:auto;overscroll-behavior:contain;right:12px;bottom:86px;z-index:30040;display:flex;align-items:center;column-gap:6px;row-gap:1px;max-width:min(92vw,560px);padding:3px 8px;border-radius:999px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 26%,transparent);background:color-mix(in srgb,var(--SmartThemeBlurTintColor,transparent) 88%,transparent);backdrop-filter:blur(10px);color:var(--SmartThemeBodyColor,currentColor);font-size:12px;line-height:1.2;box-shadow:0 4px 16px rgba(0,0,0,.22);user-select:none}',
-    '#yw-nsfw-sender .yw-nsfw-sd-grip{cursor:grab;opacity:.45;padding:0 2px;letter-spacing:-2px}',
+    '#yw-nsfw-sender{position:absolute;pointer-events:auto;box-sizing:border-box;width:max-content;flex-wrap:wrap;overflow:auto;scrollbar-width:none;overscroll-behavior:contain;right:12px;bottom:86px;z-index:30040;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;min-height:32px;max-width:min(92vw,560px);padding:0 4px;border-radius:0;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 26%,transparent);background:color-mix(in srgb,var(--SmartThemeBlurTintColor,transparent) 88%,transparent);backdrop-filter:blur(10px);color:var(--SmartThemeBodyColor,currentColor);font-size:11px;line-height:1.2;box-shadow:0 4px 16px rgba(0,0,0,.22);user-select:none}',
+    '#yw-nsfw-sender::-webkit-scrollbar{display:none}',
+    '#yw-nsfw-sender .yw-nsfw-sd-main{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;column-gap:3px;row-gap:0;max-width:100%;min-height:24px}',
+    '#yw-nsfw-sender .yw-nsfw-sd-tip{display:block;flex:none;align-self:stretch;text-align:center;font-size:7px;line-height:7px;height:7px;white-space:nowrap;color:inherit;opacity:1;pointer-events:none}',
+    '#yw-nsfw-sender .yw-nsfw-sd-grip{cursor:grab;opacity:1;padding:0;letter-spacing:-2px;display:inline-flex;align-items:center;justify-content:center;min-width:12px;min-height:24px}',
     '#yw-nsfw-sender .yw-nsfw-sd-grip:active{cursor:grabbing}',
-    '#yw-nsfw-sender .yw-nsfw-sd-auto{min-height:20px;flex-shrink:0;display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;white-space:nowrap}',
+    '#yw-nsfw-sender .yw-nsfw-sd-auto{min-height:24px;flex-shrink:0;display:inline-flex;align-items:center;gap:3px;cursor:pointer;font-weight:600;white-space:nowrap}',
     '#yw-nsfw-sender .yw-nsfw-sd-auto input{accent-color:var(--SmartThemeBodyColor,currentColor);margin:0}',
-    '#yw-nsfw-sender .yw-nsfw-sd-sep{width:1px;height:14px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 22%,transparent)}',
-    '#yw-nsfw-sender .yw-nsfw-sd-item{max-width:100%;min-width:0;flex-shrink:0;display:inline-flex;align-items:center;gap:3px;padding:1px 2px;border-radius:999px}',
+    '#yw-nsfw-sender .yw-nsfw-sd-sep{width:1px;height:12px;flex-shrink:0;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 22%,transparent)}',
+    '#yw-nsfw-sender .yw-nsfw-sd-item{max-width:100%;min-width:0;flex-shrink:0;display:inline-flex;align-items:center;gap:2px;padding:0;border-radius:0}',
+    '#yw-nsfw-sender .yw-nsfw-sd-check{min-width:16px;min-height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}',
     '#yw-nsfw-sender .yw-nsfw-sd-item:hover{background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 10%,transparent)}',
-    '#yw-nsfw-sender .yw-nsfw-sd-item input{accent-color:var(--SmartThemeBodyColor,currentColor);margin:0;flex:0 0 auto;width:var(--mainFontSize,15px);height:var(--mainFontSize,15px)}',
-    '#yw-nsfw-sender .yw-nsfw-sd-name{cursor:pointer;font-weight:500;white-space:normal;overflow-wrap:anywhere;min-width:0;min-height:20px;display:inline-flex;align-items:center;padding:0 2px}',
+    '#yw-nsfw-sender input[type="checkbox"]{appearance:none;-webkit-appearance:none;box-sizing:border-box;position:relative;width:12px;height:12px;min-width:12px;min-height:12px;margin:0;flex:0 0 auto;border:1px solid currentColor;border-radius:0;background:transparent;color:inherit;opacity:1;cursor:pointer}',
+    '#yw-nsfw-sender input[type="checkbox"]:checked::after{content:"";position:absolute;left:3px;top:0;width:3px;height:6px;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(45deg)}',
+    '#yw-nsfw-sender input[type="checkbox"]:focus-visible{outline:2px solid currentColor;outline-offset:2px}',
+    '#yw-nsfw-sender .yw-nsfw-sd-name{cursor:pointer;font-weight:500;color:inherit;opacity:1;white-space:normal;overflow-wrap:anywhere;min-width:0;min-height:24px;display:inline-flex;align-items:center;padding:0}',
     '#yw-nsfw-sender .yw-nsfw-sd-name:hover{text-decoration:underline}',
     '#yw-nsfw-sender .yw-nsfw-sd-empty{opacity:.6}',
-    '#yw-nsfw-sender .yw-nsfw-sd-tip{flex:0 0 100%;width:0;min-width:100%;box-sizing:border-box;text-align:center;font-size:8px;line-height:1.1;opacity:.65;padding:0;white-space:nowrap;pointer-events:none}',
     /* ★W386 设置卡名册：与悬浮条同款芯片，AUTO 右侧横向排开、放不下自动换行 */
     '.kimi-nsfw-autorow{display:flex;align-items:center;flex-wrap:wrap;gap:6px}',
     '.kimi-nsfw-roster{flex:1 1 auto;min-width:0}',
@@ -3545,8 +3563,8 @@ const CSS = [
     '.kimi-nsfw-roster .yw-nsfw-sd-item input{accent-color:var(--SmartThemeBodyColor,currentColor);margin:0}',
     '.kimi-nsfw-roster .yw-nsfw-sd-name{cursor:pointer;font-weight:500;white-space:nowrap;padding:0 2px}',
     '.kimi-nsfw-roster .yw-nsfw-sd-name:hover{text-decoration:underline}',
-    '#yw-nsfw-preview{position:absolute;pointer-events:auto;box-sizing:border-box;overscroll-behavior:contain;right:12px;bottom:130px;z-index:30050;display:none;width:min(92vw,420px);max-height:70vh;overflow:auto;border-radius:14px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 24%,transparent);background:var(--SmartThemeBlurTintColor,transparent);backdrop-filter:blur(12px);box-shadow:0 10px 34px rgba(0,0,0,.3);padding:8px;color:var(--SmartThemeBodyColor,currentColor);font-size:12px}',
-    '#yw-nsfw-preview .yw-nsfw-pv-hd{position:sticky;top:-8px;z-index:3;background:var(--SmartThemeBlurTintColor,Canvas);min-height:32px;display:flex;align-items:center;justify-content:space-between;gap:4px;font-weight:600;margin-bottom:6px;padding:0 2px}',
+    '#yw-nsfw-preview{position:absolute;pointer-events:auto;box-sizing:border-box;overscroll-behavior:contain;right:12px;bottom:130px;z-index:30050;display:none;width:min(92vw,840px);max-height:70vh;overflow:auto;border-radius:14px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 24%,transparent);background:var(--SmartThemeBlurTintColor,transparent);backdrop-filter:blur(12px);box-shadow:0 10px 34px rgba(0,0,0,.3);padding:8px;color:var(--SmartThemeBodyColor,currentColor);font-size:var(--mainFontSize,15px)}',
+    '#yw-nsfw-preview .yw-nsfw-pv-hd{position:sticky;top:0;z-index:3;background:var(--SmartThemeBlurTintColor,Canvas);min-height:32px;display:flex;align-items:center;justify-content:space-between;gap:4px;font-weight:600;margin-bottom:6px;padding:0 2px}',
     '#yw-nsfw-preview .yw-nsfw-pv-title{flex:1 1 auto;min-width:0;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '#yw-nsfw-preview .yw-nsfw-pv-nav{cursor:pointer;border:0;background:transparent;color:inherit;opacity:.65;font-size:14px;line-height:1;padding:2px 6px;border-radius:6px}',
     '#yw-nsfw-preview .yw-nsfw-pv-nav:hover{opacity:1;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 10%,transparent)}',
@@ -3555,8 +3573,10 @@ const CSS = [
     '#yw-nsfw-preview .yw-nsfw-pv-del:hover{opacity:1;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent)}',
     '#yw-nsfw-preview .yw-nsfw-pv-x{cursor:pointer;border:0;background:transparent;color:inherit;opacity:.6;font-size:14px;padding:2px 4px}',
     '#yw-nsfw-preview .yw-nsfw{margin:0}',
+    '#yw-nsfw-preview .yw-nsfw-pv-body{container-type:inline-size;min-width:0}',
+    '@container(max-width:600px){#yw-nsfw-preview .yw-nsfw-row{flex-wrap:wrap}#yw-nsfw-preview .yw-nsfw-row .k{flex-basis:76px}#yw-nsfw-preview .yw-nsfw-row .v:not(.num){flex:1 1 0;display:block;white-space:normal;overflow-wrap:anywhere}#yw-nsfw-preview .yw-nsfw-row .yw-nsfw-c{flex:1 1 100%;text-align:left;margin-left:84px}#yw-nsfw-preview .yw-nsfw-tbl{font-size:.8em}#yw-nsfw-preview .yw-nsfw-tbl td.v{white-space:normal;overflow-wrap:anywhere}#yw-nsfw-preview .yw-nsfw-tbl td.yw-nsfw-c{font-size:.86em}}',
     '#yw-nsfw-preview .yw-nsfw-pv-nav,#yw-nsfw-preview .yw-nsfw-pv-del,#yw-nsfw-preview .yw-nsfw-pv-x,#yw-nsfw-preview .yw-nsfw-copy-btn,#yw-nsfw-preview .yw-nsfw-edit-btn{box-sizing:border-box;min-width:32px;min-height:32px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center}',
-    '#yw-nsfw-preview .yw-nsfw-head{position:sticky;top:30px;z-index:2;background:var(--SmartThemeBlurTintColor,Canvas);min-height:32px}',
+    '#yw-nsfw-preview .yw-nsfw-head{position:static;background:var(--SmartThemeBlurTintColor,Canvas);min-height:32px}',
     '#yw-nsfw-preview .yw-nsfw-tabs{position:static}',
     '#yw-nsfw-preview .yw-nsfw-tab{box-sizing:border-box;min-width:32px;min-height:32px;display:inline-flex;align-items:center;justify-content:center}',
     '#yw-nsfw-preview .yw-nsfw-editing .yw-nsfw-in{box-sizing:border-box;min-width:0;max-width:100%;min-height:32px;scroll-margin-block:90px 12px}',
@@ -3588,7 +3608,7 @@ const CSS = [
     '@media (max-width:600px){.yw-nsfw-row{flex-wrap:wrap}.yw-nsfw-row .k{flex-basis:76px}.yw-nsfw-row .v:not(.num){flex:1 1 0;display:block;white-space:normal;overflow-wrap:anywhere}.yw-nsfw-row .yw-nsfw-c{flex:1 1 100%;text-align:left;margin-left:84px}}'
 ].join('');
 
-const NSFW_CSS_VER = 'rows-20261113-1';   /* ★W414：CSS 有改动就改这里；否则不再每挂一张卡就重注入整份样式 */
+const NSFW_CSS_VER = 'preview-20261113-1';   /* ★W414：CSS 有改动就改这里；否则不再每挂一张卡就重注入整份样式 */
 export function nsfwEnsureStyle() {
     try {
         const old = document.getElementById('yw-nsfw-style');
