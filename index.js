@@ -376,7 +376,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.347'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.348'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -8835,7 +8835,10 @@ function reasoningTimerTick() {
             } else if (frozen) {
                 // ★W141：冻结值（思维链结束那一刻的读数；此后不再重算）
                 done = String(t('thinkingDone')).replace('{s}', fmtThinkingTime(frozen.ms, false));
-            } else if (isGenerating && isThinkingTitle && mesEl.querySelector('.mes_text')?.textContent?.trim()) {
+            } else if (isGenerating && isThinkingTitle && (() => {
+                const body = mesEl.querySelector('.mes_text')?.textContent?.trim() || '';
+                return body !== '' && !/^(?:\.{3}|…+)$/.test(body);
+            })()) {
                 // 无精确时长但正文已开始输出 → 用累计值定格（≈思考时长）
                 // ★v1.37.63 两处（ac-verify §B.4 B-改 + §C.4 C-4）：
                 //   ① `isGenerating &&`：生成结束后不再每 tick 用 Date.now() 往上跳，而是落到下面作者当年那条定格分支（用 gen_finished - gen_started）；生成中那一小段行为不变。
@@ -12219,6 +12222,10 @@ const storeBuild = 'v2.2.123';
     $("#" + extensionName + "_reasoning_timer").on("change", function () {
         settings.reasoningTimer = $(this).is(":checked");
         if (!settings.reasoningTimer) stopReasoningTimer();
+        else {
+            startReasoningTimer(isGenerating ? 300 : 1500);
+            reasoningTimerTick();
+        }
         saveSettingsDebounced();
     });
     $("#" + extensionName + "_fix_generate").on("change", function () {
