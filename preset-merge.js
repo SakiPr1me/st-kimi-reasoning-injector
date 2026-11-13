@@ -585,6 +585,55 @@ export function diffLines(a, b, { maxCells = 400000 } = {}) {
     return out;
 }
 
+/** 比较视图到原文的 UTF-16 跨度。只供 diffBlocks 写回映射使用；normalizeText 的判据不变。 */
+function blockTextView(value) {
+    const raw = String(value ?? '');
+    const clean = raw.replace(/[\u200B-\u200D\uFEFF]/g, '');
+    const origins = new Uint32Array(clean.length);
+    for (let r = 0, c = 0; r < raw.length; r++) {
+        const code = raw.charCodeAt(r);
+        if ((code >= 0x200B && code <= 0x200D) || code === 0xFEFF) continue;
+        origins[c++] = r;
+    }
+    // 与 normalizeText 的第二步同序：先去零宽，再去 LF 前的空格/tab。
+    const mapped = new Uint32Array(clean.length);
+    let cursor = 0, length = 0;
+    const parts = [];
+    for (const hit of clean.matchAll(/[ \t]+(?=\n)/g)) {
+        parts.push(clean.slice(cursor, hit.index));
+        mapped.set(origins.subarray(cursor, hit.index), length);
+        length += hit.index - cursor;
+        cursor = hit.index + hit[0].length;
+    }
+    parts.push(clean.slice(cursor));
+    mapped.set(origins.subarray(cursor), length);
+    const untrimmed = parts.join('');
+    const text = untrimmed.trim();
+    if (!text) return { text, raw, rows: [], prefix: raw, suffix: '' };
+    const trimStart = untrimmed.length - untrimmed.trimStart().length;
+    const offsets = mapped.subarray(trimStart, trimStart + text.length);
+    const first = raw.lastIndexOf('\n', offsets[0] - 1) + 1;
+    const rows = [];
+    let start = first;
+    for (let i = 0; i < text.length; i++) {
+        if (text[i] !== '\n') continue;
+        const lf = offsets[i];
+        const end = lf > start && raw[lf - 1] === '\r' ? lf - 1 : lf;
+        rows.push({ start, end, eol: raw.slice(end, lf + 1) });
+        start = lf + 1;
+    }
+    const lf = raw.indexOf('\n', offsets[offsets.length - 1] + 1);
+    const end = lf < 0 ? raw.length : (raw[lf - 1] === '\r' ? lf - 1 : lf);
+    rows.push({ start, end, eol: '' });
+    return { text, raw, rows, prefix: raw.slice(0, first), suffix: raw.slice(end) };
+}
+
+function blockRawSpan(view, from, count) {
+    if (!count) return { text: '', eol: '', hasLines: false, start: null, end: null };
+    const first = view.rows[from], last = view.rows[from + count - 1];
+    return { text: view.raw.slice(first.start, last.end), eol: last.eol, hasLines: true, start: first.start, end: last.end };
+}
+
 /**
  * 把行级 diff 归并成"块"：
  *   { kind:'same', lines:[...] }                    —— 两边一样，原样保留
@@ -598,10 +647,21 @@ export function diffBlocks(a, b, opts) {
        ⇒ 进 diff 之前两侧先过 `normalizeText()`（去首尾空白、压掉行尾空格、清零宽字符）：
          规范化后完全一致 ⇒ 没有任何变化块（调用方一律得到"一字不差"）；不一致才 diff 规范化后的文本
          （红蓝里也不会再出现纯空白的噪音块）。★所有调用方（商店预览 / 更新器红蓝 / 合二为一）自动受益。 */
-    const na = normalizeText(String(a ?? ''));
-    const nb = normalizeText(String(b ?? ''));
-    if (na === nb) return [];
-    const lines = diffLines(na, nb, opts);
+    const mineView = blockTextView(a), nextView = blockTextView(b);
+    const context = {
+        mine: { prefix: mineView.prefix, suffix: mineView.suffix, eol: (mineView.raw.match(/\r?\n/) || ['\n'])[0] },
+        next: { prefix: nextView.prefix, suffix: nextView.suffix, eol: (nextView.raw.match(/\r?\n/) || ['\n'])[0] },
+    };
+    if (mineView.text === nextView.text) {
+        // 仍然零个展示块；直接拼装时也不能把无差异的原文变成空串。
+        const empty = [];
+        Object.defineProperty(empty, 'rawText', { value: { mine: mineView.raw, next: nextView.raw } });
+        return empty;
+    }
+    // diffLines('','x') 把空串当成一行；跨度映射里空侧是零行，不能拿它去匹配正文内部空行。
+    const lines = !mineView.text ? nextView.text.split('\n').map(text => ({ type: 'add', text }))
+        : !nextView.text ? mineView.text.split('\n').map(text => ({ type: 'del', text }))
+            : diffLines(mineView.text, nextView.text, opts);
     const blocks = [];
     let cur = null;
     for (const l of lines) {
@@ -614,7 +674,21 @@ export function diffBlocks(a, b, opts) {
             cur.lines.push(l.text);
         }
     }
-    blocks.forEach((bl, i) => { bl.i = i; bl.changed = bl.kind === 'change'; });
+    let mineLine = 0, nextLine = 0;
+    blocks.forEach((bl, i) => {
+        bl.i = i;
+        bl.changed = bl.kind === 'change';
+        const mc = bl.changed ? bl.mine.length : bl.lines.length;
+        const nc = bl.changed ? bl.next.length : bl.lines.length;
+        // 展示行保持规范化；输出只读对应原文跨度，不从展示行重建。
+        bl.raw = {
+            mine: blockRawSpan(mineView, mineLine, mc),
+            next: blockRawSpan(nextView, nextLine, nc),
+            context,
+        };
+        mineLine += mc;
+        nextLine += nc;
+    });
     return blocks;
 }
 
@@ -625,6 +699,29 @@ export function diffBlocks(a, b, opts) {
  *               以前固定用新版，导致"选了用我的，下面预览还是新版"（用户实测 BUG）） */
 export function assembleFromBlocks(blocks, choices = {}, defaultSide = 'next') {
     const dflt = defaultSide === 'mine' ? 'mine' : 'next';
+    if (!blocks.length) {
+        if (blocks.rawText) return blocks.rawText[dflt];
+        throw new Error('差异块缺少原文，请从两侧正文重新计算后再拼装');
+    }
+    if (blocks.length && blocks.every(bl => bl.raw)) {
+        const sideOf = bl => choices[bl.i] === 'mine' || choices[bl.i] === 'next' || choices[bl.i] === 'both' ? choices[bl.i] : dflt;
+        const changed = blocks.filter(bl => bl.changed);
+        // 全选某一侧时，共同区及首尾也必须取该侧。混选则共同区/首尾守住我的原文。
+        const picked = changed.some(bl => ['mine', 'next', 'both'].includes(choices[bl.i]));
+        const allNext = changed.length && changed.every(bl => choices[bl.i] === 'next');
+        const base = allNext || (!picked && dflt === 'next') ? 'next' : 'mine';
+        const sequence = [];
+        for (const bl of blocks) {
+            if (bl.kind === 'same') sequence.push({ block: bl.i, side: 'same' });
+            else {
+                const side = sideOf(bl);
+                if (side === 'both') sequence.push({ block: bl.i, side: 'mine' }, { block: bl.i, side: 'next' });
+                else sequence.push({ block: bl.i, side });
+            }
+        }
+        return assembleBlockSequence(blocks, sequence, base);
+    }
+    // 兼容调用方手工构造的旧块；新 diffBlocks 的块绝不走展示行写回。
     const out = [];
     for (const bl of blocks) {
         if (bl.kind === 'same') { out.push(...bl.lines); continue; }
@@ -635,6 +732,36 @@ export function assembleFromBlocks(blocks, choices = {}, defaultSide = 'next') {
         else out.push(...(dflt === 'mine' ? bl.mine : bl.next));   // 没选的地方按整条的方向，界面会拦住不让生成
     }
     return out.join('\n');
+}
+
+/** 输出指定片序列；调用方负责点击顺序/自动插回/排除规则，内核只负责原文保真。 */
+export function assembleBlockSequence(blocks, sequence, commonSide = 'mine') {
+    const base = commonSide === 'next' ? 'next' : 'mine';
+    if (!blocks.length) {
+        if (blocks.rawText) return blocks.rawText[base];
+        // [] 经 JSON 往返已经没有来源；不能把无法恢复的原文伪装成空正文。
+        throw new Error('差异块缺少原文，请从两侧正文重新计算后再拼装');
+    }
+    const byIndex = new Map(blocks.map(bl => [bl.i, bl]));
+    if (!blocks.every(bl => bl.raw)) {
+        // 旧调用方人工构造块的兼容路径；产品 diffBlocks 块必须走原文跨度。
+        return sequence.flatMap(s => {
+            const bl = byIndex.get(s.block);
+            return !bl ? [] : s.side === 'same' ? bl.lines : s.side === 'mine' ? bl.mine : bl.next;
+        }).join('\n');
+    }
+    const context = blocks[0].raw.context[base];
+    let text = context.prefix, previous = null;
+    for (const s of sequence) {
+        const bl = byIndex.get(s.block);
+        if (!bl) continue;
+        const piece = bl.raw[s.side === 'same' ? base : s.side === 'mine' ? 'mine' : 'next'];
+        if (!piece.hasLines) continue;
+        if (previous) text += previous.eol || context.eol;
+        text += piece.text;
+        previous = piece;
+    }
+    return text + context.suffix;
 }
 
 /** 进度：还有几处不同没选 */
@@ -1229,6 +1356,7 @@ export function itemDecided(item, d) {
        · **代价（有意为之）**：中间态从此算"没处理完" ⇒ `pendingCount()` /「待我处理」筛选 /
          生成·缝入的门禁都认它 —— 不让半成品被静默生成（作者 2026-09-25 拍板）；
        · 开销：只对 `source === 'custom'` 的条目算一次 diff，这类条目最多几条，跑在 154 条的循环里可忽略。 */
+    if (d.source === 'custom' && d.customEdited && typeof d.customText === 'string') return true;
     if (d.source === 'custom' && item.mine && item.next) {
         const blocks = diffBlocks(item.mine.text || '', item.next.text || '');
         return pickProgress(blocks, d.blockDecision || {}).left === 0;
@@ -2387,8 +2515,8 @@ export function buildMerged({ mine, next, items, decisions = {}, params = [], or
                 report.replaced.push(it.next.name);   // 你这边本来是空的 → 没东西可另存
             }
         } else if (src === 'custom' && (it.mine || it.next)) {
-            // 「逐行拼装」：正文用用户挑好的拼装结果（空的话退回新版正文，避免写出个空条目）
-            const text = typeof dec.customText === 'string' && dec.customText.length
+            // 明确手清空是用户选择；未编辑的旧空占位仍按原合同退回原文。
+            const text = typeof dec.customText === 'string' && (dec.customText.length || dec.customEdited === true)
                 ? dec.customText
                 : (it.next ? it.next.text : it.mine.text);
             merged.prompts[targetIdx] = { ...merged.prompts[targetIdx], ...pickContentFields(it.next.prompt), ...textFieldFor(merged.prompts[targetIdx], text) };

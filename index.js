@@ -1,5 +1,5 @@
 import { extension_settings } from "../../../extensions.js";
-import { saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, stopGeneration, Generate, getRequestHeaders, is_send_press, saveChatConditional, appendMediaToMessage, addCopyToCodeBlocks, extractMessageBias, removeMacros, showSwipeButtons } from "../../../../script.js";
+import { saveSettings, saveSettingsDebounced, substituteParams, eventSource, event_types, messageFormatting, stopGeneration, Generate, getRequestHeaders, is_send_press, saveChatConditional, appendMediaToMessage, addCopyToCodeBlocks, extractMessageBias, removeMacros, showSwipeButtons } from "../../../../script.js";
 // ★W142 旧版酒馆兼容：同上那句**不再**命名导入 `ensureSwipes` —— 它是 ST 1.15.0 才有的导出，
 //   命名导入会在**链接期**（模块体执行之前）把整个插件炸掉（作者 2026-10-14 报的"拓展里看不到、管理拓展里还在"）。
 //   这里改用命名空间取法：宿主没有那个名字时只是一个 `undefined` 属性，链接期永远安全。详见下方 ywEnsureSwipes。
@@ -7,11 +7,19 @@ import * as ST_Script from "../../../../script.js";
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
 import { toggleDrawer } from "../../../utils.js";
 import { stTagMountSettings } from "./tag-fixer.js";
-import { mountApiPoolCard } from "./api-pool.js";
+import { mountApiPoolCard } from "./api-pool.js?b=v1.46.327";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
-import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwSetStat, nsfwEditFloor, nsfwCompleteLatest, nsfwGuideSyncFromPreset, nsfwGuideAllows, NSFW_DEFAULT_RULES } from "./nsfw-panel.js"; // ★W290 NSFW 状态栏
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwStopObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwSetStat, nsfwSetStats, nsfwProfilesFromText, nsfwEditFloor, nsfwCompleteLatest, nsfwGuideSyncFromPreset, nsfwGuideAllows, NSFW_DEFAULT_RULES } from "./nsfw-panel.js?b=v1.46.328"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
+import { createCustomModelManager } from './custom-models.js?b=v1.0.3';
+import { createControlCenter } from './control-center.js?b=v1.3.6';
+import { createPresetControls } from './preset-controls.js?b=v1.4.12';
+import { createCompanion, COMPANION_DEFAULTS } from './companion.js?b=v1.3.4';
+import { applyConsoleHomeDefaults, HOME_ACTION_FAVORITES, HOME_SCHEME_IDS } from './console-home-defaults.js?b=v1.0.2';
+import { getChatCompletionPreset } from '../../../openai.js';
+import { ID as YW_PRESET_ID } from './preset-control-defs.js?b=v1.4.12';
+import { placeAfter, syncLinkedSetting } from './console-linked-controls.js?b=v1.0.0';
 
 
 // SWIPE 常量本地兜底：ST 1.15.0 才引入（1.13 无 SWIPE_DIRECTION/SWIPE_SOURCE），
@@ -19,24 +27,49 @@ import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检
 const SWIPE_DIRECTION = { LEFT: 'left', RIGHT: 'right' };
 const SWIPE_SOURCE = { DELETE: 'delete', KEYBOARD: 'keyboard', BACK: 'back', AUTO_SWIPE: 'auto_swipe', SLASH_COMMAND: 'slash_command', SWIPE_PICKER: 'swipe_picker' };
 
-// 兼容封装：1.18 通用 swipe 在 ctx.swipe.to(event, dir, opts)，1.13 只有 ctx.swipe.right({source,repeated})（无 forceMesId）。
-// 统一走 getContext().swipe，规避直接 import swipe 在 1.13 上加载失败的问题。
-async function doSwipe(targetId) {
+// 自动新分支适配：跨版本同步准备下一空槽，紧接总闸调用已导入的 Generate('swipe')。
+// 原生动画里的延迟 Generate 无取消令牌，自动路径不能借它发请求。
+async function doSwipe(targetId, task = captureRerollTask()) {
     try {
         const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-        if (typeof ctx?.swipe?.to === 'function') {
-            // 1.18+：ctx.swipe.to 是通用 swipe，支持 forceMesId 精确定位
-            await ctx.swipe.to(null, SWIPE_DIRECTION.RIGHT, {
-                source: SWIPE_SOURCE.AUTO_SWIPE,
-                repeated: true,
-                forceMesId: targetId,
-            });
-            return true;
-        }
-        if (typeof ctx?.swipe?.right === 'function') {
-            // 1.13：swipe.right({source, repeated})，无 forceMesId（降级为操作最后一条消息）
-            await ctx.swipe.right({ source: SWIPE_SOURCE.AUTO_SWIPE, repeated: true });
-            return true;
+        if (typeof ctx?.swipe?.to === 'function' || typeof ctx?.swipe?.right === 'function') {
+            // 两版原生 swipe 都在动画/事件 await 后才 Generate，无法被本模块令牌撤回。
+            // 自动路径复用同步槽位准备语义，直接在终闸内进入 Generate；用户手点原生路径不变。
+            if (!rerollExecutionAllowed(task) || is_send_press || targetId !== ctx.chat?.length - 1) return false;
+            const msg = ctx.chat[targetId];
+            if (!msg || msg.is_user || msg.is_system || targetId === 0) return false;
+            const before = { sid: msg.swipe_id, swipes: msg.swipes, info: msg.swipe_info,
+                gs: msg.gen_started, gf: msg.gen_finished, extra: msg.extra };
+            const swipes = Array.isArray(msg.swipes) ? msg.swipes.slice() : [String(msg.mes ?? '')];
+            const info = Array.isArray(msg.swipe_info) ? msg.swipe_info.slice() : [];
+            const sid = Number.isInteger(msg.swipe_id) && msg.swipe_id >= 0 && msg.swipe_id < swipes.length ? msg.swipe_id : 0;
+            swipes[sid] = String(msg.mes ?? '');
+            info[sid] = { ...(info[sid] || {}), send_date: msg.send_date, gen_started: msg.gen_started,
+                gen_finished: msg.gen_finished, extra: structuredClone(msg.extra || {}) };
+            const nextId = swipes.length;
+            const preparation = { task, msg, swipes, targetId, owner: null, text: String(msg.mes ?? '') };
+            const rollback = () => {
+                const owned = preparation.owner ? rerollGuard.owns(preparation.owner, rerollScope()) : rerollTaskCurrent(task, false);
+                if (!owned || ctx.chat[targetId] !== msg || msg.swipe_id !== nextId
+                    || msg.swipes !== swipes || swipes.length !== nextId || String(msg.mes ?? '') !== preparation.text
+                    || (preparation.owner && (generationOutput?.token || msg.gen_started !== undefined))) return;
+                msg.swipe_id = before.sid; msg.swipes = before.swipes; msg.swipe_info = before.info;
+                msg.gen_started = before.gs; msg.gen_finished = before.gf; msg.extra = before.extra;
+            };
+            msg.swipes = swipes; msg.swipe_info = info; msg.swipe_id = nextId;
+            msg.extra = structuredClone(msg.extra || {});
+            for (const key of ['memory', 'display_text', 'media', 'inline_image', 'files', 'fileLength', 'generationType', 'negative', 'title', 'append_title']) delete msg.extra[key];
+            delete msg.gen_started; delete msg.gen_finished;
+            try {
+                if (!rerollTaskCurrent(task, false) || manualStopClicked || lastGenManuallyStopped
+                    || !rerollReasonSwitchOn(task.reason) || is_send_press) { rollback(); return false; }
+                pendingSwipePreparation = preparation;
+                await Generate('swipe');
+                // STARTED 也可能早于连接检查；尚无新槽/新输出时，本次新代仍可安全恢复。
+                rollback();
+                return true;
+            } catch (e) { rollback(); throw e; }
+            finally { if (pendingSwipePreparation === preparation) pendingSwipePreparation = null; }
         }
     } catch (e) { console.warn('[余温工具箱] swipe 调用失败:', e); }
     return false;
@@ -342,7 +375,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.293'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.336'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -391,6 +424,8 @@ const defaultSettings = {
     wordReplaceEnabled: true,        // 词汇替换总开关（默认开=自动应用）
     wordReplacements: [],            // 词汇替换规则：{find, replace, mode:'simple'|'regex', enabled, scopeDisplay, scopePrompt}
     customPresets: [],               // 自定义注入模板：[{id, name, content}]（追加按钮添加；injectTarget='custom:<id>'）
+    customModels: {},                // 每个聊天补全来源独立的手填模型列表
+    customModelSelection: {},        // 当前目标内的自定义模型选择记录
     reasoningHeightCss: true,        // 思维链固定高度滚动（默认开：长思维链不撑爆楼层）
     reasoningHeightCssValue: 250,    // 固定高度数值（px，可自定义）
     showTps: true,                   // 楼层 token 数旁显示生成速度（t/s）
@@ -414,7 +449,7 @@ const defaultSettings = {
        —— 保证"给另一个方案做准备"不会把当前方案也改成同一套（作者 2026-10-29 报的 BUG）。 */
     liveClaimedBy: null,
     psnapShowFloat: true,            // 整合悬浮条入口（悬浮条设置卡控制内部显隐）
-    floatBarEnabled: true,           // 悬浮窗总开关：关闭则悬浮条整体隐藏
+    floatBarEnabled: false,          // 兼容快捷条；新装默认仅余小温入口，已有显隐偏好保持不变
     floatShowTagFix: true,           // 悬浮条功能区：一键修复标签（直接执行）
     floatShowCline: false,       // 悬浮条功能区：Cline 提供商入口（点击打开选择弹窗，自动开启指定）——默认关（新用户不显示）
     floatShowPlayFav: true,          // ★W25B：**小剧场收藏** —— 作者第 2 批拍板「这两个在用户安装插件之后默认勾选的」⇒ 默认**开**
@@ -458,6 +493,14 @@ const defaultSettings = {
     inlineInsertSavePreset: true,    // ★W115（作者 2026-10-08 拍板）：保存条目的同时保存预设（B；默认**开** —— 与新装一致；老用户按值一次性升级，见下面那段迁移）
     dblEditInPlace: true,            // ★W135（作者 2026-10-13 拍板）：双击正文 · 就地改字（默认**开** —— 与新装一致；关 ⇒ 双击完全不响应 = 恢复原生双击选词）
     /* ★W290（作者 2026-11-04）：NSFW 状态栏（默认**关** —— 老用户零变化，开了才注入才画卡） */
+    companion: structuredClone(COMPANION_DEFAULTS),
+    controlCenter: { favorites: [...HOME_ACTION_FAVORITES], recent: [], density: 'comfortable' },
+    presetControlHomePins: {},
+    presetControlHomeDefaultsVersion: {},
+    presetControlCommonHidden: [],
+    presetControlShortcuts: [],
+    presetControlLayouts: {},
+    ywpcTheaterMemory: {},
     nsfwEnabled: false,              // 总开关
     nsfwFullCount: 2,                // 每轮注入几个「在场」角色的完整状态（1-3）
     nsfwShowAllFields: false,        // 是否注入扩展字段（默认只注入核心组，省 token）
@@ -525,7 +568,7 @@ const UI = {
         dsModeLabel: "Deepseek思维链开关：", dsNative: "原生思维链", dsDisabled: "正文思维链(thinking disabled)",
         dsEffortLabel: "Deepseek思考强度：", dsEffortOff: "off（不注入，用 DeepSeek 默认 high）", dsEffortLow: "low（flash: low / pro: high）", dsEffortHigh: "high（flash: high / pro: high）", dsEffortXhigh: "xhigh（flash: high / pro: max）", dsEffortMax: "max（flash: max / pro: max）",
         k3EffortLabel: "Kimi3 思考强度：", k3EffortOff: "off（不注入，用 K3 默认 max）", k3EffortLow: "low（思考快）", k3EffortHigh: "high", k3EffortMax: "max（思考最久）",
-        injectLabel: "注入破限：", injectStep1: "step 1：中破限·原生思维链夺舍（gemini需要关闭我）", injectStep2: "step 2：强破限·正文输出思维链夺舍（大多数渠道已失效，别选我）",
+        injectLabel: "注入破限：", injectSettingsTitle: "注入设置", customModelsTitle: "自定义模型", injectStep1: "step 1：中破限·原生思维链夺舍（gemini需要关闭我）", injectStep2: "step 2：强破限·正文输出思维链夺舍（大多数渠道已失效，别选我）",
         injectTitle: "注入（模型/渠道/附加参数）", modelTitle: "模型参数", rerollTitle: "自动重Roll/截断（妙妙方法）", autoStopTitle: "自动截断", beautifyTitle: "思维链", presetUpdTitle: "预设更新器（更新时对比/保存自缝内容）", presetStoreTitle: "条目商店（上传/缝入条目/小剧场收藏）", playFavTitle: "小剧场收藏", playFavNow: "立即打开一次", playFavNotReady: "条目商店还没准备好（正在加载，或者这个包里没有它）—— 过一两秒再点一次。", playFavJumpFail: "商店打开了，但没能打开「收藏记录」—— 在商店里点一下「⭐ 收藏记录」。",
         playLatestTitle: "最新小剧场", playLatestNow: "立即打开一次",
         playLatestNotReady: "条目商店还没准备好（正在加载，或者这个包里没有它）—— 过一两秒再点一次。",
@@ -584,15 +627,15 @@ const UI = {
         apiModel: "模型名", apiKey: "密钥", apiAge: "{d} 天 {h} 小时", apiFetchModels: "获取可用模型", apiFetchBtn: "获取", apiModelsLoading: "获取模型中…", apiModelEmpty: "未获取到模型（检查 URL/密钥）", apiModelErr: "获取模型失败",
         apiNoPool: "池为空：先添加接口", apiNotCustom: "当前不是 Custom(OpenAI兼容) 连接，API 池不生效",
         apiBannerMsg: "检测到额度用尽（limit）。", apiBannerSwitch: "⇄ 切换到 {name}（{n}/{total}）", apiSwitched: "已切换到 {name}（{n}/{total}）",
-        apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（感谢啊一串信息源）", clineSectionTitle: "Cline设置相关", clineModelOverride: "积分模型名前缀覆写", clineMethodLabel: "指定方式：订阅指定提供商（感谢啊一串信息源）", clineUpTitle: "上移（调整自动切换顺序）", clineDownTitle: "下移（调整自动切换顺序）", upBtn: "📊 各上游实时状况", upTitle: "kimi-k3 各上游实时状况", upLoading: "加载中…（数据源 OpenRouter，免key）", upRefreshing: "刷新中…", upFailed: "获取失败：国内网络可能无法直连 openrouter.ai，请挂梯子后点 ↻ 重试", upSwitch: "切", upProvider: "提供商", upIn: "输入$/M", upOut: "输出$/M", upCache: "缓存读$/M", upLat: "延迟", upTps: "吞吐", upUp5m: "可用(5m)", upUptime: "可用率(1d)", upHint: "✓=可在本插件切换 · ★=当前 · 排序：可切换优先、可用率降序。手动追加自定义提供商（上方输入框）后，对应行也会出现切按钮。数据来自 OpenRouter 公开接口，仅供选型参考。", clineDSTip: "用Cline吃DeepSeek，可指定 deepseek 作为上游（官方缓存生效）！", clineDSBtn: "⇄ 一键切换 deepseek 上游", clineDSSwitched: "已切换：提供商=deepseek（走官方上游带缓存）", clineOverrideWarn: "⚠️ 啊一串实测：消耗积分的模式！限定指定提供商，如果你不知道这是什么就不要勾选", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「不常用」里勾选 使用 Cline 提供商指定", clinePassWarn: "⚠️ 检测到模型名带 cline-pass/ 前缀：提供商指定不会生效（实测全部被忽略），请改用 moonshotai/kimi-k3 等厂商前缀", clineDeadWarn: "⚠️ 已失效：Cline 指定 K3 渠道现已无法指定！（但可指定 DS）", clineHint: "开启后每次请求自动注入指定提供商。请删掉附加参数里的任何内容！仅 cline 渠道需要，其它渠道请关闭。不同渠道K3风味不同，自行测试。", psnapNoPreset: "未找到预设数据", schemeTitle: "预设方案切换（预设/API/开关）", schemeNew: "＋ 新建方案", schemeNewName: "新方案", schemeEdit: "编辑", schemeOverwrite: "覆盖", schemeSwitch: "切换", schemeDeleteConfirm: "确定删掉这个方案吗？", schemeNotConfigured: "（未配置）", schemeEditTitle: "编辑方案", schemeIconLabel: "图标", schemeIconUpload: "上传图片", schemeBadgeLabel: "角标：", schemeBadgeAuto: "自动", schemeBadgeSameTitle: "相同图标显示角标", schemeMoveUp: "上移", schemeMoveDown: "下移", schemeNameLabel: "方案名", schemeProfileLabel: "连接配置", schemeNoProfile: "不切换连接", schemePresetLabel: "预设", schemeNoPreset: "不切换预设", schemeTogglesLabel: "条目开关", schemeTogglesCount: "{n} 条", schemeTogglesAuto: "已自动捕获 {n} 条开关（跟随预设：{p}）", schemeTogglesDisabled: "选择了不切换预设，开关不可用", schemeRecapture: "🔄 重新捕获", schemeShowInBar: "出现在悬浮窗", schemeBallSync: "切换时同步悬浮球图标", schemeGenerating: "正在生成中，稍后再切", schemeProfileMissing: "连接配置「{n}」已不存在，请重新编辑方案", schemePresetMissing: "预设「{n}」已不存在", schemeNeedConnExt: "请先在酒馆里启用「Connection Profiles」扩展", schemeNoProfiles: "（请先在酒馆 API 面板保存一个连接配置）", schemeSwitchedTo: "已切换到「{n}」", schemeOverwritten: "已用当前状态覆盖「{n}」", schemeDeleted: "已删除「{n}」", schemeCreated: "已新建方案，点「编辑」绑定预设/连接/开关", schemeBindPreset: "预设", schemeBindProfile: "连接", schemeBindToggles: "开关", schemeIconBad: "这个文件不是图片 ⇒ 没有换", schemeIconBig: "这张图太大了（超过 300KB） ⇒ 换一张小一点的", floatCardTitle: "悬浮条设置", floatCardTag: "一键修复标签（直接执行）", tagFixNow: "一键修复标签", baseTitle: "基础设置（小功能整合/悬浮窗）", baseGroupShortcuts: "便捷小功能", baseGroupFloat: "悬浮窗相关功能", baseGroupLang: "语言设置", ballIconGroup: "自定义悬浮球图标", ballIconPick: "选择图片…", ballIconReset: "恢复默认", ballIconPrev: "当前图标预览", ballIconBad: "这个文件不是图片 ⇒ 没有换", ballIconBig: "这张图太大了，浏览器存不下 ⇒ 换一张小一点的", ballIconSaved: "已换成你选的图标", ballIconResetDone: "已恢复默认火球", inlineInsLabel: "在预设面板每行加「插入提示词」按钮", inlineInsDelLabel: "在预设面板每行加「删除」按钮", inlineInsSaveLabel: "保存条目的同时保存预设", inlineInsSaveHint: "", inlineInsBtnTitle: "插入提示词或复制这一条", inlineInsNewName: "新提示词", inlineInsNoId: "没能生成一个唯一的编号 ⇒ 这次没有插入", inlineInsNoDef: "酒馆没有把这条新提示词收下 ⇒ 这次没有插入（可以再试一次）", inlineInsNoOrder: "没找到预设的顺序表 ⇒ 一个字都没写（可以刷新页面再试）", inlineInsFail: "插入时出错了 ⇒ 没有写进预设", inlineInsFailNoBtn: "找不到酒馆的「更新预设」按钮 ⇒ 没有存盘（这次插入只在界面上）", inlineInsMsgPlaced: "已插到「{n}」后面", inlineInsAtTail: "原来那一行不在了 ⇒ 已放到预设最后", inlineInsMsgNoSave: "（只在界面上；要存进预设就点酒馆的「更新预设」）", inlineInsEntrySavedPreset: "条目已保存，并已替你更新预设「{p}」", inlineInsEntrySavedNoName: "条目已保存，但读不到你正在用的预设的名字 ⇒ 没有存进预设文件", inlineInsEntrySavedUnknown: "条目已保存，但没能确认写进预设文件 ⇒ 请按一下酒馆的「更新预设」（这次可能没存上）", inlineInsMsgSaved: "；条目已保存，并已替你更新预设「{p}」", inlineInsMsgSaveUnknown: "，但没能确认写进预设文件 ⇒ 请自己按一下酒馆的「更新预设」，或看控制台报错（这次可能没存上）", inlineInsMsgNoName: "，但读不到你正在用的预设的名字 ⇒ 没有存盘（这次插入只在界面上）", insAskTitle: "这一条怎么处理？", insAskWho: "这一条：{n}", insAskRemove: "移除", insAskRemoveHint: "酒馆原有的 Remove，仅隐藏，可插入提示词重链接回来", insAskDel: "删除", insAskDelHint: "确认不需要后彻底删除，无法找回", insAskIns: "插入新提示词", insAskInsHint: "在这一条后面插一条新的，填完内容点酒馆的「保存」", insAskCopy: "复制这一条", insAskCopyHint: "把这一条复制一份插到它后面，名字自动加「（副本）」", insAskCancel: "取消", insAskWi: "从世界书里选", insAskWiHint: "挑几条世界书条目，缝到这一条后面", wiTitle: "从世界书里选", wiSub: "挑好的条目会缝到「{n}」后面（按勾选先后）", wiNoBooks: "没有读到世界书（一本都没有）", wiBooksFail: "世界书列表读不出来 ⇒ 刷新页面再试", wiLoadFail: "这本世界书读不出来 ⇒ 换一本试试", wiNoEntries: "这本世界书里没有可用的条目", wiBack: "‹ 换一本", wiOk: "确定", wiLoading: "读取中…", wiCount: "已选 {n} 条", wiOff: "（世界书里是停用的）", wiUnnamed: "未命名条目", wiNone: "一条都没勾 ⇒ 什么都没做", wiDone: "已把 {n} 条世界书内容缝到「{x}」后面", wiDoneTail: "原来那一行不在了 ⇒ {n} 条已放到预设最后", wiNoBody: "（其中 {m} 条没有正文）", wiGone: "那一行已经不在了 ⇒ 没有缝", wiErr: "这一批没缝成 ⇒ 一个字都没写", wiExpand: "展开", wiCollapse: "收起", wiEmptyBody: "（这一条没有正文）",  insCopyDone: "已复制出「{n}」", insCopyTail: "原来那一行不在了 ⇒ 复制出来的「{n}」放到了预设最后", insCopyGone: "「{n}」已经不在了 ⇒ 没有复制", inlineInsCopySuffix: "（副本）", insDelDone: "已从预设里彻底删除「{n}」", insDelClean: "（顺手清掉了 {g} 张顺序表里的 {r} 行残留）", insDelNoSave: "（只在界面上；要存进预设就点酒馆的「更新预设」）", insDelGone: "「{n}」已经不在预设里了", insDelForbid: "「{n}」是系统提示词 ⇒ 不能删（酒馆也不让删）", insDelFail: "删除时出错了 ⇒ 没有删", autoUpdateLabel: "自动更新插件至最新", floatBarEnable: "开启悬浮窗", floatPanelClear: "清空", floatFuncLabel: "功能型（点图标直接执行）", floatPanelLabel: "面板型（点图标打开设置浮窗）", floatPanelAll: "全选面板", routeLabel: "本次Cline上游：", routeNone: "暂无数据", floatClineEntry: "Cline 提供商入口（点开选择）", floatRouteBadge: "悬浮条显示上游徽标", flamePauseOnCollapse: "收起悬浮球时暂停粒子特效", stopRerollName: "停止重roll", entryMenuGroup: "拓展菜单（左下角）", entryInlineGroup: "输入框旁（发送栏）", clineRouteAlertLabel: "实际路由与指定不符时提醒", opencodeLabel: "Opencode 请求标头（9/6 后红字需启用）", opencodeHint: "自动注入 X-Opencode-Session 请求头（所有来源都会注入；原版酒馆对 Google 源会忽略这个字段，这种情况由中转补齐）。同一聊天固定同一 ID（GPU 上下文缓存命中），不同聊天不同 ID。", opencodeSession: "本聊天 Session ID：",
+        apiMenuEntry: "拓展菜单入口", apiMenuSwitch: "切换下个API", apiOnlyOne: "池里只有这一条，没有下一条可切", clineEnabled: "使用 Cline 提供商指定（感谢啊一串信息源）", clineSectionTitle: "Cline设置相关", clineModelOverride: "积分模型名前缀覆写", clineMethodLabel: "指定方式：订阅指定提供商（感谢啊一串信息源）", clineUpTitle: "上移（调整自动切换顺序）", clineDownTitle: "下移（调整自动切换顺序）", upBtn: "📊 各上游实时状况", upTitle: "kimi-k3 各上游实时状况", upLoading: "加载中…（数据源 OpenRouter，免key）", upRefreshing: "刷新中…", upFailed: "获取失败：国内网络可能无法直连 openrouter.ai，请挂梯子后点 ↻ 重试", upSwitch: "切", upProvider: "提供商", upIn: "输入$/M", upOut: "输出$/M", upCache: "缓存读$/M", upLat: "延迟", upTps: "吞吐", upUp5m: "可用(5m)", upUptime: "可用率(1d)", upHint: "✓=可在本插件切换 · ★=当前 · 排序：可切换优先、可用率降序。手动追加自定义提供商（上方输入框）后，对应行也会出现切按钮。数据来自 OpenRouter 公开接口，仅供选型参考。", clineDSTip: "用Cline吃DeepSeek，可指定 deepseek 作为上游（官方缓存生效）！", clineDSBtn: "⇄ 一键切换 deepseek 上游", clineDSSwitched: "已切换：提供商=deepseek（走官方上游带缓存）", clineOverrideWarn: "⚠️ 啊一串实测：消耗积分的模式！限定指定提供商，如果你不知道这是什么就不要勾选", clineProvLabel: "提供商：", clineMenuEntry: "拓展菜单入口", clineTitle: "切换Cline提供商", clineMenuSwitch: "切换Cline提供商", clineCustomAdd: "＋ 追加", clineCustomPlaceholder: "自定义提供商名", clineCustomEmpty: "先填写提供商名再追加", clineCustomDup: "{p} 已存在", clineCustomAdded: "已追加 {p}（下拉和弹窗都可用）", clineSwitched: "已切换到 {p}", clineNeedEnable: "请先在「不常用」里勾选 使用 Cline 提供商指定", clinePassWarn: "⚠️ 检测到模型名带 cline-pass/ 前缀：提供商指定不会生效（实测全部被忽略），请改用 moonshotai/kimi-k3 等厂商前缀", clineDeadWarn: "⚠️ 已失效：Cline 指定 K3 渠道现已无法指定！（但可指定 DS）", clineHint: "开启后每次请求自动注入指定提供商。请删掉附加参数里的任何内容！仅 cline 渠道需要，其它渠道请关闭。不同渠道K3风味不同，自行测试。", psnapNoPreset: "未找到预设数据", schemeTitle: "预设方案切换（预设/API/开关）", schemeNew: "＋ 新建方案", schemeNewName: "新方案", schemeEdit: "编辑", schemeOverwrite: "覆盖", schemeSwitch: "切换", schemeDeleteConfirm: "确定删掉这个方案吗？", schemeNotConfigured: "（未配置）", schemeEditTitle: "编辑方案", schemeIconLabel: "图标", schemeIconUpload: "上传图片", schemeBadgeLabel: "角标：", schemeBadgeAuto: "自动", schemeBadgeSameTitle: "相同图标显示角标", schemeMoveUp: "上移", schemeMoveDown: "下移", schemeNameLabel: "方案名", schemeProfileLabel: "连接配置", schemeNoProfile: "不切换连接", schemePresetLabel: "预设", schemeNoPreset: "不切换预设", schemeTogglesLabel: "条目开关", schemeTogglesCount: "{n} 条", schemeTogglesAuto: "已自动捕获 {n} 条开关（跟随预设：{p}）", schemeTogglesDisabled: "选择了不切换预设，开关不可用", schemeRecapture: "🔄 重新捕获", schemeShowInBar: "出现在悬浮窗", schemeBallSync: "切换时同步悬浮球图标", schemeGenerating: "正在生成中，稍后再切", schemeProfileMissing: "连接配置「{n}」已不存在，请重新编辑方案", schemePresetMissing: "预设「{n}」已不存在", schemeNeedConnExt: "请先在酒馆里启用「Connection Profiles」扩展", schemeNoProfiles: "（请先在酒馆 API 面板保存一个连接配置）", schemeSwitchedTo: "已切换到「{n}」", schemeOverwritten: "已用当前状态覆盖「{n}」", schemeDeleted: "已删除「{n}」", schemeCreated: "已新建方案，点「编辑」绑定预设/连接/开关", schemeBindPreset: "预设", schemeBindProfile: "连接", schemeBindToggles: "开关", schemeIconBad: "这个文件不是图片 ⇒ 没有换", schemeIconBig: "这张图太大了（超过 300KB） ⇒ 换一张小一点的", floatCardTitle: "悬浮条设置", floatCardTag: "一键修复标签（直接执行）", tagFixNow: "一键修复标签", baseTitle: "基础设置（小功能整合/悬浮窗）", baseGroupShortcuts: "便捷小功能", baseGroupFloat: "悬浮窗相关功能", baseGroupLang: "语言设置", ballIconGroup: "自定义悬浮球图标", ballIconPick: "选择图片…", ballIconReset: "恢复默认", ballIconPrev: "当前图标预览", ballIconBad: "这个文件不是图片 ⇒ 没有换", ballIconBig: "这张图太大了，浏览器存不下 ⇒ 换一张小一点的", ballIconSaved: "已换成你选的图标", ballIconResetDone: "已恢复默认火球", inlineInsLabel: "在预设面板每行加「插入提示词」按钮", inlineInsDelLabel: "在预设面板每行加「删除」按钮", inlineInsSaveLabel: "保存条目的同时保存预设", inlineInsSaveHint: "", inlineInsBtnTitle: "插入提示词或复制这一条", inlineInsNewName: "新提示词", inlineInsNoId: "没能生成一个唯一的编号 ⇒ 这次没有插入", inlineInsNoDef: "酒馆没有把这条新提示词收下 ⇒ 这次没有插入（可以再试一次）", inlineInsNoOrder: "没找到预设的顺序表 ⇒ 一个字都没写（可以刷新页面再试）", inlineInsFail: "插入时出错了 ⇒ 没有写进预设", inlineInsFailNoBtn: "找不到酒馆的「更新预设」按钮 ⇒ 没有存盘（这次插入只在界面上）", inlineInsMsgPlaced: "已插到「{n}」后面", inlineInsAtTail: "原来那一行不在了 ⇒ 已放到预设最后", inlineInsMsgNoSave: "（只在界面上；要存进预设就点酒馆的「更新预设」）", inlineInsEntrySavedPreset: "条目已保存，并已替你更新预设「{p}」", inlineInsEntrySavedNoName: "条目已保存，但读不到你正在用的预设的名字 ⇒ 没有存进预设文件", inlineInsEntrySavedUnknown: "条目已保存，但没能确认写进预设文件 ⇒ 请按一下酒馆的「更新预设」（这次可能没存上）", inlineInsMsgSaved: "；条目已保存，并已替你更新预设「{p}」", inlineInsMsgSaveUnknown: "，但没能确认写进预设文件 ⇒ 请自己按一下酒馆的「更新预设」，或看控制台报错（这次可能没存上）", inlineInsMsgNoName: "，但读不到你正在用的预设的名字 ⇒ 没有存盘（这次插入只在界面上）", insAskTitle: "这一条怎么处理？", insAskWho: "这一条：{n}", insAskRemove: "移除", insAskRemoveHint: "酒馆原有的 Remove，仅隐藏，可插入提示词重链接回来", insAskDel: "删除", insAskDelHint: "确认不需要后彻底删除，无法找回", insAskIns: "插入新提示词", insAskInsHint: "在这一条后面插一条新的，填完内容点酒馆的「保存」", insAskCopy: "复制这一条", insAskCopyHint: "把这一条复制一份插到它后面，名字自动加「（副本）」", insAskCancel: "取消", insAskWi: "从世界书里选", insAskWiHint: "挑几条世界书条目，缝到这一条后面", wiTitle: "从世界书里选", wiSub: "挑好的条目会缝到「{n}」后面（按勾选先后）", wiNoBooks: "没有读到世界书（一本都没有）", wiBooksFail: "世界书列表读不出来 ⇒ 刷新页面再试", wiLoadFail: "这本世界书读不出来 ⇒ 换一本试试", wiNoEntries: "这本世界书里没有可用的条目", wiBack: "‹ 换一本", wiOk: "确定", wiLoading: "读取中…", wiCount: "已选 {n} 条", wiOff: "（世界书里是停用的）", wiUnnamed: "未命名条目", wiNone: "一条都没勾 ⇒ 什么都没做", wiDone: "已把 {n} 条世界书内容缝到「{x}」后面", wiDoneTail: "原来那一行不在了 ⇒ {n} 条已放到预设最后", wiNoBody: "（其中 {m} 条没有正文）", wiGone: "那一行已经不在了 ⇒ 没有缝", wiErr: "这一批没缝成 ⇒ 一个字都没写", wiExpand: "展开", wiCollapse: "收起", wiEmptyBody: "（这一条没有正文）",  insCopyDone: "已复制出「{n}」", insCopyTail: "原来那一行不在了 ⇒ 复制出来的「{n}」放到了预设最后", insCopyGone: "「{n}」已经不在了 ⇒ 没有复制", inlineInsCopySuffix: "（副本）", insDelDone: "已从预设里彻底删除「{n}」", insDelClean: "（顺手清掉了 {g} 张顺序表里的 {r} 行残留）", insDelNoSave: "（只在界面上；要存进预设就点酒馆的「更新预设」）", insDelGone: "「{n}」已经不在预设里了", insDelForbid: "「{n}」是系统提示词 ⇒ 不能删（酒馆也不让删）", insDelFail: "删除时出错了 ⇒ 没有删", autoUpdateLabel: "自动更新插件至最新", floatBarEnable: "开启悬浮窗", floatPanelClear: "清空", floatFuncLabel: "功能型（点图标直接执行）", floatPanelLabel: "面板型（点图标打开设置浮窗）", floatPanelAll: "全选面板", routeLabel: "本次Cline上游：", routeNone: "暂无数据", floatClineEntry: "Cline 提供商入口（点开选择）", floatRouteBadge: "悬浮条显示上游徽标", flamePauseOnCollapse: "收起悬浮球时暂停粒子特效", stopRerollName: "停止重roll", entryMenuGroup: "拓展菜单（左下角）", entryInlineGroup: "输入框旁（发送栏）", clineRouteAlertLabel: "实际路由与指定不符时提醒", opencodeLabel: "OpenCode 请求标头", opencodeHint: "自动注入 X-Opencode-Session 请求头（所有来源都会注入；原版酒馆对 Google 源会忽略这个字段，这种情况由中转补齐）。同一聊天固定同一 ID（GPU 上下文缓存命中），不同聊天不同 ID。", opencodeHintSummary: "说明", opencodeSession: "本聊天 Session ID：",
         apiHint: "密钥以明文保存在本地 settings.json，勿外传该文件；仅 Custom(OpenAI兼容) 连接生效。切换会同步改写 URL、密钥、模型名 三项，预置/采样等其它参数一概不动；命中 limit/quota/rate 即触发。",
         dblSave: "保存",
         dblEditLabel: "双击正文直接改字",
         nsfwTitle: "状态栏（NSFW）", nsfwEnable: "启用状态栏",
-        nsfwHint: "将已有状态快照画卡，并注入提示词中",
+        nsfwHint: "将已有状态快照画卡，并注入提示词中，需要同时打开预设里的NSFW状态快照条目",
         nsfwFullCount: "在场全量人数：", nsfwAllFields: "注入全部字段（更细但更费 token）",
         nsfwRoster: "角色名册", nsfwNewName: "角色名", nsfwAdd: "＋ 建档", nsfwRemove: "删",
-        nsfwCaptureHide: "捕捉并隐藏NSFW状态栏", nsfwCaptureHideHint: "", nsfwSenderToggle: "发送悬浮窗", nsfwSenderHint: "新增一个悬浮框，选谁就将谁的状态快照发送；AUTO 为上一轮正文 + 用户发送里有谁的名字，就帮你勾选并发送谁，也可在悬浮窗手动勾选（勾/取消只影响这一轮）。", nsfwPeekList: "当前聊天（点名字看状态）", nsfwAutoHint: "自动：正文里出现谁就发谁",
+        nsfwCaptureHide: "捕捉并隐藏NSFW状态栏", nsfwCaptureHideHint: "常开", nsfwSenderToggle: "发送悬浮窗", nsfwSenderHint: "新增一个悬浮框，选谁就将谁的状态快照发送；AUTO 为上一轮正文 + 用户发送里有谁的名字，就帮你勾选并发送谁，也可在悬浮窗手动勾选（勾/取消只影响这一轮）。", nsfwPeekList: "当前聊天（点名字看状态）", nsfwAutoHint: "自动：正文里出现谁就发谁",
         nsfwInjectMode: "每轮注入", nsfwInjectFull: "完整（规则 + 状态 + 协议）", nsfwInjectState: "仅当前状态（规则/格式在预设里）", nsfwInjectOff: "不注入（状态只看楼层）",
         nsfwRules: "更新规则（每行一条，注入时按顺序发出）", nsfwPreview: "预览本轮注入", nsfwPeek: "看快照", nsfwDemo: "示例填充（先看效果）", nsfwDump: "查看/复制全部状态",
         nsfwNoChars: "还没有角色，先在上面建档。",
@@ -605,7 +648,7 @@ const UI = {
         dsModeLabel: "DeepSeek Thinking Mode: ", dsNative: "Native thinking", dsDisabled: "Body CoT (thinking disabled)",
         dsEffortLabel: "DeepSeek Effort: ", dsEffortOff: "off (no inject, DeepSeek default high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 Effort: ", k3EffortOff: "off (no inject, K3 default max)", k3EffortLow: "low (fast thinking)", k3EffortHigh: "high", k3EffortMax: "max (longest thinking)",
-        injectLabel: "Injection Modes: ", injectStep1: "step 1: medium jailbreak - native CoT takeover (turn me off for gemini)", injectStep2: "step 2: strong jailbreak - body CoT takeover (defunct on most channels - don't pick me)",
+        injectLabel: "Injection Modes: ", injectSettingsTitle: "Injection settings", customModelsTitle: "Custom models", injectStep1: "step 1: medium jailbreak - native CoT takeover (turn me off for gemini)", injectStep2: "step 2: strong jailbreak - body CoT takeover (defunct on most channels - don't pick me)",
         injectTitle: "Injection (Model / Channel / Extra Params)", modelTitle: "Model Settings", rerollTitle: "Auto Reroll / Truncate (the neat trick)", autoStopTitle: "Auto-Stop", beautifyTitle: "Chain of Thought", presetUpdTitle: "Preset Updater (Compare on Update / Save Stitched Content)", presetStoreTitle: "Entry Store (Upload / Stitch Entries / Theater Favorites)", playFavTitle: "Play favorites", playFavNow: "Open once", playFavNotReady: "The entry store isn't ready yet (still loading, or not included in this build) — try again in a second.", playFavJumpFail: "The store opened but the favorites view did not — click the ⭐ favorites button in the store.",
         playLatestTitle: "Latest plays", playLatestNow: "Open once",
         playLatestNotReady: "The entry store isn't ready yet (still loading, or not included in this build) — try again in a second.",
@@ -661,7 +704,7 @@ const UI = {
         apiModel: "Model", apiKey: "Key", apiAge: "{d}d {h}h", apiFetchModels: "Fetch available models", apiFetchBtn: "Fetch", apiModelsLoading: "Fetching models…", apiModelEmpty: "No models returned (check URL/key)", apiModelErr: "Failed to fetch models",
         apiNoPool: "Pool is empty: add an endpoint first", apiNotCustom: "Not a Custom (OpenAI-compatible) connection - pool inactive",
         apiBannerMsg: "Quota limit hit.", apiBannerSwitch: "⇄ Switch to {name} ({n}/{total})", apiSwitched: "Switched to {name} ({n}/{total})",
-        apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (credit: the source)", clineSectionTitle: "Cline settings", clineModelOverride: "Credits model prefix override", clineMethodLabel: "Method: subscription provider routing (credit: the source)", clineUpTitle: "Move up (auto-switch order)", clineDownTitle: "Move down (auto-switch order)", upBtn: "📊 Live upstream status", upTitle: "kimi-k3 upstream live status", upLoading: "Loading... (OpenRouter, no key needed)", upRefreshing: "Refreshing...", upFailed: "Failed to fetch - openrouter.ai may be unreachable from your network; retry with ↻", upSwitch: "Use", upProvider: "Provider", upIn: "In $/M", upOut: "Out $/M", upCache: "Cache $/M", upLat: "Latency", upTps: "Throughput", upUp5m: "Up(5m)", upUptime: "Uptime(1d)", upHint: "✓ = switchable here · ★ = current · latency/throughput = last 30 min (blank when no traffic) · sorted: switchable first, uptime desc. Data from OpenRouter public API.", snapNamePh: "Profile name…", snapSaveBtn: "💾 Save current", snapApply: "Apply", snapDel: "Delete profile", snapEmpty: "No saved profiles yet: enter a name and hit Save", snapRecovery: "↩ Auto-recovery snapshot (saved before last switch)", snapSaved: "Saved profile \"{n}\"", snapNeedName: "Enter a profile name first", clineDSTip: "Use Cline for DeepSeek with deepseek as the upstream (official caching works)!", clineDSBtn: "⇄ One-click deepseek upstream", clineDSSwitched: "Switched: provider=deepseek (official upstream with caching)", clineOverrideWarn: "WARNING (tested): credits only - locks provider and overrides model to a vendor prefix like moonshotai/kimi-k3.", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Uncommon first", clinePassWarn: "Model has cline-pass/ prefix: provider routing will NOT work (tested). Use a vendor prefix like moonshotai/kimi-k3", clineDeadWarn: "⚠️ Deprecated: Cline can no longer route to the K3 provider! (DS still works)", clineHint: "Injects the selected provider into every request. Delete anything in Extra Parameters! Only needed for the cline channel; turn off elsewhere. Different providers give K3 different flavors - test them yourself.", psnapNoPreset: "Preset data not found", schemeTitle: "Preset Scheme Switch (Preset/API/Toggles)", schemeNew: "+ New scheme", schemeNewName: "New scheme", schemeEdit: "Edit", schemeOverwrite: "Overwrite", schemeSwitch: "Switch", schemeDeleteConfirm: "Delete this scheme?", schemeNotConfigured: "(not configured)", schemeEditTitle: "Edit scheme", schemeIconLabel: "Icon", schemeIconUpload: "Upload image", schemeBadgeLabel: "Badge:", schemeBadgeAuto: "Auto", schemeBadgeSameTitle: "Show badge for same icon", schemeMoveUp: "Move up", schemeMoveDown: "Move down", schemeNameLabel: "Scheme name", schemeProfileLabel: "Connection profile", schemeNoProfile: "Don't switch connection", schemePresetLabel: "Preset", schemeNoPreset: "Don't switch preset", schemeTogglesLabel: "Entry toggles", schemeTogglesCount: "{n}", schemeTogglesAuto: "Auto-captured {n} toggles (follows preset: {p})", schemeTogglesDisabled: "Don't switch preset selected - toggles unavailable", schemeRecapture: "🔄 Re-capture", schemeShowInBar: "Show in floating bar", schemeBallSync: "Sync ball icon on switch", schemeGenerating: "Generation in progress - switch later", schemeProfileMissing: "Connection profile \"{n}\" no longer exists - edit this scheme again", schemePresetMissing: "Preset \"{n}\" no longer exists", schemeNeedConnExt: "Enable the \"Connection Profiles\" extension in the tavern first", schemeNoProfiles: "(save a connection profile in the tavern's API panel first)", schemeSwitchedTo: "Switched to \"{n}\"", schemeOverwritten: "Overwrote \"{n}\" with the current state", schemeDeleted: "Deleted \"{n}\"", schemeCreated: "Scheme created - press Edit to bind preset/API/toggles", schemeBindPreset: "Preset", schemeBindProfile: "Connection", schemeBindToggles: "Toggles", schemeIconBad: "That file is not an image - nothing changed", schemeIconBig: "This image is too large (over 300KB) - pick a smaller one", floatCardTitle: "Floating Bar", floatCardTag: "One-click tag fix (direct run)", tagFixNow: "Fix tags now", baseTitle: "Basics (Small Features / Floating Bar)", baseGroupShortcuts: "Shortcuts", baseGroupFloat: "Floating bar", baseGroupLang: "Language", ballIconGroup: "Custom floating-ball icon", ballIconPick: "Choose image…", ballIconReset: "Reset", ballIconPrev: "Current icon preview", ballIconBad: "That file is not an image - nothing changed", ballIconBig: "This image is too large for the browser to store - pick a smaller one", ballIconSaved: "Switched to your icon", ballIconResetDone: "Back to the default fireball", inlineInsLabel: "Add an \"Insert prompt\" button to each row of the preset panel", inlineInsDelLabel: "Add a \"Delete\" button to each row of the preset panel", inlineInsSaveLabel: "Also save the preset when saving an entry", inlineInsSaveHint: "", inlineInsBtnTitle: "Insert a prompt or duplicate this entry", inlineInsNewName: "New Prompt", inlineInsNoId: "Could not generate a unique id - nothing was inserted", inlineInsNoDef: "The tavern did not accept this new prompt - nothing was inserted (you can try again)", inlineInsNoOrder: "Preset order list not found - nothing was written (try reloading the page)", inlineInsFail: "Something went wrong while inserting - nothing was written to the preset", inlineInsFailNoBtn: "Could not find the tavern's \"Update preset\" button - not saved (this insertion stays on screen only)", inlineInsMsgPlaced: "Inserted after \"{n}\"", inlineInsAtTail: "That row is gone - inserted at the end of the preset", inlineInsMsgNoSave: " (on screen only; press the tavern's \"Update preset\" to save it)", inlineInsEntrySavedPreset: "Entry saved, and we updated the preset \"{p}\" for you", inlineInsEntrySavedNoName: "Entry saved, but the name of your current preset is unreadable - not written to the preset file", inlineInsEntrySavedUnknown: "Entry saved, but we could not confirm it reached the preset file - please press the tavern's \"Update preset\" (it may not have been saved)", inlineInsMsgSaved: "; entry saved, and we updated the preset \"{p}\" for you", inlineInsMsgSaveUnknown: ", but we could not confirm it reached the preset file - please press the tavern's \"Update preset\" yourself, or check the console (it may not have been saved)", inlineInsMsgNoName: ", but the name of your current preset is unreadable - not saved (this insertion stays on screen only)", insAskTitle: "What should happen to this entry?", insAskWho: "Entry: {n}", insAskRemove: "Remove", insAskRemoveHint: "The tavern's own Remove - only hides it; link it back later by inserting a prompt", insAskDel: "Delete", insAskDelHint: "Deletes it for good once you are sure; it cannot be recovered", insAskIns: "Insert a new prompt", insAskInsHint: "Inserts a new one after this entry; fill in the content and press the tavern's Save", insAskCopy: "Duplicate this entry", insAskCopyHint: "Copies this entry and inserts the copy right after it; the name gets a (copy) suffix", insAskCancel: "Cancel", insAskWi: "Pick from a World Info book", insAskWiHint: "Pick several World Info entries and stitch them after this one", wiTitle: "Pick from a World Info book", wiSub: "The entries you pick go right after \"{n}\" (in the order you tick them)", wiNoBooks: "No World Info books found (none at all)", wiBooksFail: "Could not read the World Info list - reload the page and try again", wiLoadFail: "Could not read this book - try another one", wiNoEntries: "This book has no usable entries", wiBack: "< another book", wiOk: "OK", wiLoading: "Loading...", wiCount: "{n} selected", wiOff: "(disabled in the book)", wiUnnamed: "Unnamed entry", wiNone: "Nothing selected - nothing was done", wiDone: "Stitched {n} World Info entries after \"{x}\"", wiDoneTail: "That row was gone - the {n} entries were placed at the end", wiNoBody: " ({m} of them had no text)", wiGone: "That row is no longer there - nothing was stitched", wiErr: "This batch failed - nothing was written", wiExpand: "Expand", wiCollapse: "Collapse", wiEmptyBody: "(no text in this entry)",  insCopyDone: "Made a copy: {n}", insCopyTail: "The row was gone - the copy {n} was placed at the end of the preset", insCopyGone: "{n} is no longer there - nothing was duplicated", inlineInsCopySuffix: " (copy)", insDelDone: "Permanently deleted \"{n}\" from the preset", insDelClean: " (also cleaned {r} leftover row(s) in {g} order list(s))", insDelNoSave: " (on screen only; press the tavern's \"Update preset\" to save it)", insDelGone: "\"{n}\" is no longer in the preset", insDelForbid: "\"{n}\" is a system prompt - the tavern does not allow deleting it", insDelFail: "Something went wrong while deleting - nothing was deleted", autoUpdateLabel: "Auto-update plugin to latest", floatBarEnable: "Enable floating bar", floatPanelClear: "Clear", floatFuncLabel: "Actions (run directly)", floatPanelLabel: "Panels (open settings popup)", floatPanelAll: "Select all panels", routeLabel: "Upstream this time: ", routeNone: "No data yet", floatClineEntry: "Cline provider entry (click to pick)", floatRouteBadge: "Show upstream badge on bar", flamePauseOnCollapse: "Pause particles when collapsed", stopRerollName: "Stop reroll", entryMenuGroup: "Extensions menu (bottom-left)", entryInlineGroup: "Beside input (send bar)", clineRouteAlertLabel: "Alert when route mismatches", opencodeLabel: "Opencode request header (enable after 9/6)", opencodeHint: "Auto-inject X-Opencode-Session for all sources (the stock SillyTavern ignores this field for the Google source — the relay fills it in there). Same chat keeps one fixed ID (GPU context cache), different chats differ.", opencodeSession: "Session ID for this chat: ",
+        apiMenuEntry: "Extensions menu entry", apiMenuSwitch: "Switch to next API", apiOnlyOne: "Only one entry in the pool - nothing to switch to", clineCustomAdd: "+ Add", clineCustomPlaceholder: "Custom provider name", clineCustomEmpty: "Type a provider name first", clineCustomDup: "{p} already exists", clineCustomAdded: "Added {p} (available in dropdown and popup)", clineEnabled: "Use Cline provider routing (credit: the source)", clineSectionTitle: "Cline settings", clineModelOverride: "Credits model prefix override", clineMethodLabel: "Method: subscription provider routing (credit: the source)", clineUpTitle: "Move up (auto-switch order)", clineDownTitle: "Move down (auto-switch order)", upBtn: "📊 Live upstream status", upTitle: "kimi-k3 upstream live status", upLoading: "Loading... (OpenRouter, no key needed)", upRefreshing: "Refreshing...", upFailed: "Failed to fetch - openrouter.ai may be unreachable from your network; retry with ↻", upSwitch: "Use", upProvider: "Provider", upIn: "In $/M", upOut: "Out $/M", upCache: "Cache $/M", upLat: "Latency", upTps: "Throughput", upUp5m: "Up(5m)", upUptime: "Uptime(1d)", upHint: "✓ = switchable here · ★ = current · latency/throughput = last 30 min (blank when no traffic) · sorted: switchable first, uptime desc. Data from OpenRouter public API.", snapNamePh: "Profile name…", snapSaveBtn: "💾 Save current", snapApply: "Apply", snapDel: "Delete profile", snapEmpty: "No saved profiles yet: enter a name and hit Save", snapRecovery: "↩ Auto-recovery snapshot (saved before last switch)", snapSaved: "Saved profile \"{n}\"", snapNeedName: "Enter a profile name first", clineDSTip: "Use Cline for DeepSeek with deepseek as the upstream (official caching works)!", clineDSBtn: "⇄ One-click deepseek upstream", clineDSSwitched: "Switched: provider=deepseek (official upstream with caching)", clineOverrideWarn: "WARNING (tested): credits only - locks provider and overrides model to a vendor prefix like moonshotai/kimi-k3.", clineProvLabel: "Provider:", clineMenuEntry: "Extensions menu entry", clineTitle: "Switch Cline Provider", clineMenuSwitch: "Switch Cline provider", clineSwitched: "Switched to {p}", clineNeedEnable: "Enable \"Use Cline provider routing\" in Uncommon first", clinePassWarn: "Model has cline-pass/ prefix: provider routing will NOT work (tested). Use a vendor prefix like moonshotai/kimi-k3", clineDeadWarn: "⚠️ Deprecated: Cline can no longer route to the K3 provider! (DS still works)", clineHint: "Injects the selected provider into every request. Delete anything in Extra Parameters! Only needed for the cline channel; turn off elsewhere. Different providers give K3 different flavors - test them yourself.", psnapNoPreset: "Preset data not found", schemeTitle: "Preset Scheme Switch (Preset/API/Toggles)", schemeNew: "+ New scheme", schemeNewName: "New scheme", schemeEdit: "Edit", schemeOverwrite: "Overwrite", schemeSwitch: "Switch", schemeDeleteConfirm: "Delete this scheme?", schemeNotConfigured: "(not configured)", schemeEditTitle: "Edit scheme", schemeIconLabel: "Icon", schemeIconUpload: "Upload image", schemeBadgeLabel: "Badge:", schemeBadgeAuto: "Auto", schemeBadgeSameTitle: "Show badge for same icon", schemeMoveUp: "Move up", schemeMoveDown: "Move down", schemeNameLabel: "Scheme name", schemeProfileLabel: "Connection profile", schemeNoProfile: "Don't switch connection", schemePresetLabel: "Preset", schemeNoPreset: "Don't switch preset", schemeTogglesLabel: "Entry toggles", schemeTogglesCount: "{n}", schemeTogglesAuto: "Auto-captured {n} toggles (follows preset: {p})", schemeTogglesDisabled: "Don't switch preset selected - toggles unavailable", schemeRecapture: "🔄 Re-capture", schemeShowInBar: "Show in floating bar", schemeBallSync: "Sync ball icon on switch", schemeGenerating: "Generation in progress - switch later", schemeProfileMissing: "Connection profile \"{n}\" no longer exists - edit this scheme again", schemePresetMissing: "Preset \"{n}\" no longer exists", schemeNeedConnExt: "Enable the \"Connection Profiles\" extension in the tavern first", schemeNoProfiles: "(save a connection profile in the tavern's API panel first)", schemeSwitchedTo: "Switched to \"{n}\"", schemeOverwritten: "Overwrote \"{n}\" with the current state", schemeDeleted: "Deleted \"{n}\"", schemeCreated: "Scheme created - press Edit to bind preset/API/toggles", schemeBindPreset: "Preset", schemeBindProfile: "Connection", schemeBindToggles: "Toggles", schemeIconBad: "That file is not an image - nothing changed", schemeIconBig: "This image is too large (over 300KB) - pick a smaller one", floatCardTitle: "Floating Bar", floatCardTag: "One-click tag fix (direct run)", tagFixNow: "Fix tags now", baseTitle: "Basics (Small Features / Floating Bar)", baseGroupShortcuts: "Shortcuts", baseGroupFloat: "Floating bar", baseGroupLang: "Language", ballIconGroup: "Custom floating-ball icon", ballIconPick: "Choose image…", ballIconReset: "Reset", ballIconPrev: "Current icon preview", ballIconBad: "That file is not an image - nothing changed", ballIconBig: "This image is too large for the browser to store - pick a smaller one", ballIconSaved: "Switched to your icon", ballIconResetDone: "Back to the default fireball", inlineInsLabel: "Add an \"Insert prompt\" button to each row of the preset panel", inlineInsDelLabel: "Add a \"Delete\" button to each row of the preset panel", inlineInsSaveLabel: "Also save the preset when saving an entry", inlineInsSaveHint: "", inlineInsBtnTitle: "Insert a prompt or duplicate this entry", inlineInsNewName: "New Prompt", inlineInsNoId: "Could not generate a unique id - nothing was inserted", inlineInsNoDef: "The tavern did not accept this new prompt - nothing was inserted (you can try again)", inlineInsNoOrder: "Preset order list not found - nothing was written (try reloading the page)", inlineInsFail: "Something went wrong while inserting - nothing was written to the preset", inlineInsFailNoBtn: "Could not find the tavern's \"Update preset\" button - not saved (this insertion stays on screen only)", inlineInsMsgPlaced: "Inserted after \"{n}\"", inlineInsAtTail: "That row is gone - inserted at the end of the preset", inlineInsMsgNoSave: " (on screen only; press the tavern's \"Update preset\" to save it)", inlineInsEntrySavedPreset: "Entry saved, and we updated the preset \"{p}\" for you", inlineInsEntrySavedNoName: "Entry saved, but the name of your current preset is unreadable - not written to the preset file", inlineInsEntrySavedUnknown: "Entry saved, but we could not confirm it reached the preset file - please press the tavern's \"Update preset\" (it may not have been saved)", inlineInsMsgSaved: "; entry saved, and we updated the preset \"{p}\" for you", inlineInsMsgSaveUnknown: ", but we could not confirm it reached the preset file - please press the tavern's \"Update preset\" yourself, or check the console (it may not have been saved)", inlineInsMsgNoName: ", but the name of your current preset is unreadable - not saved (this insertion stays on screen only)", insAskTitle: "What should happen to this entry?", insAskWho: "Entry: {n}", insAskRemove: "Remove", insAskRemoveHint: "The tavern's own Remove - only hides it; link it back later by inserting a prompt", insAskDel: "Delete", insAskDelHint: "Deletes it for good once you are sure; it cannot be recovered", insAskIns: "Insert a new prompt", insAskInsHint: "Inserts a new one after this entry; fill in the content and press the tavern's Save", insAskCopy: "Duplicate this entry", insAskCopyHint: "Copies this entry and inserts the copy right after it; the name gets a (copy) suffix", insAskCancel: "Cancel", insAskWi: "Pick from a World Info book", insAskWiHint: "Pick several World Info entries and stitch them after this one", wiTitle: "Pick from a World Info book", wiSub: "The entries you pick go right after \"{n}\" (in the order you tick them)", wiNoBooks: "No World Info books found (none at all)", wiBooksFail: "Could not read the World Info list - reload the page and try again", wiLoadFail: "Could not read this book - try another one", wiNoEntries: "This book has no usable entries", wiBack: "< another book", wiOk: "OK", wiLoading: "Loading...", wiCount: "{n} selected", wiOff: "(disabled in the book)", wiUnnamed: "Unnamed entry", wiNone: "Nothing selected - nothing was done", wiDone: "Stitched {n} World Info entries after \"{x}\"", wiDoneTail: "That row was gone - the {n} entries were placed at the end", wiNoBody: " ({m} of them had no text)", wiGone: "That row is no longer there - nothing was stitched", wiErr: "This batch failed - nothing was written", wiExpand: "Expand", wiCollapse: "Collapse", wiEmptyBody: "(no text in this entry)",  insCopyDone: "Made a copy: {n}", insCopyTail: "The row was gone - the copy {n} was placed at the end of the preset", insCopyGone: "{n} is no longer there - nothing was duplicated", inlineInsCopySuffix: " (copy)", insDelDone: "Permanently deleted \"{n}\" from the preset", insDelClean: " (also cleaned {r} leftover row(s) in {g} order list(s))", insDelNoSave: " (on screen only; press the tavern's \"Update preset\" to save it)", insDelGone: "\"{n}\" is no longer in the preset", insDelForbid: "\"{n}\" is a system prompt - the tavern does not allow deleting it", insDelFail: "Something went wrong while deleting - nothing was deleted", autoUpdateLabel: "Auto-update plugin to latest", floatBarEnable: "Enable floating bar", floatPanelClear: "Clear", floatFuncLabel: "Actions (run directly)", floatPanelLabel: "Panels (open settings popup)", floatPanelAll: "Select all panels", routeLabel: "Upstream this time: ", routeNone: "No data yet", floatClineEntry: "Cline provider entry (click to pick)", floatRouteBadge: "Show upstream badge on bar", flamePauseOnCollapse: "Pause particles when collapsed", stopRerollName: "Stop reroll", entryMenuGroup: "Extensions menu (bottom-left)", entryInlineGroup: "Beside input (send bar)", clineRouteAlertLabel: "Alert when route mismatches", opencodeLabel: "Opencode request header (enable after 9/6)", opencodeHint: "Auto-inject X-Opencode-Session for all sources (the stock SillyTavern ignores this field for the Google source — the relay fills it in there). Same chat keeps one fixed ID (GPU context cache), different chats differ.", opencodeHintSummary: "Details", opencodeSession: "Session ID for this chat: ",
         apiHint: "Keys are stored in plaintext in local settings.json - do not share that file. Only applies to Custom (OpenAI-compatible) connections. Switching syncs three fields: URL, key and model name - presets/sampling untouched. Triggers on limit/quota/rate.",
         dblSave: "Save",
         dblEditLabel: "Double-click message text to edit it in place",
@@ -682,7 +725,7 @@ const UI = {
         dsModeLabel: "DeepSeek 사고 모드: ", dsNative: "네이티브 사고", dsDisabled: "본문 CoT (thinking disabled)",
         dsEffortLabel: "DeepSeek 강도: ", dsEffortOff: "off (주입 안 함, DeepSeek 기본 high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 강도: ", k3EffortOff: "off (주입 안 함, K3 기본 max)", k3EffortLow: "low (빠른 사고)", k3EffortHigh: "high", k3EffortMax: "max (가장 긴 사고)",
-        injectLabel: "주입 모드: ", injectStep1: "step 1: 중간 탈옥·네이티브 CoT 탈취 (gemini는 끄세요)", injectStep2: "step 2: 강한 탈옥·본문 CoT 탈취 (대부분 채널에서 무효 — 고르지 마세요)",
+        injectLabel: "주입 모드: ", injectSettingsTitle: "주입 설정", customModelsTitle: "사용자 정의 모델", injectStep1: "step 1: 중간 탈옥·네이티브 CoT 탈취 (gemini는 끄세요)", injectStep2: "step 2: 강한 탈옥·본문 CoT 탈취 (대부분 채널에서 무효 — 고르지 마세요)",
         injectTitle: "주입 (모델/채널/추가 파라미터)", modelTitle: "모델 설정", rerollTitle: "자동 reroll/중단 (꿀팁 방법)", autoStopTitle: "자동 중단", beautifyTitle: "사고 과정", presetUpdTitle: "프리셋 업데이터 (업데이트 시 비교/이어붙인 내용 저장)", presetStoreTitle: "항목 상점 (업로드/항목 이어붙이기/소극장 즐겨찾기)", playFavTitle: "소극장 즐겨찾기", playFavNow: "한 번 열기", playFavNotReady: "항목 상점이 아직 준비되지 않았습니다(불러오는 중이거나 이 빌드에 없음) — 잠시 후 다시 눌러 주세요.", playFavJumpFail: "상점은 열렸지만 즐겨찾기를 열지 못했습니다 — 상점에서 ⭐ 즐겨찾기 버튼을 눌러 주세요.",
         playLatestTitle: "최신 소극장", playLatestNow: "한 번 열기",
         playLatestNotReady: "항목 상점이 아직 준비되지 않았습니다(불러오는 중이거나 이 빌드에 없음) — 잠시 후 다시 눌러 주세요.",
@@ -738,7 +781,7 @@ const UI = {
         apiModel: "모델명", apiKey: "키", apiAge: "{d}일 {h}시간", apiFetchModels: "사용 가능한 모델 가져오기", apiFetchBtn: "가져오기", apiModelsLoading: "모델 가져오는 중…", apiModelEmpty: "모델이 없습니다 (URL/키 확인)", apiModelErr: "모델 가져오기 실패",
         apiNoPool: "풀이 비어 있음: 먼저 엔드포인트 추가", apiNotCustom: "Custom(OpenAI 호환) 연결이 아님 - 풀 동작 안 함",
         apiBannerMsg: "할당량 초과 감지.", apiBannerSwitch: "⇄ {name}(으)로 전환 ({n}/{total})", apiSwitched: "{name}(으)로 전환됨 ({n}/{total})",
-        apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (정보원 감사)", clineSectionTitle: "Cline 설정", clineModelOverride: "크레딧 모델 접두사 덮어쓰기", clineMethodLabel: "방식: 구독 공급자 지정", clineUpTitle: "위로(자동 전환 순서)", clineDownTitle: "아래로(자동 전환 순서)", upBtn: "📊 업스트림 실시간 현황", upTitle: "kimi-k3 업스트림 현황", upLoading: "로딩 중... (OpenRouter)", upRefreshing: "새로고침 중...", upFailed: "가져오기 실패 - 네트워크에서 openrouter.ai 접근 불가 가능, ↻로 재시도", upSwitch: "전환", upProvider: "공급자", upIn: "입력$/M", upOut: "출력$/M", upCache: "캐시$/M", upLat: "지연", upTps: "처리량", upUp5m: "가동(5m)", upUptime: "가동률(1d)", upHint: "✓=여기서 전환 가능 · ★=현재 · 지연/처리량=최근 30분 · 정렬: 전환 가능 우선. OpenRouter 공개 API 기준.", snapNamePh: "프로필 이름…", snapSaveBtn: "💾 현재 상태 저장", snapApply: "적용", snapDel: "이 프로필 삭제", snapEmpty: "저장된 프로필 없음: 이름 입력 후 저장", snapRecovery: "↩ 복구 스냅샷(전환 전 자동 저장)", snapSaved: "\"{n}\" 프로필 저장됨", snapNeedName: "먼저 프로필 이름을 입력하세요", clineDSTip: "Cline으로 DeepSeek 사용 - deepseek 업스트림 지정(공식 캐시 적용)!", clineDSBtn: "⇄ 원클릭 deepseek 업스트림", clineDSSwitched: "전환됨: 공급자=deepseek(공식 업스트림, 캐시)", clineOverrideWarn: "주의(실측): 크레딧 소모 - 공급자 지정 및 moonshotai/kimi-k3 등 벤더 접두사로 모델 덮어쓰기.", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 비상용에서 Cline 공급자 지정을 체크하세요", clinePassWarn: "모델명에 cline-pass/ 접두사 감지: 공급자 지정 무효(실측). moonshotai/kimi-k3 같은 벤더 접두사 사용", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineDeadWarn: "⚠️ 만료: Cline에서 K3 공급자 지정이 더 이상 불가! (DS는 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입합니다. 추가 매개변수의 모든 내용을 삭제하세요! cline 채널에서만 필요, 다른 곳에서는 끄세요. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.", psnapNoPreset: "프리셋 데이터 없음", schemeTitle: "프리셋 스킴 전환 (프리셋/API/토글)", schemeNew: "＋ 새 스킴", schemeNewName: "새 스킴", schemeEdit: "편집", schemeOverwrite: "덮어쓰기", schemeSwitch: "전환", schemeDeleteConfirm: "이 스킴을 삭제할까요?", schemeNotConfigured: "(미설정)", schemeEditTitle: "스킴 편집", schemeIconLabel: "아이콘", schemeIconUpload: "이미지 업로드", schemeBadgeLabel: "배지:", schemeBadgeAuto: "자동", schemeBadgeSameTitle: "동일 아이콘 배지 표시", schemeMoveUp: "위로", schemeMoveDown: "아래로", schemeNameLabel: "스킴 이름", schemeProfileLabel: "연결 프로필", schemeNoProfile: "연결 전환 안 함", schemePresetLabel: "프리셋", schemeNoPreset: "프리셋 전환 안 함", schemeTogglesLabel: "항목 토글", schemeTogglesCount: "{n}개", schemeTogglesAuto: "토글 {n}개 자동 캡처됨 (프리셋 따름: {p})", schemeTogglesDisabled: "프리셋 전환 안 함 선택됨 - 토글 사용 불가", schemeRecapture: "🔄 다시 캡처", schemeShowInBar: "플로팅 바에 표시", schemeBallSync: "전환 시 볼 아이콘 동기화", schemeGenerating: "생성 중입니다 - 잠시 후 전환하세요", schemeProfileMissing: "연결 프로필 「{n}」이(가) 없습니다 - 스킴을 다시 편집하세요", schemePresetMissing: "프리셋 「{n}」이(가) 없습니다", schemeNeedConnExt: "먼저 술집에서 「Connection Profiles」 확장을 켜세요", schemeNoProfiles: "(먼저 술집 API 패널에서 연결 프로필을 저장하세요)", schemeSwitchedTo: "「{n}」(으)로 전환했습니다", schemeOverwritten: "현재 상태로 「{n}」을(를) 덮어썼습니다", schemeDeleted: "「{n}」을(를) 삭제했습니다", schemeCreated: "스킴을 만들었습니다 - 「편집」을 눌러 프리셋/연결/토글을 묶으세요", schemeBindPreset: "프리셋", schemeBindProfile: "연결", schemeBindToggles: "토글", schemeIconBad: "이미지 파일이 아닙니다 - 변경하지 않았습니다", schemeIconBig: "이미지가 너무 큽니다 (300KB 초과) - 더 작은 것을 고르세요", floatCardTitle: "플로팅 바", floatCardTag: "태그 원클릭 수리 (즉시 실행)", tagFixNow: "태그 지금 수리", baseTitle: "기본 설정 (소기능 통합/플로팅 바)", baseGroupShortcuts: "편의 기능", baseGroupFloat: "플로팅 바 관련 기능", baseGroupLang: "언어 설정", ballIconGroup: "플로팅 볼 아이콘 사용자 지정", ballIconPick: "이미지 선택…", ballIconReset: "기본값 복원", ballIconPrev: "현재 아이콘 미리보기", ballIconBad: "이미지 파일이 아닙니다 - 변경하지 않았습니다", ballIconBig: "이미지가 너무 커서 브라우저에 저장할 수 없습니다 - 더 작은 것을 고르세요", ballIconSaved: "선택한 아이콘으로 바꿨습니다", ballIconResetDone: "기본 불꽃으로 복원했습니다", inlineInsLabel: "프리셋 패널의 각 행에 「프롬프트 삽입」 버튼 추가", inlineInsDelLabel: "프리셋 패널의 각 행에 「삭제」 버튼 추가", inlineInsSaveLabel: "항목을 저장할 때 프리셋도 함께 저장", inlineInsSaveHint: "", inlineInsBtnTitle: "프롬프트 삽입 또는 이 항목 복사", inlineInsNewName: "새 프롬프트", inlineInsNoId: "고유 번호를 만들지 못했습니다 ⇒ 이번에는 삽입하지 않았습니다", inlineInsNoDef: "술집이 이 새 프롬프트를 받지 않았습니다 ⇒ 이번에는 삽입하지 않았습니다 (다시 시도해 보세요)", inlineInsNoOrder: "프리셋 순서 목록을 찾지 못했습니다 ⇒ 아무것도 쓰지 않았습니다 (페이지를 새로고침해 보세요)", inlineInsFail: "삽입 중 오류 ⇒ 프리셋에 쓰지 않았습니다", inlineInsFailNoBtn: "술집의 「프리셋 업데이트」 버튼을 찾지 못했습니다 ⇒ 저장되지 않았습니다 (화면에만 반영)", inlineInsMsgPlaced: "「{n}」 뒤에 삽입했습니다", inlineInsAtTail: "그 행이 사라졌습니다 ⇒ 프리셋 맨 끝에 넣었습니다", inlineInsMsgNoSave: " (화면에만; 저장하려면 술집의 「프리셋 업데이트」를 누르세요)", inlineInsEntrySavedPreset: "항목이 저장되었고, 프리셋 「{p}」도 대신 업데이트했습니다", inlineInsEntrySavedNoName: "항목은 저장되었지만, 사용 중인 프리셋 이름을 읽을 수 없습니다 ⇒ 프리셋 파일에 저장하지 않았습니다", inlineInsEntrySavedUnknown: "항목은 저장되었지만, 프리셋 파일에 쓰였는지 확인하지 못했습니다 ⇒ 술집의 「프리셋 업데이트」를 눌러 보세요 (이번엔 저장되지 않았을 수 있습니다)", inlineInsMsgSaved: "; 항목이 저장되었고, 프리셋 「{p}」도 대신 업데이트했습니다", inlineInsMsgSaveUnknown: ", 프리셋 파일에 쓰였는지 확인하지 못했습니다 ⇒ 술집의 「프리셋 업데이트」를 직접 눌러 보세요 (이번엔 저장되지 않았을 수 있습니다)", inlineInsMsgNoName: ", 하지만 사용 중인 프리셋 이름을 읽을 수 없습니다 ⇒ 저장하지 않았습니다 (화면에만 반영)", insAskTitle: "이 항목을 어떻게 할까요?", insAskWho: "이 항목: {n}", insAskRemove: "제거", insAskRemoveHint: "술집의 원래 Remove - 목록에서만 숨기고, 나중에 프롬프트를 다시 끼워 연결할 수 있습니다", insAskDel: "삭제", insAskDelHint: "필요 없다고 확인되면 완전히 삭제하며 되찾을 수 없습니다", insAskIns: "새 프롬프트 삽입", insAskInsHint: "이 항목 뒤에 새로 하나 삽입합니다. 내용을 채우고 술집의 저장을 누르세요", insAskCopy: "이 항목 복사", insAskCopyHint: "이 항목을 복사해 바로 뒤에 넣습니다. 이름에 (복사)가 붙습니다", insAskCancel: "취소", insAskWi: "세계서(월드 인포)에서 고르기", insAskWiHint: "세계서 항목 몇 개를 골라 이 항목 뒤에 이어 붙입니다", wiTitle: "세계서에서 고르기", wiSub: "고른 항목은 「{n}」 뒤에 붙습니다 (체크한 순서대로)", wiNoBooks: "세계서를 읽지 못했습니다 (한 권도 없음)", wiBooksFail: "세계서 목록을 읽지 못했습니다 ⇒ 페이지를 새로고침 후 다시 시도", wiLoadFail: "이 책을 읽지 못했습니다 ⇒ 다른 책을 골라 보세요", wiNoEntries: "이 세계서에는 쓸 수 있는 항목이 없습니다", wiBack: "‹ 다른 책", wiOk: "확인", wiLoading: "불러오는 중...", wiCount: "{n}개 선택", wiOff: "(세계서에서 중지됨)", wiUnnamed: "이름 없는 항목", wiNone: "아무것도 고르지 않음 ⇒ 아무 일도 하지 않았습니다", wiDone: "세계서 {n}개를 「{x}」 뒤에 이어 붙였습니다", wiDoneTail: "그 줄이 사라졌습니다 ⇒ {n}개를 프리셋 맨 끝에 넣었습니다", wiNoBody: " (그중 {m}개는 본문이 없습니다)", wiGone: "그 줄이 이미 없습니다 ⇒ 이어 붙이지 않았습니다", wiErr: "이번 묶음은 실패했습니다 ⇒ 아무것도 쓰지 않았습니다", wiExpand: "펼치기", wiCollapse: "접기", wiEmptyBody: "(이 항목에는 본문이 없습니다)",  insCopyDone: "복사했습니다: {n}", insCopyTail: "원래 줄이 사라졌습니다 ⇒ 복사본 {n}을(를) 프리셋 맨 끝에 넣었습니다", insCopyGone: "{n}이(가) 이미 없습니다 ⇒ 복사하지 않았습니다", inlineInsCopySuffix: " (복사)", insDelDone: "프리셋에서 「{n}」을(를) 완전히 삭제했습니다", insDelClean: " (순서 목록 {g}개에서 남은 줄 {r}개도 정리했습니다)", insDelNoSave: " (화면에만; 저장하려면 술집의 「프리셋 업데이트」를 누르세요)", insDelGone: "「{n}」은(는) 이미 프리셋에 없습니다", insDelForbid: "「{n}」은(는) 시스템 프롬프트라 삭제할 수 없습니다", insDelFail: "삭제 중 오류 ⇒ 아무것도 삭제하지 않았습니다", autoUpdateLabel: "플러그인을 최신 버전으로 자동 업데이트", floatBarEnable: "플로팅 바 켜기", floatPanelClear: "비우기", floatFuncLabel: "기능형 (아이콘 즉시 실행)", floatPanelLabel: "패널형 (아이콘 클릭 시 설정 팝업)", floatPanelAll: "모든 패널 선택", routeLabel: "이번 Cline 업스트림: ", routeNone: "데이터 없음", floatClineEntry: "Cline 공급자 입구 (클릭하여 선택)", floatRouteBadge: "플로팅 바에 업스트림 배지 표시", flamePauseOnCollapse: "접힐 때 파티클 효과 일시중지", stopRerollName: "리롤 중지", entryMenuGroup: "확장 메뉴 (좌하단)", entryInlineGroup: "입력창 옆 (보내기 바)", clineRouteAlertLabel: "라우팅 불일치 시 알림", opencodeLabel: "Opencode 요청 헤더 (9/6 이후 활성화 필요)", opencodeHint: "모든 소스에 X-Opencode-Session 헤더를 자동 주입합니다(원본 SillyTavern은 Google 소스에서 이 필드를 무시하며, 그 경우 중계가 보충합니다). 같은 채팅은 고정 ID(GPU 컨텍스트 캐시), 다른 채팅은 다른 ID.", opencodeSession: "이 대화의 Session ID: ",
+        apiMenuEntry: "확장 메뉴 항목", apiMenuSwitch: "다음 API로 전환", apiOnlyOne: "풀에 이 항목 하나뿐, 전환할 다음 항목 없음", clineEnabled: "Cline 공급자 지정 사용 (정보원 감사)", clineSectionTitle: "Cline 설정", clineModelOverride: "크레딧 모델 접두사 덮어쓰기", clineMethodLabel: "방식: 구독 공급자 지정", clineUpTitle: "위로(자동 전환 순서)", clineDownTitle: "아래로(자동 전환 순서)", upBtn: "📊 업스트림 실시간 현황", upTitle: "kimi-k3 업스트림 현황", upLoading: "로딩 중... (OpenRouter)", upRefreshing: "새로고침 중...", upFailed: "가져오기 실패 - 네트워크에서 openrouter.ai 접근 불가 가능, ↻로 재시도", upSwitch: "전환", upProvider: "공급자", upIn: "입력$/M", upOut: "출력$/M", upCache: "캐시$/M", upLat: "지연", upTps: "처리량", upUp5m: "가동(5m)", upUptime: "가동률(1d)", upHint: "✓=여기서 전환 가능 · ★=현재 · 지연/처리량=최근 30분 · 정렬: 전환 가능 우선. OpenRouter 공개 API 기준.", snapNamePh: "프로필 이름…", snapSaveBtn: "💾 현재 상태 저장", snapApply: "적용", snapDel: "이 프로필 삭제", snapEmpty: "저장된 프로필 없음: 이름 입력 후 저장", snapRecovery: "↩ 복구 스냅샷(전환 전 자동 저장)", snapSaved: "\"{n}\" 프로필 저장됨", snapNeedName: "먼저 프로필 이름을 입력하세요", clineDSTip: "Cline으로 DeepSeek 사용 - deepseek 업스트림 지정(공식 캐시 적용)!", clineDSBtn: "⇄ 원클릭 deepseek 업스트림", clineDSSwitched: "전환됨: 공급자=deepseek(공식 업스트림, 캐시)", clineOverrideWarn: "주의(실측): 크레딧 소모 - 공급자 지정 및 moonshotai/kimi-k3 등 벤더 접두사로 모델 덮어쓰기.", clineProvLabel: "공급자:", clineMenuEntry: "확장 메뉴 항목", clineTitle: "Cline 공급자 전환", clineMenuSwitch: "Cline 공급자 전환", clineSwitched: "{p}(으)로 전환됨", clineNeedEnable: "먼저 비상용에서 Cline 공급자 지정을 체크하세요", clinePassWarn: "모델명에 cline-pass/ 접두사 감지: 공급자 지정 무효(실측). moonshotai/kimi-k3 같은 벤더 접두사 사용", clineCustomAdd: "＋ 추가", clineCustomPlaceholder: "지정 공급자 이름", clineCustomEmpty: "공급자 이름을 먼저 입력하세요", clineCustomDup: "{p} 이미 있음", clineCustomAdded: "{p} 추가됨 (드롭다운과 팝업에서 사용 가능)", clineDeadWarn: "⚠️ 만료: Cline에서 K3 공급자 지정이 더 이상 불가! (DS는 가능)", clineHint: "설정 시 매 요청에 지정 공급자를 자동 주입합니다. 추가 매개변수의 모든 내용을 삭제하세요! cline 채널에서만 필요, 다른 곳에서는 끄세요. 제공자마다 K3 풍미가 다르니 직접 테스트해보세요.", psnapNoPreset: "프리셋 데이터 없음", schemeTitle: "프리셋 스킴 전환 (프리셋/API/토글)", schemeNew: "＋ 새 스킴", schemeNewName: "새 스킴", schemeEdit: "편집", schemeOverwrite: "덮어쓰기", schemeSwitch: "전환", schemeDeleteConfirm: "이 스킴을 삭제할까요?", schemeNotConfigured: "(미설정)", schemeEditTitle: "스킴 편집", schemeIconLabel: "아이콘", schemeIconUpload: "이미지 업로드", schemeBadgeLabel: "배지:", schemeBadgeAuto: "자동", schemeBadgeSameTitle: "동일 아이콘 배지 표시", schemeMoveUp: "위로", schemeMoveDown: "아래로", schemeNameLabel: "스킴 이름", schemeProfileLabel: "연결 프로필", schemeNoProfile: "연결 전환 안 함", schemePresetLabel: "프리셋", schemeNoPreset: "프리셋 전환 안 함", schemeTogglesLabel: "항목 토글", schemeTogglesCount: "{n}개", schemeTogglesAuto: "토글 {n}개 자동 캡처됨 (프리셋 따름: {p})", schemeTogglesDisabled: "프리셋 전환 안 함 선택됨 - 토글 사용 불가", schemeRecapture: "🔄 다시 캡처", schemeShowInBar: "플로팅 바에 표시", schemeBallSync: "전환 시 볼 아이콘 동기화", schemeGenerating: "생성 중입니다 - 잠시 후 전환하세요", schemeProfileMissing: "연결 프로필 「{n}」이(가) 없습니다 - 스킴을 다시 편집하세요", schemePresetMissing: "프리셋 「{n}」이(가) 없습니다", schemeNeedConnExt: "먼저 술집에서 「Connection Profiles」 확장을 켜세요", schemeNoProfiles: "(먼저 술집 API 패널에서 연결 프로필을 저장하세요)", schemeSwitchedTo: "「{n}」(으)로 전환했습니다", schemeOverwritten: "현재 상태로 「{n}」을(를) 덮어썼습니다", schemeDeleted: "「{n}」을(를) 삭제했습니다", schemeCreated: "스킴을 만들었습니다 - 「편집」을 눌러 프리셋/연결/토글을 묶으세요", schemeBindPreset: "프리셋", schemeBindProfile: "연결", schemeBindToggles: "토글", schemeIconBad: "이미지 파일이 아닙니다 - 변경하지 않았습니다", schemeIconBig: "이미지가 너무 큽니다 (300KB 초과) - 더 작은 것을 고르세요", floatCardTitle: "플로팅 바", floatCardTag: "태그 원클릭 수리 (즉시 실행)", tagFixNow: "태그 지금 수리", baseTitle: "기본 설정 (소기능 통합/플로팅 바)", baseGroupShortcuts: "편의 기능", baseGroupFloat: "플로팅 바 관련 기능", baseGroupLang: "언어 설정", ballIconGroup: "플로팅 볼 아이콘 사용자 지정", ballIconPick: "이미지 선택…", ballIconReset: "기본값 복원", ballIconPrev: "현재 아이콘 미리보기", ballIconBad: "이미지 파일이 아닙니다 - 변경하지 않았습니다", ballIconBig: "이미지가 너무 커서 브라우저에 저장할 수 없습니다 - 더 작은 것을 고르세요", ballIconSaved: "선택한 아이콘으로 바꿨습니다", ballIconResetDone: "기본 불꽃으로 복원했습니다", inlineInsLabel: "프리셋 패널의 각 행에 「프롬프트 삽입」 버튼 추가", inlineInsDelLabel: "프리셋 패널의 각 행에 「삭제」 버튼 추가", inlineInsSaveLabel: "항목을 저장할 때 프리셋도 함께 저장", inlineInsSaveHint: "", inlineInsBtnTitle: "프롬프트 삽입 또는 이 항목 복사", inlineInsNewName: "새 프롬프트", inlineInsNoId: "고유 번호를 만들지 못했습니다 ⇒ 이번에는 삽입하지 않았습니다", inlineInsNoDef: "술집이 이 새 프롬프트를 받지 않았습니다 ⇒ 이번에는 삽입하지 않았습니다 (다시 시도해 보세요)", inlineInsNoOrder: "프리셋 순서 목록을 찾지 못했습니다 ⇒ 아무것도 쓰지 않았습니다 (페이지를 새로고침해 보세요)", inlineInsFail: "삽입 중 오류 ⇒ 프리셋에 쓰지 않았습니다", inlineInsFailNoBtn: "술집의 「프리셋 업데이트」 버튼을 찾지 못했습니다 ⇒ 저장되지 않았습니다 (화면에만 반영)", inlineInsMsgPlaced: "「{n}」 뒤에 삽입했습니다", inlineInsAtTail: "그 행이 사라졌습니다 ⇒ 프리셋 맨 끝에 넣었습니다", inlineInsMsgNoSave: " (화면에만; 저장하려면 술집의 「프리셋 업데이트」를 누르세요)", inlineInsEntrySavedPreset: "항목이 저장되었고, 프리셋 「{p}」도 대신 업데이트했습니다", inlineInsEntrySavedNoName: "항목은 저장되었지만, 사용 중인 프리셋 이름을 읽을 수 없습니다 ⇒ 프리셋 파일에 저장하지 않았습니다", inlineInsEntrySavedUnknown: "항목은 저장되었지만, 프리셋 파일에 쓰였는지 확인하지 못했습니다 ⇒ 술집의 「프리셋 업데이트」를 눌러 보세요 (이번엔 저장되지 않았을 수 있습니다)", inlineInsMsgSaved: "; 항목이 저장되었고, 프리셋 「{p}」도 대신 업데이트했습니다", inlineInsMsgSaveUnknown: ", 프리셋 파일에 쓰였는지 확인하지 못했습니다 ⇒ 술집의 「프리셋 업데이트」를 직접 눌러 보세요 (이번엔 저장되지 않았을 수 있습니다)", inlineInsMsgNoName: ", 하지만 사용 중인 프리셋 이름을 읽을 수 없습니다 ⇒ 저장하지 않았습니다 (화면에만 반영)", insAskTitle: "이 항목을 어떻게 할까요?", insAskWho: "이 항목: {n}", insAskRemove: "제거", insAskRemoveHint: "술집의 원래 Remove - 목록에서만 숨기고, 나중에 프롬프트를 다시 끼워 연결할 수 있습니다", insAskDel: "삭제", insAskDelHint: "필요 없다고 확인되면 완전히 삭제하며 되찾을 수 없습니다", insAskIns: "새 프롬프트 삽입", insAskInsHint: "이 항목 뒤에 새로 하나 삽입합니다. 내용을 채우고 술집의 저장을 누르세요", insAskCopy: "이 항목 복사", insAskCopyHint: "이 항목을 복사해 바로 뒤에 넣습니다. 이름에 (복사)가 붙습니다", insAskCancel: "취소", insAskWi: "세계서(월드 인포)에서 고르기", insAskWiHint: "세계서 항목 몇 개를 골라 이 항목 뒤에 이어 붙입니다", wiTitle: "세계서에서 고르기", wiSub: "고른 항목은 「{n}」 뒤에 붙습니다 (체크한 순서대로)", wiNoBooks: "세계서를 읽지 못했습니다 (한 권도 없음)", wiBooksFail: "세계서 목록을 읽지 못했습니다 ⇒ 페이지를 새로고침 후 다시 시도", wiLoadFail: "이 책을 읽지 못했습니다 ⇒ 다른 책을 골라 보세요", wiNoEntries: "이 세계서에는 쓸 수 있는 항목이 없습니다", wiBack: "‹ 다른 책", wiOk: "확인", wiLoading: "불러오는 중...", wiCount: "{n}개 선택", wiOff: "(세계서에서 중지됨)", wiUnnamed: "이름 없는 항목", wiNone: "아무것도 고르지 않음 ⇒ 아무 일도 하지 않았습니다", wiDone: "세계서 {n}개를 「{x}」 뒤에 이어 붙였습니다", wiDoneTail: "그 줄이 사라졌습니다 ⇒ {n}개를 프리셋 맨 끝에 넣었습니다", wiNoBody: " (그중 {m}개는 본문이 없습니다)", wiGone: "그 줄이 이미 없습니다 ⇒ 이어 붙이지 않았습니다", wiErr: "이번 묶음은 실패했습니다 ⇒ 아무것도 쓰지 않았습니다", wiExpand: "펼치기", wiCollapse: "접기", wiEmptyBody: "(이 항목에는 본문이 없습니다)",  insCopyDone: "복사했습니다: {n}", insCopyTail: "원래 줄이 사라졌습니다 ⇒ 복사본 {n}을(를) 프리셋 맨 끝에 넣었습니다", insCopyGone: "{n}이(가) 이미 없습니다 ⇒ 복사하지 않았습니다", inlineInsCopySuffix: " (복사)", insDelDone: "프리셋에서 「{n}」을(를) 완전히 삭제했습니다", insDelClean: " (순서 목록 {g}개에서 남은 줄 {r}개도 정리했습니다)", insDelNoSave: " (화면에만; 저장하려면 술집의 「프리셋 업데이트」를 누르세요)", insDelGone: "「{n}」은(는) 이미 프리셋에 없습니다", insDelForbid: "「{n}」은(는) 시스템 프롬프트라 삭제할 수 없습니다", insDelFail: "삭제 중 오류 ⇒ 아무것도 삭제하지 않았습니다", autoUpdateLabel: "플러그인을 최신 버전으로 자동 업데이트", floatBarEnable: "플로팅 바 켜기", floatPanelClear: "비우기", floatFuncLabel: "기능형 (아이콘 즉시 실행)", floatPanelLabel: "패널형 (아이콘 클릭 시 설정 팝업)", floatPanelAll: "모든 패널 선택", routeLabel: "이번 Cline 업스트림: ", routeNone: "데이터 없음", floatClineEntry: "Cline 공급자 입구 (클릭하여 선택)", floatRouteBadge: "플로팅 바에 업스트림 배지 표시", flamePauseOnCollapse: "접힐 때 파티클 효과 일시중지", stopRerollName: "리롤 중지", entryMenuGroup: "확장 메뉴 (좌하단)", entryInlineGroup: "입력창 옆 (보내기 바)", clineRouteAlertLabel: "라우팅 불일치 시 알림", opencodeLabel: "Opencode 요청 헤더 (9/6 이후 활성화 필요)", opencodeHint: "모든 소스에 X-Opencode-Session 헤더를 자동 주입합니다(원본 SillyTavern은 Google 소스에서 이 필드를 무시하며, 그 경우 중계가 보충합니다). 같은 채팅은 고정 ID(GPU 컨텍스트 캐시), 다른 채팅은 다른 ID.", opencodeHintSummary: "설명", opencodeSession: "이 대화의 Session ID: ",
         apiHint: "키는 로컬 settings.json에 평문 저장됨 - 파일 공유 금지. Custom(OpenAI 호환) 연결에서만 동작. 전환 시 URL·키·모델명 세 항목을 함께 변경, 프리셋/샘플링은 불변. limit/quota/rate 에서 트리거.",
         dblSave: "저장",
         dblEditLabel: "메시지 본문을 두 번 클릭하면 그 자리에서 바로 수정",
@@ -775,7 +818,7 @@ const WRAP4A_EXAMPLE_SUFFIX = "    抛开烦恼,我拿起三明治,也吃了沙�
 
 const OC_RELAY_I18N = {
     zh: {
-        title: 'Gemini 4 Argon：',
+        title: 'Gemini 4 Argon · OpenCode 连接',
         geminiNote: '注意：4a是正文思维链，所以请关闭「无思维链直接出正文」和「正文出现」的自动重roll',
         ttLabel: 'TT 连接OC：',
         stLabel: 'ST 连接OC：',
@@ -834,7 +877,7 @@ const OC_RELAY_I18N = {
         schemeTtProxyKey: 'Key',
     },
     en: {
-        title: 'Gemini 4 Argon:',
+        title: 'Gemini 4 Argon OC connection:',
         geminiNote: 'Note: 4A emits chain-of-thought in the body, so turn off the auto-rerolls for "no thinking → direct reply" and "reply body contains".',
         ttLabel: 'TT connection OC: ',
         stLabel: 'ST connection OC: ',
@@ -892,7 +935,7 @@ const OC_RELAY_I18N = {
         schemeTtProxyKey: 'Key',
     },
     ko: {
-        title: 'Gemini 4 Argon:',
+        title: 'Gemini 4 Argon OC 연결 설정:',
         geminiNote: '주의: 4A는 본문에 사고 사슬을 출력하므로 "사고 없이 바로 본문" 및 "본문 등장" 자동 리롤을 꺼 주세요.',
         ttLabel: 'TT 연결 OC: ',
         stLabel: 'ST 연결 OC: ',
@@ -959,6 +1002,9 @@ if (!extension_settings[extensionName]) {
     extension_settings[extensionName] = defaultSettings;
 }
 const settings = extension_settings[extensionName];
+for (const key of ['companion', 'controlCenter', 'presetControlHomePins', 'presetControlHomeDefaultsVersion', 'presetControlCommonHidden', 'presetControlShortcuts', 'presetControlLayouts', 'ywpcTheaterMemory']) {
+    if (settings[key] === undefined) settings[key] = structuredClone(defaultSettings[key]);
+}
 
 if (settings.enabled === undefined) settings.enabled = defaultSettings.enabled;   // ★W114（铁律 32）：新装默认 true；缺键时原来勾选框画成不勾、运行期却按"开着"算 ⇒ 口径统一到 defaultSettings
 if (settings.language === undefined) settings.language = 'zh';
@@ -970,6 +1016,8 @@ if (settings.showTps === undefined) settings.showTps = true;
 if (settings.keepScrollOnGenerate === undefined) settings.keepScrollOnGenerate = true;
 if (settings.reasoningTimer === undefined) settings.reasoningTimer = true;
 
+if (settings.customModels === undefined) settings.customModels = defaultSettings.customModels;
+if (settings.customModelSelection === undefined) settings.customModelSelection = defaultSettings.customModelSelection;
 if (settings.reasoningContent === undefined) settings.reasoningContent = defaultSettings.reasoningContent;
 if (settings.reasoningEffort === undefined) settings.reasoningEffort = defaultSettings.reasoningEffort;
 if (settings.rerollNewBranchGate === undefined) settings.rerollNewBranchGate = defaultSettings.rerollNewBranchGate; // v1.37.66（§BA 通用门：老用户升级补默认 true）
@@ -1051,7 +1099,7 @@ if (settings.schemesInitV1 !== true) {
     //    已有同 id 的跳过，不重复添加。★作者 2026-10-25 第①②条：默认 1~3 改用品牌图标（iconData，不再是 emoji 🔥✨🦈）；
     //    ★新增第 4 个空白方案（icon=⚡、showInBar=false——不占悬浮窗，让用户自己配））
     for (const def of [
-        { id: 'kimi',     name: 'Kimi',     icon: '', iconData: schemeBrandIcon('kimi-color'),     showInBar: true,  profileName: null, presetName: null, toggles: null },
+        { id: 'kimi',     name: 'Kimi3',    icon: '', iconData: schemeBrandIcon('kimi-color'),     showInBar: true,  profileName: null, presetName: null, toggles: null },
         { id: 'gemini',   name: 'Gemini',   icon: '', iconData: schemeBrandIcon('gemini-color'),   showInBar: true,  profileName: null, presetName: null, toggles: null },
         { id: 'deepseek', name: 'Deepseek', icon: '', iconData: schemeBrandIcon('deepseek-color'), showInBar: true,  profileName: null, presetName: null, toggles: null },
         { id: 'scheme4',  name: '方案4',    icon: '⚡', iconData: null, showInBar: false, profileName: null, presetName: null, toggles: null },
@@ -1084,8 +1132,11 @@ if (settings.schemesBrandV1 !== true) {
     }
     if (touched2) { try { saveSettingsDebounced(); } catch (e) { } }
 }
+if (applyConsoleHomeDefaults(settings, defaultSettings)) {
+    try { saveSettingsDebounced(); } catch (e) { }
+}
 if (settings.psnapShowFloat === undefined) settings.psnapShowFloat = true;
-if (settings.floatBarEnabled === undefined) settings.floatBarEnabled = true;
+if (settings.floatBarEnabled === undefined) settings.floatBarEnabled = defaultSettings.floatBarEnabled;
 if (settings.floatShowTagFix === undefined) settings.floatShowTagFix = true;
 if (settings.floatShowCline === undefined) settings.floatShowCline = false;
 /* ★W25B：作者拍板「这两个在用户安装插件之后默认勾选的」⇒ 两条都补默认 true。
@@ -1328,7 +1379,7 @@ setInterval(() => {
         }
     } catch (e) { }
 }, 800);
-eventSource.on(event_types.GENERATION_STARTED, () => { try { healTruncatedPreset(); } catch (e) { } });
+eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => { if (dryRun) return; try { healTruncatedPreset(); } catch (e) { } });
 
 // KIMI/DS 为固定内置预设（不可修改）：启动即以「当前模式+语言」的代码预设为准 →
 //   ① 文本框在界面上 readonly；② 以后改代码预设，老用户升级后也自动生效（无需迁移）。
@@ -2371,7 +2422,9 @@ function applyRequestInjections(bodyObj) {
             try {
                 if (settings.nsfwEnabled && settings.nsfwSenderEnabled !== false) {
                     /* ★W401：拼状态 / 剥旧块 / 插 system 全在模块那一个函数里（顺序：先拼后剥） */
-                    const nsfwReq = nsfwRewriteRequest(msgs, nsfwChatId());
+                    // 包含远楼、多角色的允许历史，但排除本轮被替换的目标楼；缺身份时只信请求msgs。
+                    const nsfwFull = generationHistoryForRequest(msgs);
+                    const nsfwReq = nsfwRewriteRequest(msgs, nsfwChatId(), nsfwFull, { bounded: true });
                     if (nsfwReq.changed) changed = true;
                 } else {
                     if (nsfwStripHistory(msgs)) changed = true;
@@ -2480,7 +2533,118 @@ let lastStuckRecoverAt = 0;   // ★W398：卡死看门狗上次补切时间
 let earlyStopTriggered = false;      // 流式中已触发截断（防重复 stopGeneration）
 let earlyRerollMessageId = -1;       // 已被流式截断、需要强制重roll的消息id
 let rerollGuard = createRerollGuard();   // v1.37.54：截断后「待新分支」状态（确认进入分支后一直等，不盲等出字）
-function curChatKey() { try { const c = (typeof window !== "undefined" && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null; return String(c?.chatId || c?.chat?.length || ""); } catch (e) { return ""; } }
+function curChatKey() { try { const c = window.SillyTavern?.getContext?.(); return String(c?.chatId ?? ''); } catch (e) { return ''; } }
+
+// 2026-11-11：重试任务只属于捕获时的聊天、生成代和末楼分支。
+function rerollScope() {
+    const ctx = window.SillyTavern?.getContext?.();
+    return { chat: ctx?.chat, chatKey: String(ctx?.chatId ?? ''), seq: genStartSeq };
+}
+function captureRerollTask(reason = earlyRerollReason) {
+    const scope = rerollScope(), chat = scope.chat;
+    const id = (chat?.length || 0) - 1, msg = chat?.[id];
+    return rerollGuard.token({ ...scope, id, msg, sid: msg?.swipe_id, len: msg?.swipes?.length,
+        gs: String(msg?.gen_started ?? ''), reason });
+}
+function rerollTaskCurrent(task, branch = true) {
+    if (!rerollGuard.owns(task, rerollScope())) return false;
+    if (!branch) return true;
+    const chat = task.chat, msg = chat?.[task.id];
+    return chat?.length === task.id + 1 && msg === task.msg && msg?.swipe_id === task.sid
+        && msg?.swipes?.length === task.len && String(msg?.gen_started ?? '') === task.gs;
+}
+function rerollExecutionAllowed(task) {
+    return rerollTaskCurrent(task) && !manualStopClicked && !lastGenManuallyStopped
+        && rerollReasonSwitchOn(task.reason);
+}
+function cancelRerollTasks() {
+    rerollGuard.cancelTokens();
+    pendingSwipeConfirm = -1;
+    rerollRetryTarget = -1;
+    autoSwipeBusy = false;
+    activeRerollTask = null;
+    rerollFuseDisarm();
+}
+function rerollLimitReached() {
+    if (autoRerollCount < settings.autoRerollLimit) return false;
+    if (!rerollBlockedNotified) {
+        rerollBlockedNotified = true;
+        notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll${rerollLastReasonSuffix()}`, 'error');
+    }
+    updateRerollStatus();
+    return true;
+}
+let activeRerollTask = null;
+let lastRerollAttempt = null;
+let generationOutput = null;
+let pendingSwipePreparation = null;
+function captureGenerationOutput(type) {
+    const scope = rerollScope(), chat = scope.chat || [], id = chat.length - 1, msg = chat[id];
+    const reuse = type === 'swipe' || type === 'continue' || type === 'append';
+    generationOutput = { ...scope, ownership: rerollGuard.token(scope), type, minId: chat.length, id: reuse || (type === 'regenerate' && msg && !msg.is_user) ? id : null,
+        msg: reuse ? msg : null, oldMsg: msg, sid: msg?.swipe_id, len: msg?.swipes?.length,
+        gs: String(msg?.gen_started ?? ''), mes: String(msg?.mes ?? ''), rs: String(msg?.extra?.reasoning ?? '').trim(),
+        token: false, bound: null,
+        history: chat.map(m => ({ ref: m, text: String(m?.mes ?? ''), role: m?.is_user ? 'user' : m?.is_system ? 'system' : 'assistant' })),
+        historyTargetId: reuse || (type === 'regenerate' && msg && !msg.is_user) ? id : null };
+    const prep = pendingSwipePreparation;
+    if (type === 'swipe' && prep && !prep.owner && prep.msg === msg && prep.swipes === msg?.swipes
+        && prep.targetId === id && prep.task.seq + 1 === scope.seq && prep.task.chat === scope.chat && prep.task.chatKey === scope.chatKey) {
+        prep.owner = generationOutput.ownership;
+        pendingSwipePreparation = null;
+    }
+}
+// 请求补全只读真实 STARTED 固定的边界；身份不完整时以已组装的请求为界。
+function generationHistoryForRequest(msgs) {
+    const fallback = () => Array.isArray(msgs) ? msgs.map(m => ({ ...m })) : [];
+    try {
+        const out = generationOutput, scope = rerollScope();
+        if (!out || !Array.isArray(scope.chat) || !rerollGuard.owns(out.ownership, scope)) return fallback();
+        const chat = scope.chat, type = out.type, targetId = out.historyTargetId;
+        const replacing = type === 'swipe' || type === 'regenerate';
+        const continuing = type === 'continue' || type === 'append';
+        if (!replacing && !continuing && type !== 'normal' && type !== undefined) return fallback();
+        if (continuing && (targetId === null || !out.oldMsg || out.oldMsg.is_user || out.oldMsg.is_system
+            || chat[targetId] !== out.oldMsg || out.oldMsg.swipe_id !== out.sid || out.oldMsg.swipes?.length !== out.len)) return fallback();
+        const end = replacing && targetId !== null ? targetId : out.minId;
+        if (!Number.isInteger(end) || end < 0 || end > out.history.length) return fallback();
+        const history = [];
+        for (let i = 0; i < end; i++) {
+            const saved = out.history[i];
+            if (!saved || chat[i] !== saved.ref) return fallback();
+            // continue 的目标按开始时原文取，其它历史发生编辑则不能再借用旧快照。
+            if (!(continuing && i === targetId) && String(chat[i]?.mes ?? '') !== saved.text) return fallback();
+            history.push({ role: saved.role, content: saved.text });
+        }
+        if (type === 'swipe' && (targetId === null || chat[targetId] !== out.oldMsg
+            || out.oldMsg.swipe_id !== out.sid || out.oldMsg.swipes?.length !== out.len)) return fallback();
+        if (!continuing && (!replacing || targetId === null)) {
+            // normal/末楼user的regenerate：STARTED后宿主才追加的新user必须保留，新AI占位不属于历史。
+            for (let i = out.minId; i < chat.length; i++) {
+                const m = chat[i];
+                if (!m || (!m.is_user && !m.is_system)) break;
+                history.push({ role: m.is_user ? 'user' : 'system', content: String(m.mes ?? '') });
+            }
+        }
+        return history;
+    } catch (e) { return fallback(); }
+}
+function currentGenerationOutput(messageId) {
+    const out = generationOutput, scope = rerollScope();
+    if (!out || !rerollGuard.owns(out.ownership, scope)) return null;
+    const id = Number(messageId);
+    if (out.id === null ? id < out.minId : id !== out.id) return null;
+    const msg = scope.chat?.[id];
+    if (!msg || msg.is_user || msg.is_system || scope.chat.length - 1 !== id) return null;
+    if (out.bound && out.bound !== msg) return null;
+    const changedBranch = msg !== out.oldMsg || msg.swipe_id !== out.sid || msg.swipes?.length !== out.len || String(msg.gen_started ?? '') !== out.gs;
+    const changedText = String(msg.mes ?? '') !== out.mes || String(msg.extra?.reasoning ?? '').trim() !== out.rs;
+    // 同文新分支依靠分支身份/真实流事件认领；旧楼仅重画不能认领。
+    if (!out.bound && !changedBranch && !changedText && !out.token) return null;
+    out.bound = msg;
+    out.id = id;
+    return out;
+}
 let streamGotToken = false;          // 本次生成是否收到过 token（空回检测用）
 let manualStopClicked = false;       // 用户点了 ST 停止按钮（#mes_stop）→ 手动停止，不判空回
 let isGenerating = false;           // 是否正在生成（防止历史加载 MESSAGE_RECEIVED 误判空回）
@@ -2599,7 +2763,9 @@ function gateAllowsJudgment(messageId, tag) {
 // 已判为"同一条"时还会自愈 —— ST 可能只是晚一拍才建出新分支槽，只要现在这条是新身份就补开门。
 let streamGateSeq = -1, streamGateAllowed = true, streamGateDesc = '';
 function streamingGateAllows(messageId) {
+    if (!currentGenerationOutput(messageId)) return false;
     if (settings.rerollNewBranchGate === false) return true;
+    if (generationOutput?.bound) return true;
     /* ★W452：本次生成已经写出新内容 ⇒ 流式这一档必须按“新分支”放行。
        新分支的槽位 / gen_started 往往晚一拍才落到 chat 上；第一拍拿旧分支身份会把**整轮**流式判定关掉，
        表现就是“进入新分支后的第一轮怎么都不截断/不重roll”。只在生成中且有新内容时走这条，绝不放过查看旧分支。 */
@@ -2724,33 +2890,7 @@ function checkStreamingAbort(messageId) {
     // ★W138：新增「正文标记」—— 同 keyword 口径加进这道总门（这一档也走流式截断）；
     //   判据用 bodyMarkerArmed()（勾着 + 列表非空；默认"勾着+空"不放行，免得白跑检测）。
     if (!settings.rerollOnEnglishThinking && !settings.rerollOnNoThinking && settings.rerollOnKeyword === false && !bodyMarkerArmed()) return;
-    // v1.37.15：只检测"本次生成正在写入的新分支"，跳过历史/静态内容——
-    // ① observer 会因 swipe 动画/计数器捕获旧消息 DOM 变化，若旧消息是英文会误触发；
-    // ② 用户手动往分支填英文 / 加载历史分支（gen_started 是旧时间）也绝不能触发截断——
-    //    那只是查看内容，不是"本次生成输出英文"（模型本次可能根本没输出）。
-    // 判定"本次生成的消息"：消息的 gen_started 必须晚于本次 GENERATION_STARTED（genStartAt）。
-    // swipe 开的新分支生成时 ST 会更新 gen_started = 本次；手动编辑/加载旧分支保持旧 gen_started。
-    let dbgSkip = ''; // 诊断：记录跳过原因（临时排查用）
-    try {
-        const ctx0 = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-        const chat0 = ctx0?.chat;
-        const lastAiIdx = (() => { for (let i = (chat0?.length || 1) - 1; i >= 0; i--) { const mm = chat0?.[i]; if (mm && !mm.is_user && !mm.is_system) return i; } return -1; })();
-        if (lastAiIdx < 0 || messageId !== lastAiIdx) { dbgSkip = 'not-last-ai(id=' + messageId + ',lastAi=' + lastAiIdx + ')'; return; } // 非最后一条 assistant → 旧消息，跳过
-        const lastAiMsg = chat0?.[lastAiIdx];
-        if (lastAiMsg && genStartAt > 0) {
-            const gs = lastAiMsg.gen_started ? new Date(lastAiMsg.gen_started).getTime() : 0;
-            // 容差 2s：ST 的 gen_started 可能略早于 GENERATION_STARTED 事件；历史消息则远早于本次
-            if (Number.isFinite(gs) && gs > 0 && gs < genStartAt - 2000) {
-                /* ★W452：gen_started 还是旧的时候，只要这一楼**已经写出本次的新内容**，就按当前生成判；
-                   否则才当历史消息跳过（进入新分支第一拍 gen_started 常常还没更新）。 */
-                const mesNow0 = String(lastAiMsg.mes || '');
-                const rsNow0 = String(lastAiMsg.extra?.reasoning || '');
-                const changedNow0 = (generationStartLastMes !== null && mesNow0 !== generationStartLastMes)
-                    || (genStartReasoning !== null && rsNow0 !== String(genStartReasoning));
-                if (!changedNow0) { dbgSkip = 'old-gen_started(gs=' + gs + ',genStartAt=' + genStartAt + ')'; return; } // 历史消息（本次生成前就存在）→ 跳过
-            }
-        }
-    } catch (e) { /* 静默：拿不到 chat 时不拦截 */ }
+    if (!currentGenerationOutput(messageId) || settings.rerollLockOn || manualStopClicked || lastGenManuallyStopped) return;
     // ★v1.37.66 通用门（§BA）：**先确认"这条是不是还没判定过的新分支"，再开流式判定** ——
     //   "如果不是新分支，就没必要开启新的流式判断"。判据本身（英文/无思维链/思维太短/关键词的
     //   算式、阈值、取样窗口）**一个字没动**，这里只加门、只调顺序。
@@ -2764,12 +2904,13 @@ function checkStreamingAbort(messageId) {
         const reasoning = String(msg.extra?.reasoning ?? '').trim();
         const mes = String(msg.mes ?? '');
         const marker = settings.foldMarker || '<scene>';
-        /* ★W453：只判「本次新写出来的部分」—— swipe/regenerate 时这一楼还挂着上一分支的正文/思维链，
-           拿整段判会在新分支第一拍就命中上一版（无思考/关键词/正文标记/英文），表现“第一轮不管怎样都重roll”。 */
-        const startMes0 = (generationStartLastMes === null ? null : String(generationStartLastMes));
-        const startRs0 = (genStartReasoning === null ? null : String(genStartReasoning).trim());
-        const newMes0 = (startMes0 !== null && mes.startsWith(startMes0)) ? mes.slice(startMes0.length) : ((startMes0 === null || mes !== startMes0) ? mes : '');
-        const newRs0 = (startRs0 !== null && reasoning.startsWith(startRs0)) ? reasoning.slice(startRs0.length) : ((startRs0 === null || reasoning !== startRs0) ? reasoning : '');
+        const output = currentGenerationOutput(messageId);
+        if (!output) return;
+        const continuing = output.type === 'continue' || output.type === 'append';
+        const startMes0 = continuing ? output.mes : null;
+        const startRs0 = continuing ? output.rs : null;
+        const newMes0 = continuing && mes.startsWith(startMes0) ? mes.slice(startMes0.length) : mes;
+        const newRs0 = continuing && reasoning.startsWith(startRs0) ? reasoning.slice(startRs0.length) : reasoning;
         let stopReason = '';
 
         // ① 英文思维链（原生 reasoning 通道；partial 模式思考在 content，用 <scene> 前文本兜底）
@@ -2874,9 +3015,10 @@ function checkStreamingAbort(messageId) {
             stopReason = '';
         }
         if (stopReason) {
+            const stopTask = captureRerollTask(earlyRerollReason);
             let stopped = false;
             try { stopped = stopGeneration(); } catch (e) { console.warn('[余温工具箱] 截断失败:', e); }
-            if (stopped) {
+            if (stopped && rerollTaskCurrent(stopTask)) {
                 earlyStopTriggered = true;
                 earlyRerollDetail = stopReason;   /* ★W455：横幅要说清是哪条判据 */
                 earlyRerollMessageId = messageId;
@@ -2885,7 +3027,12 @@ function checkStreamingAbort(messageId) {
                 markBranchJudged(messageId); // v1.37.66 通用门：这条分支已判过（流式判定动手了）→ 不再对它反复判
                 console.log(`[余温工具箱] 流式中${stopReason} → 截断生成`);
                 // 保险：若截断后 MESSAGE_RECEIVED 没触发（异常情况），10 秒后清标记
-                setTimeout(() => { earlyStopTriggered = false; earlyRerollMessageId = -1; }, 10000);
+                const cleanupTask = captureRerollTask(earlyRerollReason);
+                setTimeout(() => {
+                    if (!rerollTaskCurrent(cleanupTask)) return;
+                    earlyStopTriggered = false;
+                    earlyRerollMessageId = -1;
+                }, 10000);
             }
         }
     } catch (e) {
@@ -3118,7 +3265,8 @@ function anyRerollSwitchOn() {
  *   · 来源未知（`earlyRerollReason` 为空 / 历史遗留）⇒ 退回 `anyRerollSwitchOn()`（五勾口径）。
  *   ★`settings.enabled` / `rerollPaused` 也在这里一起判（总开关关掉、点了停止，同样当场作废）。 */
 function rerollReasonSwitchOn(reason) {
-    if (!settings.enabled || settings.rerollPaused) return false;
+    if (!settings.enabled || settings.rerollPaused || settings.rerollLockOn) return false;
+    if (reason === 'empty') return !!settings.rerollOnEmpty;
     if (reason === 'english') return !!settings.rerollOnEnglishThinking;
     if (reason === 'nothink') return !!settings.rerollOnNoThinking;   // "无思考"与"思考太短"共用这一个勾
     if (reason === 'keyword') return settings.rerollOnKeyword !== false && !!String(settings.rerollKeywords || '').trim();
@@ -3135,7 +3283,8 @@ function applyRerollSwitchChange() {
     try {
         const allOff = !settings.enabled || !anyRerollSwitchOn();
         const reasonOff = !rerollReasonSwitchOn(earlyRerollReason);
-        if (!allOff && !reasonOff) return;                 // 还有别的路径开着、且不是它被关 ⇒ 什么都不做
+        if (!allOff && !reasonOff && !settings.rerollLockOn && !settings.rerollPaused) return;
+        cancelRerollTasks();
         earlyStopTriggered = false;                        // 待办作废（别动 earlyRerollHandled，免得被当成"已处理过"吞掉下一次）
         earlyRerollMessageId = -1;
         rerollFiredThisGen = false;                        // 总闸释放：我们没真的 roll，别把这一代占住
@@ -3151,7 +3300,12 @@ function checkNativeReroll(messageId) {
     if (!settings.rerollOnEnglishThinking && !settings.rerollOnNoThinking && !settings.rerollOnNoMutter && settings.rerollOnKeyword === false && !bodyMarkerArmed()) {
         // v1.37.56：全部检测项关闭时不会走到下面的"通过检测"分支，这里补一次收尾（否则计数/横幅会一直挂着）
         // ★W138：这道早退的总门同样接进「正文标记」（勾着 + 列表非空才放行；默认"勾着+空"照旧早退）
-        if (autoRerollCount !== 0 || rerollBlockedNotified) { autoRerollCount = 0; rerollBlockedNotified = false; clearRerollBanner(); updateRerollStatus(); }
+        let emptyNow = true;
+        try {
+            const current = window.SillyTavern?.getContext?.()?.chat?.[messageId];
+            if (current && !current.is_user && !current.is_system) emptyNow = isEmptyMes(String(current.mes ?? ''));
+        } catch (e) { }
+        if (!emptyNow && (autoRerollCount !== 0 || rerollBlockedNotified)) { autoRerollCount = 0; rerollBlockedNotified = false; clearRerollBanner(); updateRerollStatus(); }
         return;
     }
     /* ★W144b（2026-10-16 · 扩展矩阵在真 1.13 上抓到的格子）：**空占位不是一条"分支"**。
@@ -3191,7 +3345,7 @@ function checkNativeReroll(messageId) {
 
         if (canNativeDetect && settings.rerollOnEnglishThinking && reasoning.length > 0) {
             // v1.37.51：同流式检测——只看「本次新增的思维链」，避免拿上一分支残留的英文反复判重roll（死循环）
-            const _oldRs2 = String(genStartReasoning ?? '');
+            const _oldRs2 = generationOutput?.type === 'continue' || generationOutput?.type === 'append' ? String(genStartReasoning ?? '') : '';
             const _newRs2 = (_oldRs2 && reasoning.startsWith(_oldRs2)) ? reasoning.slice(_oldRs2.length) : reasoning;
             if (_newRs2.trim() && startsWithEnglish(_newRs2)) {
                 shouldReroll = true;
@@ -3296,7 +3450,6 @@ function checkNativeReroll(messageId) {
                 return;
             }
             if (autoRerollCount < settings.autoRerollLimit) {
-                autoRerollCount++;
                 lastAutoRerollTime = now;
                 console.log(`[余温工具箱] 检测到${reason}，自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${messageId}`);
                 rerollFiredThisGen = true;
@@ -3366,11 +3519,12 @@ function stStreamProcessorSettled() {
     } catch (e) { return true; }
 }
 
-async function waitStAbortSettled(seq0) {
+async function waitStAbortSettled(seq0, task) {
     try {
         const t0 = Date.now();
         let waitedForProc = false;
         while (Date.now() - t0 < 6000) {
+            if (task && !rerollExecutionAllowed(task)) return false;
             if (seq0 !== undefined && genStartSeq !== seq0) return false; // 已有新生成在跑 → 别插队
             if (!is_send_press) {
                 if (stStreamProcessorSettled()) return true; // ST 真正空闲 → abort 已收尾，可以安全 swipe 开新分支
@@ -3391,7 +3545,7 @@ async function waitStAbortSettled(seq0) {
             console.log('[余温工具箱] 等 streamingProcessor 收尾超时(6s) → 按原逻辑继续本次 swipe');
         }
         return true;
-    } catch (e) { return true; }
+    } catch (e) { return !task || rerollExecutionAllowed(task); }
 }
 
 // ===== 自愈保险丝（v1.37.64）：ST `script.js:5454` 已知竞态的兜底 =====
@@ -3409,8 +3563,10 @@ let rerollFuseUntil = 0;           // > now 表示观察中
 let rerollFuseStuckSince = 0;      // 特征态首次成立的时间戳（0 = 当前不成立）
 let rerollFuseFired = false;       // 本段观察里是否已经自愈过（幂等闸）
 let rerollFuseTimer = null;
+let rerollFuseTask = null;
 
 function rerollFuseArm() {
+    rerollFuseTask = captureRerollTask();
     rerollFuseUntil = Date.now() + REROLL_FUSE_WINDOW;
     rerollFuseStuckSince = 0;
     rerollFuseFired = false;
@@ -3427,7 +3583,7 @@ function rerollFuseDisarm() {
 
 function rerollFuseTick() {
     try {
-        if (!rerollFuseUntil || Date.now() > rerollFuseUntil) { rerollFuseDisarm(); return; }
+        if (!rerollFuseTask || !rerollExecutionAllowed(rerollFuseTask) || !rerollFuseUntil || Date.now() > rerollFuseUntil) { rerollFuseDisarm(); return; }
         // ① 旗标不在 → 正常（或 ST 自己/我们已经解开了）
         if (typeof document === 'undefined' || !document.body || document.body.dataset.generating !== 'true') { rerollFuseStuckSince = 0; return; }
         // ②③ 真有流在跑 / ST 自己认为在生成 → 不是卡死
@@ -3447,187 +3603,58 @@ function rerollFuseTick() {
     } catch (e) { /* 自愈失败不影响主流程 */ }
 }
 
-async function triggerAutoSwipe(messageId) {
-    // v1.37.34 防重入：ENDED 兜底 + MESSAGE_RECEIVED/空回兜底可能并发各调一次，
-    // 同一消息连续 swipe 会让 ST 第二次 "Swiping back" 回滚 → 分支开不成、总闸卡死。
-    if (autoSwipeBusy) {
-        console.log('[余温工具箱] 自动swipe 进行中，跳过重复触发（防双 swipe 回滚）');
-        return;
-    }
+async function triggerAutoSwipe(messageId, task = captureRerollTask()) {
+    if (autoSwipeBusy || !rerollExecutionAllowed(task)) return;
     autoSwipeBusy = true;
-    rerollFuseArm(); // v1.37.64：我们自己发起重roll → 开保险丝观察窗（若这次引发 ST 旗标卡死，4s 后自愈）
-    const releaseBusy = () => { autoSwipeBusy = false; };
-    const seq0 = genStartSeq; // v1.37.56：记下"决定重roll"时的生成序号（执行前若变了 = 已有新生成在跑）
-    await new Promise(r => setTimeout(r, 300));
+    const owner = {};
+    activeRerollTask = owner;
+    const release = () => {
+        if (activeRerollTask !== owner) return;
+        activeRerollTask = null;
+        autoSwipeBusy = false;
+    };
     try {
-        // 先等上一次 stopGeneration 的 abort 完全收尾，再开新分支（防竞态假成功）。
-        // v1.37.56：等待期间若已经开了新生成（genStartSeq 变）或 6 秒后生成仍在跑 → 放弃本次 swipe。
-        const settled = await waitStAbortSettled(seq0);
-        if (!settled) {
-            console.log('[余温工具箱] 已进入/正在生成新分支 → 取消本次补 swipe（不打断生成）');
-            try { rerollGuard.clear(); } catch (e) { }   // 守卫作废：这条链路已由新生成接手
-            rerollFiredThisGen = false;                  // 释放总闸，让后续事件（新分支的检测）正常走
-            releaseBusy();
-            return;
-        }
-        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-        // v1.37.58：ST 正在做 swipe 动画（或正在编辑消息）时绝不插队 ——
-        // 用户手动左滑查看旧分支的动画期间（MESSAGE_SWIPED 就是在这期间发出的）插件若发 swipe，
-        // 会覆盖用户这次切换（现象：点了上一条分支，界面立刻被顶回下一条）。
-        // ST 状态机：ctx.swipe.state() 取值 none / swiping / editing（constants.js SWIPE_STATE）。
-        try {
-            const swState = (ctx && ctx.swipe && typeof ctx.swipe.state === 'function') ? ctx.swipe.state() : '';
-            if (swState && swState !== 'none') {
-                console.log('[余温工具箱] ST 正在 swipe/编辑中（state=' + swState + '）→ 取消本次自动 swipe（不插队）');
-                try { rerollGuard.clear(); } catch (e) { }
-                rerollFiredThisGen = false;
-                releaseBusy();
-                return;
-            }
-        } catch (e) { }
-        const chat = ctx?.chat;
-        if (!chat || chat.length === 0) { releaseBusy(); return; }
-        const lastId = chat.length - 1;
-        const lastMsg = chat[lastId];
-        // 最后一条是用户消息：AI 没生成出来（用户消息后空回 / regenerate 删了 AI 消息）→ 重新生成
-        if (lastMsg && lastMsg.is_user) {
-            console.log(`[余温工具箱] 最后一条是用户消息 → 改用 regenerate 重新生成`);
-            try { await Generate('regenerate'); } catch (e) { console.warn('[余温工具箱] regenerate 重新生成失败:', e); }
-            releaseBusy();
-            return;
-        }
-        // 否则 swipe 开新分支（目标实时取 chat.length-1）
-        let targetId = messageId;
-        if (!chat[messageId] || messageId !== lastId) {
-            targetId = lastId;
-            console.log(`[余温工具箱] 重roll目标修正：消息#${messageId} → #${lastId}（regenerate 删建后索引变化）`);
-        }
-        console.log(`[余温工具箱] 触发自动重roll：消息#${targetId} 开新分支`);
-        // v1.37.56：swipe 生效性快照（watchdog 用它区分"真回滚"和"切到已有分支/正常生成"）
-        let sid0 = -2, len0 = -2;
-        try {
-            const mS = chat[targetId];
-            sid0 = (mS && typeof mS.swipe_id === 'number') ? mS.swipe_id : -1;
-            len0 = (mS && Array.isArray(mS.swipes)) ? mS.swipes.length : -1;
-        } catch (e) { }
-        // v1.37.56：pendingSwipeConfirm 必须在 doSwipe **之前**登记 —— doSwipe 会一直 await 到这次
-        // swipe 触发的生成跑完；原来在 doSwipe 之后才登记，那次生成的 GENERATION_STARTED 早已过去，
-        // 于是 8 秒后 watchdog 必然判定"没被确认"→ 每次重roll都误报"swipe 疑似假成功"并复位总闸。
-        if (targetId >= 0 && settings.enabled && !settings.rerollPaused) pendingSwipeConfirm = targetId;
-        /* ★A1-修法1（2026-09-27 · 作者当场批复"改"）：**出发前再看一眼开关**。
-           上面那条 if 只护 `pendingSwipeConfirm` 的登记，**不护下面这次 doSwipe** —— 而从"决定重roll"到
-           这里要等 300ms（1703）+ 最坏 ~6s（waitStAbortSettled，等 ST 把上一次生成收尾）；这段窗口里用户
-           完全可能把开关关掉 / 点「停止重roll」⇒ 出现"我明明按了停止，它还是又 roll 了一次"（作者 2026-09-27
-           报的那一族现象的窄根因之一；纯 Node 探针 H1 已钉死：等待窗内不复查任何开关）。
-           ★收尾动作与同函数 `!settled` 分支（1710~1713）同款，并按"我们**没真的 roll**"补一条释放总闸
-             （不释放的话，用户在窗口里重新打开开关后，这一代会一直被 `rerollFiredThisGen` 占住 =
-             又一个"开了却不动"的坑）。不新增任何状态、不碰等待逻辑本身。 */
-        // ★W66：原来只看 enabled/暂停 ⇒ **挡不住"只取消勾选"**（A2 路径 C）⇒ 改成按路径判。
-        //   窗口 = 300ms + waitStAbortSettled ≤ 6s，用户有充分时间在设置里取消那个勾。
-        if (!rerollReasonSwitchOn(earlyRerollReason)) {
-            console.log('[余温工具箱] 等待期间重roll 开关被关（总开关/停止/或它那条路径）→ 取消本次自动 swipe');
-            try { rerollGuard.clear(); } catch (e) { }   // 守卫作废：这次不切了
-            rerollFiredThisGen = false;                  // 释放总闸（没真的 roll，别把这一代占住）
-            releaseBusy();
-            return;
-        }
-        await doSwipe(targetId);
-        console.log(`[余温工具箱] 自动重roll swipe 完成`);
-        // v1.37.15：swipe 确认 watchdog —— ST 在 abort 竞态下会 "Swipe failed, Swiping back" 回滚
-        // （doSwipe 的 ctx.swipe.to 不抛错、扩展无法感知），导致没有新分支、rerollFiredThisGen
-        // 永远等不到 GENERATION_STARTED 重置 → 后续空回/截断全被总闸挡 → 停在空回。
-        // 这里登记等待真实 GENERATION_STARTED；超时未确认 → 判定 swipe 假成功 → 复位总闸 + 各状态，
-        // 让后续事件（或空回兜底）能继续触发重roll，不再卡死。
-        if (targetId >= 0 && settings.enabled && !settings.rerollPaused) {
+        await new Promise(r => setTimeout(r, 300));
+        if (!rerollExecutionAllowed(task)) return;
+        if (!await waitStAbortSettled(task.seq, task)) return;
+        if (!rerollExecutionAllowed(task) || is_send_press || rerollLimitReached()) return;
+        const ctx = window.SillyTavern?.getContext?.();
+        const swState = ctx?.swipe?.state?.();
+        if (swState && swState !== 'none') return;
+        const last = task.chat?.[task.id];
+        if (!last || last.is_system) return;
+        // 同一事务：最终闸 → 占用预算 → 调宿主。取消排队不消耗次数。
+        autoRerollCount++;
+        rerollFiredThisGen = true;
+        lastAutoRerollTime = Date.now();
+        pendingSwipeConfirm = task.id;
+        lastRerollAttempt = task;
+        rerollFuseArm();
+        updateRerollStatus();
+        notifyReroll('🔄 自动重roll 连续 ' + autoRerollCount + '/' + settings.autoRerollLimit + rerollReasonSuffix(lastRerollReason));
+        let action;
+        try { action = last.is_user ? Generate('regenerate') : doSwipe(task.id, task); }
+        catch (e) { action = Promise.reject(e); }
+        // STARTED 只确认进入下一代，绝不宣称请求已经派发。
+        // watchdog 在 await 宿主之前挂，旧宿主的动画API也走同一观察窗。
+        setTimeout(() => {
+            if (!rerollExecutionAllowed(task)) { release(); return; }
+            if (pendingSwipeConfirm !== task.id) { release(); return; }
+            pendingSwipeConfirm = -1;
+            release();
+            if (rerollLimitReached()) return;
+            rerollRetryTarget = task.id;
+            lastRerollReason = '上次重roll未进入新生成';
             setTimeout(() => {
-                releaseBusy(); // 无论确认与否，swipe 流程结束都释放防重入锁
-                if (pendingSwipeConfirm !== targetId) return; // 已被 GENERATION_STARTED 确认
-                pendingSwipeConfirm = -1;                // 距 swipe 已超时且从未进入新生成 → 释放本次"已重roll"的总闸，允许再触发
-                // v1.37.56：先看数据有没有真的动过 —— 切到"已存在的分支"不会有新生成，但 swipe 是成功的，
-                // 不能当假成功（否则会误报日志 + 白复位状态）。
-                try {
-                    const mC = chat[targetId];
-                    const sid1 = (mC && typeof mC.swipe_id === 'number') ? mC.swipe_id : -1;
-                    const len1 = (mC && Array.isArray(mC.swipes)) ? mC.swipes.length : -1;
-                    if (sid1 !== sid0 || len1 !== len0) {
-                        console.log(`[余温工具箱] swipe 已生效（分支 ${sid0}/${len0} → ${sid1}/${len1}）→ 无需复位`);
-                        return;
-                    }
-                } catch (e) { }
-                // v1.37.15：已达连续上限时不再复位总闸——复位会让后续检测再次通过、count 继续++，
-                // 造成 31/30、32/30 突破上限的无限循环。上限就是硬停：让 rerollBlockedNotified 提示生效，
-                // 等一条通过检测的消息或用户手动 swipe 把计数归零。
-                if ((rerollFiredThisGen || earlyRerollHandled || emptyRerollHandled) && autoRerollCount < settings.autoRerollLimit) {
-                    console.log('[余温工具箱] swipe 疑似假成功（ST Swiping back 回滚，未进入新生成）→ 复位总闸，允许后续重roll');
-                    rerollFiredThisGen = false;
-                    earlyRerollHandled = false;
-                    emptyRerollHandled = false;
-                    earlyRerollMessageId = -1;
-                    lastGenManuallyStopped = false;
-                    // v1.37.15：不再用 regenerate 兜底——regenerate 会删掉最后一条 AI 消息重建，
-                    // 新消息 swipe_id=undefined，ST 下次 swipe 时会把 swipes 清空（script.js swipe_id
-                    // undefined 分支），造成"分支被清成 1 个"、重roll永远进不了新分支的死循环。
-                    // 复位总闸后，后续 ENDED/MESSAGE_RECEIVED 的自然事件流会再次触发重roll（swipe 开新分支）。
-                    // 这里只做一件事：若消息 swipe_id 异常（undefined/负数）则修正，确保下一次 swipe 走分支逻辑。
-                    try {
-                        const ctxW = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-                        const chatW = ctxW?.chat;
-                        const lastW = chatW && chatW.length ? chatW[chatW.length - 1] : null;
-                        if (lastW && !lastW.is_user && typeof lastW.swipe_id !== 'number') {
-                            const sw = Array.isArray(lastW.swipes) ? lastW.swipes : [];
-                            lastW.swipe_id = Math.max(0, sw.length - 1);
-                            if (!Array.isArray(lastW.swipes)) lastW.swipes = [lastW.mes ?? ''];
-                            console.log('[余温工具箱] 修正消息 swipe_id=' + lastW.swipe_id + '（防 ST 把 swipe 降级为 normal）');
-                        }
-                        // ★v1.37.65「本次是否真的生成过」门槛（AQ 定性，保留）：
-                        //   走到这里已经证明两件事 —— ① 8 秒内没有任何新生成（pendingSwipeConfirm 仍等于 targetId，
-                        //   否则上面早就 return 了）；② 分支数据没变（sid/len 与 swipe 前快照相同）。
-                        //   也就是说 **这次 swipe 什么都没产生**：既没有新分支槽、也没有新生成 ⇒ 这不是「空回」
-                        //   （空回的定义是"生成过但零 token"，见本文件各处注释），而是 swipe 没生效。
-                        // ★v1.37.66（§AZ 作者纠正）：「切不进去」的修法**不是**对着这条再判一次，而是
-                        //   **继续把分支真正切过去** —— 与英文路**同一套补试预算**（rerollRetryLeft，每代 2 次）；
-                        //   预算用尽仍没切成功 ⇒ 才走最后兜底（明确出声；连败达到阈值再叠加暂停）。
-                        //   于是"空占位"和"还挂着坏内容"在这里**走同一条路**（以前空占位那条会重新发起判定
-                        //   → 对着没变过的消息再 roll 一次 = 用户看到的"判定→重roll→没进新分支→再判定"）。
-                        if (lastW && !lastW.is_user) {
-                            const lastEmpty = isEmptyMes(lastW.mes);
-                            const stuckWhat = lastEmpty ? '这条还是空占位' : '这条还挂着坏内容';
-                            if (anyRerollSwitchOn()          // ★A1-修法2：五勾全关 ⇒ 补试链也要停（别"关了还在 roll"）
-                                && settings.enabled && !settings.rerollPaused
-                                && autoRerollCount < settings.autoRerollLimit) {
-                                /* ★W456：用户拍板 —— 只按「连续上限」停，取消 2 次补试 / 3 次连败就停。
-                                   每一次切不进去都算一次连续次数（和内容重roll共用同一个上限）。 */
-                                autoRerollCount++;
-                                lastAutoRerollTime = Date.now();
-                                rerollRetryTarget = targetId;
-                                lastRerollReason = '上次重roll没进入新分支（' + stuckWhat + '）';
-                                console.log('[余温工具箱] swipe 没生效（8 秒内无新生成、也无新分支槽；' + stuckWhat + '）→ 继续把分支切过去（连续 ' + autoRerollCount + '/' + settings.autoRerollLimit + '），消息#' + targetId);
-                                notifyReroll(`🔄 上次没进新分支，正在重试…（连续 ${autoRerollCount}/${settings.autoRerollLimit}）` + rerollReasonSuffix(lastRerollReason));
-                                rerollFiredThisGen = true;   // 补试期间别让自然事件再叠加一次 swipe
-                                setTimeout(() => {
-                                    try { if (anyRerollSwitchOn() && autoRerollCount < settings.autoRerollLimit && settings.enabled && !settings.rerollPaused) triggerAutoSwipe(targetId); } catch (e) { }   // ★A1-修法2（同一个理由）
-                                }, 900);
-                            } else if (autoRerollCount >= settings.autoRerollLimit) {
-                                if (!rerollBlockedNotified) {
-                                    rerollBlockedNotified = true;
-                                    lastRerollReason = lastRerollReason || 'swipe 没生效（没进入新分支）';
-                                    notifyReroll(`⏸ 已达连续上限 ${autoRerollCount}/${settings.autoRerollLimit}，暂停自动重roll${rerollLastReasonSuffix()}`, 'error');
-                                }
-                            } else {
-                                console.log('[余温工具箱] 自动重roll补试被关闭（开关/暂停）→ 停手');
-                                notifyReroll('⚠ 自动重roll 没成功（ST 回滚了 swipe）→ 请手动点「开新分支」' + rerollReasonSuffix(lastRerollReason), 'error');
-                                try { rerollGuard.clear(); } catch (e) { }
-                            }
-                        }
-                    } catch (eW) { console.warn('[余温工具箱] swipe watchdog 兜底失败:', eW); }
-                }
-            }, 8000);
-        } else {
-            releaseBusy(); // 无有效目标 / 已暂停 / 已禁用 → 不登记 watchdog，立即解锁
-        }
-    } catch (e) {
-        console.warn('[余温工具箱] 自动重roll失败:', e);
-        releaseBusy();
+                if (!rerollExecutionAllowed(task)) return;
+                rerollRetryTarget = -1;
+                triggerAutoSwipe(task.id, task);
+            }, 900);
+        }, 8000);
+        try { await action; } catch (e) { console.warn('[余温工具箱] 自动重roll调用失败:', e); }
+    } finally {
+        // 上一代 await 返回时，不能释放下一代的锁或改下一代总闸。
+        release();
     }
 }
 
@@ -3717,6 +3744,14 @@ function msgHasThinking(msg) {
  *  和「空回」分开记账：横幅写清楚是接口失败，不冒充空回。 */
 function handleFailureReroll() {
     try {
+        if (manualStopClicked || lastGenManuallyStopped) return;
+        earlyRerollReason = 'failure';
+        /* ★W469：锁住 = 所有自动重roll都停，包括「接口失败自动重试」。
+           这条以前只认 enabled/rerollPaused/上限，锁了仍会弹「接口失败，自动重试」横幅。 */
+        if (settings.rerollLockOn || !anyRerollSwitchOn()) {
+            try { clearRerollBanner(); } catch (e0) { }   /* 锁着时连已经挂着的失败横幅也收掉 */
+            return;
+        }
         lastRerollReason = '接口失败/被拦截，没有生成出新消息';
         if (rerollFiredThisGen) return;
         if (!settings.enabled || settings.rerollPaused) return;
@@ -3729,7 +3764,6 @@ function handleFailureReroll() {
         const target = chatF.length - 1;
         if (target < 0) return;
         rerollFiredThisGen = true;
-        autoRerollCount++;
         lastAutoRerollTime = Date.now();
         console.log(`[余温工具箱] 接口失败 → 自动重试（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${target}`);
         lastRerollReason = '接口失败/被拦截，没有生成出新消息';
@@ -3742,8 +3776,10 @@ function handleFailureReroll() {
 
 
 function handleEmptyReroll(messageId, cause) {
+    earlyRerollReason = 'empty';
     const why = cause || '空回：生成结束仍没有正文';
     lastRerollReason = why;
+    if (settings.rerollLockOn) { try { clearRerollBanner(); } catch (e0) { } return; }   /* ★W469：锁住 = 连空回/接口重试也一并停 */
     if (rerollFiredThisGen) return; // 总闸
     if (settings.rerollPaused) { console.log('[余温工具箱] 自动重roll已暂停，跳过空回重roll'); return; }
     if (!settings.enabled || !settings.rerollOnEmpty) {
@@ -3762,7 +3798,6 @@ function handleEmptyReroll(messageId, cause) {
     //   空回判定通过（且门已确认这是新分支）就**照常重roll**；切不进去的情形由看门狗负责
     //   （继续切 → 补试预算用尽 → 才出声/兜底提高），那条路与英文路共用同一套预算。
     rerollFiredThisGen = true;
-    autoRerollCount++;
     lastAutoRerollTime = Date.now();
     console.log(`[余温工具箱] ${why}→ 自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${messageId}`);
     lastRerollReason = why;
@@ -4045,6 +4080,7 @@ $(document).off('click.kimiRerollStop').on('click.kimiRerollStop', '.kimi-reroll
 
 // 停止自动重roll（横幅按钮 / 悬浮球 / 拓展菜单 / 输入框旁共用）。手动 swipe/regenerate 会恢复。
 window.__kimiStopReroll = () => {
+    cancelRerollTasks();
     if (settings.rerollPaused) { // 已暂停：仍可再发一次停止信号（停止当前生成）
         try { stopGeneration(); } catch (e) { }
         return;
@@ -4152,7 +4188,13 @@ function toggleRerollLock() {
         console.log('[余温工具箱] 重roll ' + (settings.rerollLockOn ? '已锁住（6 个勾选已暂存、全部关闭）' : '已解锁（勾选已还原）'));
     } catch (e) { console.warn('[余温工具箱] 重roll 锁定切换失败:', e); }
 }
-$(document).off('click.kimiRerollLock').on('click.kimiRerollLock', '.kimi-reroll-lock', function () { toggleRerollLock(); });
+function bindRerollLockButton() {
+    const button = document.getElementById(extensionName + '_reroll_lock');
+    if (!button || button.dataset.kimiRerollLockBound) return;
+    button.dataset.kimiRerollLockBound = '1';
+    // 跟随原节点搬入总控；不依赖被总控阻断的 document 点击冒泡。
+    button.addEventListener('click', toggleRerollLock);
+}
 
 /** ★W105b：自动截断卡里的说明句 —— **自动读取上面两个输入框**填进句子（作者原话"会自动读取到上面的填写来填空"）。
  *  每次输入框变化都重算；起始标记留空 ⇒ 走"未填起始标记＝全文检测"那一版。
@@ -4528,19 +4570,26 @@ async function fetchRemoteVersion(report) {
 // 避免先完成的插件刷掉页面时其他插件还在写盘。约定 window 级函数，st-chat-sync 等插件可复用。
 if (typeof window.__kimiCoordReload !== 'function') {
     window.__kimiCoordReload = function (ms) {
-        const delay = Math.max(300, ms || 3000);
-        if (window.__kimiReloadFired) return; // 已在刷新/已刷过，不再重复
-        if (window.__kimiReloadTimer) clearTimeout(window.__kimiReloadTimer); // 重置：最后调用者负责刷新
-        window.__kimiReloadTimer = setTimeout(() => {
+        const delay = Math.max(300, Number(ms) || 3000);
+        if (window.__kimiReloadFired) return;
+        clearTimeout(window.__kimiReloadTimer);
+        clearTimeout(window.__kimiReloadWatchdog);
+        // Both timers belong to the latest completed caller. A queued old callback cannot win.
+        const deadline = Date.now() + delay;
+        const request = {};
+        window.__kimiReloadRequest = request;
+        const fire = () => {
+            if (window.__kimiReloadRequest !== request || window.__kimiReloadFired) return;
+            const remaining = deadline - Date.now();
+            if (remaining > 0) { window.__kimiReloadTimer = setTimeout(fire, remaining); return; }
             window.__kimiReloadFired = true;
+            clearTimeout(window.__kimiReloadTimer);
+            clearTimeout(window.__kimiReloadWatchdog);
+            window.__kimiReloadTimer = window.__kimiReloadWatchdog = null;
             try { location.reload(); } catch (e) { }
-        }, delay);
-        // watchdog：5s 内仍未刷新（手机 WebView 计时器异常兜底，st-chat-sync 同款经验）→ 强刷
-        if (!window.__kimiReloadWatchdog) {
-            window.__kimiReloadWatchdog = setTimeout(() => {
-                if (!window.__kimiReloadFired) { window.__kimiReloadFired = true; location.reload(); }
-            }, 5000);
-        }
+        };
+        window.__kimiReloadTimer = setTimeout(fire, delay);
+        window.__kimiReloadWatchdog = setTimeout(fire, Math.max(5000, delay + 2000));
     };
     window.__kimiReloadFired = false;
 }
@@ -4615,46 +4664,11 @@ async function doSelfUpdate(btn, remoteVer, auto) {
         return;
         }
     }
-    /* ★W164（作者 2026-10-25 · Gitee 匿名拉取被关后 update 全灭 ⇒ 自动走 GitHub 删除重装兜底）：
-       ★★W164b（作者报"手机端工具箱消失"）：**TT/手机上禁用此兜底** —— TT 的 delete/install 接口
-       会把 third-party/ 前缀剥掉（sanitize-filename 把 `/` 删了）⇒ 删错路径/装错路径 ⇒ 插件从
-       third-party/ 目录消失。桌面 ST 的全局安装（public/scripts/extensions/third-party/）路径正确，
-       兜底安全。⇒ 检测到 TT（__TAURITAVERN__ 存在）或 Android UA 时跳过兜底，只弹手动重装指引。 */
-    if (btn) { btn.disabled = false; btn.textContent = '⬆ 可更新'; }
-    const isTT = !!(window.__TAURITAVERN__ || window.__TAURITAVERN_MAIN_READY__);
-    const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
-    if (isTT || isMobile) {
-        const tip = '<br>Gitee 匿名克隆已被关闭，自动更新暂不支持 TT/手机。请用电脑浏览器打开酒馆 →「管理扩展」删除本插件后用以下链接重装（设置不会丢）：<br><a href="https://github.com/SakiPr1me/st-kimi-reasoning-injector.git" target="_blank">https://github.com/SakiPr1me/st-kimi-reasoning-injector.git</a><br>（TT/手机上操作会因路径错位导致插件消失——请务必在电脑浏览器操作）';
-        try { toastr.error(tip, null, { escapeHtml: false, timeOut: 20000 }); } catch (e2) { }
-        console.warn('[余温工具箱] TT/移动端跳过 GitHub 兜底（防止路径错位导致插件消失）');
-        return;
-    }
-    let githubTried = false;
-    try { githubTried = localStorage.getItem('kimi_github_fallback') === '1'; } catch (e) { }
-    if (!githubTried) {
-        try { localStorage.setItem('kimi_github_fallback', '1'); } catch (e) { }
-        try {
-            if (btn) btn.textContent = '⏳ 从 GitHub 重装…';
-            toastr.info('Gitee 更新失败，正在从 GitHub 重装…（设置和收藏不会丢失）', '余温工具箱', { timeOut: 8000 });
-            const H = getRequestHeaders();
-            const del = await fetch('/api/extensions/delete', { method: 'POST', headers: H, body: JSON.stringify({ extensionName: selfName, global: false }) });
-            if (!del.ok && del.status !== 404) throw new Error('delete HTTP ' + del.status);
-            const GH_URL = 'https://github.com/SakiPr1me/st-kimi-reasoning-injector.git';
-            const inst = await fetch('/api/extensions/install', { method: 'POST', headers: Object.assign({}, H, { 'Content-Type': 'application/json' }), body: JSON.stringify({ url: GH_URL, global: false }) });
-            if (!inst.ok) throw new Error('install HTTP ' + inst.status);
-            try { localStorage.setItem('kimi_updated_to', String(remoteVer || PLUGIN_VERSION)); } catch (e) { }
-            try { toastr.success('🔥 已从 GitHub 重装最新版 v' + (remoteVer || PLUGIN_VERSION) + '，即将刷新', null, { timeOut: 4000 }); } catch (e) { }
-            window.__kimiCoordReload(3000);
-            return;
-        } catch (fbErr) {
-            console.warn('[余温工具箱] GitHub 兜底也失败：', fbErr);
-            try { localStorage.removeItem('kimi_github_fallback'); } catch (e) { }   // 下次还能再试
-        }
-    }
-    // 兜底也没成（或已试过）→ 弹原始错误 + 手动重装指引（GitHub 链接，匿名克隆实测通）
-    const tip = '<br>自动更新失败（Gitee 匿名克隆已被关闭）。请到「管理扩展」删除本插件后用以下链接重装（设置不会丢）：<br><a href="https://github.com/SakiPr1me/st-kimi-reasoning-injector.git" target="_blank">https://github.com/SakiPr1me/st-kimi-reasoning-injector.git</a>';
-    try { toastr.error(tip, null, { escapeHtml: false, timeOut: 15000 }); } catch (e2) { }
-    console.warn('[余温工具箱] 自动更新失败 + GitHub 兜底也失败', lastErr);
+    // 更新失败保留原安装。删除/安装不能作为自动重试的兜底事务。
+    if (btn) { btn.disabled = false; btn.textContent = '更新失败 · 可重试'; }
+    try { toastr.error('自动更新失败，已保留现有安装。请稍后重试，或在管理扩展中检查更新。', null, { timeOut: 15000 }); } catch (e) { }
+    console.warn('[余温工具箱] 更新失败，保留现有安装', lastErr);
+    return false;
 }
 async function checkUpdate() {
     try {
@@ -4758,19 +4772,57 @@ function getPromptScenario() {
     if (!Array.isArray(po)) return null;
     return po.find(p => p.character_id === 100001) || po[0] || null;
 }
+function ywSyncLinkedControls() {
+    const scenario = getPromptScenario();
+    const rows = scenario?.order;
+    const reordered = placeAfter(rows, YW_PRESET_ID.niah, YW_PRESET_ID.break2);
+    const changed = syncLinkedSetting(settings, rows, YW_PRESET_ID.niah);
+    const input = document.getElementById(extensionName + '_wrap4a');
+    if (input) input.checked = !!settings.wrap4aEnabled;
+    if (changed) saveSettingsDebounced();
+    if (reordered) {
+        const name = getCurrentPresetName();
+        inlineInsGetPm().then(pm => {
+            if (getPromptScenario() === scenario && getCurrentPresetName() === name) pm?.render(false);
+        }).catch(() => {});
+    }
+    return reordered || changed;
+}
+function ywSetWrap4a(want) {
+    const scenario = getPromptScenario();
+    const row = scenario?.order?.find(item => item.identifier === YW_PRESET_ID.niah);
+    settings.wrap4aEnabled = !!want;
+    if (row) {
+        writePromptToggles({ [YW_PRESET_ID.niah]: !!want });
+        if (settings.inlineInsertSavePreset === true) {
+            ywUnifiedConsole?.presets.requestPresetSave('yw-wrap4a-linked');
+        }
+    } else saveSettingsDebounced();
+    ywConsoleChanged();
+}
+function ywWriteToolboxFlag(key, want) {
+    if (key !== 'randHeadEnabled') return false;
+    settings.randHeadEnabled = !!want;
+    const input = document.getElementById(extensionName + '_rand_head');
+    if (input) input.checked = !!want;
+    saveSettingsDebounced();
+    ywConsoleChanged();
+    return true;
+}
 function readPromptToggles() {
     const scenario = getPromptScenario();
-    if (!scenario) return null;
+    if (!scenario || !Array.isArray(scenario.order)) return null;
     const map = {};
     for (const o of scenario.order) map[o.identifier] = !!o.enabled;
     return map;
 }
 function writePromptToggles(toggleMap) {
     const scenario = getPromptScenario();
-    if (!scenario) return;
+    if (!scenario || !Array.isArray(scenario.order) || !toggleMap || typeof toggleMap !== 'object') return;
     for (const o of scenario.order) {
         if (o.identifier in toggleMap) o.enabled = !!toggleMap[o.identifier];
     }
+    ywSyncLinkedControls();
     saveSettingsDebounced();
     // 直接更新左面板 DOM（disabled 类名切换）——不依赖 ST 内部 render()
     for (const o of scenario.order) {
@@ -4778,6 +4830,7 @@ function writePromptToggles(toggleMap) {
         const el = document.querySelector(`[data-pm-identifier="${o.identifier}"]`);
         if (el) el.classList.toggle('completion_prompt_manager_prompt_disabled', !o.enabled);
     }
+    if (ywUnifiedConsole) { ywUnifiedConsole.subscribers.forEach(fn => fn('toggles')); ywConsoleChanged(); }
 }
 function promptEntryName(identifier) {
     try {
@@ -4979,7 +5032,7 @@ function applyApiState(api) {
 function newScheme() {
     const s = {
         id: 'scheme_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-        name: t('schemeNewName'), icon: '⚡', iconData: null, showInBar: false,
+        name: t('schemeNewName'), icon: '⚡', iconData: null, showInBar: false, showHome: false,
         profileName: null, presetName: null, toggles: null,
     };
     getSchemes().push(s);
@@ -5186,12 +5239,13 @@ window.__ywSwitchScheme = (s) => switchScheme(typeof s === 'string' ? schemeById
    只动方案这一块，其它设置一概不碰（调试出口，不进任何 UI；与首启默认那份构造同口径，别处分叉）。 */
 window.__ywSchemeReset = function () {
     settings.schemes = [
-        { id: 'kimi',     name: 'Kimi',     icon: '', iconData: schemeBrandIcon('kimi-color'),     showInBar: true,  profileName: null, presetName: null, toggles: null },
+        { id: 'kimi',     name: 'Kimi3',    icon: '', iconData: schemeBrandIcon('kimi-color'),     showInBar: true,  profileName: null, presetName: null, toggles: null },
         { id: 'gemini',   name: 'Gemini',   icon: '', iconData: schemeBrandIcon('gemini-color'),   showInBar: true,  profileName: null, presetName: null, toggles: null },
         { id: 'deepseek', name: 'Deepseek', icon: '', iconData: schemeBrandIcon('deepseek-color'), showInBar: true,  profileName: null, presetName: null, toggles: null },
         { id: 'scheme4',  name: '方案4',    icon: '⚡', iconData: null, showInBar: false, profileName: null, presetName: null, toggles: null },
     ];
     settings.activeSchemeId = null;
+    for (const scheme of settings.schemes) scheme.showHome = HOME_SCHEME_IDS.includes(scheme.id);
     try { saveSettingsDebounced(); } catch (e) { }
     try { __kimiSetBallIcon('', true); } catch (e) { }   // 归零顺带清悬浮球本机图（noRebuild：外层统一重建一次）
     try { window.__kimiRefreshCombo(); } catch (e) { }
@@ -6697,6 +6751,7 @@ function isKimiSettingsVisible() {
 
 // 在主设置面板内展开并滚动到指定卡（面板可见时替代浮窗）
 function openCardInPanel(key) {
+    if (ywUnifiedConsole) { ywUnifiedConsole.center.open('modules', 'card:' + key); return; }
     const def = KIMI_CARD_DEFS.find(d => d.key === key);
     if (!def) return;
     const panel = document.getElementById(extensionName + '_settings');
@@ -6726,6 +6781,7 @@ function watchSettingsOpenClosesFloat() {
 
 // 按卡 key 打开浮窗：把主页原版卡 DOM 移进浮窗（jQuery 绑定跟元素走，全部交互原样可用）
 function openCardFloat(key) {
+    if (ywUnifiedConsole) { ywUnifiedConsole.center.open('modules', 'card:' + key); return; }
     const def = KIMI_CARD_DEFS.find(d => d.key === key);
     if (!def) return;
     const panel = document.getElementById(extensionName + '_settings');
@@ -7830,6 +7886,7 @@ function schemeEsc(v) { return String(v).replace(/&/g, '&amp;').replace(/</g, '&
 
 /** 方案卡本体（主面板 + 快捷浮窗共用的单一出口） */
 function renderSchemeUI() {
+    queueMicrotask(() => { try { ywConsoleChanged(); } catch (e) { } });
     const box = document.getElementById(extensionName + '_psnap_list') || document.getElementById(extensionName + '_psnap_body');
     const boxFloat = document.getElementById(extensionName + '_psnap_body');
     if (!box) return;
@@ -7958,7 +8015,7 @@ function openSchemeEditor(scheme) {
         name: String(scheme.name || ''),
         icon: scheme.icon || '', iconData: (typeof scheme.iconData === 'string' && /^data:image\//.test(scheme.iconData)) ? scheme.iconData : null,
         profileName: scheme.profileName || null, presetName: scheme.presetName || null,
-        toggles: scheme.toggles || null, showInBar: !!scheme.showInBar,
+        toggles: scheme.toggles || null, showInBar: !!scheme.showInBar, showHome: !!scheme.showHome,
         badge: scheme.badge != null ? String(scheme.badge) : '',
         badgeOff: !!scheme.badgeOff,
         ttProxy: scheme.ttProxy && typeof scheme.ttProxy === 'object' ? { url: String(scheme.ttProxy.url || ''), key: String(scheme.ttProxy.key || '') } : null,
@@ -8020,6 +8077,9 @@ function openSchemeEditor(scheme) {
         + '<label style="display:flex;align-items:center;gap:6px;margin-top:12px;cursor:pointer;font-size:.88em">'
         + '<input type="checkbox" id="kimi_scheme_bar"' + (draft.showInBar ? ' checked' : '') + '/>'
         + '<span>' + t('schemeShowInBar') + '</span></label>'
+        + '<label style="display:flex;align-items:center;gap:6px;margin-top:4px;cursor:pointer;font-size:.88em">'
+        + '<input type="checkbox" id="kimi_scheme_home"' + (draft.showHome ? ' checked' : '') + '/>'
+        + '<span>出现在总控首页</span></label>'
         /* ★W163c（作者 2026-10-25 补充）：悬浮球图标联动勾选 —— 开了 = 切换到此方案时球也跟着换图标 */
         + '<label style="display:flex;align-items:center;gap:6px;margin-top:4px;cursor:pointer;font-size:.85em">'
         + '<input type="checkbox" id="kimi_scheme_ball"' + (draft.ballSync !== false ? ' checked' : '') + '/>'
@@ -8110,6 +8170,7 @@ function openSchemeEditor(scheme) {
         paintTog();
     });
     $('#kimi_scheme_bar').on('change', function () { draft.showInBar = this.checked; });
+    $('#kimi_scheme_home').on('change', function () { draft.showHome = this.checked; });
     $('#kimi_scheme_ball').on('change', function () { draft.ballSync = this.checked; });
     $('#kimi_scheme_save').on('click', () => {
         scheme.name = String(draft.name || '').trim() || t('schemeNewName');
@@ -8125,6 +8186,7 @@ function openSchemeEditor(scheme) {
             scheme.ttProxy = (tu || tk) ? { url: tu, key: tk } : null;
         } catch (e) { scheme.ttProxy = null; }
         scheme.showInBar = draft.showInBar;
+        scheme.showHome = draft.showHome;
         scheme.ballSync = draft.ballSync !== false;
         saveSettingsDebounced();
         close();
@@ -8797,6 +8859,11 @@ const KIMI_SETTINGS_CSS = `
 #kimi_reasoning_injector_card_float .kimi-card-body label.checkbox_label > b {
     font-weight: 600;
 }
+#kimi_reasoning_injector_settings summary:focus-visible,
+#kimi_reasoning_injector_card_float summary:focus-visible {
+    outline: 2px solid var(--SmartThemeBodyColor);
+    outline-offset: -2px;
+}
 `;
 
 // 楼层 token 数旁显示生成速度（t/s）：token_count ÷ (gen_finished - gen_started)
@@ -9041,7 +9108,6 @@ eventSource.on(event_types.MESSAGE_RECEIVED, (id, type) => {
         // ★W66：改前只认 enabled/上限/总闸 ⇒ 取消勾选后照样弹字 + 照样 roll（A2 路径 B）
         if (rerollReasonSwitchOn(earlyRerollReason) && autoRerollCount < settings.autoRerollLimit && !rerollFiredThisGen) {
             rerollFiredThisGen = true;
-            autoRerollCount++;
             console.log(`[余温工具箱] 流式截断后自动重roll（连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${rerollId}`);
             notifyReroll(`🔄 流式截断重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}${rerollReasonSuffix(earlyRerollDetail || '流式命中')}`);
             updateRerollStatus();
@@ -9200,7 +9266,8 @@ function bindNsfwCard() {
         settings.nsfwEnabled = $(this).is(":checked");
         saveSettingsDebounced();
         try {
-            if (settings.nsfwEnabled) { nsfwReattachAll(); nsfwMountSender(); nsfwStartObserver(); }
+            kimiSyncCaptureObserver();
+            if (settings.nsfwEnabled) { nsfwReattachAll(); nsfwMountSender(); }
             else {
                 /* ★W404：关掉就不要再画画了 —— 已挂出来的卡一并摘掉 */
                 document.querySelectorAll(".yw-nsfw").forEach((n) => n.remove());
@@ -9252,6 +9319,7 @@ function bindNsfwCard() {
     $capHide.off("change.kimiNsfwCap").on("change.kimiNsfwCap", function () {
         settings.nsfwCaptureHide = $(this).is(":checked");
         saveSettingsDebounced();
+        kimiSyncCaptureObserver();
         try { if (settings.nsfwCaptureHide) nsfwReattachAll(); } catch (e) { }
         /* ★W402：关掉捕捉 ⇒ 把卡摘掉并把现有消息重渲染一遍（钩子按新开关放行原文） */
         try {
@@ -9334,6 +9402,17 @@ function bindNsfwCard() {
                 + '<td style="padding:2px 4px">' + input + '</td>'
                 + '<td style="padding:2px 4px"><input class="text_pole" data-c="' + f.id + '" value="' + String(cell.comment == null ? '' : cell.comment).replace(/"/g, '&quot;') + '" placeholder="' + t('nsfwComment') + '" style="width:100%"></td></tr>';
         }).join('');
+        const editorContext = window.SillyTavern?.getContext?.();
+        let targetId = -1;
+        const editorChat = editorContext?.chat || [];
+        for (let i = editorChat.length - 1; i >= 0; i--) {
+            const m = editorChat[i];
+            if (!m || m.is_user || m.is_system) continue;
+            if (Object.prototype.hasOwnProperty.call(nsfwProfilesFromText(String(m.mes || '')), name)) { targetId = i; break; }
+        }
+        const target = editorChat[targetId];
+        box.__ywEditSource = { chatId: chatId(), chat: editorChat, name, targetId, target,
+            text: target?.mes, sid: target?.swipe_id };
         box.setAttribute('data-name', name);
         box.innerHTML = '<div style="margin-top:6px;border:1px solid var(--SmartThemeBorderColor);border-radius:8px;padding:6px">'
             + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><b>' + name + '</b>'
@@ -9385,32 +9464,53 @@ function bindNsfwCard() {
     $('#' + extensionName + '_nsfw_roster').off('click.kimiNsfwEditRow').on('click.kimiNsfwEditRow', '[data-nsfw-edit]', function () {
         openCharEditor(String($(this).attr('data-nsfw-edit') || ''));
     });
-    $('#' + extensionName + '_nsfw_char_editor').off('click.kimiNsfwCSave').on('click.kimiNsfwCSave', '[data-cedit-save]', function () {
+    $('#' + extensionName + '_nsfw_char_editor').off('click.kimiNsfwCSave').on('click.kimiNsfwCSave', '[data-cedit-save]', async function () {
         const name = String($(this).attr('data-cedit-save') || '');
         const box = document.getElementById(extensionName + '_nsfw_char_editor');
-        if (!box) return;
-        const changes0 = [];
+        if (!box || box.__ywSaving) return;
+        const source = box.__ywEditSource;
+        const ctx = window.SillyTavern?.getContext?.();
+        const fail = () => { try { toastr.error('保存失败或编辑来源已变化，输入已保留，请重试。'); } catch (e) { } };
+        if (!source || source.name !== name || source.chatId !== chatId() || source.chat !== ctx?.chat) { fail(); return; }
+        const edits = [];
         box.querySelectorAll('[data-v]').forEach((el) => {
-            const id = el.getAttribute('data-v');
-            const c = box.querySelector('[data-c="' + id + '"]');
-            nsfwSetStat(chatId(), name, id, el.value, c ? c.value : '');
-            changes0.push({ id: id, value: el.value, comment: c ? c.value : '' });
+            const id = el.getAttribute('data-v'), comment = box.querySelector('[data-c="' + id + '"]');
+            edits.push({ id, value: el.value, comment: comment ? comment.value : '' });
         });
-        /* ★W404：编辑器改的值也要写回楼层块 —— 只写缓存的话下一次重建就被楼层覆盖（看起来"改了没生效"） */
+        const controls = Array.from(box.querySelectorAll('input,select,textarea,button')).map(el => ({ el, disabled: el.disabled }));
+        const draftMatches = () => {
+            const current = [];
+            box.querySelectorAll('[data-v]').forEach(el => {
+                const id = el.getAttribute('data-v'), comment = box.querySelector('[data-c="' + id + '"]');
+                current.push({ id, value: el.value, comment: comment ? comment.value : '' });
+            });
+            return JSON.stringify(current) === JSON.stringify(edits);
+        };
+        box.__ywSaving = true;
+        controls.forEach(({ el }) => { el.disabled = true; });
         try {
-            const ctxEd = (window.SillyTavern && SillyTavern.getContext) ? SillyTavern.getContext() : null;
-            const chatEd = (ctxEd && Array.isArray(ctxEd.chat)) ? ctxEd.chat : [];
-            for (let ie = chatEd.length - 1; ie >= 0; ie--) {
-                const me = chatEd[ie];
-                if (!me || me.is_user || me.is_system) continue;
-                const te = String(me.mes || '');
-                if (!te || te.indexOf(name) < 0) continue;
-                if (nsfwEditFloor(chatId(), ie, name, changes0)) break;
+            let saved = false;
+            if (source.targetId >= 0) {
+                const msg = source.chat[source.targetId];
+                if (msg !== source.target || msg.mes !== source.text || msg.swipe_id !== source.sid) { fail(); return; }
+                saved = await nsfwEditFloor(source.chatId, source.targetId, name, edits);
+            } else {
+                // 无来源楼的人工档案仍可编辑，单批存储明确成功才收框。
+                saved = await nsfwSetStats(source.chatId, name, edits);
             }
-        } catch (eEd) { }
-        box.innerHTML = '';
-        box.removeAttribute('data-name');
-        try { nsfwReattachAll(); } catch (e) { }
+            if (saved !== true) { fail(); return; }
+            if (box.__ywEditSource !== source || chatId() !== source.chatId || window.SillyTavern?.getContext?.()?.chat !== source.chat) return;
+            if (!draftMatches()) {
+                if (source.targetId >= 0) { source.text = source.target.mes; source.sid = source.target.swipe_id; }
+                try { toastr.info('已保存提交时的内容，较新的输入仍保留在编辑器中。'); } catch (e) { }
+                return;
+            }
+            box.innerHTML = '';
+            box.removeAttribute('data-name');
+            box.__ywEditSource = null;
+            try { nsfwReattachAll(); } catch (e) { }
+        } catch (e) { fail(); }
+        finally { controls.forEach(({ el, disabled }) => { el.disabled = disabled; }); box.__ywSaving = false; }
     });
     $('#' + extensionName + '_nsfw_char_editor').off('click.kimiNsfwCClose').on('click.kimiNsfwCClose', '[data-cedit-close]', function () {
         const box = document.getElementById(extensionName + '_nsfw_char_editor');
@@ -9524,11 +9624,12 @@ let _nsfwCompleteTimer = 0;
 function nsfwCompleteLatestSoon(ms) {
     try {
         clearTimeout(_nsfwCompleteTimer);
-        _nsfwCompleteTimer = setTimeout(() => {
+        _nsfwCompleteTimer = setTimeout(async () => {
             try {
                 if (settings.nsfwCaptureHide === false) return;
-                const r = nsfwCompleteLatest();
-                if (r && r.changed) { [30, 300, 900].forEach((ms) => setTimeout(() => { try { if (document.querySelector('.yw-nsfw-editing')) return; nsfwReattachAll(); } catch (e1) { } }, ms)); }   /* ★W444d：有卡在编辑就别重挂 */   /* ★W440：补完多挂几次，等酒馆重刷落定 */
+                const r = await nsfwCompleteLatest();
+                if (r?.ok === false) { console.warn('[余温工具箱] 状态补全保存失败'); return; }
+                if (r && r.ok === true && r.changed) { [30, 300, 900].forEach((ms) => setTimeout(() => { try { if (document.querySelector('.yw-nsfw-editing')) return; nsfwReattachAll(); } catch (e1) { } }, ms)); }   /* ★W444d：有卡在编辑就别重挂 */   /* ★W440：补完多挂几次，等酒馆重刷落定 */
             } catch (e) { }
         }, ms || 500);
     } catch (e) { }
@@ -9541,23 +9642,15 @@ try { setTimeout(() => nsfwGuideSyncNow(false), 1500); setTimeout(() => nsfwGuid
 try { nsfwCompleteLatestSoon(2600); setTimeout(() => nsfwCompleteLatestSoon(0), 5200); } catch (e) { }   /* ★W438：刷新后也补 */
 
 eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
-    isDryRun = !!dryRun; // ST 提示词查看器 dry-run（Generate 第三个参数）
-    if (isDryRun) {
-        dryRunSince = Date.now(); // v1.37.34 记录 dry-run 开始
-        // v1.37.56：只在 ST 确实空闲时清"生成中"标记。
-        // 依据：ST 真实生成时 deactivateSendButtons 会置 body[data-generating=true]（script.js 7085-7088），
-        // 结束由 activateSendButtons 清掉（7075-7080）。原来无条件 isGenerating=false，
-        // 若查看器的 dry-run 插在真实生成刚开始之后，会把真实生成的"生成中"状态抹掉 →
-        // 流式截断检测（要求 isGenerating）整轮失效 → "该截断的没截断、也不重roll"。
-        if (typeof document !== 'undefined' && document.body && document.body.dataset.generating !== 'true') {
-            isGenerating = false; // dry-run 不是真实生成，且当前没有真实生成在跑 → 清残留
-        }
-        console.log('[余温工具箱] GENERATION_STARTED (dry-run，跳过状态管理)');
-        return;
-    }
+    if (dryRun) return;
+    isDryRun = false;
+    dryRunSince = 0;
     console.log('[余温工具箱] GENERATION_STARTED');
     genStartAt = Date.now();        // 记录本次生成开始时间（流式检测只认本次生成的消息）
+    cancelRerollTasks();
     genStartSeq++;                  // v1.37.56：真实生成序号 +1（自动 swipe 用它判断"是否已有新生成在跑"）
+    captureGenerationOutput(type);
+    abortCheckAt.clear();
     pendingSwipeConfirm = -1;    // 已进入真实生成 → 自动 swipe 确认成功（watchdog 不再兜底）
 try { rerollGuard.confirmBranch(); } catch (e) { } // v1.37.54 真实生成开始 = 已进入新分支
  rerollRetryLeft = REROLL_RETRY_BUDGET; rerollRetryTarget = -1;   // 新的一代开始 → 补试预算重置
@@ -9634,6 +9727,7 @@ eventSource.on(event_types.GENERATION_AFTER_COMMANDS, () => {
 // "只有思维链、正文零 token"的分支被当成"非空回"→ 空回重roll永不触发（用户现象：新分支空回却不重roll）。
 eventSource.on(event_types.STREAM_TOKEN_RECEIVED, (text) => {
     if (text) streamGotToken = true;
+    if (generationOutput && generationOutput.seq === genStartSeq && generationOutput.chat === rerollScope().chat) generationOutput.token = true;
 });
 eventSource.on(event_types.STREAM_TOKEN_RECEIVED, checkAutoStop);
 
@@ -9653,7 +9747,7 @@ setInterval(() => {
    ⇒ 继续把分支切过去，直到连续上限（手动停止/暂停时一律不动）。 */
 setInterval(() => {
     try {
-        if (!settings.enabled || settings.rerollPaused) return;
+        if (!lastRerollAttempt || !rerollExecutionAllowed(lastRerollAttempt)) return;
         if (isGenerating || autoSwipeBusy) return;
         if (!rerollFiredThisGen) return;
         if (pendingSwipeConfirm !== -1 || rerollRetryTarget >= 0) return;
@@ -9668,7 +9762,6 @@ setInterval(() => {
         if (rid < 0) return;
         if (!isEmptyMes(String(chatS[rid].mes ?? ''))) return;
         lastStuckRecoverAt = Date.now();
-        autoRerollCount++;
         lastAutoRerollTime = Date.now();
         rerollFiredThisGen = true;
         console.log(`[余温工具箱] 卡死看门狗：空楼层 + 没有生成在跑 → 再切一次（连续 ${autoRerollCount}/${settings.autoRerollLimit}）`);
@@ -9679,7 +9772,8 @@ setInterval(() => {
     } catch (e) { }
 }, 2000);
 
-eventSource.on(event_types.GENERATION_STARTED, () => {
+eventSource.on(event_types.GENERATION_STARTED, (type, opts, dryRun) => {
+    if (dryRun) return;
     /* ★W333：生成期间把状态卡藏起来（作者要求：跟其它美化一样，生成完再显示新内容，流式期间不挂着） */
     try { if (document && document.body) document.body.classList.add('yw-nsfw-generating'); } catch (e) { }
     try { nsfwMarkGeneratingFloor(true); } catch (e) { }   /* ★W407 */
@@ -9702,7 +9796,7 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
         try { nsfwMarkGeneratingFloor(false); } catch (e) { }
         if (settings.nsfwEnabled) { const lidE = nsfwLastAssistantId(); if (lidE >= 0) [150, 500, 1100].forEach((ms) => setTimeout(() => { try { nsfwReattachAll([lidE]); } catch (e) { } }, ms)); nsfwCompleteLatestSoon(700); }   /* ★W438 */
     } catch (e) { }
-    lastGenManuallyStopped = false; // 一轮生成彻底结束，清手动停止标记
+    // 手停原因保留到下一次真实 STARTED，兼容 STOPPED/ENDED 的两种顺序。
     // v1.37.56：dry-run 不会发 GENERATION_ENDED（dry-run 在 Generate 里提前 return，从不显示停止按钮，
     //   hideStopButton 的"按钮可见才 emit"条件不成立）→ 收到的 ENDED 一定是真实生成的收尾，必须照常处理。
     //   原实现直接 return，一旦 dry-run 标记残留就会把真实 ENDED 吞掉 → 截断兜底重roll/空回重roll 全部失效。
@@ -9720,7 +9814,6 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
             // ★W66：同消费点① —— 按"是哪条路径开的枪"复查（取消勾选强制生效）
             if (rerollReasonSwitchOn(earlyRerollReason) && autoRerollCount < settings.autoRerollLimit && !rerollFiredThisGen) {
                 rerollFiredThisGen = true;
-                autoRerollCount++;
                 console.log(`[余温工具箱] 流式截断后自动重roll（GENERATION_ENDED 兜底，连续${autoRerollCount}/${settings.autoRerollLimit}），消息#${targetId}`);
                 notifyReroll(`🔄 流式截断重roll 连续 ${autoRerollCount}/${settings.autoRerollLimit}${rerollReasonSuffix(earlyRerollDetail || '流式命中')}`);
                 updateRerollStatus();
@@ -9737,7 +9830,7 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
     console.log('[余温工具箱] ENDED 守卫: enabled/rerollOnEmpty 挡住');
     if (!settings.enabled) return;   /* ★W428：接口失败重试不依赖「空回」这一勾，下面真正空回再判 */
     console.log('[余温工具箱] ENDED 守卫: 手动停止，跳过');
-    if (manualStopClicked) return; // 用户手动停止：不当作空回
+    if (manualStopClicked || lastGenManuallyStopped) return; // 本代手停在重复收尾中仍有效
     console.log('[余温工具箱] ENDED 守卫: 已收到token，非空回');
     if (streamGotToken) {
         /* ★W398：先定位这次生成的那条楼 */
@@ -9762,7 +9855,7 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
             const mE = cE?.chat?.[rid];
             emptyNow = !!(mE && !mE.is_user && !mE.is_system && isEmptyMes(String(mE.mes ?? '')));
         } catch (e) { }
-        if (rid >= 0 && emptyNow && settings.enabled && settings.rerollOnEmpty && !autoStopTriggered && !emptyRerollHandled && !rerollFiredThisGen && !settings.rerollPaused) {
+        if (rid >= 0 && emptyNow && settings.enabled && settings.rerollOnEmpty && !settings.rerollLockOn && !autoStopTriggered && !emptyRerollHandled && !rerollFiredThisGen && !settings.rerollPaused) {
             console.log('[余温工具箱] ENDED 收尾是空占位 → 按空回兜底重roll（消息#' + rid + '）');
             emptyRerollHandled = true;
             handleEmptyReroll(rid, '空回：收尾兜底（生成结束仍为空）');
@@ -9830,14 +9923,10 @@ eventSource.on(event_types.GENERATION_ENDED, () => {
     generationStartBranchSig = null;
     generationStartLastMes = null;
     if (lastUnchanged) {
-        /* ★W428：API 报错/被拦截时酒馆不产生新消息 —— 以前和 dry-run 一起被跳过，看起来就是「重roll一次就停」。
-           dry-run 和手动停止不重试；其余按「接口失败」处理，直接重试（受连续上限约束）。 */
-        if (!wasDryRun && !manualStopClicked && settings.enabled && !settings.rerollPaused && autoRerollCount < settings.autoRerollLimit) {
-            console.log('[余温工具箱] 接口失败/无新消息（非 dry-run、非手动停止）→ 自动重试');
-            try { handleFailureReroll(); } catch (eF) { }
-        } else {
-            console.log('[余温工具箱] 空回但最后一条消息未变化（dry-run/手动停止/已停）→ 跳过');
-        }
+        /* ★W428b：429 的 ENDED 来自宿主 onError，早于原生 swipe 回滚/重新生成删楼收尾（实测回滚约 2.9s）。
+           此刻捕获的任务 300ms 后已过期（或 triggerAutoSwipe 因 swState 非 none 静默放弃）⇒ 抢跑会把重试吞掉。
+           这里只记录事实；失败裁决统一交给 800ms 失败看门狗（等宿主收尾后再取快照，动作仍只走 handleFailureReroll）。 */
+        console.log(`[余温工具箱] 本轮没有产生新消息（dry-run=${wasDryRun}, 手停=${manualStopClicked}）→ 800ms 失败看门狗复核`);
         return;
     }
 
@@ -9853,11 +9942,12 @@ eventSource.on(event_types.GENERATION_STOPPED, () => {
     dryRunSince = 0;
     streamGotToken = true;
     isGenerating = false;
+    if (!__genStartedDryRun) __genStopSeq = genStartSeq; // ★W428b：只作废同一真实代；dry-run 不占 seq，不得吞前一个真实失败
     startReasoningTimer(1500); // 空闲低频保活
     if (manualStopClicked) {
         console.log('[余温工具箱] manual stop');
         lastGenManuallyStopped = true; // 手动停的半截楼不做“无标记重roll”
-        manualStopClicked = false;
+        cancelRerollTasks();
     }
 });
 
@@ -9869,6 +9959,8 @@ document.addEventListener('click', (e) => {
     if (e.isTrusted !== true) return; // 程序化 click（ST abort 竞态触发）不算用户手动停止
     if (e.target && e.target.closest && e.target.closest('#mes_stop')) {
         manualStopClicked = true;
+        lastGenManuallyStopped = true;
+        cancelRerollTasks();
     }
 }, true);
 
@@ -9901,6 +9993,7 @@ document.addEventListener('click', (e) => {
     if (t && t.closest && t.closest('.swipe_right, .swipe_left, .swipe_right_stealth, .swipe_left_stealth')) {
         const isRight = !!t.closest('.swipe_right, .swipe_right_stealth');
         const opensNew = clickOpensNewBranch(isRight ? 'right' : 'left', t);
+        cancelRerollTasks();
         autoSwipeBusy = false;   // 手动操作 = 用户接管，释放自动swipe锁
         if (!opensNew) return;   // 只是查看旧分支：不动暂停状态、不重置计数、不收横幅
         settings.rerollPaused = false;
@@ -9919,6 +10012,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('click', (e) => {
     const t = e.target;
     if (t && t.closest && t.closest('#option_regenerate')) {
+        cancelRerollTasks();
         settings.rerollPaused = false;
         autoSwipeBusy = false; // v1.37.34 手动重新生成 = 用户接管，释放自动swipe锁
         clearRerollBanner(); // 重新生成 = 新一轮开始 → 收起横幅
@@ -9927,6 +10021,10 @@ document.addEventListener('click', (e) => {
 }, true);
 
 eventSource.on(event_types.CHAT_CHANGED, () => {
+    cancelRerollTasks();
+    generationOutput = null;
+    genStartSeq++;
+    lastGenManuallyStopped = false;
     try { if (settings.nsfwEnabled) { nsfwMountSender(); nsfwStartObserver(); } } catch (e) { }   /* ★W325：换聊天刷新悬浮发送面板 */
     try { if (typeof window.__ywNsfwRenderRoster === 'function') window.__ywNsfwRenderRoster(); } catch (e) { }   /* ★W381：设置卡里的名册也跟着换 */
     isDryRun = false;
@@ -10300,7 +10398,360 @@ try { window.__kimiInkFix = {
     ready: () => _kinkReady(document.getElementById('kimi_reasoning_injector_settings') || document.body),
     state: () => { const out = []; document.querySelectorAll(KIMI_INK_FIX_SEL).forEach(el => { const st = _kinkState.get(el); out.push({ t: String(el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 14), style: el.style.color, orig: st ? st.orig : null, fixed: !!(st && st.fixed), color: getComputedStyle(el).color }); }); return out; }
 }; } catch (e) { }
+// Panel-owned resources never outlive the exact root that created them.
+let kimiSettingsPanelScope = null;
+let kimiPanelNamesBound = false;
+function kimiRefreshPanelNames() {
+    if (!kimiSettingsPanelScope?.alive()) return;
+    try { if (settings.randMasterEnabled && settings.randNameEnabled) refreshRandNameLabel(); } catch (e) { }
+    try { if (settings.randMasterEnabled && settings.randUserEnabled) refreshRandNameLabel('user'); } catch (e) { }
+}
+function kimiSyncCaptureObserver() {
+    try {
+        if (settings.nsfwEnabled && settings.nsfwCaptureHide !== false) nsfwStartObserver();
+        else nsfwStopObserver();
+    } catch (e) { }
+}
+function kimiDisposeSettingsPanel() {
+    if (kimiSettingsPanelScope) kimiSettingsPanelScope.dispose();
+    kimiSettingsPanelScope = null;
+    try { nsfwStopObserver(); } catch (e) { }
+}
+function kimiBeginSettingsPanel(panel) {
+    kimiDisposeSettingsPanel();
+    let disposed = false;
+    const timers = new Set(), cleanups = [];
+    const scope = {
+        panel,
+        alive: () => !disposed && kimiSettingsPanelScope === scope && panel.isConnected,
+        later(fn, ms) {
+            if (!scope.alive()) return null;
+            const id = setTimeout(() => { timers.delete(id); if (scope.alive()) fn(); }, ms);
+            timers.add(id);
+            return id;
+        },
+        cancel(id) { clearTimeout(id); timers.delete(id); },
+        own(cleanup) { cleanups.push(cleanup); },
+        delegate(events, selector, fn) {
+            const guarded = function (...args) { if (scope.alive()) return fn.apply(this, args); };
+            $(document).on(events, selector, guarded);
+            scope.own(() => $(document).off(events, selector, guarded));
+        },
+        dispose() {
+            if (disposed) return;
+            // Flush local input drafts before the root is removed; never leave delayed writes behind.
+            cleanups.splice(0).forEach(fn => { try { fn(); } catch (e) { } });
+            disposed = true;
+            timers.forEach(id => clearTimeout(id)); timers.clear();
+        },
+    };
+    kimiSettingsPanelScope = scope;
+    if (!kimiPanelNamesBound) {
+        eventSource.on(event_types.GENERATION_ENDED, kimiRefreshPanelNames);
+        kimiPanelNamesBound = true;
+    }
+    return scope;
+}
+function kimiBindSettingsCardMemory(scope) {
+    if (!scope.alive()) return;
+    const panel = scope.panel;
+    panel.querySelectorAll('details.kimi-card').forEach(card => {
+        // Independent cards have stable slots even though their modules do not set data-card.
+        if (!card.dataset.card) {
+            if (card.closest('#' + extensionName + '_tag_slot')) card.dataset.card = 'tag';
+            else if (card.closest('#' + extensionName + '_api_slot')) card.dataset.card = 'api';
+        }
+        const identity = card.dataset.card;
+        if (!identity || card.dataset.kimiMemBound) return;
+        card.dataset.kimiMemBound = '1';
+        const key = 'kimi_card_open_key_' + identity;
+        try {
+            let saved = localStorage.getItem(key);
+            // Legacy indices were captured synchronously, before either imported card existed.
+            const legacyIndex = ['base', 'inject', 'reroll', 'psnap', 'word', 'tag', 'api', 'nsfw', 'fix'].indexOf(identity);
+            if (saved === null && legacyIndex >= 0) {
+                saved = localStorage.getItem('kimi_card_open_' + legacyIndex);
+                if (saved !== null) localStorage.setItem(key, saved);
+            }
+            if (saved === '1') card.open = true;
+        } catch (e) { }
+        const toggle = () => {
+            if (!scope.alive()) return;
+            try {
+                localStorage.setItem(key, card.open ? '1' : '0');
+                if (card.open) panel.querySelectorAll('details.kimi-card[open]').forEach(other => {
+                    if (other !== card) other.open = false;
+                });
+            } catch (e) { }
+        };
+        card.addEventListener('toggle', toggle);
+        scope.own(() => card.removeEventListener('toggle', toggle));
+    });
+}
+// Created only after host settings hydrate; panel cleanup never disposes this runtime.
+let kimiCustomModelManager = null;
+function customModelTargetUrl(raw) {
+    try {
+        const url = new URL(String(raw || ''));
+        return /^https?:$/.test(url.protocol) ? url.origin + url.pathname : '';
+    } catch (e) { return ''; }
+}
+function getKimiCustomModelManager() {
+    if (!kimiCustomModelManager) {
+        kimiCustomModelManager = createCustomModelManager({
+            getSettings: () => settings,
+            saveSettings: saveSettingsDebounced,
+            oaiSettings: oai_settings,
+            eventSource,
+            eventTypes: event_types,
+            getLanguage: () => settings.language,
+            getTarget: () => ({
+                preset: String(oai_settings.preset_settings_openai || ''),
+                profile: String(extension_settings.connectionManager?.selectedProfile || ''),
+                proxy: customModelTargetUrl(oai_settings.reverse_proxy),
+                customUrl: customModelTargetUrl(oai_settings.custom_url),
+            }),
+        });
+    }
+    return kimiCustomModelManager;
+}
+function bindCustomModelsPanel(panelScope) {
+    const fold = panelScope.panel.querySelector('#' + extensionName + '_models_fold');
+    const slot = panelScope.panel.querySelector('#' + extensionName + '_models_slot');
+    if (!fold || !slot) return;
+    let cleanup = null;
+    const unmount = () => { const fn = cleanup; cleanup = null; if (fn) fn(); };
+    const paint = () => {
+        if (!panelScope.alive()) return;
+        const caret = fold.querySelector('.kimi-fold-caret');
+        caret?.classList.toggle('fa-caret-right', !fold.open);
+        caret?.classList.toggle('fa-caret-down', !!fold.open);
+        if (fold.open) {
+            if (!cleanup) cleanup = getKimiCustomModelManager().mount(slot);
+        } else unmount();
+    };
+    const toggle = () => {
+        if (!panelScope.alive()) return;
+        settings.uiFolds.models = fold.open ? 'open' : 'closed';
+        saveSettingsDebounced();
+        paint();
+    };
+    fold.addEventListener('toggle', toggle);
+    panelScope.own(() => { fold.removeEventListener('toggle', toggle); unmount(); });
+    paint();
+}
+// Unified console adapters reuse each original card node and the host's effective settings.
+let ywUnifiedConsole = null;
+let ywPresetSaveFunction = null;
+let ywPresetSaving = false;
+function ywConsoleContext() { return window.SillyTavern?.getContext?.(); }
+function ywConsoleChanged() {
+    if (!ywUnifiedConsole) return;
+    ywUnifiedConsole.presets.refresh();
+    ywUnifiedConsole.actor.refresh();
+    ywUnifiedConsole.center.refresh();
+}
+async function ywConsoleSaveCurrentPreset({ name } = {}) {
+    if (!name || name !== getCurrentPresetName()) throw new Error('预设已经切换，已取消保存。');
+    if (ywPresetSaving) throw new Error('上一份预设正在保存，请稍后再试。');
+    const ctx = ywConsoleContext(), pm = ctx?.getPresetManager?.('openai');
+    if (!pm || !Array.isArray(oai_settings.prompts) || !Array.isArray(oai_settings.prompt_order)) throw new Error('当前预设内容暂不可用。');
+    const list = pm.getPresetList('openai'), index = pm.findPreset(name);
+    const raw = list?.presets?.[index];
+    if (!raw || typeof raw !== 'object') throw new Error('无法核对当前预设，未写入。');
+    const payload = { ...structuredClone(raw), ...structuredClone(getChatCompletionPreset(oai_settings)) };
+    const orderIdentity = oai_settings.prompt_order;
+    ywPresetSaving = true;
+    try {
+        if (name !== getCurrentPresetName() || orderIdentity !== oai_settings.prompt_order) throw new Error('预设已经切换，已取消保存。');
+        // The host projects and updates its original preset ledger. skipUpdate avoids reapplying it over live input.
+        await pm.savePreset(name, payload, { skipUpdate: true });
+        const current = pm.getPresetList('openai'), afterIndex = pm.findPreset(name);
+        if (afterIndex === undefined || afterIndex === null || !current?.presets?.[afterIndex]) return { ok: true, name, unverified: true };
+        current.presets[afterIndex] = structuredClone(payload);
+        saveSettingsDebounced();
+        const switched = name !== getCurrentPresetName() || orderIdentity !== oai_settings.prompt_order;
+        return { ok: true, name, switched };
+    } finally { ywPresetSaving = false; }
+}
+function ywMountOriginalCard(key, container) {
+    closeCardFloat();
+    const panel = document.getElementById(extensionName + '_settings');
+    const card = panel?.querySelector('details.kimi-card[data-card="' + key + '"]')
+        || (key === 'tag' ? panel?.querySelector('#tag_auto_fixer_tree')?.closest('details.kimi-card') : null)
+        || (key === 'api' ? panel?.querySelector('#kimi_api_enabled')?.closest('details.kimi-card') : null);
+    if (!card) {
+        const notice = document.createElement('p');
+        notice.textContent = '这个模块还没有加载好，其他功能可以继续使用。';
+        container.appendChild(notice);
+        return () => notice.remove();
+    }
+    const marker = document.createElement('button');
+    marker.type = 'button';
+    marker.className = 'kimi-btn yw-card-entry';
+    const def = KIMI_CARD_DEFS.find(item => item.key === key);
+    marker.textContent = def ? t(def.titleKey) : '打开功能';
+    marker.setAttribute('data-yw-card-origin', key);
+    marker.setAttribute('aria-label', '在总控台打开' + marker.textContent);
+    marker.addEventListener('click', () => ywUnifiedConsole?.center.open('modules', 'card:' + key));
+    card.parentNode.insertBefore(marker, card);
+    const wasOpen = card.open, summary = card.querySelector(':scope > summary');
+    const summaryDisplay = summary?.style.display;
+    card.open = true;
+    if (summary) summary.style.display = 'none';
+    card.classList.add('ywcc-original-card');
+    container.appendChild(card);
+    return () => {
+        card.classList.remove('ywcc-original-card');
+        if (summary) summary.style.display = summaryDisplay || '';
+        card.open = wasOpen;
+        if (marker.parentNode) marker.parentNode.replaceChild(card, marker);
+        else if (panel?.isConnected) panel.querySelector('.inline-drawer-content')?.appendChild(card);
+    };
+}
+function ywConsoleModules() {
+    const labels = { base: '工具箱基础设置', inject: '注入与模型', reroll: '妙妙与自动重roll', psnap: '预设方案与连接', word: '词汇与文本替换', tag: '标签修复', api: 'API 池与额度轮换', nsfw: 'NSFW 状态面板', fix: '其他工具与诊断', presetupd: '预设更新与合并', presetstore: '条目商店与社区' };
+    const groups = { base: '全局与便捷', inject: '请求与连接', reroll: '请求与连接', psnap: '请求与连接', word: '聊天与生成', tag: '聊天与生成', api: '不常用', nsfw: '聊天与生成', fix: '不常用', presetupd: '预设更新', presetstore: '预设更新' };
+    const panel = document.getElementById(extensionName + '_settings');
+    const keys = new Set(['base', ...KIMI_CARD_DEFS.map(def => def.key)].filter(key =>
+        key !== 'presetstore' && key !== 'presetupd' || !!panel?.querySelector('[data-card="' + key + '"]')
+        || !!document.querySelector('#ywcc-root [data-card="' + key + '"]')));
+    for (const card of panel?.querySelectorAll('details.kimi-card[data-card]') || []) keys.add(card.dataset.card);
+    const emojis = { base: '⚙️', inject: '🧩', reroll: '🔄', psnap: '🎛️', word: '📝', tag: '🏷️', api: '🔌', nsfw: '📋', fix: '🛠️', presetupd: '🔀', presetstore: '🛍️' };
+    const orderedKeys = [...keys];
+    const rerollIndex = orderedKeys.indexOf('reroll');
+    if (rerollIndex >= 0) { orderedKeys.splice(rerollIndex, 1); orderedKeys.splice(orderedKeys.indexOf('inject') + 1, 0, 'reroll'); }
+    const modules = orderedKeys.map(key => ({
+        id: 'card:' + key, label: labels[key] || key, category: groups[key] || '其他模块', emoji: emojis[key] || '🧰', kind: 'module',
+        description: key === 'inject' ? '注入：破限、塞小说、随机头/身份、OC请求头、追加模型名' : key === 'fix' ? '原有低频选项与路由诊断' : '',
+        open: container => ywMountOriginalCard(key, container),
+    }));
+    const actionEmojis = { 'action:stop': '⏹️', 'action:tag-now': '🏷️', 'action:cline': '🔌', 'action:playfav': '⭐', 'action:playlatest': '🎭' };
+    const action = (id, label, run) => ({ id, label, category: '快捷动作', emoji: actionEmojis[id], kind: 'action', run });
+    modules.push(action('action:stop', '停止自动重Roll', () => window.__kimiStopReroll?.()));
+    modules.push(action('action:tag-now', '修复最新一楼标签', () => window.__stTagFixLast?.()));
+    modules.push(action('action:cline', 'Cline 提供商', () => openClineModal()));
+    modules.push(action('action:playfav', '小剧场收藏', () => openStorePlayFav()));
+    modules.push(action('action:playlatest', '最新小剧场', () => openStorePlayLatest()));
+    return modules;
+}
+function ywActiveHomeScheme() {
+    const scheme = schemeById(settings.activeSchemeId);
+    return scheme ? { id: scheme.id, name: scheme.name, icon: scheme.icon, iconData: scheme.iconData } : null;
+}
+function ywHomeSchemes() {
+    return getSchemes().filter(scheme => scheme && scheme.showHome === true).map(scheme => ({
+        id: scheme.id, name: scheme.name, icon: scheme.icon, iconData: scheme.iconData,
+        active: settings.activeSchemeId === scheme.id,
+        run: () => switchScheme(scheme),
+        configure: () => openSchemeEditor(scheme),
+        overwrite: () => {
+            overwriteScheme(scheme);
+            try { toastr.success(String(t('schemeOverwritten')).replace('{n}', scheme.name), '余温工具箱', { timeOut: 2500 }); } catch (e) { }
+            renderSchemeUI();
+        },
+    }));
+}
+function ywOfficialUpdateNotice() {
+    try { return storeApi?.getOfficialUpdateNotice?.() || { pending: false, ready: false }; }
+    catch (e) { return { pending: false, ready: false }; }
+}
+function ywOpenOfficialStore() {
+    const body = document.getElementById('kimi_presetstore_body');
+    if (!body || !storeApi?.openStorePage) {
+        notice('条目商店还在加载，请稍后再试。');
+        return false;
+    }
+    const center = ywUnifiedConsole?.center;
+    if (center?.isOpen()) center.open('modules', 'card:presetstore');
+    else if (isKimiSettingsVisible()) openCardInPanel('presetstore');
+    else openCardFloat('presetstore');
+    return storeApi.openStorePage('official') !== false;
+}
+function getYwUnifiedConsole() {
+    if (ywUnifiedConsole) return ywUnifiedConsole;
+    const subscribers = new Set();
+    const subscribeChanges = fn => { subscribers.add(fn); return () => subscribers.delete(fn); };
+    const presets = createPresetControls({
+        document, window, getContext: ywConsoleContext, getOaiSettings: () => oai_settings,
+        getSettings: () => settings, saveSettings: saveSettingsDebounced, saveSettingsNow: saveSettings,
+        readToggles: readPromptToggles, writeToggles: writePromptToggles,
+        readToolboxFlag: key => key === 'randHeadEnabled' && settings.randHeadEnabled === true,
+        writeToolboxFlag: ywWriteToolboxFlag,
+        saveCurrentPreset: ywConsoleSaveCurrentPreset, getCurrentPresetName, subscribeChanges,
+    });
+    let actor;
+    const center = createControlCenter({
+        document, window, getSettings: () => settings, saveSettings: saveSettingsDebounced, saveSettingsNow: saveSettings,
+        getModules: ywConsoleModules, getCurrentPreset: getCurrentPresetName, getHomeSchemes: ywHomeSchemes, getActiveScheme: ywActiveHomeScheme,
+        getStoreUpdateNotice: ywOfficialUpdateNotice, openOfficialStore: ywOpenOfficialStore,
+        mountPresetControls: (el, opts) => presets.mount(el, opts),
+        mountActorSettings: el => {
+            const actorMount = actor?.mountSettings(el);
+            const label = document.createElement('label'); label.className = 'ywcc-launcher-choice';
+            const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = settings.floatBarEnabled !== false;
+            const text = document.createElement('span'); text.textContent = '开启悬浮窗'; label.append(checkbox, text); el.appendChild(label);
+            const update = () => { settings.floatBarEnabled = checkbox.checked; saveSettingsDebounced(); updateComboFloat(); const original = document.getElementById(extensionName + '_float_bar'); if (original) original.checked = checkbox.checked; };
+            checkbox.addEventListener('change', update);
+            return () => { checkbox.removeEventListener('change', update); label.remove(); if (typeof actorMount === 'function') actorMount(); else if (actorMount?.cleanup) actorMount.cleanup(); else actorMount?.destroy?.(); };
+        },
+        onOpenChange: (open, detail) => actor?.setPanelOpen(open, detail?.rect || center.getPanelRect?.()),
+    });
+    actor = createCompanion({ document, window, getSettings: () => settings, saveSettings: saveSettingsDebounced,
+        onActivate: () => { if (center.isOpen()) center.close(); else center.open('home'); }, onStateChange: () => {
+            const input = document.getElementById(extensionName + '_companion_enabled');
+            if (input) input.checked = settings.companion.enabled !== false;
+        }, assetBase: new URL('./assets/', import.meta.url).href });
+    ywUnifiedConsole = { center, presets, actor, subscribers };
+    window.__YW_CONSOLE__ = {
+        open: (page, moduleId) => center.open(page, moduleId), close: () => center.close(), refresh: ywConsoleChanged,
+        modules: () => ywConsoleModules().map(({ id, label, category }) => ({ id, label, category })),
+        status: () => ({ open: center.isOpen(), preset: presets.getSnapshot(), actor: actor.status() }),
+    };
+    const events = [event_types.OAI_PRESET_CHANGED_AFTER, event_types.PRESET_CHANGED, event_types.CHAT_CHANGED, event_types.SETTINGS_UPDATED].filter(Boolean);
+    for (const event of new Set(events)) eventSource.on(event, () => { ywSyncLinkedControls(); subscribers.forEach(fn => fn()); ywConsoleChanged(); });
+    document.addEventListener('click', event => { if (event.target?.closest?.('#completion_prompt_manager .prompt-manager-toggle-action')) queueMicrotask(() => { ywSyncLinkedControls(); subscribers.forEach(fn => fn()); ywConsoleChanged(); }); });
+    window.addEventListener('yw-store-official-update', ywConsoleChanged);
+    ywSyncLinkedControls();
+    actor.start();
+    return ywUnifiedConsole;
+}
+function bindYwUnifiedConsole(panelScope) {
+    const runtime = getYwUnifiedConsole();
+    const slot = panelScope.panel.querySelector('#yw-unified-console-settings');
+    if (!slot) return;
+    const cleanup = runtime.center.mountSettings(slot);
+    const cardList = slot.querySelector('[data-ywcc-settings-content]');
+    const versionSlot = slot.querySelector('[data-ywcc-version-slot]');
+    if (cardList) {
+        const version = panelScope.panel.querySelector('.kimi-ver-card');
+        if (version && versionSlot) versionSlot.appendChild(version);
+        for (const card of panelScope.panel.querySelectorAll('details.kimi-card')) {
+            if (!slot.contains(card)) cardList.appendChild(card);
+        }
+    }
+    panelScope.own(() => {
+        if (slot.parentNode) {
+            if (versionSlot) for (const node of [...versionSlot.childNodes]) slot.parentNode.insertBefore(node, slot);
+            if (cardList) for (const node of [...cardList.childNodes]) slot.parentNode.insertBefore(node, slot);
+        }
+        if (typeof cleanup === 'function') cleanup();
+    });
+    if (!document.getElementById('ywcc-legacy-theme')) {
+        const style = document.createElement('style'); style.id = 'ywcc-legacy-theme';
+        style.textContent = KIMI_SETTINGS_CSS.replaceAll('#kimi_reasoning_injector_settings', '#ywcc-root');
+        document.head.appendChild(style);
+    }
+    runtime.presets.refresh(); runtime.actor.refresh(); runtime.center.refresh();
+}
+
 function initSettingsPanel() {
+    getKimiCustomModelManager();
+    // Return any card moved into the floating window before disposing/removing its original panel.
+    closeCardFloat();
+    if (ywUnifiedConsole) ywUnifiedConsole.center.close();
+    kimiDisposeSettingsPanel();
+    $('#' + extensionName + '_settings').remove();
     ensureClinePriority(); // 合并新增内置提供商进用户优先序列（如 sail-research），下拉/弹窗/注入都能用到
     const nameValueHtml = String(settings.nameValue ?? (LANG_NAME_DEFAULT[settings.language] || '余小温')).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const fixMarkerHtml = String(settings.fixMarker ?? 'content').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -10321,6 +10772,7 @@ function initSettingsPanel() {
                         <span id="${extensionName}_upd_slot"></span>
                         <button id="${extensionName}_chk_upd" type="button" class="kimi-chk-btn">检查更新</button>
                     </div>
+                    <div id="yw-unified-console-settings"></div>
                     <!-- ═══ 基础设置（总开关 + 语言）═══ -->
 <details class="kimi-card" data-card="base">
 <summary><i class="fa-solid fa-gear kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('baseTitle')}</summary>
@@ -10386,6 +10838,10 @@ ${t('showTpsLabel')}
     <label class="kimi-entry-master">
         <input type="checkbox" id="${extensionName}_float_bar" ${settings.floatBarEnabled ? 'checked' : ''}/>
         <span>${t('floatBarEnable')}</span>
+    </label>
+    <label class="kimi-entry-master">
+        <input type="checkbox" id="${extensionName}_companion_enabled" ${settings.companion.enabled ? 'checked' : ''}/>
+        <span>开启悬浮小人</span>
     </label>
     <label class="kimi-entry-row" style="opacity:.85">
         <input type="checkbox" id="${extensionName}_float_route_badge" ${settings.floatRouteBadge ? 'checked' : ''}/>
@@ -10517,110 +10973,6 @@ ${t('showTpsLabel')}
 <summary><i class="fa-solid fa-bolt kimi-card-ico" aria-hidden="true"></i>${kimiCardTitleHtml('injectTitle')}</summary>
 <div class="kimi-card-body">
 
-<div class="kimi-section-label">${t('targetLabel')}</div>
-<div id="${extensionName}_target_radios" style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center">
-<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="kimi" ${settings.injectTarget === 'kimi' ? 'checked' : ''}/>KIMI</label>
-<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="ds" ${settings.injectTarget === 'ds' ? 'checked' : ''}/>DS</label>
-${(settings.customPresets || []).map(p => {
-    const checked = settings.injectTarget === 'custom:' + p.id ? 'checked' : '';
-    return `<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="${extensionName}_inject_target" value="custom:${p.id}" ${checked}/>${String(p.name || t('customName')).replace(/</g,'&lt;')} <span class="kimi-custom-del" data-id="${p.id}" title="${t('customDel')}">✕</span></label>`;
-}).join('')}
-<button id="${extensionName}_add_custom" type="button" class="kimi-btn" style="flex:none;margin-left:auto">${t('customAdd')}</button>
-</div>
-<div id="${extensionName}_custom_name_row" style="margin-top:5px;display:none;align-items:center;gap:6px">
-<label class="kimi-label" for="${extensionName}_custom_name" style="margin:0;white-space:nowrap">${t('customNameLabel')}</label>
-<input id="${extensionName}_custom_name" type="text" class="text_pole" style="flex:1;min-width:0" placeholder="${t('customNamePh')}"/>
-</div>
-
-<div class="kimi-sep"></div>
-
-<div class="kimi-section-label">${t('injectLabel')}</div>
-<label class="checkbox_label">
-<input id="${extensionName}_inject_rc" type="checkbox" ${settings.injectModes.includes('reasoning_content')?'checked':''}/>
-${t('injectStep1')}
-</label>
-<p id="${extensionName}_inject_gemini_note" class="kimi-hint" style="display:none;margin:0 0 4px 24px;opacity:.85;line-height:1.35"></p>
-<label class="checkbox_label">
-<input id="${extensionName}_inject_partial" type="checkbox" ${settings.injectModes.includes('partial')?'checked':''}/>
-${t('injectStep2')}
-</label>
-
-<details class="kimi-fold" id="${extensionName}_rc_fold"${foldIsOpen('rc', false) ? ' open' : ''} style="margin-top:8px">
-<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:5px;user-select:none">
-<i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true" style="flex:none"></i>
-<span class="kimi-label" style="margin:0">${t('rcLabel')}</span>
-</summary>
-<div style="margin-top:4px">
-<textarea id="${extensionName}_reasoning_value" class="text_pole" ${(typeof settings.injectTarget === 'string' && settings.injectTarget.startsWith('custom:')) ? '' : 'readonly'} style="width: 100%; box-sizing: border-box; height: 120px;">${settings.reasoningContent}</textarea>
-<!-- 注入卡提示句已按用户要求移除；i18n 词条 rcPresetHint 保留在代码里 -->
-<p id="${extensionName}_rc_locked_hint" class="kimi-hint" style="display:${(typeof settings.injectTarget === 'string' && settings.injectTarget.startsWith('custom:')) ? 'none' : ''}">${t('rcLockedHint')}</p>
-</div>
-</details>
-
-<div class="kimi-sep"></div>
-
-<!-- 使用方法（子折叠，默认收起） -->
-<details class="kimi-inner-card">
-<summary>${t('usageTitle')}</summary>
-<p class="kimi-hint">
-${t('usage1')}<br>
-${t('usage2')}<br>
-${t('usage3')}
-</p>
-</details>
-
-<div class="kimi-sep"></div>
-<div class="kimi-inner-card" style="border-left:3px solid var(--golden-color,#e0a800);margin-bottom:10px">
-<label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
-<input type="checkbox" id="${extensionName}_opencode_headers" ${settings.opencodeHeadersEnabled ? 'checked' : ''}/>
-<span style="font-size:.9em;font-weight:600;color:#e57373">${t('opencodeLabel')}</span>
-</label>
-<p class="kimi-hint" style="color:#e57373;opacity:.9">${t('opencodeHint')}</p>
-<div id="${extensionName}_opencode_sid" style="font-size:.8em;opacity:.75;margin-top:2px"></div>
-</div>
-<div class="kimi-inner-card" style="padding:8px 9px">
-<div class="kimi-label" style="font-weight:700;font-size:1.12em;color:var(--golden-color,#e0a800);margin:0 0 2px">${ocr('title')}</div>
-<p class="kimi-hint" style="margin:0 0 4px;font-size:.8em;line-height:1.35">${ocr('geminiNote')}</p>
-<div class="kimi-sep"></div>
-<details class="kimi-oc-tt" style="margin:0 0 3px">
-<summary style="cursor:pointer;font-size:.88em;font-weight:600;line-height:1.35;list-style:none">${ocr('ttLabel')}<span style="color:var(--golden-color,#e0a800);text-decoration:underline">${ocr('ttGuideSummary')}</span></summary>
-<div class="kimi-hint" style="margin:4px 0 0;line-height:1.55">${ocr('ttGuideBody')}</div>
-</details>
-<details class="kimi-oc-tt" style="margin:0 0 3px">
-<summary style="cursor:pointer;font-size:.88em;font-weight:600;line-height:1.35;list-style:none">${ocr('stLabel')}<span style="color:var(--golden-color,#e0a800);text-decoration:underline">${ocr('stGuideSummary')}</span></summary>
-<div class="kimi-hint" style="margin:4px 0 0;line-height:1.5">
-<div style="font-weight:600;margin:2px 0">${ocr('stGuideLocal')}</div>
-<label class="kimi-label" style="font-size:.82em;opacity:.85;margin:2px 0 0">${ocr('cmdWinLabel')}</label>
-<div id="${extensionName}_oc_relay_local_win" title="${ocr('copyTip')}" style="${OC_CMD_STYLE}">${OC_RELAY_LOCAL_WIN}</div>
-<label class="kimi-label" style="font-size:.82em;opacity:.85;margin:2px 0 0">${ocr('cmdShLabel')}</label>
-<div id="${extensionName}_oc_relay_local_sh" title="${ocr('copyTip')}" style="${OC_CMD_STYLE}">${OC_RELAY_LOCAL_SH}</div>
-<div style="font-weight:600;margin:6px 0 2px">${ocr('stGuideCloud')}</div>
-<label class="kimi-label" style="font-size:.82em;opacity:.85;margin:2px 0 0">${ocr('cmdWinLabel')}</label>
-<div id="${extensionName}_oc_relay_cmd" title="${ocr('copyTip')}" style="${OC_CMD_STYLE}">${OC_RELAY_CMD}</div>
-<label class="kimi-label" style="font-size:.82em;opacity:.85;margin:2px 0 0">${ocr('cmdShLabel')}</label>
-<div id="${extensionName}_oc_relay_cmd_sh" title="${ocr('copyTip')}" style="${OC_CMD_STYLE}">${OC_RELAY_CMD_SH}</div>
-<div style="margin-top:4px;opacity:.85">${ocr('stGuideNote')}</div>
-</div>
-</details>
-<div class="kimi-label" style="font-size:.8em;font-weight:700;margin:0 0 2px">${ocr('ocSectionTitle')}</div>
-<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-<label class="kimi-label" for="${extensionName}_oc_relay_cfg" style="margin:0;flex:none;white-space:nowrap">${ocr('cfgLabel')}</label>
-<input type="text" id="${extensionName}_oc_relay_cfg" class="text_pole" style="flex:1;min-width:0" placeholder="${ocr('cfgPh')}"/>
-</div>
-<div style="display:flex;align-items:center;gap:6px;margin-top:5px">
-<label class="kimi-label" for="${extensionName}_oc_relay_key" style="margin:0;flex:none;white-space:nowrap">${ocr('keyLabel')}</label>
-<input type="password" id="${extensionName}_oc_relay_key" class="text_pole" style="flex:1;min-width:0" placeholder="${ocr('keyPh')}"/>
-</div>
-<div style="display:flex;align-items:center;gap:8px;margin-top:7px">
-<button type="button" id="${extensionName}_oc_relay_apply" class="menu_button" style="flex:none;white-space:nowrap">${ocr('apply')}</button>
-<span id="${extensionName}_oc_relay_status" class="kimi-hint" style="margin:0"></span>
-</div>
-<!-- ★★W228（用户反馈"配置串和 Key 填了删不掉"）：这两格以前既没有自己的保存、也会去读酒馆当前值
-     ⇒ 删掉框里的字，下次打开又被填回来（看着像"删不掉"）。现在只显示插件自己记的那份 + 失焦即写回。
-     这句小字说清"这两格 ≠ 实际生效的中转"，免得用户以为清空就等于把中转关了。 -->
-<div class="kimi-hint" style="margin-top:4px;opacity:.8">${ocr('cfgScopeNote')}</div>
-</div>
-<div class="kimi-sep"></div>
 <!-- ★W174-A（作者："只要勾选就必须展开有点蠢 这样吧 任何时候展开关闭都是可选的"）：
      勾选框只管开关功能；展开/收起独立（点行头切换，勾选框绝不带动展开）；
      默认展开态 = 该功能开着就展开/关着就收起（渲染时定一次，不持久化）；行尾一颗会转的三角。
@@ -10721,6 +11073,121 @@ ${poolEditorHtml('user', 'rand_user')}
 </div>
 </div>
 </div>
+<div class="kimi-sep"></div>
+<div class="kimi-inner-card" style="border-left:3px solid var(--golden-color,#e0a800);margin-bottom:10px">
+<label class="checkbox_label" style="display:flex;align-items:center;gap:6px">
+<input type="checkbox" id="${extensionName}_opencode_headers" ${settings.opencodeHeadersEnabled ? 'checked' : ''}/>
+<span style="font-size:.9em;font-weight:600;color:#e57373">${t('opencodeLabel')}</span>
+</label>
+<details class="kimi-fold" style="margin:2px 0 0"><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:5px;color:#e57373;opacity:.9;font-size:.85em;user-select:none"><i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true" style="flex:none"></i><span>${t('opencodeHintSummary')}</span></summary><p class="kimi-hint" style="color:#e57373;opacity:.9;margin:4px 0 0">${t('opencodeHint')}</p></details>
+<div id="${extensionName}_opencode_sid" style="font-size:.8em;opacity:.75;margin-top:2px"></div>
+</div>
+<details class="kimi-inner-card kimi-fold" id="${extensionName}_oc_fold"${foldIsOpen('oc', false) ? ' open' : ''} style="padding:8px 9px">
+<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;user-select:none"><i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true" style="flex:none"></i><span class="kimi-label" style="font-weight:700;font-size:1.12em;color:var(--golden-color,#e0a800);margin:0">${ocr('title')}</span></summary>
+<p class="kimi-hint" style="margin:0 0 4px;font-size:.8em;line-height:1.35">${ocr('geminiNote')}</p>
+<div class="kimi-sep"></div>
+<details class="kimi-oc-tt" style="margin:0 0 3px">
+<summary style="cursor:pointer;font-size:.88em;font-weight:600;line-height:1.35;list-style:none">${ocr('ttLabel')}<span style="color:var(--golden-color,#e0a800);text-decoration:underline">${ocr('ttGuideSummary')}</span></summary>
+<div class="kimi-hint" style="margin:4px 0 0;line-height:1.55">${ocr('ttGuideBody')}</div>
+</details>
+<details class="kimi-oc-tt" style="margin:0 0 3px">
+<summary style="cursor:pointer;font-size:.88em;font-weight:600;line-height:1.35;list-style:none">${ocr('stLabel')}<span style="color:var(--golden-color,#e0a800);text-decoration:underline">${ocr('stGuideSummary')}</span></summary>
+<div class="kimi-hint" style="margin:4px 0 0;line-height:1.5">
+<div style="font-weight:600;margin:2px 0">${ocr('stGuideLocal')}</div>
+<label class="kimi-label" style="font-size:.82em;opacity:.85;margin:2px 0 0">${ocr('cmdWinLabel')}</label>
+<div id="${extensionName}_oc_relay_local_win" title="${ocr('copyTip')}" style="${OC_CMD_STYLE}">${OC_RELAY_LOCAL_WIN}</div>
+<label class="kimi-label" style="font-size:.82em;opacity:.85;margin:2px 0 0">${ocr('cmdShLabel')}</label>
+<div id="${extensionName}_oc_relay_local_sh" title="${ocr('copyTip')}" style="${OC_CMD_STYLE}">${OC_RELAY_LOCAL_SH}</div>
+<div style="font-weight:600;margin:6px 0 2px">${ocr('stGuideCloud')}</div>
+<label class="kimi-label" style="font-size:.82em;opacity:.85;margin:2px 0 0">${ocr('cmdWinLabel')}</label>
+<div id="${extensionName}_oc_relay_cmd" title="${ocr('copyTip')}" style="${OC_CMD_STYLE}">${OC_RELAY_CMD}</div>
+<label class="kimi-label" style="font-size:.82em;opacity:.85;margin:2px 0 0">${ocr('cmdShLabel')}</label>
+<div id="${extensionName}_oc_relay_cmd_sh" title="${ocr('copyTip')}" style="${OC_CMD_STYLE}">${OC_RELAY_CMD_SH}</div>
+<div style="margin-top:4px;opacity:.85">${ocr('stGuideNote')}</div>
+</div>
+</details>
+<div class="kimi-label" style="font-size:.8em;font-weight:700;margin:0 0 2px">${ocr('ocSectionTitle')}</div>
+<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+<label class="kimi-label" for="${extensionName}_oc_relay_cfg" style="margin:0;flex:none;white-space:nowrap">${ocr('cfgLabel')}</label>
+<input type="text" id="${extensionName}_oc_relay_cfg" class="text_pole" style="flex:1;min-width:0" placeholder="${ocr('cfgPh')}"/>
+</div>
+<div style="display:flex;align-items:center;gap:6px;margin-top:5px">
+<label class="kimi-label" for="${extensionName}_oc_relay_key" style="margin:0;flex:none;white-space:nowrap">${ocr('keyLabel')}</label>
+<input type="password" id="${extensionName}_oc_relay_key" class="text_pole" style="flex:1;min-width:0" placeholder="${ocr('keyPh')}"/>
+</div>
+<div style="display:flex;align-items:center;gap:8px;margin-top:7px">
+<button type="button" id="${extensionName}_oc_relay_apply" class="menu_button" style="flex:none;white-space:nowrap">${ocr('apply')}</button>
+<span id="${extensionName}_oc_relay_status" class="kimi-hint" style="margin:0"></span>
+</div>
+<!-- ★★W228（用户反馈"配置串和 Key 填了删不掉"）：这两格以前既没有自己的保存、也会去读酒馆当前值
+     ⇒ 删掉框里的字，下次打开又被填回来（看着像"删不掉"）。现在只显示插件自己记的那份 + 失焦即写回。
+     这句小字说清"这两格 ≠ 实际生效的中转"，免得用户以为清空就等于把中转关了。 -->
+<div class="kimi-hint" style="margin-top:4px;opacity:.8">${ocr('cfgScopeNote')}</div>
+</details>
+<div class="kimi-sep"></div>
+<details class="kimi-inner-card kimi-fold" id="${extensionName}_models_fold"${foldIsOpen('models', false) ? ' open' : ''}>
+<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;user-select:none"><i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true" style="flex:none"></i><span class="kimi-label" style="font-weight:700;font-size:1.02em;color:var(--golden-color,#e0a800);margin:0">${t('customModelsTitle')}</span></summary>
+<div id="${extensionName}_models_slot"></div>
+</details>
+<div class="kimi-sep"></div>
+<details class="kimi-inner-card kimi-fold" id="${extensionName}_inject_fold"${foldIsOpen('inject', false) ? ' open' : ''}>
+<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;user-select:none"><i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true" style="flex:none"></i><span class="kimi-label" style="font-weight:700;font-size:1.02em;color:var(--golden-color,#e0a800);margin:0">${t('injectSettingsTitle')}</span></summary>
+<div style="margin-top:4px">
+<div class="kimi-section-label">${t('targetLabel')}</div>
+<div id="${extensionName}_target_radios" style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center">
+<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="kimi" ${settings.injectTarget === 'kimi' ? 'checked' : ''}/>KIMI</label>
+<label class="checkbox_label" style="margin:0"><input type="radio" name="${extensionName}_inject_target" value="ds" ${settings.injectTarget === 'ds' ? 'checked' : ''}/>DS</label>
+${(settings.customPresets || []).map(p => {
+    const checked = settings.injectTarget === 'custom:' + p.id ? 'checked' : '';
+    return `<label class="checkbox_label" style="margin:0;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="${extensionName}_inject_target" value="custom:${p.id}" ${checked}/>${String(p.name || t('customName')).replace(/</g,'&lt;')} <span class="kimi-custom-del" data-id="${p.id}" title="${t('customDel')}">✕</span></label>`;
+}).join('')}
+<button id="${extensionName}_add_custom" type="button" class="kimi-btn" style="flex:none;margin-left:auto">${t('customAdd')}</button>
+</div>
+<div id="${extensionName}_custom_name_row" style="margin-top:5px;display:none;align-items:center;gap:6px">
+<label class="kimi-label" for="${extensionName}_custom_name" style="margin:0;white-space:nowrap">${t('customNameLabel')}</label>
+<input id="${extensionName}_custom_name" type="text" class="text_pole" style="flex:1;min-width:0" placeholder="${t('customNamePh')}"/>
+</div>
+
+<div class="kimi-sep"></div>
+
+<div class="kimi-section-label">${t('injectLabel')}</div>
+<label class="checkbox_label">
+<input id="${extensionName}_inject_rc" type="checkbox" ${settings.injectModes.includes('reasoning_content')?'checked':''}/>
+${t('injectStep1')}
+</label>
+<p id="${extensionName}_inject_gemini_note" class="kimi-hint" style="display:none;margin:0 0 4px 24px;opacity:.85;line-height:1.35"></p>
+<label class="checkbox_label">
+<input id="${extensionName}_inject_partial" type="checkbox" ${settings.injectModes.includes('partial')?'checked':''}/>
+${t('injectStep2')}
+</label>
+
+<details class="kimi-fold" id="${extensionName}_rc_fold"${foldIsOpen('rc', false) ? ' open' : ''} style="margin-top:8px">
+<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:5px;user-select:none">
+<i class="fa-solid fa-caret-right kimi-fold-caret" aria-hidden="true" style="flex:none"></i>
+<span class="kimi-label" style="margin:0">${t('rcLabel')}</span>
+</summary>
+<div style="margin-top:4px">
+<textarea id="${extensionName}_reasoning_value" class="text_pole" ${(typeof settings.injectTarget === 'string' && settings.injectTarget.startsWith('custom:')) ? '' : 'readonly'} style="width: 100%; box-sizing: border-box; height: 120px;">${settings.reasoningContent}</textarea>
+<!-- 注入卡提示句已按用户要求移除；i18n 词条 rcPresetHint 保留在代码里 -->
+<p id="${extensionName}_rc_locked_hint" class="kimi-hint" style="display:${(typeof settings.injectTarget === 'string' && settings.injectTarget.startsWith('custom:')) ? 'none' : ''}">${t('rcLockedHint')}</p>
+</div>
+</details>
+
+<div class="kimi-sep"></div>
+
+<!-- 使用方法（子折叠，默认收起） -->
+<details class="kimi-inner-card">
+<summary>${t('usageTitle')}</summary>
+<p class="kimi-hint">
+${t('usage1')}<br>
+${t('usage2')}<br>
+${t('usage3')}
+</p>
+</details>
+
+</div>
+</details>
+<div class="kimi-sep"></div>
 <div class="kimi-inner-card" id="kimi_ds_card">
 <div style="display:flex;align-items:center;gap:6px">
     <label class="kimi-label" for="${extensionName}_ds_thinking_mode" style="margin:0;flex:none;white-space:nowrap">${t('dsModeLabel')}</label>
@@ -10914,8 +11381,8 @@ ${renderWordReplaceRows()}
 <div class="kimi-hint">${t('nsfwHint')}</div>
 
 <label class="checkbox_label" style="margin-top:6px"><input id="${extensionName}_nsfw_capturehide" type="checkbox" ${settings.nsfwCaptureHide !== false ? 'checked' : ''}/><span>${t('nsfwCaptureHide')}</span></label>
+<div class="kimi-hint">${t('nsfwCaptureHideHint')}</div>
 <label class="checkbox_label" style="margin-top:6px"><input id="${extensionName}_nsfw_sender" type="checkbox" ${settings.nsfwSenderEnabled !== false ? 'checked' : ''}/><span>${t('nsfwSenderToggle')}</span></label>
-<div class="kimi-hint">${t('nsfwSenderHint')}</div>
 <div class="kimi-label" style="margin-top:10px">${t('nsfwPeekList')}</div>
 <div class="kimi-row kimi-nsfw-autorow" style="margin-top:2px"><label class="checkbox_label" style="margin:0"><input id="${extensionName}_nsfw_auto" type="checkbox" ${settings.nsfwAutoSend !== false ? 'checked' : ''}/><span>AUTO</span></label><div id="${extensionName}_nsfw_roster" class="kimi-nsfw-roster"></div></div>
 <div id="${extensionName}_nsfw_char_editor"></div>
@@ -11021,9 +11488,11 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
     `;
 
     $("#extensions_settings").append(settingsHtml);
+    const panelScope = kimiBeginSettingsPanel(document.getElementById(extensionName + '_settings'));
+    bindCustomModelsPanel(panelScope);
     // ★W105b：构建完成后把两处动态 UI 校准一遍（说明句读两个输入框；重roll锁定按钮的形态/勾选态）
     try { updateAutoStopExplain(); } catch (e) { }
-    try { applyRerollLockUI(); } catch (e) { }
+    try { applyRerollLockUI(); bindRerollLockButton(); } catch (e) { }
     // ★W108-③-1：抽屉里"内联写死颜色的彩字"过一遍对比兜底（达标 ⇒ 什么都不写 / 不达标 ⇒ 朝正文色掺）
     try { kimiColoredTextInkFix(); } catch (e) { }
     /** ★★W27-B6（评审该修）：**"动态 import 拿不到文件"这一族的错误签名** —— 只有这一族允许**静默**。
@@ -11079,14 +11548,17 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
            点过的片按点击顺序 + 没被点走的同文段默认收进原位 + 没点过的不同处按新版；「按原顺序全收」删掉（用途被覆盖）；
            内核改动仍为 0；与 preset-updater.js 的 VERSION/BUILD 成对升） */
         /* ★W279a（2026-10-29 · 收口补救）：v5.3.50 → **v5.3.54**（W256/W260/W261/W263 四波只升了 preset-updater.js 的 VERSION、漏了本戳 ⇒ ?b= 不变 = 用户浏览器可能一直吃旧缓存；本波把戳追平到更新器现值，业务逻辑零改动；与 preset-updater.js 的 VERSION/BUILD 成对升） */
-        const updaterBuild = 'v5.3.54';
+        const updaterBuild = 'v5.3.58';
     import('./preset-updater.js?b=' + updaterBuild)
         .then(mod => {
-            // 卡片插在「不常用」那张卡之前（和以前静态 HTML 的位置一致）
-            const anchor = document.querySelector('#extensions_settings details.kimi-card[data-card="word"]');
-            if (anchor && anchor.parentNode) {
+            if (!panelScope.alive()) return;
+            // Resolve only within the root that requested this module, never a replacement panel.
+            const anchor = panelScope.panel.querySelector('details.kimi-card[data-card="word"]')
+                || panelScope.panel.querySelector('[data-yw-card-origin="word"]');
+            if (anchor && anchor.parentNode && !panelScope.panel.querySelector('[data-card="presetupd"]')) {
                 const det = document.createElement('details');
                 det.className = 'kimi-card';
+                det.dataset.card = 'presetupd';
                 det.innerHTML = '<summary><i class="fa-solid fa-file-import kimi-card-ico" aria-hidden="true"></i>' + kimiCardTitleHtml('presetUpdTitle') + '</summary>'
                     + '<div class="kimi-card-body" id="kimi_presetupd_body"></div>';
                 anchor.parentNode.insertBefore(det, anchor);
@@ -11100,14 +11572,15 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
                    ⇒ 那次建条时它们还不存在 ⇒ 勾着也**永远不出图标**（作者原话"勾了没用"）。
                    updateComboFloat() 就是"按当前勾选重画悬浮条"的既有出口（每个设置开关点的都是它）。 */
                 updateComboFloat();
-                mod.mountPresetUpdater(document.getElementById('kimi_presetupd_body'));
+                mod.mountPresetUpdater(det.querySelector('#kimi_presetupd_body'));
+                kimiBindSettingsCardMemory(panelScope);
             }
             // 样式也带戳注入一份（manifest 里的 css 会被缓存，改色看不到就是它）
             if (!document.getElementById('ywpu-css-' + updaterBuild)) {
                 const l = document.createElement('link');
                 l.id = 'ywpu-css-' + updaterBuild;
                 l.rel = 'stylesheet';
-                l.href = './scripts/extensions/third-party/st-kimi-reasoning-injector/preset-updater.css?b=' + updaterBuild;
+                l.href = new URL('./preset-updater.css?b=' + updaterBuild, import.meta.url).href;
                 document.head.appendChild(l);
             }
             console.log('[余温工具箱] 预设更新器已挂载（开发版：' + updaterBuild + '）');
@@ -11244,15 +11717,17 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
    ★同时升工具箱 PLUGIN_VERSION（1.46.27 → 1.46.28）：用户的自更新是拿**远端 manifest 的版本号**比本机 ——
      只升商店号、不升工具箱号，用户端就**不会**自动更新（作者今天当场踩到过）。 */
 /* ★W279b：v2.2.117 → **v2.2.118**（本波 preset-store.js 内容变了 [BUILD 对齐]，戳跟着走防旧缓存；与商店 VERSION/BUILD 成对） */
-const storeBuild = 'v2.2.118';
+const storeBuild = 'v2.2.122';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
+                    if (!panelScope.alive()) return;
                     if (typeof smod.initStoreDebug === 'function') smod.initStoreDebug();
-                    const panel = document.getElementById(extensionName + '_settings');
-                    const first = panel ? panel.querySelector('details.kimi-card') : null;
-                    if (first && first.parentNode) {
+                    const panel = panelScope.panel;
+                    const first = panel.querySelector('details.kimi-card, [data-yw-card-origin]');
+                    if (first && first.parentNode && !panel.querySelector('[data-card="presetstore"]')) {
                         const sdet = document.createElement('details');
                         sdet.className = 'kimi-card';
+                        sdet.dataset.card = 'presetstore';
                         /* ★W157（作者第 5 条）：标题 = 主标题（🛒 条目商店）+ 描述性括号（弱化、靠右）+ 右侧独立小徽标（未读数）。
                            隐藏的 #kimi_presetstore_title 是给 preset-store.js 写的**兼容位**（它只认这个 id）——
                            见 kimiStoreUnreadBadgeBoot() 的注释。 */
@@ -11267,16 +11742,18 @@ const storeBuild = 'v2.2.118';
                         if (!KIMI_CARD_DEFS.some(d => d.key === 'presetstore')) {
                             KIMI_CARD_DEFS.unshift({ key: 'presetstore', ico: 'fa-cart-shopping', titleKey: 'presetStoreTitle' });
                         }
-                        storeApi = smod;                           // ★W21B：留着给「小剧场收藏」用（只调它导出的 openStorePage，不碰 S）
+                        storeApi = smod;                           // 只用商店导出的导航与更新状态接口。
+                        ywConsoleChanged();
                         renderFloatPanelList();                    // ★W21B：同上，把「条目商店」补进勾选列表
                         updateComboFloat();                        // ★W25B：同上 —— 悬浮条也要按新注册的 key 重建一次（否则勾着也不出图标）
-                        smod.mountPresetStore(document.getElementById('kimi_presetstore_body'));
+                        smod.mountPresetStore(sdet.querySelector('#kimi_presetstore_body'));
+                        kimiBindSettingsCardMemory(panelScope);
                     }
                     if (!document.getElementById('yws-css-' + storeBuild)) {
                         const l2 = document.createElement('link');
                         l2.id = 'yws-css-' + storeBuild;
                         l2.rel = 'stylesheet';
-                        l2.href = './scripts/extensions/third-party/st-kimi-reasoning-injector/preset-store.css?b=' + storeBuild;
+                        l2.href = new URL('./preset-store.css?b=' + storeBuild, import.meta.url).href;
                         document.head.appendChild(l2);
                     }
                     console.log('[余温工具箱] 条目商店已挂载（开发版：' + storeBuild + '）');
@@ -11302,32 +11779,8 @@ const storeBuild = 'v2.2.118';
             if (!isMissingModuleError(e)) console.error('[余温工具箱] 预设更新器模块加载/挂载失败（更新器卡片不会出现）', e);
         });
 
-    // 卡片展开状态记忆（localStorage 按卡片序号存，跨刷新/语言切换保持）
-    // v1.37.15：手风琴——点开任一卡自动关闭其它卡（设置面板不拉太长，免滚轮累）；
-    // 仅主设置面板内互斥；被移入浮窗的卡不在面板容器内，不受影响。
-    const bindCardMemory = () => {
-        try {
-            const panel = document.getElementById(extensionName + '_settings');
-            if (!panel) return;
-            panel.querySelectorAll('details.kimi-card').forEach((card, idx) => {
-                if (card.dataset.kimiMemBound) return;
-                card.dataset.kimiMemBound = '1';
-                const key = 'kimi_card_open_' + idx;
-                if (localStorage.getItem(key) === '1') card.open = true;
-                card.addEventListener('toggle', () => {
-                    try {
-                        localStorage.setItem(key, card.open ? '1' : '0');
-                        // 手风琴：本卡打开时，收起面板内其它已打开的卡（保留各自的记忆状态）
-                        if (card.open) {
-                            panel.querySelectorAll('details.kimi-card[open]').forEach((other) => {
-                                if (other !== card) other.open = false;
-                            });
-                        }
-                    } catch (e) { /* localStorage 不可用则静默 */ }
-                });
-            });
-        } catch (e) { /* localStorage 不可用则静默 */ }
-    };
+    // Same-key memory for synchronous and late-loaded cards; accordion semantics stay unchanged.
+    const bindCardMemory = () => kimiBindSettingsCardMemory(panelScope);
     window.__kimiBindCardMemory = bindCardMemory;
     connectChatObserver();
     if (!$('#kimi-settings-style').length) $('<style id="kimi-settings-style">' + KIMI_SETTINGS_CSS + '</style>').appendTo('head');
@@ -11394,10 +11847,10 @@ const storeBuild = 'v2.2.118';
        · `setTimeout(…, 0)` 是为了**确保**上面那些 handler 已经把 `settings` 写进去（委托在冒泡阶段
          比直接绑定的 handler 晚跑，但同一元素上两者的先后不保证 ⇒ 干脆让到下一个宏任务）；
        · 只在真的"有关系"时才碰 DOM（`applyRerollSwitchChange` 里先判两个条件）。 */
-    $(document).on('change input', '#' + extensionName + '_reroll_english, #' + extensionName + '_reroll_nothink, #' + extensionName +
+    panelScope.delegate('change input', '#' + extensionName + '_reroll_english, #' + extensionName + '_reroll_nothink, #' + extensionName +
         '_reroll_empty, #' + extensionName + '_reroll_nomutter, #' + extensionName + '_reroll_keyword, #' + extensionName +
         '_reroll_keywords, #' + extensionName + '_reroll_bodymarker, #' + extensionName + '_reroll_bodymarkers, #' + extensionName +
-        '_enabled', function () { setTimeout(() => { try { applyRerollSwitchChange(); } catch (e) { } }, 0); });
+        '_enabled', function () { panelScope.later(() => { try { applyRerollSwitchChange(); } catch (e) { } }, 0); });
     $("#" + extensionName + "_mutter_sound").on("change", function () {
         settings.mutterSoundEnabled = $(this).is(":checked");
         saveSettingsDebounced();
@@ -11479,6 +11932,11 @@ const storeBuild = 'v2.2.118';
         settings.floatBarEnabled = $(this).is(":checked");
         saveSettingsDebounced();
         updatePsnapEntries();
+    });
+    $("#" + extensionName + "_companion_enabled").on("change", function () {
+        settings.companion.enabled = this.checked;
+        saveSettingsDebounced();
+        ywConsoleChanged();
     });
     // ★W80：行内「插入提示词」—— A′（只管那颗 `+ `）：开⇒起（补挂）、关⇒**只把我们那颗 + 拔掉**（零痕迹）
     $("#" + extensionName + "_inline_ins").on("change", function () {
@@ -11603,8 +12061,8 @@ const storeBuild = 'v2.2.118';
     });
     renderOpencodeSid();
     // ★W166h：step 1 自动跳过提示（切来源/换模型都刷新一下）
-    setTimeout(renderGeminiNote, 900);
-    $(document).on("change", "#chat_completion_source, #model_google_select, #custom_model_id, #model_openai_select", function () { setTimeout(renderGeminiNote, 80); });
+    panelScope.later(renderGeminiNote, 900);
+    panelScope.delegate('change', '#chat_completion_source, #model_google_select, #custom_model_id, #model_openai_select', function () { panelScope.later(renderGeminiNote, 80); });
     // ★W166c（作者 2026-10-25）：OpenCode Go 中转 —— 粘配置串 + 钥匙 ⇒ 一键配好「来源 / 反代 / 代理密码 / 模型」
     (function bindOcRelay() {
         const $cfg = $("#" + extensionName + "_oc_relay_cfg");
@@ -11612,6 +12070,38 @@ const storeBuild = 'v2.2.118';
         const $status = $("#" + extensionName + "_oc_relay_status");
         if (!$cfg.length) return;
         const say = (m, bad) => { $status.text(m).css("color", bad ? "#e57373" : ""); };
+        let applyEpoch = 0, ownSourceChange = false;
+        const invalidateApply = () => { applyEpoch++; };
+        // Read actual host identities, not the panel identity or a cached display label.
+        const relayTarget = () => {
+            const preset = document.getElementById('settings_preset_openai');
+            const profile = document.getElementById('connection_profiles');
+            const cm = window.SillyTavern?.getContext?.()?.extensionSettings?.connectionManager;
+            return JSON.stringify([
+                oai_settings.preset_settings_openai ?? null,
+                preset?.value ?? null, preset?.selectedOptions?.[0]?.text ?? null,
+                cm?.selectedProfile ?? null, profile?.value ?? null,
+            ]);
+        };
+        const relayState = () => JSON.stringify([
+            relayTarget(), oai_settings.chat_completion_source ?? null,
+            document.getElementById('chat_completion_source')?.value ?? null,
+            oai_settings.reverse_proxy ?? null, oai_settings.proxy_password ?? null,
+            oai_settings.google_model ?? null,
+        ]);
+        const captureRelayTask = () => ({ epoch: applyEpoch, state: relayState() });
+        const relayTaskCurrent = task => panelScope.alive() && task.epoch === applyEpoch && task.state === relayState();
+        panelScope.delegate('change', '#settings_preset_openai, #connection_profiles, #openai_proxy_preset, #openai_reverse_proxy, #openai_proxy_access_key, #model_google_select', invalidateApply);
+        // BEFORE catches A -> B -> A even if the final values happen to match again.
+        for (const type of new Set([event_types.OAI_PRESET_CHANGED_BEFORE, event_types.OAI_PRESET_CHANGED_AFTER,
+            event_types.PRESET_CHANGED, event_types.CONNECTION_PROFILE_LOADED].filter(Boolean))) {
+            eventSource.on(type, invalidateApply);
+            panelScope.own(() => {
+                if (typeof eventSource.removeListener === 'function') eventSource.removeListener(type, invalidateApply);
+                else if (typeof eventSource.off === 'function') eventSource.off(type, invalidateApply);
+            });
+        }
+        panelScope.own(invalidateApply);
         /* ★★W228（用户反馈"配置串和 Key 填了删不掉"）—— **这两行就是病根**，改前：
              `if (settings.ocRelayUrl) ... else if (oai_settings.reverse_proxy) $cfg.val(...)`
              `if (oai_settings.proxy_password) $key.val(...)`
@@ -11661,39 +12151,42 @@ const storeBuild = 'v2.2.118';
                 return ok;
             } catch (e) { return false; }
         }
-        function ensureGoogleModelOption() {
+        function ensureGoogleModelOption(selectArgon = false) {
             const sel = document.getElementById("model_google_select");
             if (!sel) return false;
+            // Preserve the current host choice when only supplementing options.
+            const selected = sel.value;
             if (!Array.from(sel.options).some((o) => o.value === "gemini-4-argon")) {
-                const host = document.getElementById("google_other_models") || sel;
+                let host = sel.querySelector('optgroup[data-kimi-oc-models]');
+                if (!host) {
+                    host = document.createElement('optgroup');
+                    host.setAttribute('data-kimi-oc-models', '1');
+                    host.label = 'OpenCode';
+                    sel.appendChild(host);
+                }
                 const opt = document.createElement("option");
                 opt.value = "gemini-4-argon"; opt.text = "gemini-4-argon";
                 host.appendChild(opt);
             }
-            sel.value = "gemini-4-argon";
+            if (selectArgon) sel.value = "gemini-4-argon";
+            else if (sel.value !== selected) sel.value = selected;
             return true;
         }
-        // ★W166e：刷新页面后酒馆会按远端模型表重画下拉 ⇒ 我们那个选项会不见、下拉看上去是空的。
-        //   只要还在用这个中转（ocRelayUrl 有值 + 模型名还是 gemini-4-argon），就把选项补回去。
+        // Ordinary source/timer/rebuild paths add an option; only explicit apply selects it.
         function keepGoogleModelOption() {
             if (!settings.ocRelayUrl) return;
-            try { if (oai_settings.google_model !== "gemini-4-argon") return; } catch (e) { return; }
-            const sel = document.getElementById("model_google_select");
-            if (!sel) return;
-            if (!Array.from(sel.options).some((o) => o.value === "gemini-4-argon")) {
-                const host = document.getElementById("google_other_models") || sel;
-                const opt = document.createElement("option");
-                opt.value = "gemini-4-argon"; opt.text = "gemini-4-argon";
-                host.appendChild(opt);
-            }
-            if (sel.value !== "gemini-4-argon") sel.value = "gemini-4-argon";
+            ensureGoogleModelOption(false);
         }
         if (settings.ocRelayUrl) {
-            setTimeout(keepGoogleModelOption, 700);
-            setTimeout(keepGoogleModelOption, 2500);
+            panelScope.later(keepGoogleModelOption, 700);
+            panelScope.later(keepGoogleModelOption, 2500);
             try {
-                const gsel = document.getElementById("model_google_select");
-                if (gsel) new MutationObserver(keepGoogleModelOption).observe(gsel, { childList: true, subtree: true });
+                const gsel = document.getElementById('model_google_select');
+                if (gsel) {
+                    const observer = new MutationObserver(() => { if (panelScope.alive()) keepGoogleModelOption(); });
+                    observer.observe(gsel, { childList: true, subtree: true });
+                    panelScope.own(() => observer.disconnect());
+                }
             } catch (e) { }
         }
         const CMD_BY_ID = {
@@ -11710,11 +12203,17 @@ const storeBuild = 'v2.2.118';
             say(ok ? ocr("copied") : ocr("copyFail"), !ok);
         });
         // 切来源会重画 Google 模型下拉 ⇒ 把我们的模型选项补回去（否则下拉里看不见它）
-        $(document).on("change", "#chat_completion_source", function () {
-            if (!settings.ocRelayUrl) return;
-            setTimeout(ensureGoogleModelOption, 60);
+        panelScope.delegate('change', '#chat_completion_source', function () {
+            if (!ownSourceChange) invalidateApply();
+            if (!settings.ocRelayUrl || oai_settings.chat_completion_source !== 'makersuite') return;
+            const task = captureRelayTask();
+            panelScope.later(() => { if (relayTaskCurrent(task)) ensureGoogleModelOption(false); }, 60);
         });
         $("#" + extensionName + "_oc_relay_apply").on("click", function () {
+            invalidateApply(); // A new attempt supersedes the old one, including invalid input.
+            if (!panelScope.alive()) return;
+            const target = relayTarget();
+            const epoch = applyEpoch;
             let raw = String($cfg.val() || "").trim();
             if (raw.startsWith("ywoc1:")) raw = raw.slice(6).trim();
             raw = raw.replace(/\/+$/, "");
@@ -11734,9 +12233,14 @@ const storeBuild = 'v2.2.118';
                 oai_settings.reverse_proxy = url;
                 oai_settings.proxy_password = key;
                 oai_settings.chat_completion_source = "makersuite";
-                $("#chat_completion_source").val("makersuite").trigger("change");
+                ownSourceChange = true;
+                try { $("#chat_completion_source").val("makersuite").trigger("change"); }
+                finally { ownSourceChange = false; }
             } catch (e) { say(String((e && e.message) || e), true); return; }
-            setTimeout(function () {
+            if (epoch !== applyEpoch || target !== relayTarget()) return;
+            const task = captureRelayTask();
+            panelScope.later(function () {
+                if (!relayTaskCurrent(task)) return;
                 try {
                     // ★W166g：酒馆启动时 loadProxyPresets() 会用「选中的代理预设」把 reverse_proxy /
                     //   proxy_password 覆盖回去 ⇒ 只写 oai_settings 的话一刷新就全空。走它自己的
@@ -11749,8 +12253,11 @@ const storeBuild = 'v2.2.118';
                     if ($pk.length) $pk.val(key);
                     const $save = $("#save_proxy");
                     if ($save.length) $save.trigger("click");
-                    ensureGoogleModelOption();
+                    if (!relayTaskCurrent(task)) return;
+                    getKimiCustomModelManager().clearSelection('makersuite');
+                    ensureGoogleModelOption(true);
                     oai_settings.google_model = "gemini-4-argon";
+                    document.getElementById('model_google_select')?.dispatchEvent(new Event('change', { bubbles: true }));
                     saveSettingsDebounced();
                 } catch (e) { }
                 say(ocr("applied"), false);
@@ -11973,7 +12480,6 @@ const storeBuild = 'v2.2.118';
         // 重新渲染设置面板（全部 UI 文案跟随新语言），但保留展开状态不闭合
         const drawerEl = document.getElementById(extensionName + "_settings");
         const wasOpen = drawerEl && drawerEl.querySelector('.inline-drawer-content')?.style.display === 'block';
-        $("#" + extensionName + "_settings").remove();
         initSettingsPanel();
         if (wasOpen) toggleDrawer(document.getElementById(extensionName + "_settings"), true);
     });
@@ -12098,13 +12604,13 @@ const storeBuild = 'v2.2.118';
         saveSettingsDebounced();
         try { toastr.success('已追加空白模板，请先命名并填写 Reasoning Content', '余温工具箱', { timeOut: 3000 }); } catch (e) {}
         // 聚焦名字框，方便立即命名
-        setTimeout(() => { try { document.getElementById(extensionName + '_custom_name')?.focus(); } catch (e) {} }, 50);
+        panelScope.later(() => { try { document.getElementById(extensionName + '_custom_name')?.focus(); } catch (e) {} }, 50);
         // 追加后 content 为空：立即清掉种子缓存，避免注入旧种子
         try { refreshSeed(); } catch (e) { console.warn('[余温工具箱] refreshSeed 失败:', e); }
     });
 
     // ===== 删除自定义模板（事件委托，命名空间防重复绑定）=====
-    $(document).off('click.kimiCustomDel').on('click.kimiCustomDel', '.kimi-custom-del', function () {
+    $('#' + extensionName + '_target_radios').off('click.kimiCustomDel').on('click.kimiCustomDel', '.kimi-custom-del', function () {
         const id = Number(this.dataset.id);
         settings.customPresets = (settings.customPresets || []).filter(p => p.id !== id);
         // 若删除的是当前选中模板，回退到 KIMI
@@ -12351,10 +12857,14 @@ const storeBuild = 'v2.2.118';
         if (!$chk.length) return;
         $pre.val(String(settings.wrap4aPrefix || ''));
         $suf.val(String(settings.wrap4aSuffix || ''));
+        const tokenRequests = new Map();
         const setTok = (el, out, text) => {
+            const target = el?.closest('#kimi_rand_card')?.querySelector('#' + out);
+            const request = {};
+            tokenRequests.set(out, request);
             countTokensAsync(text).then((n) => {
-                const o = document.getElementById(out);
-                if (o) o.textContent = '≈ ' + n + ' ' + ocr('wrap4aTok');
+                if (!panelScope.alive() || tokenRequests.get(out) !== request || !target?.isConnected) return;
+                target.textContent = '≈ ' + n + ' ' + ocr('wrap4aTok');
             }).catch(() => { });
         };
         const renderTok = () => {
@@ -12363,19 +12873,20 @@ const storeBuild = 'v2.2.118';
         };
         renderTok();
         $chk.on("change", function () {
-            settings.wrap4aEnabled = $(this).is(":checked");
-            saveSettingsDebounced();
+            ywSetWrap4a($(this).is(":checked"));
             if (settings.wrap4aEnabled) renderTok();   // ★W174-A：勾选只管功能；展开/收起由行头那颗三角独立控制
         });
         let tmr = null;
+        const persistWrap = () => {
+            tmr = null;
+            settings.wrap4aPrefix = String($pre.val() || '');
+            settings.wrap4aSuffix = String($suf.val() || '');
+            saveSettingsDebounced();
+        };
+        panelScope.own(() => { if (tmr !== null) persistWrap(); });
         const saveSoon = () => {
-            clearTimeout(tmr);
-            tmr = setTimeout(() => {
-                settings.wrap4aPrefix = String($pre.val() || '');
-                settings.wrap4aSuffix = String($suf.val() || '');
-                saveSettingsDebounced();
-                renderTok();
-            }, 600);
+            panelScope.cancel(tmr);
+            tmr = panelScope.later(() => { persistWrap(); renderTok(); }, 600);
         };
         $pre.on("input", saveSoon);
         $suf.on("input", saveSoon);
@@ -12408,8 +12919,7 @@ const storeBuild = 'v2.2.118';
         if (settings.randMasterEnabled && settings.randNameEnabled) renderName();
         if (settings.randMasterEnabled && settings.randUserEnabled) renderUserName();
         $headChk.on("change", function () {
-            settings.randHeadEnabled = $(this).is(":checked");
-            saveSettingsDebounced();                   // ★W174-A：勾选只管功能（展开/收起独立）
+            ywWriteToolboxFlag('randHeadEnabled', $(this).is(":checked"));
         });
         $nameChk.on("change", function () {
             settings.randNameEnabled = $(this).is(":checked");
@@ -12505,14 +13015,15 @@ const storeBuild = 'v2.2.118';
         if ($userSrcInput.length) {
             $userSrcInput.val(randUserSource());
             let tmrU = null;
-            $userSrcInput.on("input change", function () {
-                clearTimeout(tmrU);
-                const save = () => {
-                    const v = String($userSrcInput.val() == null ? '' : $userSrcInput.val()).trim().slice(0, RAND_NAME_SRC_MAX);
-                    settings.randUserSource = v;
-                    saveSettingsDebounced();
-                };
-                tmrU = setTimeout(save, 400);
+            const saveUserSource = () => {
+                tmrU = null;
+                settings.randUserSource = String($userSrcInput.val() ?? '').trim().slice(0, RAND_NAME_SRC_MAX);
+                saveSettingsDebounced();
+            };
+            panelScope.own(() => { if (tmrU !== null) saveUserSource(); });
+            $userSrcInput.on('input change', function () {
+                panelScope.cancel(tmrU);
+                tmrU = panelScope.later(saveUserSource, 400);
             });
         }
         // ★W171（作者）：「AI身份」输入框（被替换的占位名；空/全空格 ⇒ 有效值回落到 余小温）
@@ -12520,23 +13031,19 @@ const storeBuild = 'v2.2.118';
         if ($srcInput.length) {
             $srcInput.val(randNameSource());                       // 显示的是"当前有效值"（空 ⇒ 默认）
             let tmrSrc = null;
-            $srcInput.on("input change", function () {
-                clearTimeout(tmrSrc);
-                const save = () => {
-                    const v = String($srcInput.val() == null ? '' : $srcInput.val()).trim().slice(0, RAND_NAME_SRC_MAX);
-                    settings.randNameSource = v;                   // 存 trim 后的原值（空串 = 让有效值回落到默认）
-                    saveSettingsDebounced();
-                };
-                tmrSrc = setTimeout(save, 400);
+            const saveNameSource = () => {
+                tmrSrc = null;
+                settings.randNameSource = String($srcInput.val() ?? '').trim().slice(0, RAND_NAME_SRC_MAX);
+                saveSettingsDebounced();
+            };
+            panelScope.own(() => { if (tmrSrc !== null) saveNameSource(); });
+            $srcInput.on('input change', function () {
+                panelScope.cancel(tmrSrc);
+                tmrSrc = panelScope.later(saveNameSource, 400);
             });
         }
         // ★W169f（验收低优先项）：发送后「下次发送将使用」要跟着刷新（不然面板开着时显示的是刚用掉的那个）
-        try {
-            eventSource.on(event_types.GENERATION_ENDED, function () {
-                try { if (settings.randMasterEnabled && settings.randNameEnabled) renderName(); } catch (e) { }
-                try { if (settings.randMasterEnabled && settings.randUserEnabled) renderUserName(); } catch (e) { }   // ★W270：小火苗那行同样刷新
-            });
-        } catch (e) { }
+        // GENERATION_ENDED is bound once by kimiBeginSettingsPanel; no panel closures retained.
     })();
 
     // ★W177：折叠状态 = settings.uiFolds 里存过的（手动开合落盘）优先；没存过的走默认（功能开着展开/关着收起）。
@@ -12588,6 +13095,21 @@ const storeBuild = 'v2.2.118';
             det.addEventListener('toggle', paint);
                         det.addEventListener('toggle', function () { try { if (!settings.uiFolds || typeof settings.uiFolds !== 'object') settings.uiFolds = {}; settings.uiFolds['rc'] = det.open ? 'open' : 'closed'; saveSettingsDebounced(); } catch (e) { } });   // ★W177：RC 折叠记忆
         })();
+        /* ★W472/W473：Gemini OC / 注入设置整块的折叠三角/记忆 */
+        (function () {
+            ['oc', 'inject'].forEach(function (key) {
+                const det = document.getElementById(extensionName + '_' + key + '_fold');
+                if (!det || det.getAttribute('data-caret-bound') === '1') return;
+                det.setAttribute('data-caret-bound', '1');
+                const car = det.querySelector('.kimi-fold-caret');
+                const paint = () => { if (!car) return; car.classList.toggle('fa-caret-right', !det.open); car.classList.toggle('fa-caret-down', !!det.open); };
+                paint();
+                det.addEventListener('toggle', function () {
+                    paint();
+                    try { if (!settings.uiFolds || typeof settings.uiFolds !== 'object') settings.uiFolds = {}; settings.uiFolds[key] = det.open ? 'open' : 'closed'; saveSettingsDebounced(); } catch (e) { }
+                });
+            });
+        })();
     })();
 
     // 监听 ST 构建完 prompt 的事件：截获已渲染 thinking 块 + 预解析种子（提示词查看器同款机制）
@@ -12603,6 +13125,7 @@ const storeBuild = 'v2.2.118';
     try { mountApiPoolCard('#kimi_reasoning_injector_api_slot'); } catch (e) { console.warn('[余温工具箱] API池卡挂载失败:', e); }
     // ★W290：状态栏（NSFW）卡的绑定（面板会整体重建 ⇒ 每次重建后重新绑）
     try { bindNsfwCard(); } catch (e) { console.warn('[余温工具箱] 状态栏卡绑定失败:', e); }
+    kimiSyncCaptureObserver(); // language rebuild restarts the allowed observer after disposing the old panel
     // 所有卡挂载完毕后统一恢复展开记忆（含标签卡/API卡）
     if (typeof bindCardMemory === 'function') bindCardMemory();
     // ★W155（作者 2026-10-23 第 3 条）：给"别的模块挂上来的卡"（API 池 / 标签修复）补同款括号弱化 ——
@@ -12613,6 +13136,7 @@ const storeBuild = 'v2.2.118';
     // v1.37.39：浮窗开着时展开本设置面板 → 自动关浮窗（卡移回），避免主面板里"缺卡"
     if (typeof watchSettingsOpenClosesFloat === 'function') watchSettingsOpenClosesFloat();
     try { customNameRowSync(); } catch (e) { } // v1.37.44 初始：当前若选中自定义模板则显示名字框
+    try { bindYwUnifiedConsole(panelScope); } catch (e) { console.warn('[余温工具箱] 总控台挂载失败:', e); }
 }
 
 // 全局事件只绑定一次（语言切换重渲染 initSettingsPanel 时不会重复监听）
@@ -12621,93 +13145,66 @@ eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, onSettingsReady);
 // ★W167c（作者报：429 限流时「空回自动重roll」不动作）：
 //   429 这类接口失败时，ST 连一条空占位消息都不会生成（聊天最后一条还是 user），
 //   现成的空回重roll 全部挂在「消息」上 ⇒ 抓不到。这里补一个看门狗：
-//   生成结束后若最后一条仍是 user（= 一个字都没生成出来），按 4/8/12 秒递进重试，最多 3 次，然后停手出声。
-let __apiFailRetry = 0;
-let __genSnap = null;   // 本次生成开始时：最后一条消息的 条数/swipe_id/分支数（判断 429 时 swipe 是否真的没生效）
-/* ★W288（2026-11-04 · 作者报「生成完整后又自己重来一遍，横幅一直挂着 这次没生成出内容，立刻重试」）：
-   真因 = **上一代的 800ms 失败检查没被取消**。时序：
-     ① 第 N 代正常出完 → GENERATION_ENDED → 挂一个 800ms 定时器；
-     ② 800ms 内，完成时判定/自动重roll/用户点重来 ⇒ **第 N+1 代已经 GENERATION_STARTED**（它会把
-        streamGotToken 重置成 false、并覆盖 __genSnap）；
-     ③ 旧定时器醒来，看到的是「第 N+1 代刚开始、还没出字」的状态 ⇒ 误判「这次没生成出内容」⇒ 再开一次。
-   修法（两件，缺一不可）：
-     a) GENERATION_STARTED 时**主动取消**上一代还没跑的失败检查定时器；
-     b) 定时器里再比一次**代号**（__genSeq）—— 只要期间有新一代开始，旧检查一律作废。 */
-let __genSeq = 0;       // 每开始一代生成 +1；定时器用"挂号时的代号"比对，代号变了就作废
-let __apiFailTimer = null;
-eventSource.on(event_types.GENERATION_STARTED, function () {
-    __genSeq++;
-    if (__apiFailTimer) { try { clearTimeout(__apiFailTimer); } catch (e) { } __apiFailTimer = null; }
-    // ★W171c（验收必修）：**发送那一刻就把面板上那个名字锁住**（面板读的也是 currentRandName() ⇒ 同一个值）。
-    //   之后 ST 可能才创建/切换聊天（chatId 变），请求里用的仍然是这一刻锁住的名字 ⇒ 面板 == 请求。
+//   延迟复查只补充失败检测，受共同总闸、取消令牌和连续上限约束。
+let __genSnap = null;
+let __genStopSeq = -1, __genStartedDryRun = false; // ★W428b：dry-run STARTED 不占 genStartSeq；STOPPED 只作废同一真实代
+eventSource.on(event_types.GENERATION_STARTED, function (type, opts, dryRun) { __genStartedDryRun = !!dryRun; });
+eventSource.on(event_types.GENERATION_STARTED, function (type, opts, dryRun) {
+    if (dryRun) return;
     RAND_SEND_NAME = (() => { try { return currentRandName(); } catch (e) { return null; } })();
-    /* ★★W270：小火苗同样锁名（各自独立的一格），语义与上面逐字相同 */
     RAND_USER_SEND_NAME = (() => { try { return currentRandName('user'); } catch (e) { return null; } })();
-    try {
-        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-        const ch = ctx && Array.isArray(ctx.chat) ? ctx.chat : [];
-        const last = ch.length ? ch[ch.length - 1] : null;
-        __genSnap = {
-            n: ch.length,
-            sid: (last && typeof last.swipe_id === 'number') ? last.swipe_id : -1,
-            len: (last && Array.isArray(last.swipes)) ? last.swipes.length : -1,
-        };
-    } catch (e) { __genSnap = null; }
+    const ctx = window.SillyTavern?.getContext?.(), ch = ctx?.chat || [], last = ch[ch.length - 1];
+    __genSnap = { n: ch.length, sid: last?.swipe_id, len: last?.swipes?.length, msg: last, prev: ch[ch.length - 2], mes: String(last?.mes ?? ''), rs: String(last?.extra?.reasoning ?? last?.reasoning_content ?? '').trim() };
 });
 eventSource.on(event_types.GENERATION_ENDED, function () {
-    RAND_SEND_NAME = null;                 // ★W171c：这一轮用完就清，绝不残留给下一次
-    RAND_USER_SEND_NAME = null;            // ★W270：小火苗那格同样清掉
-    try {
-        if (!settings.enabled || !settings.rerollOnEmpty || settings.rerollPaused) { __apiFailRetry = 0; return; }
-        if (manualStopClicked) { __apiFailRetry = 0; return; }   // 用户手动停的，不重试
-        const __seq = __genSeq;   // ★W288：挂号时记下"这是第几代"；醒来时代号变了 ⇒ 期间已经开了新一代，本检查作废
-        __apiFailTimer = setTimeout(function () {
-            __apiFailTimer = null;
-            try {
-                if (__seq !== __genSeq) return;   // ★W288：已经开过新一代 ⇒ 旧检查作废（防"完整生成又被判没内容"）
-                if (is_send_press || manualStopClicked) return;
-                const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-                const ch = ctx && Array.isArray(ctx.chat) ? ctx.chat : [];
-                const last = ch.length ? ch[ch.length - 1] : null;
-                if (streamGotToken) { __apiFailRetry = 0; return; }   // 这次收到过内容 ⇒ 不算失败
-                if (!last) return;
-                if (!last.is_user) {
-                    // 点“新分支/重roll”撞 429 时：ST 往往什么都没变（没有新分支槽、内容还是旧的）
-                    // ⇒ 用生成开始时的快照比对，没变就再开一次；真的产生了新分支就交给现有空回逻辑
-                    const sid = (typeof last.swipe_id === 'number') ? last.swipe_id : -1;
-                    const len = Array.isArray(last.swipes) ? last.swipes.length : -1;
-                    const changed = !!(__genSnap && (__genSnap.n !== ch.length || __genSnap.sid !== sid || __genSnap.len !== len));
-                    if (changed) { __apiFailRetry = 0; return; }
-                }
-                // ★W167d（作者 2026-10-26）：**取消 3 次上限、也不再等几秒** —— 失败就立刻再试，一直试。
-                __apiFailRetry++;
-                lastRerollReason = '接口没有返回新内容（疑似接口失败/429/被拦截）';
-                notifyReroll('🔄 这次没生成出内容，立刻重试（第 ' + __apiFailRetry + ' 次）' + rerollReasonSuffix(lastRerollReason));
-                console.log('[余温工具箱] 本次生成没有产生 AI 消息（疑似接口失败/429）→ 立刻重试，第 ' + __apiFailRetry + ' 次');
-                setTimeout(function () {
-                    try {
-                        if (__seq !== __genSeq) return;   // ★W288：这 0ms 里也可能已经开了新一代 ⇒ 同样作废
-                        if (is_send_press || manualStopClicked) return;
-                        const c2 = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-                        const ch2 = c2 && Array.isArray(c2.chat) ? c2.chat : [];
-                        const l2 = ch2.length ? ch2[ch2.length - 1] : null;
-                        if (!l2) return;
-                        if (l2.is_user) Generate('regenerate');
-                        else doSwipe(ch2.length - 1);
-                    } catch (e) { }
-                }, 0);
-            } catch (e) { }
-        }, 800);
-    } catch (e) { }
+    RAND_SEND_NAME = null;
+    RAND_USER_SEND_NAME = null;
+    /* ★W428b（2026-11-12 真实宿主复现）：429 的 ENDED 由宿主 onError 同步发出，早于原生 swipe 的 endSwipe
+       回滚（实测约 2.9s，期间 ctx.swipe.state() 仍是 swiping）。旧 800ms 消费者只看一次；真正动手的
+       triggerAutoSwipe 又因 swState 非 none 静默放弃 ⇒ 请求数停在 429，count 不涨，也没有第二次机会。
+       这里只把「什么时候可以判定失败」改成等宿主收尾：swipe 状态回 none、ST 空闲，再取当前快照认领一次。
+       不设新的超时上限（IAB/慢收尾可以超过 6s）；只有新一代、切聊、手停/明确 STOPPED、锁/暂停/开关、原预算
+       才终止等待。动作、总闸、上限、锁/暂停/开关仍只走 handleFailureReroll —— 不新增并发、不新增独立 retry。 */
+    const snap = __genSnap;
+    if (!snap || !snap.msg) return;
+    const scopeEnded = rerollScope();
+    const seqEnded = scopeEnded.seq, chatEnded = scopeEnded.chat, keyEnded = scopeEnded.chatKey;
+    if (streamGotToken || manualStopClicked || lastGenManuallyStopped) return;
+    const tick = function () {
+        if (genStartSeq !== seqEnded) return;                       // 新一代真实生成已开始 → 旧代不抢
+        const now = rerollScope();
+        if (now.chat !== chatEnded || now.chatKey !== keyEnded) return; // 切聊/换聊天对象
+        if (manualStopClicked || lastGenManuallyStopped) return;
+        if (!settings.enabled || settings.rerollPaused || settings.rerollLockOn || !anyRerollSwitchOn()) return;
+        if (rerollFiredThisGen) return;                              // 已有人认领（空回主路径等）
+        if (__genStopSeq === seqEnded) return;                       // 同一真实代被明确停止（晚到的 STOPPED 也算）
+        if (autoRerollCount >= settings.autoRerollLimit) return;     // 原预算；不新增提前停手
+        let swState = 'none';
+        try { swState = window.SillyTavern?.getContext?.()?.swipe?.state?.() || 'none'; } catch (e) { }
+        if (is_send_press || (swState && swState !== 'none')) return setTimeout(tick, 150); // 等宿主真正收尾，不设新上限
+        const ch = now.chat, id = (ch?.length || 0) - 1;
+        if (id < 0) return;
+        const last = ch[id];
+        if (!last || last.is_system) return;
+        if (last.is_user) {
+            // 发送：宿主在 STARTED 后追加了新 user（STARTED 时那条尾楼仍在原位）；
+            // 重新生成：宿主删掉旧助手后，尾楼正好是 STARTED 前那条（旧助手对象已不在 chat 里）。
+            const sendTail = ch.length === snap.n + 1 && ch[snap.n - 1] === snap.msg;
+            const sendTailAlready = ch.length === snap.n && last === snap.msg; // driver: sendMessageAsUser 后才 Generate('normal')
+            const regenTail = ch.length === snap.n - 1 && last === snap.prev && ch.indexOf(snap.msg) === -1;
+            if (!sendTail && !sendTailAlready && !regenTail) return;
+        } else {
+            if (last !== snap.msg) return;                             // 必须是 STARTED 时那条消息对象
+            if (snap.n !== ch.length || snap.len !== last.swipes?.length) return;
+            if (String(last.mes ?? '') !== String(snap.mes ?? '')) return;
+            if (String(last.extra?.reasoning ?? last.reasoning_content ?? '').trim() !== String(snap.rs ?? '')) return;
+        }
+        console.log('[余温工具箱] 失败复核：宿主收尾后仍没有新回复 → 交给失败重试');
+        handleFailureReroll();
+    };
+    setTimeout(tick, 800);
 });
-// 真正生成出内容 ⇒ 把失败计数清零
-eventSource.on(event_types.MESSAGE_RECEIVED, function (mesId) {
-    try {
-        const ctx = (typeof window !== 'undefined' && window.SillyTavern?.getContext) ? window.SillyTavern.getContext() : null;
-        const m = ctx && Array.isArray(ctx.chat) ? ctx.chat[mesId] : null;
-        if (m && !m.is_user && String(m.mes || '').trim()) __apiFailRetry = 0;
-    } catch (e) { }
-});
+
 // ★W167b（作者：提示词查看器是一次 dry-run，应该能看到包裹）：
 //   GENERATE_AFTER_DATA 在 Generate() 里**先于**查看器快照发生（script.js:5318 vs 5340）。
 // ★W168b 更正（验收 BUG-2）：这个事件给的是 ST 内部的 generate_data ——

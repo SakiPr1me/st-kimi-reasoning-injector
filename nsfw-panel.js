@@ -174,15 +174,177 @@ export function nsfwInit(opts) {
 }
 
 function readAll() {
-    try {
-        const raw = localStorage.getItem(LS_KEY);
-        const obj = raw ? JSON.parse(raw) : {};
-        return obj && typeof obj === 'object' ? obj : {};
-    } catch (e) { return {}; }
+    // An unreadable/corrupt store is not an empty database. Let write callers fail closed.
+    const raw = localStorage.getItem(LS_KEY);
+    const obj = raw == null ? {} : JSON.parse(raw);
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('状态档案无法读取');
+    return obj;
 }
 function writeAll(obj) {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(obj || {})); } catch (e) { }
+    localStorage.setItem(LS_KEY, JSON.stringify(obj));
+    return true;
 }
+
+let _stateWriteQueue = Promise.resolve();
+function stateWrite(task) {
+    const pending = _stateWriteQueue.then(task);
+    _stateWriteQueue = pending.catch(() => {});
+    return pending;
+}
+function stateContext() {
+    return window.SillyTavern && window.SillyTavern.getContext ? window.SillyTavern.getContext() : null;
+}
+function stateError(error) { return String(error && error.message || error || '保存失败'); }
+function stateNotice(error) {
+    try { if (typeof toastr !== 'undefined') toastr.error(stateError(error), '状态保存失败，输入已保留'); } catch (e) {}
+}
+function chatIdentity(chatId) {
+    const ctx = stateContext();
+    if (!ctx || !Array.isArray(ctx.chat) || String(chatId || nsfwChatId(ctx)) !== nsfwChatId(ctx)) throw new Error('聊天已切换，请重新打开');
+    return { ctx, chat: ctx.chat, chatId: nsfwChatId(ctx), groupId: ctx.groupId, characterId: ctx.characterId };
+}
+function sameChat(source) {
+    const now = stateContext();
+    return !!now && nsfwChatId(now) === source.chatId && now.chat === source.chat
+        && now.groupId === source.groupId && now.characterId === source.characterId;
+}
+/** Immutable source token: chat + message object + slot + active branch + exact original text. */
+export function nsfwFloorSource(chatId, mesid) {
+    const source = chatIdentity(chatId);
+    const msg = source.chat[mesid];
+    if (!msg) throw new Error('楼层已不存在');
+    return Object.assign(source, { mesid: Number(mesid), msg, text: String(msg.mes || ''),
+        swipeId: msg.swipe_id, swipes: msg.swipes,
+        swipeText: Array.isArray(msg.swipes) ? msg.swipes[msg.swipe_id] : undefined });
+}
+function sameFloor(source, text) {
+    return sameChat(source) && source.chat[source.mesid] === source.msg
+        && source.msg.swipe_id === source.swipeId && source.msg.swipes === source.swipes
+        && String(source.msg.mes || '') === (text === undefined ? source.text : text)
+        && (!Array.isArray(source.swipes) || source.swipes[source.swipeId] === (text === undefined || source.swipeText == null ? source.swipeText : text));
+}
+function patchValue(patches, obj, key, next) {
+    if (obj[key] !== next) patches.push({ obj, key, old: obj[key], next });
+}
+function applyPatches(patches) { patches.forEach(p => { p.obj[p.key] = p.next; }); }
+function undoPatches(patches) {
+    patches.forEach(p => { if (p.obj[p.key] === p.next) p.obj[p.key] = p.old; });
+}
+function patchFloor(source, next) {
+    const patches = [];
+    patchValue(patches, source.msg, 'mes', next);
+    if (Array.isArray(source.swipes) && typeof source.swipeId === 'number' && source.swipes[source.swipeId] != null) {
+        patchValue(patches, source.swipes, source.swipeId, next);
+    }
+    return patches;
+}
+/** ctx.saveChat swallows HTTP errors on ST. Observe only the exact save request we staged.
+ * No request is sent here; the original host saver still owns headers/compression/endpoint.
+ * Missing ACK (including a swallowed error, timeout, unsupported compressed body) fails closed. */
+async function saveChatAcknowledged(source, patches) {
+    if (!sameChat(source) || typeof source.ctx.saveChat !== 'function') throw new Error('聊天已切换或宿主无法保存');
+    // Match the fields this transaction owns, not unrelated message metadata or other floors.
+    const targets = source.chat.map((msg, mesid) => ({ msg, mesid })).flatMap(({ msg, mesid }) => {
+        const own = (patches || []).filter(p => p.obj === msg || p.obj === msg.swipes);
+        if (!own.length) return [];
+        return [{ mesid, swipeId: msg.swipe_id, mes: String(msg.mes || ''), fields: own.map(p => ({ swipe: p.obj !== msg, key: p.key, value: p.obj[p.key] })) }];
+    });
+    const hostFetch = window.fetch;
+    if (typeof hostFetch !== 'function') throw new Error('无法确认宿主保存结果');
+    const ctx = source.ctx;
+    const isGroup = !!ctx.groupId;
+    const fileName = isGroup ? source.chatId : (ctx.characters && ctx.characters[ctx.characterId] && ctx.characters[ctx.characterId].chat || source.chatId);
+    const avatar = !isGroup && ctx.characters && ctx.characters[ctx.characterId] && ctx.characters[ctx.characterId].avatar;
+    let ack = false, possiblySaved = false;
+    const observations = [];
+    const observer = async function (input, init) {
+        try {
+            const url = new URL(typeof input === 'string' ? input : input.url, window.location.href);
+            if (url.origin !== window.location.origin || url.pathname !== (isGroup ? '/api/chats/group/save' : '/api/chats/save') || url.search) {
+                return hostFetch.call(window, input, init);
+            }
+        } catch (error) { return hostFetch.call(window, input, init); }
+        const observation = (async () => {
+            try {
+                const url = new URL(typeof input === 'string' ? input : input.url, window.location.href);
+                if (url.origin !== window.location.origin || url.pathname !== (isGroup ? '/api/chats/group/save' : '/api/chats/save') || url.search) return false;
+                const request = new Request(input instanceof Request ? input.clone() : url.href, init);
+                if (request.method !== 'POST') return false;
+                let bytes = await request.clone().arrayBuffer();
+                if (request.headers.get('Content-Encoding') === 'gzip') {
+                    bytes = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+                }
+                const body = JSON.parse(new TextDecoder().decode(bytes));
+                if (isGroup ? String(body.id) !== source.chatId : body.file_name !== fileName || (avatar && body.avatar_url !== avatar)) return false;
+                return Array.isArray(body.chat) && targets.length > 0 && targets.every(target => {
+                    const msg = body.chat[target.mesid + 1];
+                    return msg && msg.swipe_id === target.swipeId && String(msg.mes || '') === target.mes
+                        && target.fields.every(field => (field.swipe ? msg.swipes && msg.swipes[field.key] : msg[field.key]) === field.value);
+                });
+            } catch (e) { return false; }
+        })();
+        const resultPromise = hostFetch.call(window, input, init);
+        // Observe response errors immediately, but never await a foreign request to finish.
+        resultPromise.catch(() => {});
+        const checked = (async () => {
+            try {
+                if (!(await observation)) return;
+                const response = await resultPromise;
+                if (!response.ok) return;
+                possiblySaved = true;
+                let result;
+                try { result = await response.clone().json(); } catch (e) { return; }
+                if (!result || result.error || result.ok === false || (result.result !== undefined && result.result !== 'ok')) return;
+                if (result.ok !== true && (isGroup || result.result !== 'ok')) return;
+                ack = true;
+            } catch (e) {}
+        })();
+        observations.push(checked);
+        return resultPromise;
+    };
+    window.fetch = observer;
+    try {
+        const result = await ctx.saveChat();
+        await Promise.all(observations);
+        if (result === false || !ack) throw new Error('宿主没有确认聊天保存成功');
+    } catch (error) {
+        if (possiblySaved) error.statePossiblySaved = true;
+        throw error;
+    } finally {
+        if (window.fetch === observer) window.fetch = hostFetch;
+    }
+}
+async function commitState(source, patches, valid, persist) {
+    if (!sameChat(source) || !valid(false)) throw new Error('来源已变化，请重新打开后保存');
+    // Read before touching memory; a failed read must never become an empty-store overwrite.
+    readAll();
+    if (!patches.length) { if (persist) persist(); return; }
+    applyPatches(patches);
+    let saved = false;
+    try {
+        await saveChatAcknowledged(source, patches);
+        saved = true;
+        if (!sameChat(source) || !valid(true)) throw new Error('保存期间聊天或分支已变化，请重新打开');
+        if (persist) persist();
+    } catch (error) {
+        undoPatches(patches);
+        // A failed derived-cache write after an ACK needs a compensating host save.
+        if (saved || error.statePossiblySaved) {
+            if (!sameChat(source)) throw new Error(stateError(error) + '；原聊天可能已保存，请重新读取核对');
+            try { await saveChatAcknowledged(source, patches); }
+            catch (rollbackError) { throw new Error(stateError(error) + '；回滚保存未确认，请重新读取核对'); }
+        }
+        throw error;
+    }
+}
+async function emitStateSaved(source, mesid) {
+    if (!sameChat(source)) return;
+    for (const type of ['MESSAGE_EDITED', 'MESSAGE_UPDATED']) {
+        try { if (source.ctx.eventSource && source.ctx.eventTypes && source.ctx.eventTypes[type]) await source.ctx.eventSource.emit(source.ctx.eventTypes[type], mesid); }
+        catch (e) { /* Persistence succeeded; a subscriber cannot undo the saved transaction. */ }
+    }
+}
+
 export function nsfwMsgIndex() {
     try {
         const c = window.SillyTavern && window.SillyTavern.getContext ? window.SillyTavern.getContext() : null;
@@ -209,6 +371,7 @@ export function nsfwList(chatId) {
     return (bucket.order || []).filter((n) => bucket.chars[n]).map((n) => Object.assign({ name: n }, bucket.chars[n]));
 }
 export function nsfwEnsure(chatId, name, sex, role) {
+    try {
     const { all, bucket, key } = nsfwBucket(chatId);
     const n = String(name || '').trim();
     if (!n) return null;
@@ -220,6 +383,7 @@ export function nsfwEnsure(chatId, name, sex, role) {
     all[key] = bucket;
     writeAll(all);
     return bucket.chars[n];
+    } catch (error) { stateNotice(error); return null; }
 }
 /** 该角色适用的静态字段（按性别过滤） */
 export function nsfwStaticFields(profile) {
@@ -260,11 +424,56 @@ export function nsfwApplyStatic(chatId, name, text) {
     } catch (e) { return false; }
 }
 export function nsfwRemove(chatId, name) {
-    const { all, bucket, key } = nsfwBucket(chatId);
-    bucket.order = (bucket.order || []).filter((n) => n !== name);
-    delete bucket.chars[name];
-    all[key] = bucket;
-    writeAll(all);
+    try {
+        const { all, bucket, key } = nsfwBucket(chatId);
+        bucket.order = (bucket.order || []).filter((n) => n !== name);
+        delete bucket.chars[name];
+        all[key] = bucket;
+        writeAll(all);
+        return true;
+    } catch (error) { stateNotice(error); return false; }
+}
+/** ★W470：一键删掉这个角色在当前聊天里的所有 NSFW 快照（所有楼层、所有 swipe 分支）。
+    只删 `<nsfw>`/`data-nsfw` 块本身，楼层正文不动；删完重建 bucket 并移除名册记录。 */
+export async function nsfwDeleteCharBlocks(chatId, name) {
+    let source;
+    try { source = chatIdentity(chatId); } catch (error) { return { ok: false, removed: 0, error: stateError(error) }; }
+    return stateWrite(async () => {
+        try {
+            if (!sameChat(source)) throw new Error('聊天已切换，请重新打开');
+            const target = String(name || '').trim();
+            if (!target) throw new Error('角色名为空');
+            const patches = [], snapshots = new Set(), identities = [];
+            const scrub = (text, floor, slot) => {
+                const original = String(text == null ? '' : text);
+                let out = original;
+                const blocks = nsfwTextBlocks(original).filter(b => b.name === target);
+                // Machine + desc wrappers on the same branch represent one snapshot.
+                if (blocks.length) snapshots.add(floor + ':' + slot);
+                for (let i = blocks.length - 1; i >= 0; i--) out = out.slice(0, blocks[i].openStart) + out.slice(blocks[i].closeEnd);
+                return out;
+            };
+            source.chat.forEach((msg, floor) => {
+                if (!msg) return;
+                identities.push({ msg, floor, swipeId: msg.swipe_id, swipes: msg.swipes });
+                const active = Array.isArray(msg.swipes) && typeof msg.swipe_id === 'number' && msg.swipes[msg.swipe_id] === msg.mes ? msg.swipe_id : 'mes';
+                if (typeof msg.mes === 'string') patchValue(patches, msg, 'mes', scrub(msg.mes, floor, active));
+                if (Array.isArray(msg.swipes)) msg.swipes.forEach((text, slot) => {
+                    if (typeof text === 'string') patchValue(patches, msg.swipes, slot, scrub(text, floor, slot));
+                });
+            });
+            const valid = applied => identities.every(i => source.chat[i.floor] === i.msg && i.msg.swipe_id === i.swipeId && i.msg.swipes === i.swipes)
+                && patches.every(p => p.obj[p.key] === (applied ? p.next : p.old));
+            const { bucket } = nsfwBucket(source.chatId);
+            const hasRoster = Object.prototype.hasOwnProperty.call(bucket.chars, target) || bucket.order.includes(target);
+            if (!patches.length && !hasRoster) return { ok: true, removed: 0 };
+            await commitState(source, patches, valid, () => persistChatBucket(source.chatId, source.chat, target));
+            if (sameChat(source)) {
+                try { document.querySelectorAll('.yw-nsfw').forEach(n => n.remove()); nsfwReattachAll(); nsfwMountSender(); } catch (e) {}
+            }
+            return { ok: true, removed: snapshots.size };
+        } catch (error) { return { ok: false, removed: 0, error: stateError(error) }; }
+    });
 }
 
 /* ────────────────────────── 字段工具 ────────────────────────── */
@@ -530,9 +739,40 @@ function fieldByLabel(label) {
         || all.find((f) => !f.static && f.id === s)
         || null;
 }
+/** ★W468：前穴那组字段只属于女性；男性不显示/不发送/不自动补。 */
+const NSFW_FRONT_IDS = ['stClitLen', 'stClitSize', 'clitState', 'vulvaState', 'vLoose', 'vLastIn', 'vLastLen', 'stGDepth', 'stCervixDepth', 'cervixState', 'vFluidKind', 'vFluidMl', 'uterusFluidMl'];
+/** ★W468：从数值判断——有阴茎、且没有前穴结构值 ⇒ 男性。
+    只认结构值（阴蒂/深度/液体），不认 vulvaState/cervixState 这种「状态选项」，
+    这样以前被下拉误写进去的「紧闭缝隙状/下沉」不会反过来把它判成女性。 */
+function nsfwSexFromStats(stats, fallback) {
+    try {
+        const get = (id) => {
+            const c = (stats || {})[id];
+            return (c && typeof c === 'object') ? c.value : c;
+        };
+        const pl = get('stPenisLen');
+        const pn = Number(String(pl == null ? '' : pl).replace(/[^0-9.\-]/g, ''));
+        if (!(pn > 0)) return fallback;
+        const marks = ['stClitLen', 'stClitSize', 'clitState', 'stGDepth', 'stCervixDepth', 'vFluidKind', 'vFluidMl', 'uterusFluidMl'];
+        const femaleMark = marks.some((id) => { const v = get(id); return v != null && String(v).trim() && !isNaish(v); });
+        return femaleMark ? fallback : 'male';
+    } catch (e) { return fallback; }
+}
+function nsfwProfileSex(profile) {
+    const sex = String((profile && profile.sex) || 'female');
+    if (sex === 'other') return sex;   /* 其他/双性保留用户选择 */
+    /* ★W468：有阴茎且没有前穴结构值 ⇒ 按男性处理（即使旧档案默认/手填成 female）。
+       这样老聊天里「白辙」这种从来没手填过性别的男性，也不会再冒出前穴。 */
+    const inferred = nsfwSexFromStats(profile && profile.stats, sex);
+    if (inferred === 'male') return 'male';
+    return sex;
+}
+/** ★W468c：撤销隐藏 —— 作者明确“我没叫你隐藏”。前穴页（含清单外 vOrgasmCount）照常显示，
+    只保留「N/A/空值不被下拉/补全改写」的保护。 */
+function nsfwMaleFrontHidden() { return false; }
 function activeFields(profile) {
     const sex = (profile && profile.sex) || 'female';
-    return nsfwAllFields().filter((f) => (!f.sex || f.sex === sex) && nsfwGuideAllows(f.id));   /* ★W413：指南删掉的字段不再上卡/发送/入库 */
+    return nsfwAllFields().filter((f) => (!f.sex || f.sex === sex) && nsfwGuideAllows(f.id));   /* ★W413：指南删掉的字段不再上卡/发送/入库；★W468c 前穴不再按性别隐藏 */
 }
 /** ★W418：N/A 是「没有/不适用」——卡片上要显示 N/A，但不参与数值、不发送 */
 function isNaish(v) {
@@ -646,17 +886,29 @@ export function nsfwSetStats(chatId, name, edits) {
             if (!id) return;
             if (e0.static) {
                 if (!rec.static) rec.static = {};
-                rec.static[id] = String(e0.value == null ? '' : e0.value);
+                const value = String(e0.value == null ? '' : e0.value);
+                if (String(rec.static[id] == null ? '' : rec.static[id]) === value) return;
+                rec.static[id] = value;
                 touched = true;
                 return;
             }
+            const oldCell = (rec.stats || {})[id] || (rec.extra || {})[id] || {};
+            const oldValue = Array.isArray(oldCell.list) ? oldCell.list.join('\n') : String(oldCell.value == null ? '' : oldCell.value);
+            if (oldValue === String(e0.value == null ? '' : e0.value) && String(oldCell.comment || '') === String(e0.comment || '')) return;
             const f = fieldById(id);
-            if (!f) return;
+            if (!f) {
+                if (!rec.extra || !rec.extra[id]) return;
+                const cell = rec.extra[id];
+                cell.value = e0.value; cell.comment = e0.comment || '';
+                if (Array.isArray(cell.list)) cell.list = String(e0.value).split(/\r?\n/).filter(Boolean);
+                touched = true;
+                return;
+            }
             rec.stats[id] = { value: e0.value, comment: e0.comment || '', at: Date.now() };
             touched = true;
         });
         if (touched) { rec.updatedAt = Date.now(); all[key] = bucket; writeAll(all); }
-        return touched;
+        return true;
     } catch (e) { return false; }
 }
 /** 字段管理：新增自定义字段 */
@@ -794,11 +1046,11 @@ const NSFW_ALIAS = {
 };
 /** 取一个属性值（双引号 / 单引号 / 无引号都吃） */
 function attrVal(raw, key) {
-    const re = new RegExp(key + '\\s*=\\s*(?:"([^"]*)"|([^\\s>]+))', 'i');
+    const re = new RegExp('(?:^|[\\s<])' + key + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s>]+))', 'i');
     const m = re.exec(String(raw || ''));
-    if (!m) return '';
-    return (m[1] != null ? m[1] : (m[2] || ''));
+    return m ? (m[1] != null ? m[1] : m[2] != null ? m[2] : (m[3] || '')) : '';
 }
+
 /** ★W315：把 AI 写的 <nsfw> 外壳换成酒馆净化器会保留的 <div>（内容一字不动）
  *  原因：酒馆显示层用 DOMPurify，未知标签 <nsfw> 会被剥掉 ⇒ 原始行露在正文里。
  *  div + data-nsfw 能活下来，用 CSS 隐藏 ⇒ 楼层里有值（小铅笔可看可改），正文里看不见。 */
@@ -888,11 +1140,11 @@ export function nsfwParse(text) {
             body.split(/\r?\n/).forEach((ln) => {
                 const s2 = ln.trim();
                 const gm = /^【([^】]{1,40})】$/.exec(s2);   /* ★W437b：组名别卡 12 字 */
-                if (gm) { curGroup = gm[1]; return; }
+                if (gm) { curGroup = gm[1]; lastMulti = ''; return; }
                 if (!s2) return;
                 if (s2.indexOf('=') < 0) {
                     /* ★W427：多行字段的续行（AI 常只给第一行带 ID，后面直接 [时间] …） */
-                    if (lastMulti && /^\[/.test(s2) && c.extra && c.extra[lastMulti]) {
+                    if (lastMulti && c.extra && c.extra[lastMulti]) {
                         const ent0 = c.extra[lastMulti];
                         if (!Array.isArray(ent0.list)) ent0.list = String(ent0.value || '').trim() ? [String(ent0.value)] : [];
                         ent0.list.push(s2);
@@ -901,8 +1153,7 @@ export function nsfwParse(text) {
                 }
                 const key0 = s2.slice(0, s2.indexOf('=')).trim().split(/\s+/)[0];
                 if (!/^[A-Za-z_\u4e00-\u9fa5][A-Za-z0-9_\-\u4e00-\u9fa5]*$/.test(key0)) return;
-                if (known[key0]) return;
-                if (/^(name|snapTime)$/.test(key0)) return;
+                if (known[key0] || /^(name|snapTime)$/.test(key0)) { lastMulti = ''; return; }
                 const rest0 = s2.slice(s2.indexOf('=') + 1).trim();
                 const sv = rest0 ? splitValueComment(rest0) : { value: '', comment: '' };   /* ★W425：空值也收（卡片显示占位） */
                 const empty0 = !rest0;
@@ -963,15 +1214,22 @@ export function nsfwStripBlocks(text) {
 function applyParsedTo(bucket, parsed) {
     const names = Object.keys((parsed && parsed.chars) || {});
     names.forEach((name) => {
+        const mm = parsed.chars[name].machine || {};
         if (!bucket.chars[name]) {
             const meta = (parsed.chars[name] && parsed.chars[name].meta) || {};
-            const sex = (meta.sex === 'm' || meta.sex === 'male') ? 'male' : (meta.sex === 'o' || meta.sex === 'other' ? 'other' : 'female');
+            const sexMeta = (meta.sex === 'm' || meta.sex === 'male') ? 'male' : (meta.sex === 'o' || meta.sex === 'other' ? 'other' : '');
+            const sex = sexMeta || nsfwSexFromStats(mm, 'female');
             const role = (meta.role === 'top') ? 'top' : (meta.role === 'switch' ? 'switch' : 'bottom');
             bucket.chars[name] = { sex: sex, role: role, stats: {}, desc: {}, static: {}, updatedAt: 0 };
             if (bucket.order.indexOf(name) < 0) bucket.order.push(name);
         }
         const rec = bucket.chars[name];
-        const mm = parsed.chars[name].machine || {};
+        if (!rec.manual) {
+            const merged = Object.assign({}, rec.stats || {});
+            Object.keys(mm).forEach((id) => { merged[id] = { value: mm[id] && mm[id].value }; });
+            const inferred = nsfwSexFromStats(merged, rec.sex || 'female');
+            if (inferred === 'male' && rec.sex !== 'male') rec.sex = 'male';
+        }
         const allow = {};
         activeFields(rec).forEach((f) => { allow[f.id] = 1; });
         Object.keys(mm).forEach((id) => {
@@ -1021,7 +1279,7 @@ function applyParsedTo(bucket, parsed) {
                 rec.extra[id] = { value: '', comment: '', group: inc.group || (nsfwGuideMeta(id) || {}).group || '其它', label: inc.label || old.label || '', min: (typeof inc.min === 'number' ? inc.min : null), max: (typeof inc.max === 'number' ? inc.max : null), unit: inc.unit || '', empty: true, at: Date.now() };
                 return;
             }
-            if (isUnknownish(inc.value) && old && String(old.value || "").trim() && !isUnknownish(old.value)) return;
+            if (!isNaish(inc.value) && isUnknownish(inc.value) && old && String(old.value || "").trim() && !isUnknownish(old.value)) return;
             rec.extra[id] = { value: inc.value, comment: inc.comment || "", group: inc.group || (nsfwGuideMeta(id) || {}).group || "其它", label: inc.label || "", min: (typeof inc.min === "number" ? inc.min : null), max: (typeof inc.max === "number" ? inc.max : null), unit: inc.unit || "", at: Date.now() };
         });
         rec.updatedAt = Date.now();
@@ -1042,9 +1300,38 @@ export function nsfwApply(chatId, parsed) {
 /** ★W315：从楼层块重建"当前状态"（删楼 / 改楼 / 切分支 / 切聊天都调它）
  *  状态就长在楼层里：以最后一条含块的楼为准；删楼 ⇒ 它那一段贡献自动消失。
  *  面板手填的固定档案（rec.static）与手工建档但还没出过块的角色保留。 */
+function rebuildSemantic(bucket) {
+    const copy = JSON.parse(JSON.stringify(bucket));
+    Object.keys(copy.chars || {}).forEach(name => {
+        const rec = copy.chars[name];
+        delete rec.updatedAt;
+        ['stats', 'desc', 'extra'].forEach(group => {
+            Object.keys(rec[group] || {}).forEach(id => {
+                const cell = rec[group][id];
+                if (cell && typeof cell === 'object' && !Array.isArray(cell)) delete cell.at;
+            });
+        });
+    });
+    function stable(value) {
+        if (Array.isArray(value)) return value.map(stable);
+        if (!value || typeof value !== 'object') return value;
+        const out = Object.create(null);
+        Object.keys(value).sort().forEach(k => { out[k] = stable(value[k]); });
+        return out;
+    }
+    return JSON.stringify(stable(copy));
+}
 export function nsfwRebuildFromChat(chatId, chat) {
     try {
         const { all, bucket, key } = nsfwBucket(chatId);
+        const next = rebuildBucket(bucket, chat);
+        if (rebuildSemantic(bucket) === rebuildSemantic(next)) return next.order.slice();
+        all[key] = next;
+        writeAll(all);
+        return next.order.slice();
+    } catch (e) { return []; }
+}
+function rebuildBucket(bucket, chat) {
         const prev = bucket.chars || {};
         const next = { order: [], pin: bucket.pin || null, chars: {} };
         const msgs = Array.isArray(chat) ? chat : [];
@@ -1071,14 +1358,22 @@ export function nsfwRebuildFromChat(chatId, chat) {
             }
             next.chars[n].static = JSON.parse(JSON.stringify(old.static || {}));
             /* ★W404：手填档案的三件套也保留（以前只拷 static ⇒ 出过块就变回 女/受、manual 丢失、删楼即消失） */
-            if (old.manual) next.chars[n].manual = true;
-            if (old.sex) next.chars[n].sex = old.sex;
+            if (old.manual) { next.chars[n].manual = true; if (old.sex) next.chars[n].sex = old.sex; }
+            else if (old.sex && old.sex !== 'female') next.chars[n].sex = old.sex;
             if (old.role) next.chars[n].role = old.role;
         });
-        all[key] = next;
-        writeAll(all);
-        return next.order.slice();
-    } catch (e) { return []; }
+        return next;
+}
+function persistChatBucket(chatId, chat, removeName) {
+    const { all, bucket, key } = nsfwBucket(chatId);
+    const next = rebuildBucket(bucket, chat);
+    if (removeName) {
+        delete next.chars[removeName];
+        next.order = next.order.filter(n => n !== removeName);
+        if (next.pin === removeName) next.pin = null;
+    }
+    all[key] = next;
+    writeAll(all);
 }
 
 /* ────────────────────────── 注入 ────────────────────────── */
@@ -1132,6 +1427,8 @@ export function buildCharBlock(name, profile) {
         /* ★W421：没有值的字段也发一个空位 `id = `，让 AI 下一轮自己补 */
         addTo(f.group, val ? (f.id + ' = ' + val) : (f.id + ' = '), f.ord);   /* ★W438：发送顺序跟指南行序 */
     });
+    const allowed0 = {};
+    fields.forEach((f0) => { allowed0[f0.id] = 1; });
     /* 自定义字段跟普通字段一起发 */
     try {
         const ex = profile.extra || {};
@@ -1140,6 +1437,7 @@ export function buildCharBlock(name, profile) {
             const e0 = ex[id] || {};
             /* ★W392：近况只给自己看 —— 不发给 AI（否则它会把上一份照抄/拿正文事件重写一遍） */
             const g0 = nsfwGuideMeta(id) || {};
+            if (nsfwMaleFrontHidden(profile, id, g0.group || e0.group)) return;   /* ★W468b */
             if (id === 'gapLog' || String(g0.group || e0.group || '') === '近况') return;   /* ★W437：组以指南为准 */
             if (Array.isArray(e0.list) && e0.list.length) return;   /* 多行字段一律不发送 */
             const v = String(e0.value == null ? "" : e0.value).trim();
@@ -1166,6 +1464,9 @@ export function buildCharBlock(name, profile) {
         Object.keys(gm0).forEach((id) => {
             if (id === 'name' || id === 'snapTime') return;   /* ★W436：gapLog 没值时也占一行 */
             if (sent0[id]) return;
+            if (fieldById(id) && !allowed0[id]) return;   /* ★W468：男性不补前穴空位（否则 AI 下一轮会拿选项把它填上） */
+            const gx0 = gm0[id] || {};
+            if (nsfwMaleFrontHidden(profile, id, gx0.group)) return;   /* ★W468b：清单外字段同样不补 */
             if (!nsfwGuideAllows(id)) return;
             if (/^view/i.test(id)) return;   /* ★W431：他人视线是 desc，不发空位 */
             const g = gm0[id] || {};
@@ -1309,12 +1610,69 @@ export function buildInjection(chatId, opts) {
 const SEND_KEY = 'kimi_nsfw_send';
 const SEND_ONCE_KEY = 'kimi_nsfw_send_once';
 const SEND_OFF_KEY = 'kimi_nsfw_send_off';
-function readSend() {
+function readSendSnapshot(key) {
+    const raw = localStorage.getItem(key);
+    const all = raw == null ? {} : JSON.parse(raw);
+    if (!all || typeof all !== 'object' || Array.isArray(all)) throw new Error('发送偏好无法读取');
+    Object.keys(all).forEach(k => {
+        if (!Array.isArray(all[k]) || all[k].some(n => typeof n !== 'string')) throw new Error('发送偏好名单格式损坏');
+    });
+    return { raw, all };
+}
+function readSendStore(key) { return readSendSnapshot(key).all; }
+function readSend() { return readSendStore(SEND_KEY); }
+// Pre-read all keys; compensate completed writes if a later key fails. Failed
+// compensation is explicit: localStorage provides no cross-key transaction.
+function updateSendStores(chatId, edits) {
+    const snapshots = new Map(), completed = [];
     try {
-        const raw = localStorage.getItem(SEND_KEY);
-        const obj = raw ? (JSON.parse(raw) || {}) : {};
-        return obj && typeof obj === 'object' ? obj : {};
-    } catch (e) { return {}; }
+        const k = String(chatId || 'default');
+        edits.forEach(edit => {
+            if (!snapshots.has(edit.key)) snapshots.set(edit.key, readSendSnapshot(edit.key));
+        });
+        edits.forEach(edit => {
+            const all = snapshots.get(edit.key).all;
+            if (edit.clear) { delete all[k]; return; }
+            const list = Object.prototype.hasOwnProperty.call(all, k) ? all[k].slice() : [];
+            const i = list.indexOf(edit.name);
+            if ((edit.on && i >= 0) || (!edit.on && i < 0)) return;
+            if (edit.on) list.push(edit.name); else list.splice(i, 1);
+            Object.defineProperty(all, k, { value: list, enumerable: true, configurable: true, writable: true });
+        });
+        for (const [key, snapshot] of snapshots) {
+            const next = JSON.stringify(snapshot.all);
+            // Structural no-op must preserve even whitespace in the original bytes.
+            if (next === JSON.stringify(snapshot.raw == null ? {} : JSON.parse(snapshot.raw))) continue;
+            localStorage.setItem(key, next);
+            completed.push(key);
+        }
+        return { ok: true, changed: completed.length > 0 };
+    } catch (error) {
+        const rollbackFailed = [];
+        completed.reverse().forEach(key => {
+            try {
+                const raw = snapshots.get(key).raw;
+                if (raw == null) localStorage.removeItem(key); else localStorage.setItem(key, raw);
+            } catch (rollbackError) { rollbackFailed.push(key); }
+        });
+        const partial = rollbackFailed.length > 0;
+        return { ok: false, changed: partial, partial, error: stateError(error) + (partial ? '；发送偏好只完成部分修改，回滚未完成，请重新读取核对' : ''), rollbackFailed };
+    }
+}
+function setSendMember(key, chatId, name, on) {
+    return updateSendStores(chatId, [{ key, name, on }]);
+}
+function sendPreferenceNotice(result) {
+    try { if (typeof toastr !== 'undefined') toastr.error(result.error, result.partial ? '发送偏好部分修改，请核对' : '发送偏好保存失败，未更改勾选'); } catch (e) {}
+}
+function changeSendCheckbox(cb, chatId, auto, autoPicks, previous) {
+    const name = cb.getAttribute('data-send');
+    const edits = !auto ? [{ key: SEND_KEY, name, on: cb.checked }]
+        : cb.checked ? [{ key: SEND_OFF_KEY, name, on: false }].concat(autoPicks.indexOf(name) < 0 ? [{ key: SEND_ONCE_KEY, name, on: true }] : [])
+        : [{ key: SEND_ONCE_KEY, name, on: false }, { key: SEND_OFF_KEY, name, on: true }];
+    const result = updateSendStores(chatId, edits);
+    if (!result.ok) { cb.checked = previous; sendPreferenceNotice(result); return false; }
+    return true;
 }
 /** 这个聊天手动勾选要发送的角色 */
 export function nsfwSendPicks(chatId) {
@@ -1325,73 +1683,26 @@ export function nsfwSendPicks(chatId) {
     } catch (e) { return []; }
 }
 export function nsfwSetSendPick(chatId, name, on) {
-    try {
-        const all = readSend();
-        const k = String(chatId || 'default');
-        const list = Array.isArray(all[k]) ? all[k].slice() : [];
-        const i = list.indexOf(name);
-        if (on && i < 0) list.push(name);
-        if (!on && i >= 0) list.splice(i, 1);
-        all[k] = list;
-        localStorage.setItem(SEND_KEY, JSON.stringify(all));
-    } catch (e) { }
+    return setSendMember(SEND_KEY, chatId, name, on);
 }
 /** ★W364：AUTO 下手动追加的一次性名单（发完即清） */
 export function nsfwSendOnce(chatId) {
-    try {
-        const raw = localStorage.getItem(SEND_ONCE_KEY);
-        const all = raw ? (JSON.parse(raw) || {}) : {};
-        const k = String(chatId || 'default');
-        return Array.isArray(all[k]) ? all[k].slice() : [];
-    } catch (e) { return []; }
+    try { const all = readSendStore(SEND_ONCE_KEY); return (all[String(chatId || 'default')] || []).slice(); }
+    catch (e) { return []; }
 }
 export function nsfwSetSendOnce(chatId, name, on) {
-    try {
-        const raw = localStorage.getItem(SEND_ONCE_KEY);
-        const all = raw ? (JSON.parse(raw) || {}) : {};
-        const k = String(chatId || 'default');
-        const list = Array.isArray(all[k]) ? all[k].slice() : [];
-        const i = list.indexOf(name);
-        if (on && i < 0) list.push(name);
-        if (!on && i >= 0) list.splice(i, 1);
-        all[k] = list;
-        localStorage.setItem(SEND_ONCE_KEY, JSON.stringify(all));
-    } catch (e) { }
+    return setSendMember(SEND_ONCE_KEY, chatId, name, on);
 }
 /** ★W368：AUTO 下「本轮临时排除」名单（发完同样清） */
 export function nsfwSendOff(chatId) {
-    try {
-        const raw = localStorage.getItem(SEND_OFF_KEY);
-        const all = raw ? (JSON.parse(raw) || {}) : {};
-        const k = String(chatId || 'default');
-        return Array.isArray(all[k]) ? all[k].slice() : [];
-    } catch (e) { return []; }
+    try { const all = readSendStore(SEND_OFF_KEY); return (all[String(chatId || 'default')] || []).slice(); }
+    catch (e) { return []; }
 }
 export function nsfwSetSendOff(chatId, name, on) {
-    try {
-        const raw = localStorage.getItem(SEND_OFF_KEY);
-        const all = raw ? (JSON.parse(raw) || {}) : {};
-        const k = String(chatId || 'default');
-        const list = Array.isArray(all[k]) ? all[k].slice() : [];
-        const i = list.indexOf(name);
-        if (on && i < 0) list.push(name);
-        if (!on && i >= 0) list.splice(i, 1);
-        all[k] = list;
-        localStorage.setItem(SEND_OFF_KEY, JSON.stringify(all));
-    } catch (e) { }
+    return setSendMember(SEND_OFF_KEY, chatId, name, on);
 }
 export function nsfwClearSendOnce(chatId) {
-    try {
-        const raw = localStorage.getItem(SEND_ONCE_KEY);
-        const all = raw ? (JSON.parse(raw) || {}) : {};
-        const k = String(chatId || 'default');
-        delete all[k];
-        localStorage.setItem(SEND_ONCE_KEY, JSON.stringify(all));
-        const raw2 = localStorage.getItem(SEND_OFF_KEY);
-        const all2 = raw2 ? (JSON.parse(raw2) || {}) : {};
-        delete all2[k];
-        localStorage.setItem(SEND_OFF_KEY, JSON.stringify(all2));
-    } catch (e) { }
+    return updateSendStores(chatId, [{ key: SEND_ONCE_KEY, clear: true }, { key: SEND_OFF_KEY, clear: true }]);
 }
 /** ★W366：只看「真实用户输入」——作者用 4A 包裹/<user_input> 把用户楼层包了，小说前缀里的名字不该触发 AUTO */
 function realUserInput(t) {
@@ -1446,22 +1757,31 @@ export function nsfwAutoPicks(chatId, msgs) {
     } catch (e) { return []; }
 }
 /** 本轮该发送谁：AUTO=正文提到的人 + 手动一次性追加；手动=勾选的 */
-export function nsfwPickForRequest(chatId, msgs) {
+export function nsfwPickForRequest(chatId, msgs, fullMsgs, opts) {
     try {
         const st = _getSettings() || {};
         /* ★W327：AUTO 勾上=按正文提到谁发谁；不勾=只发手动勾选的人；都不选=不发送 */
         const auto = (st.nsfwAutoSend !== undefined) ? !!st.nsfwAutoSend : (String(st.nsfwSendMode || 'auto') === 'auto');
         const { bucket } = nsfwBucket(chatId);
-        const live = nsfwStateFromMsgs(msgs);
-        const names = (bucket.order || []).filter((n) => bucket.chars[n]);
+        const bounded = !!(opts && opts.bounded);
+        const live = nsfwStateFromMsgs(bounded && Array.isArray(fullMsgs) ? fullMsgs : msgs);
+        /* ★W464：fullMsgs = 整段聊天到最后一条 user（悬浮条 AUTO 用的就是这份）。
+           请求 msgs 被上游裁掉/改写时，不能只按它算 AUTO —— 否则 UI 勾着的名字会在请求时被悄悄丢掉。 */
+        const full = (Array.isArray(fullMsgs) && (bounded || fullMsgs.length)) ? fullMsgs : null;
+        const liveFull = full ? nsfwStateFromMsgs(full) : null;
+        const names = (bucket.order || []).filter((n) => bucket.chars[n] && (!bounded || bucket.chars[n].manual || Object.keys(bucket.chars[n].static || {}).length));
         Object.keys(live.chars).forEach((n) => { if (names.indexOf(n) < 0) names.push(n); });
+        if (bounded) nsfwSendPicks(chatId).concat(nsfwSendOnce(chatId)).forEach(n => { if (!names.includes(n)) names.push(n); });
+        if (liveFull) Object.keys(liveFull.chars).forEach((n) => { if (names.indexOf(n) < 0) names.push(n); });
         if (!names.length) return [];
         if (!auto) {
             const picks = nsfwSendPicks(chatId);
             return names.filter((n) => picks.indexOf(n) >= 0);
         }
-        /* AUTO：正文命中的 ∪ 手动追加 */
-        const base = nsfwAutoPicks(chatId, msgs);
+        /* AUTO：正文命中的 ∪ 手动追加（正文口径优先用整段聊天，和悬浮条一致） */
+        const history = full || msgs;
+        // AUTO candidates come from bounded history, never from a future bucket-only role.
+        const base = nsfwAutoPicks(chatId, history).filter(n => !bounded || names.includes(n));
         const once = nsfwSendOnce(chatId);
         const off = nsfwSendOff(chatId);
         const union = base.filter((n) => off.indexOf(n) < 0);
@@ -1518,16 +1838,29 @@ export function nsfwBuildSend(chatId, names, msgs, opts) {
         const { bucket } = nsfwBucket(chatId);
         /* ★W343：给了 msgs 就只认「这次请求带的历史」——正在重roll/新分支的那一楼不在里面，
            绝不能拿它（或缓存里的旧值）当状态；只有没给 msgs（预览等）才退回缓存档案 */
-        const live = Array.isArray(msgs) ? nsfwStateFromMsgs(msgs) : null;
+        const bounded = !!(opts && opts.bounded);
+        const history = bounded && opts && Array.isArray(opts.fullMsgs) ? opts.fullMsgs : msgs;
+        const live = Array.isArray(history) ? nsfwStateFromMsgs(history) : null;
+        /* ★W464：请求 msgs 可能缺了旧块（上游裁历史/改内容），整段聊天里还有 ⇒ 用整段那份补齐。
+           合并顺序：缓存 → 整段 → 请求（越靠后越新）。 */
+        const fullMsgs = !bounded && (opts && Array.isArray(opts.fullMsgs) && opts.fullMsgs.length) ? opts.fullMsgs : null;
+        const liveFull = fullMsgs ? nsfwStateFromMsgs(fullMsgs) : null;
         const parts = [];
         (names || []).forEach((n) => {
             /* ★W458：勾了谁就发谁 —— 请求 msgs 可能被酒馆预算裁掉/被处理后少了旧块；
                请求历史里没有这个人的块时，回「按整段聊天重建的缓存」找他的最近一份状态。
                这样 6 楼 A、8 楼 B、10 楼 A+B、14 楼只写了 A：勾 B 也能从 8/10 楼的状态补出来。 */
             const lRec = live ? (live.chars[n] || null) : null;
-            const bRec = bucket.chars[n] || null;
-            const prof = mergeSendProfile(bRec, lRec);
-            try { console.log('[余温工具箱] NSFW发送·' + n + '：历史块=' + (lRec ? '有' : '无') + ' 缓存块=' + (bRec ? '有' : '无') + ' 合并字段=' + Object.keys((prof && prof.stats) || {}).length + ' 扩展=' + Object.keys((prof && prof.extra) || {}).length); } catch (eM) { }
+            const fRec = liveFull ? (liveFull.chars[n] || null) : null;
+            const cached = bucket.chars[n] || null;
+            const bRec = bounded ? {
+                sex: cached && cached.manual ? cached.sex : undefined,
+                role: cached && cached.manual ? cached.role : undefined,
+                manual: !!(cached && cached.manual), static: cached && cached.static || {},
+                stats: {}, extra: {}, desc: {}
+            } : cached;
+            const prof = mergeSendProfile(mergeSendProfile(bRec, fRec), lRec);
+            try { console.log('[余温工具箱] NSFW发送·' + n + '：请求块=' + (lRec ? '有' : '无') + ' 全量块=' + (fRec ? '有' : '无') + ' 缓存块=' + (bRec ? '有' : '无') + ' 合并字段=' + Object.keys((prof && prof.stats) || {}).length + ' 扩展=' + Object.keys((prof && prof.extra) || {}).length); } catch (eM) { }
             if (!prof) return;
             const b = buildCharBlock(n, prof);
             if (!b) return;
@@ -1561,13 +1894,14 @@ export function nsfwStripHistory(msgs) {
     return changed;
 }
 
-export function nsfwRewriteRequest(msgs, chatId) {
+export function nsfwRewriteRequest(msgs, chatId, fullMsgs, opts) {
     const out = { changed: false, names: [], text: '' };
     try {
         if (!Array.isArray(msgs) || !msgs.length) return out;
         /* ① 拼状态：必须在剥块之前（历史里还留着块） */
-        out.names = nsfwPickForRequest(chatId, msgs);
-        out.text = out.names.length ? nsfwBuildSend(chatId, out.names, msgs) : '';
+        out.names = nsfwPickForRequest(chatId, msgs, fullMsgs, opts);
+        out.text = out.names.length ? nsfwBuildSend(chatId, out.names, msgs, { fullMsgs: fullMsgs, bounded: !!(opts && opts.bounded) }) : '';
+        try { console.log('[余温工具箱] NSFW请求：请求消息=' + msgs.length + ' 全量消息=' + (Array.isArray(fullMsgs) ? fullMsgs.length : '无') + ' 选中=' + out.names.join('、') + ' 发送字符=' + out.text.length); } catch (eD) { }
         /* ★W447b：只把真的写进注入段的人算作“这次发了”（历史里没块的人已被 nsfwBuildSend 跳过） */
         if (out.text) out.names = out.names.filter((n) => out.text.indexOf('以下是' + n) >= 0 || out.text.indexOf('name 角色名 = ' + n) >= 0);
         else out.names = [];
@@ -1591,12 +1925,90 @@ export function nsfwRewriteRequest(msgs, chatId) {
                 else msgs.unshift({ role: 'system', content: out.text });
             }
             out.changed = true;
-            try { nsfwClearSendOnce(chatId); } catch (e) { }
+            out.sendClear = nsfwClearSendOnce(chatId);
+            if (!out.sendClear.ok) sendPreferenceNotice(out.sendClear);
         }
     } catch (e) { }
     return out;
 }
 
+/** Mobile: ST's transformed html can have height 0 and a scrolled origin.
+ * Give these two floats their own explicit viewport, without changing host roots. */
+let _nsfwViewport = null;
+function nsfwViewportSize() {
+    const v = window.visualViewport;
+    return { x: v && Number.isFinite(v.offsetLeft) ? v.offsetLeft : 0,
+        y: v && Number.isFinite(v.offsetTop) ? v.offsetTop : 0,
+        w: v && v.width > 0 ? v.width : window.innerWidth,
+        h: v && v.height > 0 ? v.height : window.innerHeight };
+}
+function nsfwFloatPlace(el, point) {
+    if (!el || !el.isConnected || el.style.display === 'none') return;
+    const v = nsfwViewportSize(), r = el.getBoundingClientRect();
+    const layer = el.parentNode.getBoundingClientRect();
+    const old = el._nsfwFloatPoint;
+    const want = point || old || { x: v.w - r.width - 12, y: v.h - r.height - (el.id === 'yw-nsfw-preview' ? 130 : 86) };
+    const x = Math.max(8, Math.min(Math.max(8, v.w - r.width - 8), Number.isFinite(want.x) ? want.x : 8));
+    const y = Math.max(8, Math.min(Math.max(8, v.h - r.height - 8), Number.isFinite(want.y) ? want.y : 8));
+    el.style.left = (v.x + x - layer.left) + 'px';
+    el.style.top = (v.y + y - layer.top) + 'px';
+    el.style.right = 'auto'; el.style.bottom = 'auto';
+    // Only user/restored positions become sticky. Defaults stay bottom-anchored on resize.
+    if (point || old) el._nsfwFloatPoint = { x: x, y: y };
+}
+function nsfwFloatFocus() {
+    const el = document.activeElement;
+    const box = document.getElementById('yw-nsfw-preview');
+    if (!el || !box || !el.closest || el.closest('#yw-nsfw-preview') !== box) return;
+    const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+    const hd = box.querySelector('.yw-nsfw-pv-hd');
+    const top = b.top + (hd ? hd.getBoundingClientRect().height : 0) + 8;
+    const bottom = b.top + b.height - 8;
+    if (r.top < top) box.scrollTop -= top - r.top;
+    else if (r.top + r.height > bottom) box.scrollTop += r.top + r.height - bottom;
+}
+function nsfwFloatRefresh() {
+    const layer = _nsfwViewport;
+    if (!layer) return;
+    const v = nsfwViewportSize();
+    layer.style.width = v.w + 'px'; layer.style.height = v.h + 'px';
+    layer.style.left = '0px'; layer.style.top = '0px';
+    const r = layer.getBoundingClientRect();
+    layer.style.left = (v.x - r.left) + 'px'; layer.style.top = (v.y - r.top) + 'px';
+    ['yw-nsfw-sender', 'yw-nsfw-preview'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.maxWidth = Math.max(0, v.w - 16) + 'px';
+        el.style.maxHeight = Math.max(32, Math.min(v.h - 16, v.h * (id === 'yw-nsfw-preview' ? .7 : .4))) + 'px';
+        nsfwFloatPlace(el);
+    });
+    nsfwFloatFocus();
+}
+function nsfwFloatMount(el) {
+    if (!_nsfwViewport || !_nsfwViewport.isConnected) {
+        const layer = document.createElement('div'); layer.id = 'yw-nsfw-viewport';
+        document.documentElement.appendChild(layer); _nsfwViewport = layer;
+        if (window.addEventListener) window.addEventListener('resize', nsfwFloatRefresh);
+        const v = window.visualViewport;
+        if (v && v.addEventListener) { v.addEventListener('resize', nsfwFloatRefresh); v.addEventListener('scroll', nsfwFloatRefresh); }
+    }
+    if (el.parentNode !== _nsfwViewport) _nsfwViewport.appendChild(el);
+    nsfwFloatRefresh();
+}
+function nsfwFloatRelease() {
+    if (!_nsfwViewport || _nsfwViewport.children.length) return;
+    if (window.removeEventListener) window.removeEventListener('resize', nsfwFloatRefresh);
+    const v = window.visualViewport;
+    if (v && v.removeEventListener) { v.removeEventListener('resize', nsfwFloatRefresh); v.removeEventListener('scroll', nsfwFloatRefresh); }
+    _nsfwViewport.remove(); _nsfwViewport = null;
+}
+function nsfwFloatRestore(el, key) {
+    try {
+        const p = JSON.parse(localStorage.getItem(key) || 'null');
+        if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) nsfwFloatPlace(el, p);
+        else nsfwFloatPlace(el);
+    } catch (e) { nsfwFloatPlace(el); }
+}
 /** ★W327 悬浮发送条：一条横条（可拖）+ AUTO 勾 + 名字列表；点名字看最新快照 */
 function nsfwBindSenderDrag(host, grip) {
     /* ★W410：绑定判据必须落在**把手**上 —— 悬浮条每次刷新都会重建 innerHTML，
@@ -1610,26 +2022,33 @@ function nsfwBindSenderDrag(host, grip) {
         if (!on) return;
         const p = pt(e);
         if (!p) return;
-        const x = Math.max(0, Math.min(window.innerWidth - 80, ox + p.clientX - sx));
-        const y = Math.max(0, Math.min(window.innerHeight - 32, oy + p.clientY - sy));
-        host.style.left = x + 'px'; host.style.top = y + 'px';
+        const v = nsfwViewportSize();
+        nsfwFloatPlace(host, { x: ox + p.clientX - sx - v.x, y: oy + p.clientY - sy - v.y });
         try { e.preventDefault(); } catch (e1) { }
     };
-    const up = () => {
-        if (!on) return; on = false;
+    const dispose = () => {
+        on = false;
         document.removeEventListener('pointermove', move, true);
         document.removeEventListener('mousemove', move, true);
         document.removeEventListener('touchmove', move, true);
         document.removeEventListener('pointerup', up, true);
         document.removeEventListener('mouseup', up, true);
         document.removeEventListener('touchend', up, true);
-        const r = host.getBoundingClientRect();
-        try { localStorage.setItem('kimi_nsfw_sender_pos', JSON.stringify({ x: Math.round(r.left), y: Math.round(r.top) })); } catch (e) { }
+        document.removeEventListener('pointercancel', dispose, true);
+        document.removeEventListener('touchcancel', dispose, true);
+    };
+    host._nsfwDisposeDrag = dispose;
+    const up = () => {
+        if (!on) return;
+        dispose();
+        const r = host.getBoundingClientRect(), v = nsfwViewportSize();
+        try { localStorage.setItem('kimi_nsfw_sender_pos', JSON.stringify({ x: Math.round(r.left - v.x), y: Math.round(r.top - v.y) })); } catch (e) { }
     };
     const down = (e) => {
         const r = host.getBoundingClientRect();
         const p = pt(e);
         if (!p) return;
+        dispose();
         on = true; sx = p.clientX; sy = p.clientY; ox = r.left; oy = r.top;
         host.style.right = 'auto'; host.style.bottom = 'auto';
         document.addEventListener('pointermove', move, true);
@@ -1638,6 +2057,8 @@ function nsfwBindSenderDrag(host, grip) {
         document.addEventListener('pointerup', up, true);
         document.addEventListener('mouseup', up, true);
         document.addEventListener('touchend', up, true);
+        document.addEventListener('pointercancel', dispose, true);
+        document.addEventListener('touchcancel', dispose, true);
         try { e.preventDefault(); } catch (e2) { }
         try { e.stopPropagation(); } catch (e3) { }
     };
@@ -1746,28 +2167,147 @@ export function nsfwApplyFold(card, chatId, mesid, name) {
     } catch (e) { }
 }
 
-/** 点名字 → 用同一套美化卡看最新快照 */
+/** ★W465：列出「带状态块 + 正文里出现这个名字」的楼号（只做字符串预筛，不解析、不建卡）。 */
+export function nsfwSnapshotFloorIds(chat, name) {
+    const out = [];
+    try {
+        for (let i = 0; i < (chat || []).length; i++) {
+            const m = chat[i];
+            if (!m || m.is_user || m.is_system) continue;
+            const t = String(m.mes || '');
+            if (t.indexOf('<nsfw') < 0 && t.indexOf('data-nsfw') < 0) continue;
+            if (t.indexOf(name) < 0) continue;
+            out.push(i);
+        }
+    } catch (e) { }
+    return out;
+}
+
+/** 点名字 → 用同一套美化卡看快照；★W465 顶栏 ◀ ▶ 按楼层翻，点开才解析那一楼 */
 export function nsfwShowSnapshot(name) {
     try {
         const chatId = nsfwChatId();
-        const { bucket } = nsfwBucket(chatId);
-        const rec = bucket.chars[name];
-        if (!rec) return;
+        const ctx = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
+        const chat = (ctx && Array.isArray(ctx.chat)) ? ctx.chat : [];
+        const previewIdentity = chatIdentity(chatId);
+        /* ★W465：只挑「正文里出现过这个名字 + 带状态块」的楼号；不解析、不建卡。 */
+        const ids = nsfwSnapshotFloorIds(chat, name);
         let box = document.getElementById('yw-nsfw-preview');
         if (!box) {
             box = document.createElement('div');
             box.id = 'yw-nsfw-preview';
-            document.body.appendChild(box);
+            nsfwFloatMount(box);
         }
-        box.innerHTML = '<div class="yw-nsfw-pv-hd"><span>最新快照 · ' + esc(name) + '</span><button type="button" class="yw-nsfw-pv-x">✕</button></div>';
+        nsfwFloatMount(box);
+        if (box._nsfwDisposeDrag) box._nsfwDisposeDrag();
+        const closePreview = () => {
+            if (box._nsfwDisposeDrag) box._nsfwDisposeDrag();
+            box.style.display = 'none';
+        };
+        box.innerHTML = '<div class="yw-nsfw-pv-hd">'
+            + '<button type="button" class="yw-nsfw-pv-nav" data-nav="prev" title="上一楼">◀</button>'
+            + '<span class="yw-nsfw-pv-title"></span>'
+            + '<button type="button" class="yw-nsfw-pv-nav" data-nav="next" title="下一楼">▶</button>'
+            + '<button type="button" class="yw-nsfw-pv-del" title="删除这个角色的所有快照">🗑</button>'
+            + '<button type="button" class="yw-nsfw-pv-x" aria-label="关闭预览" title="关闭预览">✕</button>'
+            + '</div>';
         const body = document.createElement('div');
         body.className = 'yw-nsfw-pv-body';
-        const pvCard = nsfwRenderCard(name, rec);
-        body.appendChild(pvCard);
-        try { nsfwApplyFold(pvCard, 'pv', 'pv', name); } catch (eF) { }
-        try { nsfwApplyTab(pvCard, 'pv', 'pv', name); } catch (eT) { }
         box.appendChild(body);
+        const titleEl = box.querySelector('.yw-nsfw-pv-title');
+        const prevBtn = box.querySelector('[data-nav="prev"]');
+        const nextBtn = box.querySelector('[data-nav="next"]');
+        const delBtn = box.querySelector('.yw-nsfw-pv-del');
+        if (delBtn) {
+            delBtn.addEventListener('click', async (e) => {
+                try { e.stopPropagation(); } catch (e0) { }
+                const msg = '删除「' + name + '」在这段聊天里的所有 NSFW 快照（所有楼层和所有历史分支），并从名册移除？楼层本身不会删除。';
+                let yes = false;
+                try {
+                    const c0 = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
+                    if (c0 && c0.Popup && c0.Popup.show && typeof c0.Popup.show.confirm === 'function') {
+                        yes = await c0.Popup.show.confirm('删除所有快照', msg, { okButton: '删除', cancelButton: '取消' });
+                    } else {
+                        yes = window.confirm(msg);
+                    }
+                } catch (e1) {
+                    try { yes = window.confirm(msg); } catch (e2) { yes = false; }
+                }
+                if (!yes) return;
+                if (!sameChat(previewIdentity)) { stateNotice('聊天已切换，请重新打开'); return; }
+                delBtn.disabled = true;
+                const result = await nsfwDeleteCharBlocks(chatId, name);
+                delBtn.disabled = false;
+                if (!result.ok) { stateNotice(result.error); return; }
+                try { closePreview(); } catch (e3) { }
+            });
+        }
+        const recOf = (id) => {
+            // Parse the current source each time; a floor-number-only cache survives edits/swipes.
+            if (!sameChat(previewIdentity)) return null;
+            return nsfwProfilesFromText(String((chat[id] && chat[id].mes) || ''))[name] || null;
+        };
+        let pos = -1;
+        const findValid = (start, step) => {
+            for (let i = start; i >= 0 && i < ids.length; i += step) { if (recOf(ids[i])) return i; }
+            return -1;
+        };
+        const paint = (idx) => {
+            const id = ids[idx];
+            const rec = recOf(id);
+            if (!rec) return false;
+            /* ★W466：翻楼前记下当前停在哪个分页 —— 新卡默认会回到「状态」，这里把它按回去 */
+            const oldOn = body.querySelector('.yw-nsfw-tab.on');
+            const oldTabs = Array.prototype.slice.call(body.querySelectorAll('.yw-nsfw-tab'));
+            const keepTab = oldOn ? oldOn.getAttribute('data-tab') : '';
+            const keepIdx = oldOn ? oldTabs.indexOf(oldOn) : -1;
+            body.innerHTML = '';
+            const pvCard = nsfwRenderCard(name, rec, { source: nsfwFloorSource(chatId, id) });
+            pvCard.dataset.mesid = String(id);
+            try { nsfwApplyFold(pvCard, 'pv', String(id), name); } catch (eF) { }
+            try { nsfwApplyTab(pvCard, 'pv', String(id), name); } catch (eT) { }
+            body.appendChild(pvCard);
+            if (keepTab || keepIdx >= 0) {
+                const tabs = Array.prototype.slice.call(pvCard.querySelectorAll('.yw-nsfw-tab'));
+                let tb = keepTab ? tabs.filter((x) => x.getAttribute('data-tab') === keepTab)[0] : null;
+                if (!tb && keepIdx >= 0 && keepIdx < tabs.length) tb = tabs[keepIdx];
+                if (tb) {
+                    try { tb.click(); } catch (eC) { }
+                    try { _tabMap.set(_foldKey('pv', String(id), name), tb.getAttribute('data-tab')); } catch (eM) { }
+                }
+            }
+            titleEl.textContent = '第 ' + id + ' 楼 · ' + name;
+            prevBtn.style.display = ''; nextBtn.style.display = '';
+            prevBtn.disabled = findValid(idx - 1, -1) < 0;
+            nextBtn.disabled = findValid(idx + 1, 1) < 0;
+            nsfwFloatRefresh();
+            return true;
+        };
+        const go = (start, step) => {
+            const n = findValid(start, step);
+            if (n < 0) return false;
+            pos = n;
+            return paint(n);
+        };
+        const showBucket = () => {
+            const { bucket } = nsfwBucket(chatId);
+            const rec = bucket.chars[name];
+            if (!rec) return false;
+            titleEl.textContent = '最新快照 · ' + name;
+            prevBtn.style.display = 'none'; nextBtn.style.display = 'none';
+            body.innerHTML = '';
+            const pvCard = nsfwRenderCard(name, rec, { rosterSource: { identity: chatIdentity(chatId), version: JSON.stringify(rec) } });
+            try { nsfwApplyFold(pvCard, 'pv', 'bucket', name); } catch (eF) { }
+            try { nsfwApplyTab(pvCard, 'pv', 'bucket', name); } catch (eT) { }
+            body.appendChild(pvCard);
+            return true;
+        };
+        let shown = ids.length ? go(ids.length - 1, -1) : false;
+        if (!shown) { shown = showBucket(); if (!shown) { try { box.style.display = 'none'; } catch (e0) { } return; } }
+        prevBtn.addEventListener('click', (e) => { try { e.stopPropagation(); } catch (e0) { } if (!prevBtn.disabled) go(pos - 1, -1); });
+        nextBtn.addEventListener('click', (e) => { try { e.stopPropagation(); } catch (e0) { } if (!nextBtn.disabled) go(pos + 1, 1); });
         box.style.display = 'block';
+        nsfwFloatRefresh();
         /* ★W362：预览浮层可拖动（按住标题栏），位置记住 */
         try {
             const hd = box.querySelector('.yw-nsfw-pv-hd');
@@ -1775,31 +2315,47 @@ export function nsfwShowSnapshot(name) {
                 hd.dataset.dragBound = '1';
                 hd.style.cursor = 'move';
                 let on = false, sx = 0, sy = 0, ox = 0, oy = 0;
+                const dispose = () => {
+                    on = false;
+                    document.removeEventListener('mousemove', move);
+                    document.removeEventListener('mouseup', up);
+                };
+                const move = (e) => {
+                    if (!on) return;
+                    if (!box.isConnected || box.style.display === 'none') { dispose(); return; }
+                    const v = nsfwViewportSize();
+                    nsfwFloatPlace(box, { x: ox + e.clientX - sx - v.x, y: oy + e.clientY - sy - v.y });
+                };
+                const up = () => {
+                    if (!on) return;
+                    dispose();
+                    const r = box.getBoundingClientRect(), v = nsfwViewportSize();
+                    try { localStorage.setItem('kimi_nsfw_preview_pos', JSON.stringify({ x: Math.round(r.left - v.x), y: Math.round(r.top - v.y) })); } catch (e) { }
+                };
+                box._nsfwDisposeDrag = dispose;
                 hd.addEventListener('mousedown', (e) => {
+                    if (e.target && e.target.closest && e.target.closest('button')) return;
                     const r = box.getBoundingClientRect();
                     on = true; sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
                     box.style.right = 'auto'; box.style.bottom = 'auto';
+                    document.addEventListener('mousemove', move);
+                    document.addEventListener('mouseup', up);
                     e.preventDefault();
                 });
-                document.addEventListener('mousemove', (e) => {
-                    if (!on) return;
-                    const x = Math.max(0, Math.min(window.innerWidth - 80, ox + e.clientX - sx));
-                    const y = Math.max(0, Math.min(window.innerHeight - 40, oy + e.clientY - sy));
-                    box.style.left = x + 'px'; box.style.top = y + 'px';
-                });
-                document.addEventListener('mouseup', () => {
-                    if (!on) return; on = false;
-                    const r = box.getBoundingClientRect();
-                    try { localStorage.setItem('kimi_nsfw_preview_pos', JSON.stringify({ x: Math.round(r.left), y: Math.round(r.top) })); } catch (e) { }
-                });
             }
-            const pv = JSON.parse(localStorage.getItem('kimi_nsfw_preview_pos') || 'null');
-            if (pv && Number.isFinite(pv.x)) { box.style.left = pv.x + 'px'; box.style.top = pv.y + 'px'; box.style.right = 'auto'; box.style.bottom = 'auto'; }
+            nsfwFloatRestore(box, 'kimi_nsfw_preview_pos');
         } catch (e) { }
-        box.addEventListener('mousedown', (e) => e.stopPropagation());
-        box.addEventListener('click', (e) => e.stopPropagation());
-        box.querySelector('.yw-nsfw-pv-x').addEventListener('click', () => { box.style.display = 'none'; });
-    } catch (e) { }
+        if (!box._nsfwRootBound) {
+            box._nsfwRootBound = true;
+            box.addEventListener('mousedown', (e) => e.stopPropagation());
+            box.addEventListener('click', (e) => {
+                e.stopPropagation();
+                nsfwFloatRefresh();
+            });
+            box.addEventListener('focusin', nsfwFloatFocus);
+        }
+        box.querySelector('.yw-nsfw-pv-x').addEventListener('click', closePreview);
+    } catch (error) { stateNotice(error); }
 }
 /** ★W381：角色芯片（设置卡「当前聊天」和悬浮条共用同一套外观与勾选逻辑） */
 export function nsfwChipsRender(host, chatId) {
@@ -1823,19 +2379,9 @@ export function nsfwChipsRender(host, chatId) {
             + '<input type="checkbox" data-send="' + esc(n) + '"' + ((auto ? (((autoPicks.indexOf(n) >= 0 && offNow.indexOf(n) < 0) || once.indexOf(n) >= 0)) : (picks.indexOf(n) >= 0)) ? ' checked' : '') + '/>'
             + '<b class="yw-nsfw-sd-name" data-name="' + esc(n) + '" title="点名字看最新快照">' + esc(n) + '</b></span>').join('') || '<span class="yw-nsfw-sd-empty">无档案</span>';
         host.querySelectorAll('input[data-send]').forEach((cb) => {
+            const previous = cb.checked;
             cb.addEventListener('change', () => {
-                const nm0 = cb.getAttribute('data-send');
-                if (auto) {
-                    if (cb.checked) {
-                        nsfwSetSendOff(chatId, nm0, false);
-                        if (autoPicks.indexOf(nm0) < 0) nsfwSetSendOnce(chatId, nm0, true);
-                    } else {
-                        nsfwSetSendOnce(chatId, nm0, false);
-                        nsfwSetSendOff(chatId, nm0, true);
-                    }
-                } else {
-                    nsfwSetSendPick(chatId, nm0, cb.checked);
-                }
+                if (!changeSendCheckbox(cb, chatId, auto, autoPicks, previous)) return;
                 nsfwChipsRender(host, chatId);
                 try { nsfwMountSender(); } catch (e) { }
             });
@@ -1853,8 +2399,10 @@ export function nsfwMountSender() {
         if (typeof document === 'undefined') return;
         const st = _getSettings() || {};
         if (!st.nsfwEnabled || st.nsfwSenderEnabled === false) {
-            const old0 = document.getElementById('yw-nsfw-sender'); if (old0) old0.remove();
-            const pv0 = document.getElementById('yw-nsfw-preview'); if (pv0) pv0.remove();
+            const old0 = document.getElementById('yw-nsfw-sender');
+            if (old0) { if (old0._nsfwDisposeDrag) old0._nsfwDisposeDrag(); old0.remove(); }
+            const pv0 = document.getElementById('yw-nsfw-preview'); if (pv0) { if (pv0._nsfwDisposeDrag) pv0._nsfwDisposeDrag(); pv0.remove(); }
+            nsfwFloatRelease();
             return;
         }
         nsfwEnsureStyle();
@@ -1863,8 +2411,9 @@ export function nsfwMountSender() {
             host = document.createElement('div');
             host.id = 'yw-nsfw-sender';
             host.className = 'yw-nsfw-sd';
-            document.body.appendChild(host);
+            nsfwFloatMount(host);
         }
+        nsfwFloatMount(host);
         const chatId = nsfwChatId();
         /* ★W385：先按楼层重建到「没有楼层支撑的旧名字消失」；
            ★W414：同一份聊天内容只重建一次（挂悬浮条的调用点有 10+ 处） */
@@ -1885,10 +2434,7 @@ export function nsfwMountSender() {
         const names = (bucket.order || []).filter((n) => bucket.chars[n]);
         const picks = nsfwSendPicks(chatId);
         const auto = (st.nsfwAutoSend !== undefined) ? !!st.nsfwAutoSend : (String(st.nsfwSendMode || 'auto') === 'auto');
-        try {
-            const pos = JSON.parse(localStorage.getItem('kimi_nsfw_sender_pos') || 'null');
-            if (pos && Number.isFinite(pos.x)) { host.style.left = pos.x + 'px'; host.style.top = pos.y + 'px'; host.style.right = 'auto'; host.style.bottom = 'auto'; }
-        } catch (e) { }
+        // Restore after rendering, so clamp uses the complete sender dimensions.
         /* ★W364：AUTO 下勾选框变成「本轮会发谁」的示意；手动勾一个 = 只加这一轮 */
         const once = nsfwSendOnce(chatId);
         const offNow = nsfwSendOff(chatId);
@@ -1903,34 +2449,36 @@ export function nsfwMountSender() {
         const items = names.map((n) => '<span class="yw-nsfw-sd-item">'
             + '<input type="checkbox" data-send="' + esc(n) + '"' + ((auto ? (((autoPicks.indexOf(n) >= 0 && offNow.indexOf(n) < 0) || once.indexOf(n) >= 0)) : (picks.indexOf(n) >= 0)) ? ' checked' : '') + '/>'
             + '<b class="yw-nsfw-sd-name" data-name="' + esc(n) + '" title="点名字看最新快照">' + esc(n) + '</b></span>').join('');
+        if (host._nsfwDisposeDrag) host._nsfwDisposeDrag();
         host.innerHTML = '<span class="yw-nsfw-sd-grip" title="按住拖动">⠿</span>'
             + '<label class="yw-nsfw-sd-auto" title="自动：上一楼正文或你的消息里出现谁就发谁"><input type="checkbox"' + (auto ? ' checked' : '') + '/><span>AUTO</span></label>'
             + '<span class="yw-nsfw-sd-sep"></span>'
-            + (items || '<span class="yw-nsfw-sd-empty">无档案</span>');
-        host.addEventListener('mousedown', (e) => e.stopPropagation());
-        host.addEventListener('click', (e) => e.stopPropagation());
+            + (items || '<span class="yw-nsfw-sd-empty">无档案</span>')
+            + '<span class="yw-nsfw-sd-tip">发送NSFW状态给AI</span>';
+        if (!host._nsfwRootBound) {
+            host._nsfwRootBound = true;
+            host.addEventListener('mousedown', (e) => e.stopPropagation());
+            host.addEventListener('click', (e) => e.stopPropagation());
+        }
         const autoCb = host.querySelector('.yw-nsfw-sd-auto input');
         autoCb.addEventListener('change', (e) => {
-            st.nsfwAutoSend = !!e.target.checked;
-            /* ★W373：每次「开启 AUTO」= 重新自然判定一次 —— 清掉上一轮的手动追加/排除 */
-            if (st.nsfwAutoSend) { try { nsfwClearSendOnce(chatId); } catch (e3) { } }
-            try { if (_save) _save(); } catch (e2) { }
+            const nextAuto = !!e.target.checked;
+            /* Opening AUTO clears one-round overrides only after both stores validate. */
+            if (nextAuto) {
+                const result = nsfwClearSendOnce(chatId);
+                if (!result.ok) { autoCb.checked = auto; sendPreferenceNotice(result); return; }
+            }
+            st.nsfwAutoSend = nextAuto;
+            try { if (_save) _save(); } catch (error) {
+                st.nsfwAutoSend = auto; autoCb.checked = auto;
+                sendPreferenceNotice({ error: stateError(error) }); return;
+            }
             nsfwMountSender();
         });
         host.querySelectorAll('input[data-send]').forEach((cb) => {
+            const previous = cb.checked;
             cb.addEventListener('change', () => {
-                const nm0 = cb.getAttribute('data-send');
-                if (auto) {
-                    if (cb.checked) {
-                        nsfwSetSendOff(chatId, nm0, false);
-                        if (autoPicks.indexOf(nm0) < 0) nsfwSetSendOnce(chatId, nm0, true);
-                    } else {
-                        nsfwSetSendOnce(chatId, nm0, false);
-                        nsfwSetSendOff(chatId, nm0, true);   /* ★W368：取消勾选 = 只排除这一轮 */
-                    }
-                } else {
-                    nsfwSetSendPick(chatId, nm0, cb.checked);
-                }
+                if (!changeSendCheckbox(cb, chatId, auto, autoPicks, previous)) return;
                 nsfwMountSender();
             });
         });
@@ -1938,6 +2486,8 @@ export function nsfwMountSender() {
             el.addEventListener('click', () => nsfwShowSnapshot(el.getAttribute('data-name')));
         });
         nsfwBindSenderDrag(host, host.querySelector('.yw-nsfw-sd-grip'));
+        nsfwFloatRefresh();
+        nsfwFloatRestore(host, 'kimi_nsfw_sender_pos');
     } catch (e) { }
 }
 /* ────────────────────────── 展示 ────────────────────────── */
@@ -1974,6 +2524,7 @@ function guideEmptyRowsHtml(profile, grp) {
             if (/^view/i.test(id)) return;   /* ★W436：多行字段也占位（视线单独画） */
             if (has[id]) return;
             if (fieldById(id) && !allowed[id]) return;   /* 性别筛掉的字段不占位 */
+            if (nsfwMaleFrontHidden(profile, id, g.group)) return;   /* ★W468b：清单外的 vOrgasmCount 等也不占位 */
             const lab = g.label || id;
             out.push('<div class="yw-nsfw-row yw-nsfw-ph" data-id="' + esc(id) + '" data-type="text" data-ph="1" data-ord="' + esc(String(typeof g.ord === 'number' ? g.ord : 9999)) + '"><span class="k">' + esc(lab) + '</span><span class="v">—</span><span class="yw-nsfw-c"></span></div>');
         });
@@ -2057,7 +2608,26 @@ function rowHtml(f, cell) {
 
 /** 状态卡（v2：分页 tabs，评述在右）；★W445 opts.names = 这一楼所有角色（>1 时卡头出名字切换） */
 export function nsfwRenderCard(name, profile, opts) {
+    /* ★W468：楼层里的 profile 是重解析出来的，sex 可能只是默认值；用 bucket 里已推导/手填的性别兜底。
+       手填性别优先；bucket 已推导成 male 的也盖过楼层的默认 female。 */
+    try {
+        const { bucket } = nsfwBucket(nsfwChatId());
+        const b = bucket.chars[name] || null;
+        if (b) {
+            const merged = Object.assign({}, profile || {});
+            if (b.manual && b.sex) merged.sex = b.sex;
+            else if (b.sex === 'male') merged.sex = 'male';
+            else if (!merged.sex) merged.sex = b.sex;
+            if (!merged.role && b.role) merged.role = b.role;
+            if (merged.manual === undefined) merged.manual = !!b.manual;
+            if (!merged.static && b.static) merged.static = b.static;
+            profile = merged;
+        }
+    } catch (eS) { }
+    profile = profile || {};
     const wrap = document.createElement('div');
+    wrap._nsfwSource = opts && opts.source || null;
+    wrap._nsfwRosterSource = opts && opts.rosterSource || null;
     const dens = String((_getSettings() || {}).nsfwDensity || 'normal');
     wrap.className = 'yw-nsfw yw-nsfw--' + (dens === 'compact' || dens === 'loose' ? dens : 'normal');
     wrap.setAttribute('data-char', name);
@@ -2126,6 +2696,7 @@ export function nsfwRenderCard(name, profile, opts) {
             if (!nsfwGuideAllows(id)) return;   /* ★W413 */
             if (!exHas(id)) return;
             const g = exGroupOf(id);
+            if (nsfwMaleFrontHidden(profile, id, g)) return;   /* ★W468b */
             if (exGroups.indexOf(g) < 0) exGroups.push(g);
         });
         exGroups.forEach((g) => {
@@ -2149,7 +2720,7 @@ export function nsfwRenderCard(name, profile, opts) {
                     const unit0 = String(e0.unit || gm0.unit || "");
                     /* ★W461：N/A 在卡上与“没值”同款「—」（值/发送仍是 N/A）；未知保留文字 */
                     if (isNaish(raw0)) {
-                        return '<div class="yw-nsfw-row yw-nsfw-na yw-nsfw-ph" data-id="' + esc(id) + '" data-type="text" data-ord="' + esc(String(typeof gm0.ord === 'number' ? gm0.ord : 9999)) + '"><span class="k">' + esc(lab0) + '</span><span class="v">—</span><span class="yw-nsfw-c"></span></div>';
+                        return '<div class="yw-nsfw-row yw-nsfw-na yw-nsfw-ph" data-id="' + esc(id) + '" data-type="text" data-ord="' + esc(String(typeof gm0.ord === 'number' ? gm0.ord : 9999)) + '"><span class="k">' + esc(lab0) + '</span><span class="v">—</span><span class="yw-nsfw-c">' + esc(e0.comment || '') + '</span></div>';
                     }
                     /* ★W443：显示统一「值 + 一次单位」——值里有单位先摘掉，未知 不补单位 */
                     const naish0 = /^(未知|unknown)$/i.test(raw0);
@@ -2286,6 +2857,7 @@ export function nsfwRenderCard(name, profile, opts) {
     /* ★W354/W362：按「最高一页」把面板高度钉死 —— 切分页时上面的分页条不跳位；
        渲染当下可能还没排版（宽度为 0），所以 rAF + 150ms 各再锁一次 */
     const lockPanels = () => {
+        if (!wrap.isConnected) return;
         if (wrap.dataset && wrap.dataset.nolock === '1') return;   /* ★W450：一楼多角色时不锁高（只显示一张，避免布局卡死） */
         try {
             if (wrap.classList.contains('is-collapsed')) { panels.style.minHeight = ''; panels.style.height = ''; return; }   /* ★W412：折叠时不量高度 */
@@ -2355,7 +2927,7 @@ function bindCardEdit(wrap, name, profile) {
     const copyBtn = wrap.querySelector('.yw-nsfw-copy-btn');
     if (copyBtn) {
         copyBtn.addEventListener('click', function () {
-            const text = nsfwDumpChar(nsfwChatId(), name);
+            const text = nsfwDumpProfile(name, profile);
             const done = () => { copyBtn.textContent = '✓'; setTimeout(() => { copyBtn.textContent = '⧉'; }, 1200); };
             try {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -2374,9 +2946,20 @@ function bindCardEdit(wrap, name, profile) {
     }
     const btn = wrap.querySelector('.yw-nsfw-edit-btn');
     if (!btn) return;
-    let editing = false;
-    btn.addEventListener('click', function () {
-        const chatId = nsfwChatId();
+    let editing = false, saving = false;
+    let source = wrap._nsfwSource || null;
+    const rosterSource = wrap._nsfwRosterSource || null;
+    btn.addEventListener('click', async function () {
+        if (saving) return;
+        const chatId = source ? source.chatId : rosterSource ? rosterSource.identity.chatId : nsfwChatId();
+        if (!source && !rosterSource) {
+            try {
+                if (wrap.dataset.mesid == null || wrap.dataset.mesid === '') throw new Error('缺少楼层来源，请重新打开');
+                source = nsfwFloorSource(chatId, Number(wrap.dataset.mesid));
+            } catch (error) { stateNotice(error); return; }
+        }
+        if (source && !sameFloor(source)) { stateNotice('来源已变化，请重新打开后编辑'); return; }
+        if (rosterSource && !sameChat(rosterSource.identity)) { stateNotice('聊天已切换，请重新打开'); return; }
         if (!editing) {
             editing = true;
             btn.textContent = '✓';
@@ -2409,6 +2992,7 @@ function bindCardEdit(wrap, name, profile) {
                             const v = document.createElement('span'); v.className = 'v';
                             if (Array.isArray(fv.options)) {
                                 const sel = document.createElement('select'); sel.className = 'yw-nsfw-in yw-nsfw-in-v';
+                                const ph = document.createElement('option'); ph.value = ''; ph.textContent = '—'; ph.selected = true; sel.appendChild(ph);   /* ★W468：不默认第一项 */
                                 fv.options.forEach((op) => { const o = document.createElement('option'); o.value = op; o.textContent = op; sel.appendChild(o); });
                                 v.appendChild(sel);
                             } else {
@@ -2439,17 +3023,30 @@ function bindCardEdit(wrap, name, profile) {
                     if (optsAttr) {
                         const sel = document.createElement('select');
                         sel.className = 'yw-nsfw-in yw-nsfw-in-v';
-                        optsAttr.split('|').forEach((op) => {
+                        /* ★W468：N/A / 空 / 不在选项里的旧值 → 先放一个「保持原值」项并选中；
+                           以前下拉没有 N/A 项，浏览器自动选第一项，保存就把 N/A 写成「紧闭缝隙状/下沉」。 */
+                        const curVal = cell.value == null ? '' : String(cell.value).trim();
+                        const opts = optsAttr.split('|').filter(Boolean);
+                        if (!opts.includes(curVal)) {
+                            const o = document.createElement('option');
+                            o.value = isNaish(curVal) ? 'N/A' : curVal;
+                            o.textContent = isNaish(curVal) ? 'N/A' : (curVal || '—');
+                            o.selected = true;
+                            sel.appendChild(o);
+                        }
+                        if (!curVal) row.setAttribute('data-keep-empty', '1');
+                        opts.forEach((op) => {
                             const o = document.createElement('option');
                             o.value = op; o.textContent = op;
-                            if (String(cell.value) === op) o.selected = true;
+                            if (curVal === op) o.selected = true;
                             sel.appendChild(o);
                         });
                         vEl.appendChild(sel);
                     } else {
-                        const inp = document.createElement('input');
+                        const multi = Array.isArray(cell.list) || !!(nsfwGuideMeta(id) || {}).multi;
+                        const inp = document.createElement(multi ? 'textarea' : 'input');
                         inp.className = 'yw-nsfw-in yw-nsfw-in-v';
-                        inp.value = cell.value == null ? '' : String(cell.value);
+                        inp.value = Array.isArray(cell.list) ? cell.list.join('\n') : cell.value == null ? '' : String(cell.value);
                         /* ★W415：不再强制 number —— 允许输入 N/A / 18cm / 无（保存后能解析的按数字收，不能的按原文留在楼层） */
                         if (type === 'num') { inp.type = 'text'; inp.inputMode = 'decimal'; }
                         vEl.appendChild(inp);
@@ -2475,52 +3072,80 @@ function bindCardEdit(wrap, name, profile) {
             const v = row.querySelector('.yw-nsfw-in-v');
             const c = row.querySelector('.yw-nsfw-in-c');
             if (!v) return;
+            if (row.getAttribute('data-keep-empty') === '1' && !String(v.value || '').trim()) return;   /* ★W468：原本空的下拉，没选就继续空着 */
             if ((row.getAttribute('data-new') === '1' || row.getAttribute('data-ph') === '1') && !String(v.value || '').trim() && !(c && String(c.value || '').trim())) return;   /* ★W417/W433：补录/占位行没填就不写 */
             edits.push({ id: id, value: v.value, comment: c ? c.value : '', static: isStatic });
         });
-        try { nsfwSetStats(chatId, name, edits); } catch (eBatch) { }
-
-        /* ★W362：把改动写回这一楼的块 —— 卡片是「读楼层」画的，只改 bucket 会被下次挂载覆盖 */
+        // Unchanged rows do not rewrite formatting, cache timestamps or emit message events.
+        const changed = edits.filter(edit => {
+            const cell = edit.static ? { value: (profile.static || {})[edit.id] } : (profile.stats || {})[edit.id] || (profile.extra || {})[edit.id] || {};
+            const oldValue = Array.isArray(cell.list) ? cell.list.join('\n') : String(cell.value == null ? '' : cell.value);
+            return oldValue !== String(edit.value) || String(cell.comment || '') !== String(edit.comment || '');
+        });
+        saving = true; btn.disabled = true;
+        let ok = false;
         try {
-            const mesid0 = wrap.dataset.mesid;
-            const changes = edits.map((x) => ({ id: x.id, value: x.value, comment: x.comment }));
-
-            if (mesid0 != null && changes.length) nsfwEditFloor(chatId, Number(mesid0), name, changes);
-
-        } catch (e) { }
-        /* ★W448b：等重建完再收编辑态（和“直接改楼层”同序：重建时卡还带着 editing，布局不会卡） */
+            if (source) ok = await nsfwEditFloor(chatId, source.mesid, name, changed, source);
+            else if (rosterSource) {
+                ok = await stateWrite(async () => {
+                    if (!sameChat(rosterSource.identity)) return false;
+                    const rec = nsfwGetChar(chatId, name);
+                    if (!rec || JSON.stringify(rec) !== rosterSource.version) return false;
+                    return !changed.length || nsfwSetStats(chatId, name, changed);
+                });
+            }
+        } catch (error) { stateNotice(error); }
+        finally { saving = false; btn.disabled = false; }
+        if (!ok) { btn.title = '保存失败，输入已保留；请重试或重新打开'; return; }
         editing = false;
-        btn.textContent = '✎';
-        btn.title = '编辑这张卡';
-        try { wrap.classList.remove('yw-nsfw-editing'); } catch (eCls) { }
-        const mesid = wrap.dataset.mesid;
-        setTimeout(() => { try { nsfwReattachAll(null, true); } catch (e) { } }, 30);
-        setTimeout(() => { try { nsfwReattachAll(null, true); } catch (e) { } }, 300);
-        setTimeout(() => { try { nsfwReattachAll(null, true); } catch (e) { } }, 900);
+        btn.textContent = '✎'; btn.title = '编辑这张卡';
+        try { wrap.classList.remove('yw-nsfw-editing'); } catch (e) {}
+        try {
+            // A main-floor card belongs to a lazy multi-role cache. Refresh that whole
+            // source closure after a save; replacing only one card loses its roster and
+            // leaves the other visited cards holding the pre-save source token.
+            const preview = !!(wrap.closest && wrap.closest('#yw-nsfw-preview'));
+            if (source && !preview && wrap.closest && wrap.closest('.mes')) {
+                const active = wrap.querySelector('.yw-nsfw-tab.on');
+                if (active) _mesTabSet(chatId, source.mesid, active.getAttribute('data-tab'));
+                _charSelSet(chatId, source.mesid, name);
+                _foldMap.set(_foldKey(chatId, source.mesid, name), wrap.classList.contains('is-collapsed'));
+                if (nsfwMountToMessage(source.mesid, false)) return;
+            }
+            const rec = source ? nsfwProfilesFromText(String(source.msg.mes || ''))[name] : nsfwGetChar(chatId, name);
+            if (rec && wrap.parentNode) {
+                const fresh = nsfwRenderCard(name, rec, source
+                    ? { source: nsfwFloorSource(chatId, source.mesid) }
+                    : { rosterSource: { identity: chatIdentity(chatId), version: JSON.stringify(rec) } });
+                if (source) fresh.dataset.mesid = String(source.mesid);
+                const preview = !!(wrap.closest && wrap.closest('#yw-nsfw-preview'));
+                nsfwApplyFold(fresh, preview ? 'pv' : chatId, source ? source.mesid : 'bucket', name);
+                nsfwApplyTab(fresh, preview ? 'pv' : chatId, source ? source.mesid : 'bucket', name);
+                wrap.parentNode.replaceChild(fresh, wrap);
+            }
+        } catch (error) { stateNotice('已保存，重新打开可查看最新状态'); }
+
     });
 }
 /** ★W438：找出文本里所有状态块（<div data-nsfw> / <nsfw>），带 body 边界 */
 function nsfwTextBlocks(text) {
-    const src = String(text || '');
-    const out = [];
-    const re = /<div\b[^>]*\bdata-nsfw\s*=\s*"m"[^>]*>|<nsfw\b[^>]*>/gi;
+    const src = String(text || ''), out = [];
+    const re = /<div\b[^>]*\bdata-nsfw\s*=\s*(?:"[md]"|'[md]'|[md](?=[\s>]))[^>]*>|<nsfw(?:desc)?\b[^>]*>/gi;
     let m;
     while ((m = re.exec(src))) {
         const isDiv = /^<div/i.test(m[0]);
-        const closeTag = isDiv ? '</div>' : '</nsfw>';
+        const desc = isDiv ? attrVal(m[0], 'data-nsfw').toLowerCase() === 'd' : /^<nsfwdesc/i.test(m[0]);
+        const close = isDiv ? /<\/div\s*>/gi : desc ? /<\/nsfwdesc\s*>/gi : /<\/nsfw\s*>/gi;
         const openEnd = m.index + m[0].length;
-        const closeIdx = src.indexOf(closeTag, openEnd);
-        if (closeIdx < 0) continue;
-        const body = src.slice(openEnd, closeIdx);
-        let name = '';
-        const nmAttr = /data-name\s*=\s*"([^"]*)"/i.exec(m[0]);
-        if (nmAttr) name = String(nmAttr[1] || '').trim();
-        if (!name) {
-            const nmLine = /^[ \t]*name(?:[ \t]*[\u4e00-\u9fa5]+)?[ \t]*[=:：][ \t]*(.+)$/mi.exec(body);
-            if (nmLine) name = String(nmLine[1] || '').trim();
-        }
-        out.push({ name: name, openEnd: openEnd, closeIdx: closeIdx, body: body });
-        re.lastIndex = closeIdx + closeTag.length;
+        close.lastIndex = openEnd;
+        const cm = close.exec(src);
+        if (!cm) continue;
+        const body = src.slice(openEnd, cm.index);
+        const line = /^[ \t]*name(?:[ \t]*[\u4e00-\u9fa5]+)?[ \t]*[=:：][ \t]*(.+)$/mi.exec(body);
+        const old = /^[ \t]*([^\s=:：]{1,12})[ \t]+\S+[ \t]*=/m.exec(body);
+        const name = String(attrVal(m[0], 'data-name') || attrVal(m[0], 'name') || (line && line[1]) || (old && old[1] !== 'name' ? old[1] : '') || '').trim();
+        out.push({ name, kind: desc ? 'd' : 'm', openStart: m.index, openEnd, closeIdx: cm.index, closeEnd: cm.index + cm[0].length, body });
+        re.lastIndex = cm.index + cm[0].length;
     }
     return out;
 }
@@ -2577,20 +3202,32 @@ function nsfwCanonicalBody(body, name, chatId) {
             return { pre: pre, chunks: chunks };
         };
         /* 这个角色可用的指南字段（性别筛掉的内置字段不补） */
-        let sex = 'female';
-        try { const { bucket } = nsfwBucket(chatId); const rec = bucket.chars[name]; if (rec && rec.sex) sex = rec.sex; } catch (e) { }
+        let sex = 'female', rec0 = null;
+        try { const { bucket } = nsfwBucket(chatId); rec0 = bucket.chars[name]; if (rec0 && rec0.sex) sex = rec0.sex; } catch (e) { }
         const allow = {};
-        activeFields({ sex: sex }).forEach((f) => { allow[f.id] = 1; });
+        activeFields(rec0 || { sex: sex }).forEach((f) => { allow[f.id] = 1; });
         const present = {};
         secs.forEach((sec) => { chunksOf(sec).chunks.forEach((c) => { present[c.id] = 1; }); });
         const want = [];
+        const prevValOf = (id) => {
+            try {
+                const c = rec0 && rec0.stats && rec0.stats[id];
+                const v = (c && typeof c === 'object') ? c.value : c;
+                return String(v == null ? '' : v).trim();
+            } catch (e) { return ''; }
+        };
         Object.keys(gm).forEach((id) => {
             if (id === 'name' || id === 'snapTime') return;
             if (!nsfwGuideAllows(id)) return;
             if (present[id]) return;
             if (fieldById(id) && !allow[id]) return;
             const g0 = gm[id] || {};
-            want.push({ id: id, grp: String(g0.group || '其它'), ord: (typeof g0.ord === 'number' ? g0.ord : 9999) });
+            if (nsfwMaleFrontHidden(rec0 || { sex: sex }, id, g0.group)) return;   /* ★W468b */
+            const pv0 = prevValOf(id);
+            /* ★W468：上一轮已经明确是 N/A / 未知的字段，补回块里也必须还是 N/A，
+               不能补成空位让 AI 下一轮自己拿选项填一个值出来。 */
+            const keep = (isNaish(pv0) || /^(未知|unknown)$/i.test(pv0)) ? 'N/A' : '';
+            want.push({ id: id, grp: String(g0.group || '其它'), ord: (typeof g0.ord === 'number' ? g0.ord : 9999), keep: keep });
         });
         /* 缺的字段先建好所属组 */
         const secOf = (grp) => {
@@ -2603,7 +3240,7 @@ function nsfwCanonicalBody(body, name, chatId) {
         secs.forEach((sec) => {
             const co = chunksOf(sec);
             want.filter((w) => w.grp === sec.grp).forEach((w) => {
-                co.chunks.push({ id: w.id, ord: w.ord, lines: [w.id + ' = '] });
+                co.chunks.push({ id: w.id, ord: w.ord, lines: [w.id + ' = ' + (w.keep || '')] });
             });
             co.chunks.sort((a, b) => a.ord - b.ord);
             sec.lines = co.pre.concat.apply(co.pre, co.chunks.map((c) => c.lines));
@@ -2624,17 +3261,21 @@ function nsfwCanonicalBody(body, name, chatId) {
 }
 
 /** ★W438：把「最新一条有状态块的楼」按指南补全（缺的字段补回块里，顺序排好） */
-export function nsfwCompleteLatest(chatId) {
+export async function nsfwCompleteLatest(chatId) {
+    let identity;
+    try { identity = chatIdentity(chatId); }
+    catch (error) { return { ok: false, mesid: -1, changed: false, error: stateError(error) }; }
+    return stateWrite(async () => {
     try {
-        const ctx = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
-        if (!ctx || !Array.isArray(ctx.chat)) return { mesid: -1, changed: false };
-        const cid = chatId || nsfwChatId(ctx);
+        if (!sameChat(identity)) throw new Error('聊天已切换，请重新打开');
+        const ctx = identity.ctx;
+        const cid = identity.chatId;
         for (let i = ctx.chat.length - 1; i >= 0; i--) {
             const msg = ctx.chat[i];
             if (!msg || msg.is_user || msg.is_system) continue;
             const text = String(msg.mes || '');
             if (text.indexOf('<nsfw') < 0 && text.indexOf('data-nsfw') < 0) continue;
-            const blocks = nsfwTextBlocks(text);
+            const blocks = nsfwTextBlocks(text).filter(b => b.kind === 'm');
             if (!blocks.length) continue;
             let next = text;
             let changed = false;
@@ -2646,118 +3287,97 @@ export function nsfwCompleteLatest(chatId) {
                     changed = true;
                 }
             }
-            if (!changed) return { mesid: i, changed: false };
-            msg.mes = next;
-            try { if (Array.isArray(msg.swipes) && typeof msg.swipe_id === 'number' && msg.swipes[msg.swipe_id] != null) msg.swipes[msg.swipe_id] = next; } catch (e) { }
-            try { if (ctx.saveChat) ctx.saveChat(); } catch (e) { }
-            /* ★W440：不再整段替换 .mes_text 的 innerHTML —— 那会把别的插件挂在这一楼里的美化一起抹掉
-               （作者实测：自动补回后「其他的美化没有渲染」）。块是隐藏的，改完 mes 只重挂我们自己的卡就够。 */
-            /* ★W444d：正在编辑这张卡时不要重挂，免得把没保存的输入冲掉 */
-            let editing0 = false;
-            try { editing0 = !!document.querySelector('.mes[mesid="' + i + '"] .yw-nsfw-editing'); } catch (e) { }
-            if (!editing0) { try { nsfwMountToMessage(i); } catch (e) { } }
-            return { mesid: i, changed: true };
+            if (!changed) return { ok: true, mesid: i, changed: false };
+            const source = nsfwFloorSource(cid, i);
+            await commitState(source, patchFloor(source, next), applied => sameFloor(source, applied ? next : undefined),
+                () => persistChatBucket(cid, source.chat));
+            if (sameChat(source)) {
+                let editing = false;
+                try { editing = !!document.querySelector('.mes[mesid="' + i + '"] .yw-nsfw-editing'); } catch (e) {}
+                if (!editing) { try { nsfwMountToMessage(i); } catch (e) {} }
+            }
+            return { ok: true, mesid: i, changed: true };
         }
-        return { mesid: -1, changed: false };
-    } catch (e) { return { mesid: -1, changed: false }; }
+        return { ok: true, mesid: -1, changed: false };
+    } catch (error) { return { ok: false, mesid: -1, changed: false, error: stateError(error) }; }
+    });
 }
 
 /** ★W362：编辑卡片后写回楼层块（值/评述），并同步 swipes + 存盘 + 重渲染 */
-export function nsfwEditFloor(chatId, mesid, name, changes) {
-    try {
-        const ctx = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
-        if (!ctx || !Array.isArray(ctx.chat)) return false;
-        const msg = ctx.chat[mesid];
-        if (!msg) return false;
-        const src = String(msg.mes || '');
-        const esc0 = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        let openEnd = -1;
-        let closeIdx = -1;
-        const openRe = new RegExp('<(?:div[^>]*data-nsfw="m"[^>]*data-name="' + esc0(name) + '"[^>]*|nsfw\\s+name="' + esc0(name) + '"[^>]*)>', 'i');
-        const om = openRe.exec(src);
-        if (om) {
-            openEnd = om.index + om[0].length;
-            const ct0 = om[0].indexOf('div') === 1 ? '</div>' : '</nsfw>';
-            closeIdx = src.indexOf(ct0, openEnd);
-        }
-        /* ★W404：作者新格式是 <nsfw> 无属性 + 块内 `name 角色名 = X` —— 上面那个正则匹配不到，
-           这里按「块体里的 name 行」再找一次（否则卡片编辑静默失败、30ms 后又变回旧值）。 */
-        if (openEnd < 0 || closeIdx < 0) {
-            const reAny = /<(?:div\b[^>]*\bdata-nsfw\s*=\s*"m"[^>]*|nsfw\b[^>]*)>/gi;
-            const nameLine = new RegExp('^[ \\t]*name(?:[ \\t]*[\\u4e00-\\u9fa5]+)?[ \\t]*[=:：][ \\t]*' + esc0(name) + '[ \\t]*$', 'mi');
-            let m2;
-            while ((m2 = reAny.exec(src))) {
-                const isDiv = /^<div/i.test(m2[0]);
-                const ct2 = isDiv ? '</div>' : '</nsfw>';
-                const oe2 = m2.index + m2[0].length;
-                const ci2 = src.indexOf(ct2, oe2);
-                if (ci2 < 0) continue;
-                const body0 = src.slice(oe2, ci2);
-                const hitName = nameLine.test(body0)
-                    || new RegExp('data-name\\s*=\\s*"' + esc0(name) + '"').test(m2[0]);
-                if (!hitName) continue;
-                openEnd = oe2; closeIdx = ci2;
-                break;
+function editBlockBody(body, changes) {
+    const NL0 = body.includes('\r\n') ? '\r\n' : '\n';
+    let lines = body.split(/\r?\n/);
+    for (const ch of changes || []) {
+        const id = String(ch.id || '');
+        if (!id || /[\r\n=]/.test(id)) continue;
+        const multi = !!(nsfwGuideMeta(id) || {}).multi;
+        const value = String(ch.value == null ? '' : ch.value);
+        const comment = String(ch.comment || '');
+        const valueLines = value.split(/\r?\n/);
+        const encodedValue = (multi ? [valueLines[0] + (comment ? '|' + comment : ''), ...valueLines.slice(1)].join(NL0) : value + (comment ? '|' + comment : ''));
+        // Field separators in values are still the protocol; closing shells cannot be injected.
+        if (/<\/(?:nsfw|div)/i.test(value + comment)) throw new Error('字段值不能包含状态块结束标签');
+        const hits = [];
+        for (let i = 0; i < lines.length; i++) {
+            const eq = lines[i].indexOf('=');
+            if (eq < 0) continue;
+            const rawKey = lines[i].slice(0, eq).trim();
+            const f = resolveFieldKey(rawKey, nsfwAllFields());
+            if ((f && f.id === id) || rawKey.split(/\s+/)[0] === id) {
+                let end = i + 1;
+                if (multi) while (end < lines.length && !/^[ \t]*【/.test(lines[end]) && lines[end].indexOf('=') < 0) end++;
+                hits.push({ start: i, end, eq });
             }
         }
-        if (openEnd < 0 || closeIdx < 0) return false;
-        let body = src.slice(openEnd, closeIdx);
-        changes.forEach((ch) => {
-            const id = String(ch.id || "");
-            if (!id) return;
-            const val0 = String(ch.value == null ? '' : ch.value) + (ch.comment ? '|' + ch.comment : '');
-            const line = id + '=' + val0;
-            const re = new RegExp('^[ \\t]*' + esc0(id) + '(?![A-Za-z0-9_])[^=\\n]*=[^\\n]*$', 'mi');   /* ★W437：id 必须有边界，别把 menstrual 写成 menstrualNextDays */
-            /* 保留原来的「ID 中文 [范围]」前缀，只换 = 后面的值 */
-            if (re.test(body)) body = body.replace(re, (m0) => {
-                const eq = m0.indexOf('=');
-                return m0.slice(0, eq + 1) + ' ' + val0;
-            });
-            else {
-                /* ★W435：补录行插进「指南里这一组」的段末 —— 块尾常是【正文之外】的 gapLog，
-                   插在那里会把字段分页带跑偏（作者实测：经验人数（男）改成 1 后从开发页消失）。 */
-                const NL0 = String.fromCharCode(10);
-                const gm1 = nsfwGuideMeta(id) || {};
-                const grp1 = String(gm1.group || '');
-                let put = false;
-                if (grp1) {
-                    const hm1 = new RegExp('【' + esc0(grp1) + '】').exec(body);
-                    if (hm1) {
-                        const after1 = hm1.index + hm1[0].length;
-                        const nre1 = /【[^】]{1,40}】/g;
-                        nre1.lastIndex = after1;
-                        const nm1 = nre1.exec(body);
-                        const cut1 = nm1 ? nm1.index : body.length;
-                        const before1 = body.slice(0, cut1).replace(/\s*$/, '');
-                        body = before1 + NL0 + line + NL0 + body.slice(cut1);
-                        put = true;
-                    }
-                }
-                if (!put) body = body.replace(/\s*$/, '') + NL0 + (grp1 ? ('【' + grp1 + '】' + NL0) : '') + line + NL0;   /* ★W437：没有这个组头就新建一段，别被上一段（常见是【近况】）吞掉 */
+        if (hits.length) {
+            const first = hits[0];
+            const original = lines.slice(first.start, first.end);
+            const firstValue = splitValueComment(lines[first.start].slice(first.eq + 1).trim());
+            const originalValue = multi ? [String(firstValue.value), ...original.slice(1).map(s => s.trim()).filter(Boolean)].join('\n') : String(firstValue.value);
+            if (hits.length === 1 && originalValue === value && String(firstValue.comment || '') === comment) continue;
+            for (let h = hits.length - 1; h >= 0; h--) {
+                const hit = hits[h];
+                const replacement = h === 0 ? [lines[hit.start].slice(0, hit.eq + 1) + ' ' + encodedValue] : [];
+                // Keep trailing blank spacing, remove only stale continuation content.
+                const blanks = multi ? lines.slice(hit.start + 1, hit.end).filter(s => !s.trim()) : [];
+                lines.splice(hit.start, hit.end - hit.start, ...replacement, ...blanks);
             }
-        });
-        const next = src.slice(0, openEnd) + body + src.slice(closeIdx);
-        if (next === src) return false;
-        msg.mes = next;
-        try {
-            if (Array.isArray(msg.swipes) && typeof msg.swipe_id === "number" && msg.swipes[msg.swipe_id] != null) msg.swipes[msg.swipe_id] = next;
-        } catch (e) { }
-        /* ★W422：照「双击改字」的保存口径 —— 先发 MESSAGE_EDITED，再只重渲染这一楼 */
-        try { if (ctx.eventSource && ctx.eventTypes) { const p0 = ctx.eventSource.emit(ctx.eventTypes.MESSAGE_EDITED, mesid); if (p0 && p0.catch) p0.catch(() => { }); } } catch (e0) { }
-        try {
-            /* ★W449：不再重写 .mes_text —— 正文没变（只是隐藏块里的值改了），
-               重写整段会把别的插件的美化和布局一起翻搅（作者实测编辑保存后卡死）。 */
-            try { if (ctx.eventSource && ctx.eventTypes) { const p1 = ctx.eventSource.emit(ctx.eventTypes.MESSAGE_UPDATED, mesid); if (p1 && p1.catch) p1.catch(() => { }); } } catch (e1) { }
-            /* 只重挂这一楼；其它楼不动 */
-            nsfwMountToMessage(mesid);
-            setTimeout(() => { try { nsfwMountToMessage(mesid, true); } catch (e2) { } }, 450);   /* ★W448：卡还在就不重建 */
-            /* 兜底：酒馆若整页重刷，1200ms 后补挂（现在没块的楼不会被误删） */
-            setTimeout(() => { try { nsfwReattachAll(null, true); } catch (e3) { } }, 1200);
-        } catch (e) { }
-        try { if (ctx.saveChat) ctx.saveChat(); } catch (e) { }
-        return true;
-    } catch (e) { return false; }
+        } else {
+            if (!value && !comment) continue;
+            const group = String((nsfwGuideMeta(id) || {}).group || '');
+            let at = lines.length;
+            if (group) {
+                const header = lines.findIndex(s => s.trim() === '【' + group + '】');
+                if (header >= 0) { at = header + 1; while (at < lines.length && !/^[ \t]*【/.test(lines[at])) at++; }
+                else { if (lines.length && !lines[lines.length - 1].trim()) lines.pop(); lines.push('【' + group + '】'); at = lines.length; }
+            }
+            lines.splice(at, 0, id + '=' + encodedValue);
+        }
+    }
+    return lines.join(NL0);
 }
+export async function nsfwEditFloor(chatId, mesid, name, changes, expectedSource) {
+    let source;
+    try { source = expectedSource || nsfwFloorSource(chatId, mesid); }
+    catch (error) { return false; }
+    return stateWrite(async () => {
+        try {
+            if (source.chatId !== String(chatId) || source.mesid !== Number(mesid) || !sameFloor(source)) throw new Error('来源已变化，请重新打开后保存');
+            // Parsing merges repeated role blocks in source order; the last value wins.
+            const matching = nsfwTextBlocks(source.text).filter(b => b.kind === 'm' && b.name === name);
+            const block = matching[matching.length - 1];
+            if (!block) return false;
+            const body = editBlockBody(block.body, changes);
+            const next = source.text.slice(0, block.openEnd) + body + source.text.slice(block.closeIdx);
+            if (next === source.text) return true;
+            await commitState(source, patchFloor(source, next), applied => sameFloor(source, applied ? next : undefined),
+                () => persistChatBucket(source.chatId, source.chat));
+            await emitStateSaved(source, source.mesid);
+            return true;
+        } catch (error) { stateNotice(error); return false; }
+    });
+}
+
 /** 示例填充：给当前聊天塞一个全字段角色，方便先看效果 */
 export function nsfwFillDemo(chatId, name) {
     try {
@@ -2810,30 +3430,34 @@ export function nsfwFillDemo(chatId, name) {
     } catch (e) { return false; }
 }
 /** 导出某角色全部状态为纯文本 */
-export function nsfwDumpChar(chatId, name) {
-    try {
-        const { bucket } = nsfwBucket(chatId);
-        const rec = bucket.chars[name];
-        if (!rec) return '';
-        const lines = ['== ' + name + ' (' + (rec.sex || 'female') + ' / ' + (rec.role || 'bottom') + ') =='];
-        nsfwAllFields().filter((f) => !f.static && (!f.sex || f.sex === (rec.sex || 'female'))).forEach((f) => {
-            const c = (rec.stats || {})[f.id];
-            if (!c) return;
-            const v = fmtVal(f, c);
-            if (!v) return;
-            lines.push(f.id + ' ' + f.label + ' = ' + v + (c.comment ? '|' + c.comment : ''));
-        });
-        const stIds = Object.keys(rec.static || {});
-        stIds.forEach((id) => {
-            const f = nsfwAllFields().find((x) => x.id === id);
-            if (f && rec.static[id]) lines.push('[档案] ' + f.label + ' = ' + rec.static[id]);
-        });
-        NSFW_DESC_FIELDS.forEach((d) => {
-            if (rec.desc && rec.desc[d.id]) lines.push(d.label + ': ' + (rec.desc[d.id].text || ''));
-        });
-        return lines.join(String.fromCharCode(10));
-    } catch (e) { return ''; }
+export function nsfwDumpProfile(name, rec) {
+    if (!rec) return '';
+    const lines = ['== ' + name + ' (' + (rec.sex || 'female') + ' / ' + (rec.role || 'bottom') + ') =='];
+    const all = nsfwAllFields();
+    Object.keys(rec.stats || {}).forEach(id => {
+        const cell = rec.stats[id] || {}, f = all.find(x => x.id === id) || { id, label: id };
+        const value = Array.isArray(cell.value) ? cell.value.join('、') : String(cell.value == null ? '' : cell.value);
+        lines.push(id + ' ' + f.label + ' = ' + value + (cell.comment ? '|' + cell.comment : ''));
+    });
+    Object.keys(rec.extra || {}).forEach(id => {
+        const cell = rec.extra[id] || {};
+        const value = Array.isArray(cell.list) ? cell.list.join('\n') : String(cell.value == null ? '' : cell.value);
+        lines.push(id + ' ' + (cell.label || id) + ' = ' + value + (cell.comment ? '|' + cell.comment : ''));
+    });
+    Object.keys(rec.static || {}).forEach(id => {
+        const f = all.find(x => x.id === id);
+        lines.push('[档案] ' + (f && f.label || id) + ' = ' + rec.static[id]);
+    });
+    Object.keys(rec.desc || {}).forEach(id => {
+        const cell = rec.desc[id], f = NSFW_DESC_FIELDS.find(x => x.id === id);
+        lines.push((cell && cell.label || f && f.label || id) + ': ' + (typeof cell === 'object' ? cell.text || '' : cell || ''));
+    });
+    return lines.join('\n');
 }
+export function nsfwDumpChar(chatId, name) {
+    try { return nsfwDumpProfile(name, nsfwGetChar(chatId, name)); } catch (e) { return ''; }
+}
+
 /** 导出当前聊天全部角色 */
 export function nsfwDumpText(chatId) {
     try {
@@ -2858,6 +3482,7 @@ const CSS = [
     '.yw-nsfw-head .tag{font-size:.78em;opacity:.75;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 24%,transparent);border-radius:999px;padding:0 6px}',
     '.yw-nsfw-head .kv{margin-left:auto;font-size:.8em;opacity:.8}',
     '.yw-nsfw-head .kv+.kv{margin-left:8px}',
+    '.yw-nsfw-head .kv~.yw-nsfw-fold{margin-left:6px}',   /* ★W467：折叠箭头别再抢 auto —— 日期/怀孕先靠右，箭头跟在它们后面 */
     '.yw-nsfw-head .yw-nsfw-preg{opacity:.95;font-weight:600}',
     '.yw-nsfw-tabs{display:flex;flex-wrap:wrap;gap:3px;padding:5px 7px 0;position:sticky;top:0;z-index:1;background:inherit}',
     '.yw-nsfw-tab{font:inherit;font-size:.78em;padding:1px 8px;border-radius:999px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 22%,transparent);background:transparent;color:inherit;opacity:.62;cursor:pointer}',
@@ -2897,18 +3522,20 @@ const CSS = [
     '.yw-nsfw-tbl td.v .bar{display:inline-block;width:4.6em;height:5px;border-radius:999px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 14%,transparent);overflow:hidden;vertical-align:middle}',
     '.yw-nsfw-tbl td.v .bar>i{display:block;height:100%;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 60%,transparent)}',
     /* ★W327 悬浮发送条：一条横条，可拖；AUTO 在左，名字在右；点名字看快照 */
-    '#yw-nsfw-sender{position:fixed;right:12px;bottom:86px;z-index:30040;display:flex;align-items:center;gap:6px;max-width:min(72vw,560px);padding:4px 8px;border-radius:999px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 26%,transparent);background:color-mix(in srgb,var(--SmartThemeBlurTintColor,transparent) 88%,transparent);backdrop-filter:blur(10px);color:var(--SmartThemeBodyColor,currentColor);font-size:12px;line-height:1.2;box-shadow:0 4px 16px rgba(0,0,0,.22);user-select:none}',
+    '#yw-nsfw-viewport{position:fixed;left:0;top:0;width:100vw;height:100vh;height:100dvh;pointer-events:none;z-index:30040;overflow:visible}',
+    '#yw-nsfw-sender{position:absolute;pointer-events:auto;box-sizing:border-box;width:max-content;flex-wrap:wrap;overflow:auto;overscroll-behavior:contain;right:12px;bottom:86px;z-index:30040;display:flex;align-items:center;column-gap:6px;row-gap:1px;max-width:min(92vw,560px);padding:3px 8px;border-radius:999px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 26%,transparent);background:color-mix(in srgb,var(--SmartThemeBlurTintColor,transparent) 88%,transparent);backdrop-filter:blur(10px);color:var(--SmartThemeBodyColor,currentColor);font-size:12px;line-height:1.2;box-shadow:0 4px 16px rgba(0,0,0,.22);user-select:none}',
     '#yw-nsfw-sender .yw-nsfw-sd-grip{cursor:grab;opacity:.45;padding:0 2px;letter-spacing:-2px}',
     '#yw-nsfw-sender .yw-nsfw-sd-grip:active{cursor:grabbing}',
-    '#yw-nsfw-sender .yw-nsfw-sd-auto{display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;white-space:nowrap}',
+    '#yw-nsfw-sender .yw-nsfw-sd-auto{min-height:20px;flex-shrink:0;display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;white-space:nowrap}',
     '#yw-nsfw-sender .yw-nsfw-sd-auto input{accent-color:var(--SmartThemeBodyColor,currentColor);margin:0}',
     '#yw-nsfw-sender .yw-nsfw-sd-sep{width:1px;height:14px;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 22%,transparent)}',
-    '#yw-nsfw-sender .yw-nsfw-sd-item{display:inline-flex;align-items:center;gap:3px;padding:1px 2px;border-radius:999px}',
+    '#yw-nsfw-sender .yw-nsfw-sd-item{max-width:100%;min-width:0;flex-shrink:0;display:inline-flex;align-items:center;gap:3px;padding:1px 2px;border-radius:999px}',
     '#yw-nsfw-sender .yw-nsfw-sd-item:hover{background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 10%,transparent)}',
-    '#yw-nsfw-sender .yw-nsfw-sd-item input{accent-color:var(--SmartThemeBodyColor,currentColor);margin:0}',
-    '#yw-nsfw-sender .yw-nsfw-sd-name{cursor:pointer;font-weight:500;white-space:nowrap;padding:0 2px}',
+    '#yw-nsfw-sender .yw-nsfw-sd-item input{accent-color:var(--SmartThemeBodyColor,currentColor);margin:0;flex:0 0 auto;width:var(--mainFontSize,15px);height:var(--mainFontSize,15px)}',
+    '#yw-nsfw-sender .yw-nsfw-sd-name{cursor:pointer;font-weight:500;white-space:normal;overflow-wrap:anywhere;min-width:0;min-height:20px;display:inline-flex;align-items:center;padding:0 2px}',
     '#yw-nsfw-sender .yw-nsfw-sd-name:hover{text-decoration:underline}',
     '#yw-nsfw-sender .yw-nsfw-sd-empty{opacity:.6}',
+    '#yw-nsfw-sender .yw-nsfw-sd-tip{flex:0 0 100%;width:0;min-width:100%;box-sizing:border-box;text-align:center;font-size:8px;line-height:1.1;opacity:.65;padding:0;white-space:nowrap;pointer-events:none}',
     /* ★W386 设置卡名册：与悬浮条同款芯片，AUTO 右侧横向排开、放不下自动换行 */
     '.kimi-nsfw-autorow{display:flex;align-items:center;flex-wrap:wrap;gap:6px}',
     '.kimi-nsfw-roster{flex:1 1 auto;min-width:0}',
@@ -2918,10 +3545,23 @@ const CSS = [
     '.kimi-nsfw-roster .yw-nsfw-sd-item input{accent-color:var(--SmartThemeBodyColor,currentColor);margin:0}',
     '.kimi-nsfw-roster .yw-nsfw-sd-name{cursor:pointer;font-weight:500;white-space:nowrap;padding:0 2px}',
     '.kimi-nsfw-roster .yw-nsfw-sd-name:hover{text-decoration:underline}',
-    '#yw-nsfw-preview{position:fixed;right:12px;bottom:130px;z-index:30050;display:none;width:min(92vw,420px);max-height:70vh;overflow:auto;border-radius:14px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 24%,transparent);background:var(--SmartThemeBlurTintColor,transparent);backdrop-filter:blur(12px);box-shadow:0 10px 34px rgba(0,0,0,.3);padding:8px;color:var(--SmartThemeBodyColor,currentColor);font-size:12px}',
-    '#yw-nsfw-preview .yw-nsfw-pv-hd{display:flex;align-items:center;justify-content:space-between;font-weight:600;margin-bottom:6px;padding:0 2px}',
-    '#yw-nsfw-preview .yw-nsfw-pv-x{cursor:pointer;border:0;background:transparent;color:inherit;opacity:.6;font-size:14px}',
+    '#yw-nsfw-preview{position:absolute;pointer-events:auto;box-sizing:border-box;overscroll-behavior:contain;right:12px;bottom:130px;z-index:30050;display:none;width:min(92vw,420px);max-height:70vh;overflow:auto;border-radius:14px;border:1px solid color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 24%,transparent);background:var(--SmartThemeBlurTintColor,transparent);backdrop-filter:blur(12px);box-shadow:0 10px 34px rgba(0,0,0,.3);padding:8px;color:var(--SmartThemeBodyColor,currentColor);font-size:12px}',
+    '#yw-nsfw-preview .yw-nsfw-pv-hd{position:sticky;top:-8px;z-index:3;background:var(--SmartThemeBlurTintColor,Canvas);min-height:32px;display:flex;align-items:center;justify-content:space-between;gap:4px;font-weight:600;margin-bottom:6px;padding:0 2px}',
+    '#yw-nsfw-preview .yw-nsfw-pv-title{flex:1 1 auto;min-width:0;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#yw-nsfw-preview .yw-nsfw-pv-nav{cursor:pointer;border:0;background:transparent;color:inherit;opacity:.65;font-size:14px;line-height:1;padding:2px 6px;border-radius:6px}',
+    '#yw-nsfw-preview .yw-nsfw-pv-nav:hover{opacity:1;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 10%,transparent)}',
+    '#yw-nsfw-preview .yw-nsfw-pv-nav:disabled{opacity:.2;cursor:default;background:transparent}',
+    '#yw-nsfw-preview .yw-nsfw-pv-del{cursor:pointer;border:0;background:transparent;color:inherit;opacity:.55;font-size:14px;line-height:1;padding:2px 4px;border-radius:6px}',
+    '#yw-nsfw-preview .yw-nsfw-pv-del:hover{opacity:1;background:color-mix(in srgb,var(--SmartThemeBodyColor,currentColor) 12%,transparent)}',
+    '#yw-nsfw-preview .yw-nsfw-pv-x{cursor:pointer;border:0;background:transparent;color:inherit;opacity:.6;font-size:14px;padding:2px 4px}',
     '#yw-nsfw-preview .yw-nsfw{margin:0}',
+    '#yw-nsfw-preview .yw-nsfw-pv-nav,#yw-nsfw-preview .yw-nsfw-pv-del,#yw-nsfw-preview .yw-nsfw-pv-x,#yw-nsfw-preview .yw-nsfw-copy-btn,#yw-nsfw-preview .yw-nsfw-edit-btn{box-sizing:border-box;min-width:32px;min-height:32px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center}',
+    '#yw-nsfw-preview .yw-nsfw-head{position:sticky;top:30px;z-index:2;background:var(--SmartThemeBlurTintColor,Canvas);min-height:32px}',
+    '#yw-nsfw-preview .yw-nsfw-tabs{position:static}',
+    '#yw-nsfw-preview .yw-nsfw-tab{box-sizing:border-box;min-width:32px;min-height:32px;display:inline-flex;align-items:center;justify-content:center}',
+    '#yw-nsfw-preview .yw-nsfw-editing .yw-nsfw-in{box-sizing:border-box;min-width:0;max-width:100%;min-height:32px;scroll-margin-block:90px 12px}',
+    '#yw-nsfw-preview .yw-nsfw-editing .v{max-width:100%;min-width:0}',
+    '@media(max-width:600px){#yw-nsfw-preview .yw-nsfw-editing .yw-nsfw-row .v{flex:1 1 0}#yw-nsfw-preview .yw-nsfw-editing .yw-nsfw-in{font-size:16px}#yw-nsfw-preview .yw-nsfw-head .kv{overflow-wrap:anywhere;min-width:0}#yw-nsfw-preview .yw-nsfw-head .nm{overflow-wrap:anywhere;min-width:0}}',
     '@media (max-width:600px){.yw-nsfw-tbl{font-size:.8em}.yw-nsfw-tbl td.v{white-space:normal;overflow-wrap:anywhere}.yw-nsfw-tbl td.yw-nsfw-c{font-size:.86em}}',
     '.yw-nsfw-tbl td.yw-nsfw-c{opacity:.6;font-size:.9em;font-style:italic;text-align:right;overflow-wrap:anywhere}',
     '.yw-nsfw-dev{width:100%;border-collapse:collapse;font-size:.84em;margin:2px 0}',
@@ -2945,10 +3585,10 @@ const CSS = [
     '.yw-nsfw-head{cursor:pointer}',
     '.yw-nsfw-fold{margin-left:auto;opacity:.55;font-size:.95em;padding:0 2px;flex:0 0 auto}',
     '.yw-nsfw-row.yw-nsfw-ph .v{opacity:.4}',
-    '@media (max-width:600px){.yw-nsfw-row{flex-wrap:wrap}.yw-nsfw-row .k{flex-basis:76px}.yw-nsfw-row .yw-nsfw-c{flex:1 1 100%;text-align:left;margin-left:84px}}'
+    '@media (max-width:600px){.yw-nsfw-row{flex-wrap:wrap}.yw-nsfw-row .k{flex-basis:76px}.yw-nsfw-row .v:not(.num){flex:1 1 0;display:block;white-space:normal;overflow-wrap:anywhere}.yw-nsfw-row .yw-nsfw-c{flex:1 1 100%;text-align:left;margin-left:84px}}'
 ].join('');
 
-const NSFW_CSS_VER = 'w414';   /* ★W414：CSS 有改动就改这里；否则不再每挂一张卡就重注入整份样式 */
+const NSFW_CSS_VER = 'rows-20261113-1';   /* ★W414：CSS 有改动就改这里；否则不再每挂一张卡就重注入整份样式 */
 export function nsfwEnsureStyle() {
     try {
         const old = document.getElementById('yw-nsfw-style');
@@ -2970,7 +3610,8 @@ export function nsfwProfilesFromText(text) {
         Object.keys(parsed.chars || {}).forEach((name) => {
             const c = parsed.chars[name];
             const meta = c.meta || {};
-            const sex = (meta.sex === 'm' || meta.sex === 'male') ? 'male' : (meta.sex === 'o' || meta.sex === 'other' ? 'other' : 'female');
+            const sexMeta = (meta.sex === 'm' || meta.sex === 'male') ? 'male' : (meta.sex === 'o' || meta.sex === 'other' ? 'other' : '');
+            let sex = sexMeta;
             const role = (meta.role === 'top') ? 'top' : (meta.role === 'switch' ? 'switch' : 'bottom');
             const stats = {};
             /* ★W404：楼里的卡也要过一遍「合并层同款」校验 —— 否则 N/A/未知 会照画、条的宽度变 NaN */
@@ -2999,6 +3640,7 @@ export function nsfwProfilesFromText(text) {
                否则卡上永远没有「近况」分页（bucket 里有、但这里丢了） */
             const extra = {};
             Object.keys(c.extra || {}).forEach((id) => { if (nsfwGuideAllows(id)) extra[id] = Object.assign({}, c.extra[id]); });
+            if (!sex) sex = nsfwSexFromStats(stats, 'female');
             out[name] = { sex: sex, role: role, stats: stats, desc: desc, extra: extra };
         });
     } catch (e) { }
@@ -3116,6 +3758,38 @@ export function nsfwSnapOf(chatId, msgId) {
 }
 /* ────────────────────────── 消息挂载 ────────────────────────── */
 
+/** ★W465：只画最新一条「带状态块」的 assistant 的卡（再往后的 SFW 回复不画卡）。
+    旧楼不再渲染整张卡 —— 看历史请点悬浮条名字，用预览里的 ◀ ▶ 按需读那一楼。 */
+export function nsfwLatestCardFloor(ctx) {
+    try {
+        const c = ctx || ((typeof window !== 'undefined' && window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null);
+        const chat = (c && Array.isArray(c.chat)) ? c.chat : [];
+        for (let i = chat.length - 1; i >= 0; i--) {
+            const m = chat[i];
+            if (!m || m.is_user || m.is_system) continue;
+            const t = String(m.mes || '');
+            if (t.indexOf('<nsfw') >= 0 || t.indexOf('data-nsfw') >= 0) return i;
+        }
+    } catch (e) { }
+    return -1;
+}
+/** ★W465：把非最新楼的卡摘掉（正在编辑的那张先留着，保存后再收）。 */
+function nsfwPruneOldCards(keepId) {
+    try {
+        const keep = Number(keepId);
+        document.querySelectorAll('#chat .mes[mesid]').forEach((el) => {
+            const id = Number(el.getAttribute('mesid'));
+            if (Number.isFinite(id) && id === keep) return;
+            el.querySelectorAll('.yw-nsfw').forEach((card) => {
+                try {
+                    if (card.classList && card.classList.contains('yw-nsfw-editing')) return;
+                    card.remove();
+                } catch (e) { }
+            });
+        });
+    } catch (e) { }
+}
+
 export function nsfwMountToMessage(messageId, onlyIfMissing) {
     try {
         const ctx = window.SillyTavern && window.SillyTavern.getContext ? window.SillyTavern.getContext() : null;
@@ -3130,6 +3804,14 @@ export function nsfwMountToMessage(messageId, onlyIfMissing) {
 
         const mesEl = document.querySelector('.mes[mesid="' + messageId + '"]');
         if (!mesEl) return false;
+        /* ★W465：只保留最新一楼的卡；旧楼调用到这里只做摘卡，不解析、不建卡。 */
+        const latestId = nsfwLatestCardFloor(ctx);
+        nsfwPruneOldCards(latestId);
+        if (latestId !== Number(messageId)) {
+            /* 旧楼/刚切到没块的 SFW 分支：把最新那张带块的卡补回来（只补缺，不重建） */
+            if (latestId >= 0) { try { nsfwMountToMessage(latestId, true); } catch (eL) { } }
+            return false;
+        }
         /* ★W448：只在“卡丢了”时补挂 —— 卡还在就别再重建（编辑后 450ms 的兜底重建会把布局卡死） */
         if (onlyIfMissing) {
             const ex0 = mesEl.querySelector('.yw-nsfw');
@@ -3157,18 +3839,32 @@ export function nsfwMountToMessage(messageId, onlyIfMissing) {
         _charSelSet(chatId, messageId, selName);
         const cards = [];
         const anchorNode = mesEl.querySelector('.mes_text') || mesEl;
-        ownNames.slice(0, 6).forEach((n) => {
-            const card = nsfwRenderCard(n, pick(n), { names: ownNames });
+        const mountSource = nsfwFloorSource(chatId, messageId);
+        const ensureCard = (n) => {
+            let hit = cards.filter((x) => x.name === n)[0];
+            if (hit) return hit;
+            if (ownNames.indexOf(n) < 0) return null;
+            const card = nsfwRenderCard(n, pick(n), { names: ownNames, source: mountSource });
             card.dataset.mesid = String(messageId);
             try { nsfwApplyFold(card, chatId, messageId, n); } catch (eF) { }
             try { nsfwApplyTab(card, chatId, messageId, n); } catch (eT) { }
-            cards.push({ name: n, card: card });
-            if (n === selName) {
-                if (anchorNode.parentNode) anchorNode.parentNode.insertBefore(card, anchorNode.nextSibling);
-                else mesEl.appendChild(card);
-                try { if (card._nsfwLock) setTimeout(card._nsfwLock, 120); } catch (e) { }
-            }
-        });
+            hit = { name: n, card: card };
+            cards.push(hit);
+            card.querySelectorAll('.yw-nsfw-name[data-name]').forEach((b) => {
+                b.addEventListener('click', (ev) => {
+                    try { ev.stopPropagation(); } catch (e0) { }
+                    const nn = b.getAttribute('data-name');
+                    if (!nn || nn === selName || cards.some((y) => y.card.classList.contains('yw-nsfw-editing'))) return;
+                    setTimeout(() => {
+                        try {
+                            if (!card.isConnected || !sameFloor(mountSource) || cards.some((y) => y.card.classList.contains('yw-nsfw-editing'))) return;
+                            applySel(nn);
+                        } catch (e1) { }
+                    }, 0);
+                });
+            });
+            return hit;
+        };
         const applySel = (nn) => {
             const prev = cards.filter((x) => x.card.isConnected)[0];
             const wasCollapsed = !!(prev && prev.card.classList.contains('is-collapsed'));
@@ -3176,6 +3872,8 @@ export function nsfwMountToMessage(messageId, onlyIfMissing) {
             const prevTabId = prevTabBtn ? prevTabBtn.getAttribute('data-tab') : '';
             const prevTabIdx = prevTabBtn ? Array.prototype.indexOf.call(prev.card.querySelectorAll('.yw-nsfw-tab'), prevTabBtn) : -1;
             if (prevTabId) _mesTabSet(chatId, messageId, prevTabId);   /* ★W451：这一楼停在哪个页，跟人无关 */
+            const hit = ensureCard(nn);
+            if (!hit) return;
             selName = nn;
             _charSelSet(chatId, messageId, nn);
             cards.forEach((x) => {
@@ -3184,7 +3882,6 @@ export function nsfwMountToMessage(messageId, onlyIfMissing) {
                     b.classList.toggle('on', b.getAttribute('data-name') === nn);
                 });
             });
-            const hit = cards.filter((x) => x.name === nn)[0];
             if (hit) {
                 if (anchorNode.parentNode) anchorNode.parentNode.insertBefore(hit.card, anchorNode.nextSibling);
                 else mesEl.appendChild(hit.card);
@@ -3203,19 +3900,13 @@ export function nsfwMountToMessage(messageId, onlyIfMissing) {
             /* ★W446d：切换时不立刻量高（先在下一帧量，避免和输入/布局抢主线程） */
             if (hit && typeof hit.card._nsfwLock === 'function') { try { setTimeout(() => { try { hit.card._nsfwLock(); } catch (e2) { } }, 60); } catch (e0) { } }
         };
-        /* 名字切换（有卡在编辑就不切，免得丢输入） */
-        cards.forEach((x) => {
-            x.card.querySelectorAll('.yw-nsfw-name[data-name]').forEach((b) => {
-                b.addEventListener('click', (ev) => {
-                    try { ev.stopPropagation(); } catch (e0) { }
-                    if (cards.some((y) => y.card.classList.contains('yw-nsfw-editing'))) return;
-                    const nn = b.getAttribute('data-name');
-                    if (!nn || nn === selName) return;
-                    /* ★W446c：等这次点击走完再切（同步把当前卡的按钮藏起来，Chromium 会卡在奇怪的焦点态） */
-                    setTimeout(() => { try { applySel(nn); } catch (e1) { } }, 0);
-                });
-            });
-        });
+        /* 只建当前角色；访问过的卡留在本楼闭包内，切回保留输入、分页和折叠。 */
+        const initial = ensureCard(selName);
+        if (initial) {
+            if (anchorNode.parentNode) anchorNode.parentNode.insertBefore(initial.card, anchorNode.nextSibling);
+            else mesEl.appendChild(initial.card);
+            try { if (initial.card._nsfwLock) setTimeout(initial.card._nsfwLock, 120); } catch (e) { }
+        }
         return true;
     } catch (e) { return false; }
 }
@@ -3223,46 +3914,58 @@ export function nsfwMountToMessage(messageId, onlyIfMissing) {
 /* ★W337：自愈观察器 —— 酒馆/别的插件重渲染消息会把卡冲掉，这里发现「有块没卡」就补上（生成中不插手） */
 let __nsfwObs = null;
 let __nsfwObsTimer = 0;
+export function nsfwStopObserver() {
+    clearTimeout(__nsfwObsTimer);
+    __nsfwObsTimer = 0;
+    if (__nsfwObs) { try { __nsfwObs.disconnect(); } catch (e) { } }
+    __nsfwObs = null;
+}
+function nsfwObserverEnabled() {
+    const st = _getSettings() || {};
+    return !!st.nsfwEnabled && st.nsfwCaptureHide !== false;
+}
 export function nsfwStartObserver() {
     try {
+        if (!nsfwObserverEnabled()) { nsfwStopObserver(); return; }
         if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
         const chat = document.getElementById('chat');
-        if (!chat) return;
+        if (!chat) { nsfwStopObserver(); return; }
         if (__nsfwObs && __nsfwObs._target === chat) return;
-        if (__nsfwObs) { try { __nsfwObs.disconnect(); } catch (e) { } }
-        __nsfwObs = new MutationObserver(() => {
+        nsfwStopObserver();
+        const observer = new MutationObserver(() => {
+            if (__nsfwObs !== observer) return;
+            if (!nsfwObserverEnabled() || document.getElementById('chat') !== chat) { nsfwStopObserver(); return; }
             clearTimeout(__nsfwObsTimer);
             __nsfwObsTimer = setTimeout(() => {
+                __nsfwObsTimer = 0;
                 try {
+                    if (__nsfwObs !== observer) return;
+                    if (!nsfwObserverEnabled() || document.getElementById('chat') !== chat) { nsfwStopObserver(); return; }
                     if (document.body && document.body.classList.contains('yw-nsfw-generating')) return;
                     const ctx = (window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
                     if (!ctx || !Array.isArray(ctx.chat)) return;
-                    document.querySelectorAll('#chat .mes[mesid]').forEach((el) => {
-                        const id = Number(el.getAttribute('mesid'));
-                        if (!Number.isFinite(id)) return;
-                        const msg = ctx.chat[id];
-                        if (!msg) return;
-                        const txt = String(msg.mes || '');
-                        const hasBlock = txt.indexOf('data-nsfw') >= 0 || txt.indexOf('<nsfw') >= 0;
-                        if (!hasBlock) return;
-                        if (el.querySelector('.yw-nsfw')) return;
-                        nsfwMountToMessage(id);
-                    });
+                    /* ★W465：旧楼被酒馆重渲染时不再补卡；只保证最新一楼有卡。 */
+                    const latestId = nsfwLatestCardFloor(ctx);
+                    nsfwPruneOldCards(latestId);
+                    if (latestId < 0) return;
+                    const el = document.querySelector('#chat .mes[mesid="' + latestId + '"]');
+                    if (!el || el.querySelector('.yw-nsfw')) return;
+                    nsfwMountToMessage(latestId);
                 } catch (e) { }
             }, 220);
         });
-        __nsfwObs._target = chat;
-        __nsfwObs.observe(chat, { childList: true, subtree: true });
+        __nsfwObs = observer;
+        observer._target = chat;
+        observer.observe(chat, { childList: true, subtree: true });
     } catch (e) { }
 }
 export function nsfwReattachAll(onlyIds, onlyMissing) {
     try {
-        const want = Array.isArray(onlyIds) ? new Set(onlyIds.map((x) => Number(x))) : null;   /* ★W414：可只重挂指定楼，避免整聊扫 */
-        document.querySelectorAll('#chat .mes[mesid]').forEach((el) => {
-            const id = Number(el.getAttribute('mesid'));
-            if (!Number.isFinite(id)) return;
-            if (want && !want.has(id)) return;
-            nsfwMountToMessage(id, !!onlyMissing);
-        });
+        /* ★W465：整聊只保留最新一楼的一张卡；onlyIds 保留参数兼容，不再逐楼建卡。 */
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
+        const latestId = nsfwLatestCardFloor(ctx);
+        nsfwPruneOldCards(latestId);
+        if (latestId < 0) return;
+        nsfwMountToMessage(latestId, !!onlyMissing);
     } catch (e) { }
 }

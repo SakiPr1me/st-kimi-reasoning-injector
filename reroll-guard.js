@@ -6,7 +6,15 @@
 //   ③ 换了聊天 / 已确认 → 立即作废，绝不误伤。
 export function createRerollGuard() {
     let st = null; // { msgId, chatKey, deadline, done }
+    let epoch = 0;
     return {
+        // 所有延迟消费者共享取消代号；对象身份保留，不序列化聊天或正文。
+        token(scope) { return Object.freeze({ ...scope, epoch }); },
+        owns(token, scope) {
+            return !!token && token.epoch === epoch && token.seq === scope.seq
+                && token.chatKey === scope.chatKey && token.chat === scope.chat;
+        },
+        cancelTokens() { epoch++; st = null; },
         arm(msgId, chatKey, now, ms) {
             st = { msgId: msgId, chatKey: String(chatKey || ''), deadline: now + (ms || 2500), done: false };
         },

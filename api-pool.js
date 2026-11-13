@@ -59,7 +59,7 @@ function validEntries() {
 function findNext() {
     const ents = validEntries();
     if (ents.length < 2) return null;
-    const idx = currentIndex();
+    const idx = ents.indexOf(settings.pool[currentIndex()]);
     return ents[(idx + 1) % ents.length];
 }
 
@@ -345,6 +345,21 @@ function closeAllModelsDropdown() {
     document.querySelectorAll('.kimi-api-models').forEach(d => { d.style.display = 'none'; d.innerHTML = ''; });
 }
 
+// 点行外收起模型下拉：document **捕获阶段**注册。
+// 总控台 #ywcc-root 会在 click 冒泡阶段 stopPropagation（control-center.js:527）⇒ 冒泡委托
+// 收不到 root 内部的点击；捕获阶段在 root 之前跑，root 内卡外/导航/空白与原 page 外部都能收起。
+// fetch / 下拉容器 / 选项自己处理点击，先排除，避免在它们的处理器之前被清空。
+function onDocumentClickCloseModels(ev) {
+    if (ev.target && ev.target.closest && ev.target.closest('.kimi-api-fetch, .kimi-api-models, .kimi-api-model-opt')) return;
+    closeAllModelsDropdown();
+}
+function bindDocumentCloseModels() {
+    // 清掉旧版冒泡委托（同一页面里若还留着）；稳定函数先 remove 再 add ⇒ 重复 mount 不叠加。
+    try { $(document).off('click.kimiApiCloseModels'); } catch (e) { /* jQuery 不可用时忽略 */ }
+    document.removeEventListener('click', onDocumentClickCloseModels, true);
+    document.addEventListener('click', onDocumentClickCloseModels, true);
+}
+
 
 function renderList(slotSel) {
     // 刷新所有 #kimi_api_list：面板重建会在 slot 挂新卡，而旧卡可能仍被移入悬浮窗 → 两份并存，
@@ -374,9 +389,13 @@ export function mountApiPoolCard(slotSel) {
         updateApiMenuItem();
     });
 
-    // 列表事件委托（增删改都走这里，重渲染后依然有效；document 级覆盖所有 #kimi_api_list，
-    // 含被移入悬浮窗的旧卡——主界面与悬浮框两份并存时切换/删除都生效）。
-    // 防重复：document 级委托 + data 标志，语言切换/重挂多次调用只绑一次。
+    // 列表事件委托（增删改都走这里）。
+    // ★总控台（ywcc）把卡搬进 #ywcc-root 后，root 的 click stopPropagation 会截断 document 级
+    //   click 委托 ⇒ 切换 / 删除 / 拉模型 / 选模型全部点不动。所以 click 类动作一律绑在
+    //   #kimi_api_list 容器上（在 root 里面，先于 root 收到事件）；renderList() 只换 innerHTML、
+    //   不换列表元素本身 ⇒ 重绘不会丢绑定。
+    //   输入框仍走 document：input 不是 click，不受 root 截断影响，且保留原来的跨挂载点覆盖。
+    // 防重复：input 用 document + data 标志；click 用每份列表元素的命名空间 off/on。
     if (!$(document).data('kimiApiDelegated')) {
         $(document).data('kimiApiDelegated', true);
         $(document).on('input', '#kimi_api_list .kimi-api-model, #kimi_api_list .kimi-api-url, #kimi_api_list .kimi-api-key', function () {
@@ -388,42 +407,41 @@ export function mountApiPoolCard(slotSel) {
             else e.key = $(this).val();
             saveSettingsDebounced();
         });
-        $(document).on('click', '#kimi_api_list .kimi-api-switch', function () {
+    }
+    const $apiList = $(slot.querySelector('#kimi_api_list'));
+    if ($apiList.length) {
+        $apiList.off('click.kimiApiRowSwitch').on('click.kimiApiRowSwitch', '.kimi-api-switch', function () {
             const e = settings.pool[Number($(this).attr('data-i'))];
             if (e) doSwitch(e);
         });
-        $(document).on('click', '#kimi_api_list .kimi-api-del', function () {
+        $apiList.off('click.kimiApiRowDelete').on('click.kimiApiRowDelete', '.kimi-api-del', function () {
             const i = Number($(this).attr('data-i'));
             settings.pool.splice(i, 1);
             saveSettingsDebounced();
             updateApiMenuItem();
             renderList(); // 只重渲染列表；整卡重挂是重复绑定的源头，不再使用
         });
+        // 📋 获取可用模型委托——同一份列表元素上独立命名空间 + off 防重复。
+        $apiList.off('click.kimiApiFetch').on('click.kimiApiFetch', '.kimi-api-fetch', function () {
+            const i = Number($(this).attr('data-i'));
+            toggleModelsDropdown(i);
+        });
+        $apiList.off('click.kimiApiModelOpt').on('click.kimiApiModelOpt', '.kimi-api-model-opt', function () {
+            const i = Number($(this).attr('data-i'));
+            const m = $(this).attr('data-model');
+            const e = settings.pool[i];
+            if (e && m) {
+                e.model = m;
+                saveSettingsDebounced();
+                // 同步该行 model 输入框（不整卡重渲染，避免下拉闪烁/丢焦点）
+                const inp = document.querySelector(`#kimi_api_list .kimi-api-model[data-i="${i}"]`);
+                if (inp) inp.value = m;
+            }
+            closeAllModelsDropdown();
+        });
     }
-    // 📋 获取可用模型委托——独立命名空间 + off 防重复（不依赖 kimiApiDelegated：
-    // 旧缓存实例可能已设该标志但无 fetch handler → 新实例需总能绑上）。
-    $(document).off('click.kimiApiFetch').on('click.kimiApiFetch', '#kimi_api_list .kimi-api-fetch', function () {
-        const i = Number($(this).attr('data-i'));
-        toggleModelsDropdown(i);
-    });
-    $(document).off('click.kimiApiModelOpt').on('click.kimiApiModelOpt', '#kimi_api_list .kimi-api-model-opt', function () {
-        const i = Number($(this).attr('data-i'));
-        const m = $(this).attr('data-model');
-        const e = settings.pool[i];
-        if (e && m) {
-            e.model = m;
-            saveSettingsDebounced();
-            // 同步该行 model 输入框（不整卡重渲染，避免下拉闪烁/丢焦点）
-            const inp = document.querySelector(`#kimi_api_list .kimi-api-model[data-i="${i}"]`);
-            if (inp) inp.value = m;
-        }
-        closeAllModelsDropdown();
-    });
-    // 点行外任意处收起所有模型下拉
-    $(document).off('click.kimiApiCloseModels').on('click.kimiApiCloseModels', function (ev) {
-        if (ev.target && ev.target.closest && ev.target.closest('.kimi-api-fetch, .kimi-api-models, .kimi-api-model-opt')) return;
-        closeAllModelsDropdown();
-    });
+    // 点行外任意处收起所有模型下拉（捕获阶段，root 内外都生效；重复 mount 不叠加）
+    bindDocumentCloseModels();
 }
 
 // 调试出口（CDP 测试用）

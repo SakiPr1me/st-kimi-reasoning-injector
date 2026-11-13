@@ -1599,3 +1599,42 @@ body.ywpu-nosel { user-select: none; -webkit-user-select: none; }
 /* ★W166h：TT 攻略折叠去掉默认三角（和下面「ST 连接」标签左对齐） */
 .kimi-oc-tt > summary { list-style: none; }
 .kimi-oc-tt > summary::-webkit-details-marker { display: none; }
+
+/* ==========================================================================
+   ★2026-11-11 成熟质量批 · 四个可点 <summary> 的真实可点高度
+   --------------------------------------------------------------------------
+   真 DOM before（主在 modern 390 用 __MUI.fixture('updater') 读的）：
+     .ywpu-cadv 20.6 / .ywpu-fold 19 / .ywpu-paramsbox 18.6 / .ywpu-colors 18.6
+   —— 桌面文字链 24 / 手机触摸 32 的门槛都不够；`.ywpu-rx-same` 已 32，**不动**。
+   口径：用真实 min-height + padding 抬高可见行（不用伪元素热区 —— 相邻上下控件只隔约 20px，
+   32px 伪热区会互相重叠、抢点击）。box-sizing:border-box 让 min-height 含 padding；
+   3px/7px 是让 12px 字那一族正好过 24/32 的最小 padding；11px 那族多 1px（4px/7.5px）。
+   ========================================================================== */
+.ywpu-cadv > summary, .ywpu-fold > summary, .ywpu-paramsbox > summary, .ywpu-colors > summary {
+    box-sizing: border-box;
+    min-height: 24px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+/* .ywpu-fold 是 11px 字（17.05 + 6 = 23.05 <24）⇒ 上下各 4px */
+.ywpu-fold > summary { padding-top: 4px; padding-bottom: 4px; }
+
+@media (max-width: 720px) {
+    .ywpu-cadv > summary, .ywpu-paramsbox > summary, .ywpu-colors > summary {
+        min-height: 32px;
+        padding-top: 7px;
+        padding-bottom: 7px;
+    }
+    /* 11px 字：17.05 + 15 = 32.05；7.5px 是能过 32 的最小档 */
+    .ywpu-fold > summary { min-height: 32px; padding-top: 7.5px; padding-bottom: 7.5px; }
+}
+
+/* MUI-FINAL-FOCUS-2026-11-11 · 键盘焦点可见（只补 updater 自己，零布局；事件集成/qf 量具用） */
+#ywpu-root :is(button, summary, [tabindex], [role="button"], a):focus-visible,
+#ywpu-card :is(button, summary, [tabindex], [role="button"], a):focus-visible,
+#ywpu-sheet :is(button, summary, [tabindex], [role="button"], a):focus-visible,
+#ywpu-cmp :is(button, summary, [tabindex], [role="button"], a):focus-visible,
+#ywpu-patch :is(button, summary, [tabindex], [role="button"], a):focus-visible {
+    outline: 2px solid var(--ywpu-accent-ink);
+    outline-offset: 1px;
+}

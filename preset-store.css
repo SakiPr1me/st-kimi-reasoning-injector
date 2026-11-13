@@ -3170,3 +3170,38 @@ body[data-theme-mode="dark"] .yws-ptag.yws-st-off, .dark .yws-ptag.yws-st-off { 
    悬停才显出可点（颜色 + 虚下划线，与全站的 `.yws-mday.yws-daybtn:hover` 同一套）。 */
 .yws-card-lite .yws-mday.yws-daybtn { text-decoration: none; }
 .yws-card-lite .yws-mday.yws-daybtn:hover { text-decoration: underline dotted; text-underline-offset: 2px; color: var(--yws-accent-ink); }
+
+/* ==========================================================================
+   ★2026-11-11 成熟质量批 · 「看原始字段」可点 <summary> 的真实可点高度
+   --------------------------------------------------------------------------
+   真 DOM before（主在 modern 390 用 __MUI.fixture('store') 读的）：
+     .yws-fold 22.6 / 同一个元素上的 .yws-rvraw 21.05 —— 桌面 24 / 手机 32 都不够。
+   口径：真实 min-height + padding 抬高可见行（不用伪元素热区：上下相邻控件只隔约 20px，
+   32px 伪热区会互相重叠抢点击）。box-sizing:border-box 让 min-height 含 padding。
+   .yws-rvraw 与 .yws-fold 是同一个 summary（11px 字），所以后一条只覆盖它的上下 padding。
+   ========================================================================== */
+.yws-fold > summary {
+    box-sizing: border-box;
+    min-height: 24px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+/* 11px 字那一档：17.05 + 8 = 25.05，4px 是过 24 的最小档 */
+.yws-rvraw > summary { min-height: 24px; padding-top: 4px; padding-bottom: 4px; }
+
+@media (max-width: 720px) {
+    .yws-fold > summary { min-height: 32px; padding-top: 7px; padding-bottom: 7px; }
+    /* 17.05 + 15 = 32.05；7.5px 是过 32 的最小档 */
+    .yws-rvraw > summary { min-height: 32px; padding-top: 7.5px; padding-bottom: 7.5px; }
+}
+
+/* MUI-FINAL-FOCUS-2026-11-11 · summary 的键盘焦点可见（按钮族已有 :focus-visible，不重复） */
+.yws-host summary:focus-visible,
+#ywpu-view-store summary:focus-visible,
+#yws-dlg-host summary:focus-visible,
+#yws-banner summary:focus-visible,
+#yws-repbanner summary:focus-visible,
+#yws-noticebanner summary:focus-visible {
+    outline: 2px solid var(--yws-accent-line);
+    outline-offset: 1px;
+}

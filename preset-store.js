@@ -23,6 +23,12 @@ import { saveSettingsDebounced } from '../../../../script.js';
 // ★P5 的人话确认用酒馆**原生弹窗**（async：不冻页面、不挡 toast）；取不到会自动退化成浏览器 confirm（见 askYes）
 import { Popup, POPUP_RESULT } from '../../../popup.js';
 import * as PM from './preset-merge.js';
+/* ★M02（2026-11-11 隔离质量批）：另存新名按宿主 sanitize-filename 规则查重 + 本页预留 + 保存后复核。
+   纯逻辑模块，不读 DOM / 不发请求（见 preset-save.js 文件头的保护范围）。 */
+import * as PS from './preset-save.js?b=v1.0.0';
+/* 逐项解构（原因同 preset-updater.js：chk-updater-defs 不认 import 说明符，直接命名导入会误报）。 */
+const presetNameInfo = PS.presetNameInfo;
+const savePresetAsUnique = PS.savePresetAsUnique;
 
 const EXT = 'preset_store';
 /* ★W23 收口（2026-09-25 · 发布准备）：v2.2.20 → **v2.2.21**（W21-C 的 UI 收尾 + 「换凭据」接线 + P0 修复；与 index.js 的 storeBuild 成对升） */
@@ -150,7 +156,11 @@ const EXT = 'preset_store';
       空 / 超长（500 字）在**客户端就先给人话**（后端那道闸照旧在）；「当前在推什么」读 `GET /list` 的 `notice` 栏
       （后端那一波没给 `GET /notice`，保持"一条写接口"的最小面 —— 它的报告 §⑤ 也是这么建议的）。 */
 /* ★W279b（2026-10-29）：2.2.117 → **2.2.118**（随 W279a BUILD 对齐一起发版；与 index.js storeBuild 成对） */
-const VERSION = '2.2.118';
+/* ★★feedback11（2026-11-13 · 首页官方更新提醒）：2.2.120 → **2.2.121**
+   （VERSION/BUILD 两处 + index.js 的 storeBuild = 三处成对；主 Agent 接手 index.js 那一位）。 */
+/* ★★feedback12（2026-11-13 · 作者纠正）：更新对象是官方**补丁包**（真实 kind = ywp-entry / ywp-patch），
+   不是整份 ywp-preset。2.2.121 → **2.2.122**（VERSION/BUILD 两处 + index.js storeBuild 成对）。 */
+const VERSION = '2.2.122';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -252,7 +262,7 @@ const VERSION = '2.2.118';
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
 /* ★W279a（2026-10-29 · 收口补救）：BUILD 从 v2.2.87 追平（W211 起多波只升 VERSION/storeBuild 漏了 BUILD；纯显示对齐，逻辑零改动）；★W279b 随发版升 v2.2.118 */
-const BUILD = 'v2.2.118';
+const BUILD = 'v2.2.122';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -296,6 +306,10 @@ function backupApiOf() {
 /** ★W125-c：**这一发请求打到哪** —— 全店唯一的地址口径（`request()` 只调它这一处）。
  *  ★空 ⇒ 原样返回 `STORE_API` ⇒ 拼出来的 URL 与改前**逐字相同**（这就是"老用户零影响"的机器证据）。 */
 function apiBaseOf() { return backupApiOf() || STORE_API; }
+// evolve-20261111: read continuations
+// evolve-20261111: backend isolation. Responses belong to a base AND a switch generation.
+function apiScope() { return { base: apiBaseOf().replace(/\/+$/, ''), epoch: Number(S.apiEpoch) || 0 }; }
+function apiScopeCurrent(scope) { const now = apiScope(); return scope.base === now.base && scope.epoch === now.epoch; }
 /** ★W125-c：现在是不是在备用后端上（状态牌 / 计数条那个小牌用它）。
  *  ★用户把**默认地址原样**填进框里 ⇒ 算"主"（`apiBaseOf()` 与 `STORE_API` 相等）—— 那是实话。 */
 const apiOnBackup = () => apiBaseOf() !== STORE_API;
@@ -579,6 +593,17 @@ const S = {
     mounts: new Set(),        // 挂载点（卡片 + 更新器窗口第三标签）
     online: null,             // null=还没问过 | true | false
     version: 0,               // 服务端返回的商店版本号
+    /* ★★feedback11（2026-11-13 · 首页官方更新提醒）：**最近一次成功 `/list` 的版本号**。
+       `/stats` 也会写 `S.version`，但它**不返回卡片列表**；作者传了新 rev 时 `unreadOfficial`
+       可能已被本机已读水位线追平（=0），只看它就会漏掉新 rev。⇒ `checkStats()` 比较
+       `st.version > S.listVersion`，真的变了才借现有 `refresh()` 拉一次列表（复用 S.busy 防并发；
+       失败不推进 listVersion，下一次 15 分钟轮询会再试）。 */
+    listVersion: 0,
+    /* ★★feedback11：**最近一次可信列表算出的官方更新提醒**（`getOfficialUpdateNotice()` 的缓存）。
+       列表失败 / 离线缓存 / 旧列表时**保留它**（只把 ready 报成 false），绝不因为一次网络抖动
+       把已知 pending 清成 false。只在"门禁通过"的那一次计算里更新。 */
+    officialNotice: null,
+    officialNoticeSig: '',    // 事件去重签名（force=true 时忽略）
     cards: [],                // 已上线卡片
     stats: { total: 0, official: 0, unread: 0, mine: 0 },
     busy: false,
@@ -1056,6 +1081,16 @@ function presetManager() {
 function listPresetNames() {
     try { const pm = presetManager(); return pm ? (pm.getAllPresets() || []) : []; } catch (e) { return []; }
 }
+/** ★B1（独立复查 2026-11-11）：保存/另存前的列表读取**不许吞错** —— 上面那个 `listPresetNames()` 给 UI/浏览
+ *  用，"读不到就当空"是安全的；但保存前如果也当空，就会把一个已存在的同名预设当成"空位"覆盖掉。
+ *  这个严格版：管理器/列表任一读不到就抛；`savePresetNew` 与 `savePresetAsUnique` 只吃这个。 */
+function listPresetNamesStrict() {
+    const pm = presetManager();
+    if (!pm) throw new Error('取不到酒馆的预设管理器');
+    const list = pm.getAllPresets();
+    if (!Array.isArray(list)) throw new Error('酒馆返回的预设列表不是数组');
+    return list.slice();
+}
 /** ★★W121（与 preset-updater.js 的 readPreset **同一套修法**，作者 2026-10-08 转来的用户报告）：
  *  酒馆面板里的编辑只进「内存 + settings.json」，不点「更新预设」不进预设文件；
  *  改前这里读 `openai_settings`（= 文件那本账的副本）⇒ "改了预设插件读到旧的"。
@@ -1092,16 +1127,42 @@ function readPreset(name, opts) {
     } catch (e) { /* 读内存失败 ⇒ 退回文件那份 */ }
     return JSON.parse(JSON.stringify(body));
 }
-/** 另存新名（★绝不覆盖同名：撞了就自动加（2）（3）…） */
+/** 另存新名（★绝不覆盖同名：撞了就自动加（2）（3）…）
+ *  ★★M02（2026-11-11）：改前只拿**原始字符串** `have.has(final)` 查重 —— 酒馆服务端写盘前会先跑
+ *    `sanitize-filename`（`Neutral:Name` → `NeutralName`），客户端却认为"不重名" ⇒ 直接覆盖同名旧文件；
+ *    返回值也仍是原始名，后续切换/提示会去找一份不存在的预设。
+ *    现在：`savePresetAsUnique()` 用与宿主相同的清洗规则 + 平台大小写查重，选一个**保存前不存在**的名字，
+ *    并在保存后从 `getAllPresets()` 复核（宿主清洗成别的名字也能认出来；列表里没有新文件 ⇒ 不报成功）。
+ *    正常"保存当前预设"不走这里（那是酒馆自己的「更新预设」覆盖同一份，不是无限备份）。 */
 async function savePresetNew(name, preset) {
     const pm = presetManager();
     if (!pm) throw new Error('取不到酒馆的预设管理器，请刷新页面重试');
-    const have = new Set(listPresetNames());
-    let final = String(name || '').trim() || ('余温（商店 ' + nowDay() + '）');
-    let i = 2;
-    while (have.has(final)) { final = String(name).trim() + '（' + i + '）'; i++; }
-    await pm.savePreset(final, preset);
-    return final;
+    /* ★B1：保存前先做一次**严格**列表读取；读不到就抛（绝不当空列表去选名字）。 */
+    try { listPresetNamesStrict(); }
+    catch (e) { throw new Error('保存前读不到预设列表（不能保证不覆盖同名）：' + ((e && e.message) || e)); }
+    const raw = String(name || '').trim();
+    const base = raw || ('余温（商店 ' + nowDay() + '）');
+    const info = presetNameInfo(base);
+    if (!info.ok) throw new Error(info.why);
+    const r = await savePresetAsUnique({
+        baseName: base,
+        preset,
+        listNames: listPresetNamesStrict,
+        save: (n, p) => pm.savePreset(n, p),
+        opts: {},
+    });
+    if (!r.ok) {
+        const err = new Error(r.why || '保存没成功');
+        err.wrote = !!r.wrote;
+        err.savedMaybe = !!r.wrote;
+        throw err;
+    }
+    if (!r.verified) {
+        const err = new Error('保存调用返回了，但没能从预设列表复核到「' + (r.actualName || r.name) + '」—— 不当作成功；刷新酒馆确认');
+        err.wrote = true;
+        throw err;
+    }
+    return r.actualName || r.name;
 }
 // ★P7（§15）：新预设名不在这里定了 —— 缝合写盘全在更新器里（那边的 storeDefaultName 同口径：
 //   原名 +（商店 今天），撞名自动加序号，绝不覆盖）
@@ -1638,7 +1699,8 @@ async function request(path, { method = 'GET', body = null, headers = {}, timeou
     /* ★★W125-c：地址从**常量**改成**每次现读这一处口径**（`apiBaseOf()`）——
        没填「备用后端地址」时它返回的就是 `STORE_API` 本身 ⇒ URL 与改前**逐字相同**；
        填了（且确认过）就全打到那个地址。★除了这一行，本函数一个字没动。 */
-    const url = apiBaseOf() + path;
+    const scope = apiScope();
+    const url = scope.base + path;
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeout);
     try {
@@ -1651,6 +1713,7 @@ async function request(path, { method = 'GET', body = null, headers = {}, timeou
         const text = await r.text();
         let json = null;
         try { json = JSON.parse(text); } catch (e) { json = null; }
+        if (!apiScopeCurrent(scope)) throw Object.assign(new Error('后端已切换，忽略旧响应'), { staleBackend: true });
         if (!r.ok) {
             const msg = (json && (json.error || json.message)) || ('服务端返回 ' + r.status);
             const err = new Error(msg); err.status = r.status; err.data = json;
@@ -1660,6 +1723,7 @@ async function request(path, { method = 'GET', body = null, headers = {}, timeou
         markOnline(true);
         return json;
     } catch (e) {
+        if (!apiScopeCurrent(scope) || e.staleBackend) throw Object.assign(e, { staleBackend: true });
         const aborted = e.name === 'AbortError';
         e.timedOut = aborted;                       // ★P11：给调用方一个"这是等超时，不是被拒绝"的明确标记
         const off = aborted || /Failed to fetch|NetworkError|Load failed/i.test(String(e.message));
@@ -1934,24 +1998,36 @@ function saveCache(items) {
                  ⇒ 未截断的老缓存/新缓存**逐字节同形状**（老缓存读回来也是 undefined ⇒ 按没截处理）。 */
             playCut: (String(c.playText || '').length > PLAY_CACHE_MAX) ? 1 : undefined,
         }));
-        const pack = { at: Date.now(), version: S.version, items: brief };
-        localStorage.setItem(CACHE_KEY, JSON.stringify(pack));
+        const base = apiScope().base;
+        const pack = { at: Date.now(), backend: base, version: S.version, items: brief };
+        // Independent fallbacks: quota failure must not skip the settings copy.
+        try { localStorage.setItem(CACHE_KEY + ':' + encodeURIComponent(base), JSON.stringify(pack)); }
+        catch (e) { warn('列表本机缓存写不进去（尝试设置缓存）', e); }
         const s = getSettings(); s.cache = pack; saveSettings();
     } catch (e) { warn('列表缓存写不进去（不影响在线使用）', e); }
 }
 /** ★F7：读回缓存（localStorage 优先，settings 兜底 —— ST 会把 extension_settings 落盘，所以两边都有） */
 function loadCache() {
-    try { const t = localStorage.getItem(CACHE_KEY); if (t) { const o = JSON.parse(t); if (o && Array.isArray(o.items)) return o; } } catch (e) { /* 读不出的当没有 */ }
-    const s = getSettings().cache;
-    return (s && Array.isArray(s.items)) ? s : null;
+    const base = apiScope().base;
+    let disk = null;
+    try { disk = JSON.parse(localStorage.getItem(CACHE_KEY + ':' + encodeURIComponent(base)) || 'null'); } catch (e) { }
+    const fallback = getSettings().cache;
+    // Legacy unbound caches are intentionally not assigned to an arbitrary backend.
+    const valid = [fallback, disk].filter(o => o && o.backend === base && Array.isArray(o.items));
+    valid.sort((a, b) => Number(b.at) - Number(a.at));
+    return valid[0] || null;
 }
 const CACHE_KEY = 'yw_store_cache';
 async function refresh(silent) {
+    const backendScope = apiScope();
     if (S.busy) return;
     S.busy = true;
     try {
         const r = await api.list(0);
+        if (!apiScopeCurrent(backendScope)) return;
         S.version = Number(r.version || 0);
+        /* ★★feedback11：只信**列表回执**里的版本号（`/stats` 不返回列表，见 S.listVersion 的注释）。 */
+        S.listVersion = S.version;
         S.cards = Array.isArray(r.items) ? r.items : [];
         S.lastErr = '';
         S.lastErrStatus = 0;
@@ -1972,6 +2048,7 @@ async function refresh(silent) {
         recomputeStitched();               // ★A6：先按新列表算一次"有更新的"（下面 stats 失败也不影响它）
         try {
             const st = await api.stats(getSettings().readVersion);
+            if (!apiScopeCurrent(backendScope)) return;
             /* ★AU-①：服务端的 `unreadOfficial` / `unreadUser`（AQ1 首选路那两个数）**必须原样带进来** ——
                原来这里只挑 5 个字段拼一个新对象，新字段会被**当场丢掉**（客户端明明拿到了、却当没有）。
                口径：**只在服务端真给了数字时才写这两个键**（不是数字 = 键不存在）⇒ bannerNums() 能分清
@@ -1990,7 +2067,10 @@ async function refresh(silent) {
             /* ★★W52-N2：myRead（"我自己那几张卡看到哪一版"）也在这里做一次性补齐 —— 判据同源（真拉到过列表） */
             try { myReadInit(); } catch (e) { warn('建"我自己的卡看到哪一版"的账没成（先不报自己那条提醒，下次刷新再来）', e); }
             bannerTick();
-        } catch (e) { /* stats 失败不影响列表 */ }
+        } catch (e) { if (!apiScopeCurrent(backendScope)) return; /* stats 失败不影响列表 */ }
+        /* ★★feedback11：**列表成功 = 官方更新提醒的一次可信数据源**（stats 失败也照发 —— 判据只用 S.cards）。
+           事件只广播、不发查询；首页收到只重画 ⇒ 不会形成"事件→再来一次列表"的死循环。 */
+        emitOfficialUpdate(true);
         if (!silent) toast('success', '刷新好了：共 ' + S.cards.length + ' 条');
         /* ★★§BJ-E15/16：**手动刷新 / 进面板**也顺手问一遍"有没有人回我"（节流 60 秒，同一分钟内不重复问）。
            fire-and-forget：不拖慢这一发刷新，也不弹任何错（拉不到时那一页自己会写人话）。 */
@@ -2006,7 +2086,7 @@ async function refresh(silent) {
              所以**不需要**、也**不新造**第二个请求（少一条请求 = 少一份限流风险与 KV 读，见 R4 §4-4 的算术）；
            · 拿不到（老后端没给这个字段 / 离线）⇒ 数字按 0 显示，卡片上那颗按钮退化成「评论」，
              绝不因为"评论数没有"就把整个列表搞成出错态（这条口径本身没变，只是它不靠任何请求兜底）。 */
-    } catch (e) {
+    } catch (e) { if (!apiScopeCurrent(backendScope)) return;
         // ★★P11（审查 D1 · P1）：**列表拉取失败 ≠ 条目被撤回**。
         //   以前这里 `S.cards = []`，而 online 仍是 true（HTTP 4xx/5xx 不标离线）→ checkStitched 拿空列表判定
         //   → 顶部宣布"你缝过的条目全下架了"（Cloudflare 的 502/522/500 都走这条路，用户会以为自己缝的东西被人撤了）。
@@ -2025,7 +2105,7 @@ async function refresh(silent) {
             }
         }
         warn('拉列表失败（保留上一份数据，不判定"已下架"）：' + S.lastErr, e);
-    } finally {
+    } finally { if (!apiScopeCurrent(backendScope)) return;
         S.busy = false;
         checkStitched();                 // ★§9 边界：列表回来后比一次"你缝过的那些"（更新了/被撤回了）
         /* ★★W6-A3/A5：**这里原来那一行被删掉了**（改前：
@@ -2631,11 +2711,23 @@ export function mountPresetStore(container) {
     }
     console.log('[条目商店] ' + BUILD + ' 已挂载（' + (kind === 'card' ? '工具箱卡片' : '更新器窗口标签') + '）');
 }
-function checkStats() { api.stats(getSettings().readVersion).then(st => {
+function checkStats() {
+    const backendScope = apiScope();
+    /* ★★feedback11：`/stats` **不返回卡片列表** —— 作者传了新 rev 时 `unreadOfficial` 可能已经是 0
+       （本机已读水位线追平），只看它就会漏掉新 rev。⇒ 记下"上一次成功列表的版本号"，
+       服务端版本真的前进时才**借现有 refresh() 拉一次列表**（复用 S.busy 防并发；失败不推进
+       S.listVersion，下一次 15 分钟轮询会再试 —— 不新造第二个定时器）。 */
+    const listVersion = Number(S.listVersion) || 0;
+    api.stats(getSettings().readVersion).then(st => { if (!apiScopeCurrent(backendScope)) return;
     /* ★AU-①：后台轮询这条路也要把服务端那两个新数带进来（与 refresh() 用同一个 statsNewFields，
        否则"15 分钟轮询回来"与"手动刷新"两条路的横幅数字会不一样）。 */
     S.stats = Object.assign({ total: st.total || 0, official: st.official || 0, mine: st.mine || 0, unread: st.unread || 0 }, statsNewFields(st));
-    S.version = st.version || S.version;
+    const serverVersion = Number(st.version) || 0;
+    S.version = serverVersion || S.version;
+    if (listVersion > 0 && serverVersion > listVersion && !S.busy) {
+        void refresh(true);          // 只借现有那一发；refresh 成功后自己 emit + render
+        return;
+    }
     /* ★★W34-①：后台轮询这条路也补一次"建账"（幂等）—— 若第一次进商店时列表/统计没拉成，
        15 分钟这一次成功之后就**不该**再让"看过了"那两本账缺着（缺着 = 角标一直不出现）。 */
     try { secSeenInit(); offiSyncSeen(); } catch (e) { warn('建"看过了"的本机账没成（角标先不显示，下次刷新再来）', e); }
@@ -6169,7 +6261,7 @@ function localPlayAll() {
             name: String(x.name || ''),
             text: String(x.text || ''),
             t: Number(x.t) || 0,
-        })).filter(x => x.id).slice(0, LOCALPLAY_MAX);
+        })).filter(x => x.id);
     } catch (e) { warn('本地小剧场读不出来（可能坏了）—— 当空的，不影响别的', e); return []; }
 }
 /** 读一次就缓存（`S.localPlays`）；写入时同步更新缓存 ⇒ 界面永远看到的是刚写进去的那一份 */
@@ -6179,7 +6271,10 @@ function localPlayList() {
 }
 /** 写盘 + 同步缓存。**返回值如实**（隐私模式 / 配额满 ⇒ false，调用方要给人话、不许假装存上了）。 */
 function localPlayWrite(list) {
-    const clean = (list || []).slice(0, LOCALPLAY_MAX);
+    const clean = (list || []).slice();
+    // Never evict authored content. Existing oversized collections may still be edited/deleted.
+    const before = localPlayList();
+    if (clean.length > LOCALPLAY_MAX && (clean.length > before.length || clean.some(x => !before.some(y => y.id === x.id)))) return false;
     try { localStorage.setItem(LOCALPLAY_KEY, JSON.stringify(clean)); }
     catch (e) { warn('本地小剧场存不进去（隐私模式 / 配额满）', e); return false; }
     S.localPlays = clean;
@@ -6202,6 +6297,7 @@ function localPlaySave() {
     if (!name) { toast('warning', '给它起个名字吧（不然列表里认不出来）。'); return; }
     if (!text.trim()) { toast('warning', '正文还是空的 —— 把要玩的那段文字粘进来。'); return; }
     const list = localPlayList().slice();
+    if (list.length >= LOCALPLAY_MAX) { toast('warning', '本地小剧场已满 200 条，请先删掉不需要的一条再新建。原有内容都保留着。'); return; }
     list.unshift({ id: localPlayNewId(), name: name, text: text, t: Date.now() });
     if (!localPlayWrite(list)) { toast('error', '存不进去（浏览器隐私模式 / 空间满了）—— 换个窗口或清点空间再试。'); return; }
     S.lpDlg = null;
@@ -6216,7 +6312,7 @@ function localPlaySave() {
 function localPlayDel(id) {
     const sid = String(id || '');
     const list = localPlayList().filter(x => String(x.id) !== sid);
-    localPlayWrite(list);
+    if (!localPlayWrite(list)) { toast('error', '没删掉（浏览器隐私模式 / 空间满了）—— 原内容和确认都保留着，请清点空间后重试。'); return; }
     if (String(S.lpDel || '') === sid) S.lpDel = null;
     delete S.lpView[sid];
     toast('info', '删掉了。');
@@ -6333,6 +6429,7 @@ function toggleComments(id, opt) {
 }
 /** 拉一页评论（只在**点开评论区**和**翻页/换排序**时调；失败如实说、绝不假装"没有评论"） */
 async function loadComments(cardId, opt) {
+    const backendScope = apiScope();
     const sid = String(cardId || '');
     if (!sid) return false;
     if (S.cm.busy) return false;
@@ -6342,6 +6439,7 @@ async function loadComments(cardId, opt) {
     S.cm.busy = true;
     try {
         const r = await api.commentList(sid, S.cm.sort, S.cm.page);
+        if (!apiScopeCurrent(backendScope)) return;
         /* ★W（评论"发出即所见"）：**本地未确认的那几条（发送中 / 发送失败）原样保住** ——
            它们本来就不在服务端，不能被服务端那份列表覆盖掉（否则用户刚发的那条会当场消失）。
            它们**固定留在第 1 页最上面**（翻到第 2 页时不带过去）。
@@ -6371,7 +6469,7 @@ async function loadComments(cardId, opt) {
         /* ★U5：**≤2 条回复的楼要直接铺开**（评审口径）⇒ 顶层列表到手后，把"还没拉过、而且回复数 ≤2"的楼
            各拉一次（一次一小发；只有真的有人回复过的楼才会拉）。开了排序/翻页也照做。 */
         ensureShallowThreads();
-    } catch (e) {
+    } catch (e) { if (!apiScopeCurrent(backendScope)) return;
         /* ★★AU-②（作者第九批）：上面那句"后端还没上线"**已经过时了** —— 后端**早就有** /comment 了
            （四支接口都在：GET / POST / DELETE / like）。现在两端 404 的**唯一**含义是
            `!rec || rec.status !== 'approved'`（worker.js:1937/1976、fake-store.js:991）
@@ -6391,7 +6489,7 @@ async function loadComments(cardId, opt) {
             S.cm.err = '评论拉不到：' + String((e && e.message) || e) + ' → ' + nextStepOf(st);
         }
         warn('拉评论失败（card=' + sid + '）', e);
-    } finally { S.cm.busy = false; }
+    } finally { if (!apiScopeCurrent(backendScope)) return; S.cm.busy = false; }
     if (opt && opt.silent) return true;
     renderAll();
     return true;
@@ -6426,6 +6524,7 @@ function cmLocate(cid) {
 /** 拉某一楼（GET /comment?parent=）—— 失败只影响**这一楼**（在楼里给一行小字），顶层列表一个字不动。
  *  `opt.page` 给了 = 往后翻一页（「再看 N 条」）。 */
 async function loadThread(pid, opt) {
+    const backendScope = apiScope();
     const k = String(pid || '');
     if (!k) return false;
     const th = cmThOf(k);
@@ -6438,6 +6537,7 @@ async function loadThread(pid, opt) {
     repaintThread(k);                                     // 先在楼里显示"正在拉…"（就地，不动别处）
     try {
         const r = await api.commentThread(k, page);
+        if (!apiScopeCurrent(backendScope)) return;
         /* 未确认的那几条本来就还没在服务端 ⇒ 第 1 页要原样保住（与顶层列表同一条口径） */
         const keep = (page <= 1) ? ((th.items || []).filter(x => x && (x.pending || x.failed))) : [];
         const got = Array.isArray(r && r.items) ? r.items : [];
@@ -6456,14 +6556,14 @@ async function loadThread(pid, opt) {
             /* ★★§BJ-E15/16：这一楼里 「mine:true」 的那些也顺手记账（楼内回复的 floor = 这一楼的楼主 id） */
             cmLedgerHarvest(cid, got, k);
         }
-    } catch (e) {
+    } catch (e) { if (!apiScopeCurrent(backendScope)) return;
         /* 三档说人话（与 `loadComments` 同一套口径：404 = 这条/这张不在了；没状态码 = 连不上；别的照原话） */
         const st = Number(e && e.status) || 0;
         if (st === 404) th.err = '这一楼的回复拉不到了（这条评论可能刚被删掉、或者这张卡不在线上了）。';
         else if (!st) th.err = '连不上商店 —— 这一楼的回复暂时拉不到，过一会儿点「展开」再试。';
         else th.err = '回复拉不到：' + String((e && e.message) || e) + ' → ' + nextStepOf(st);
         warn('拉楼内回复失败（parent=' + k + '）', e);
-    } finally { th.loading = false; }
+    } finally { if (!apiScopeCurrent(backendScope)) return; th.loading = false; }
     repaintThread(k);
     return true;
 }
@@ -7363,6 +7463,7 @@ function repFloors() {
 /** 扫一遍"别人回我的"（节流；失败只影响这一页的读数，绝不弹错、绝不动别的状态）
  *  @param opt.force true = 越过节流（手动刷新 / 打开「回复我的」那一页） */
 async function repScan(opt) {
+    const backendScope = apiScope();
     const o = opt || {};
     if (S.rep.busy) return false;
     const floors = repFloors();
@@ -7382,6 +7483,7 @@ async function repScan(opt) {
         const seen = new Set();
         for (const f of floors) {
             const r = await api.commentThread(f.floor, 1, REP_LIMIT);
+            if (!apiScopeCurrent(backendScope)) return;
             for (const it of ((r && r.items) || [])) {
                 if (!it || !it.id || it.deleted) continue;
                 const tgt = String(it.replyTo || it.parent || '');
@@ -7395,13 +7497,13 @@ async function repScan(opt) {
         S.rep.items = found;
         S.rep.err = '';
         S.rep.at = Date.now();
-    } catch (e) {
+    } catch (e) { if (!apiScopeCurrent(backendScope)) return;
         /* 三档说人话（与评论区那套同一口径：404 = 那条/那张不在了；没状态码 = 连不上；别的照原话 + 下一步） */
         const st = Number(e && e.status) || 0;
         S.rep.err = st ? ('「回复我的」拉不到：' + String((e && e.message) || e) + ' → ' + nextStepOf(st))
             : '连不上商店 —— 「回复我的」这一页暂时拉不到，过一会儿点上面的刷新再试。';
         warn('扫「回复我的」失败', e);
-    } finally { S.rep.busy = false; }
+    } finally { if (!apiScopeCurrent(backendScope)) return; S.rep.busy = false; }
     repBannerTick();
     if (S.view === 'mine' && S.mySeg === 'rep') repaintRepList();
     return true;
@@ -7678,10 +7780,11 @@ function pushMyProfile() {
  *     ★为什么不按"服务端优先"覆盖：用户眼前这份设置是他刚调好的（可能离线改的还没推上去），
  *       拉取回来**悄悄改掉**正是这个项目最恨的那种"界面自己变了"。而推上去不改变任何界面。 */
 function pullMyProfile() {
+    const backendScope = apiScope();
     if (S.profTried) return Promise.resolve();
     S.profTried = true;
     if (!hasOwnerId()) return Promise.resolve();              // 没有凭据 ⇒ 服务端没有我的资料，别发请求、别造钥匙
-    return api.profileGet().then((r) => {
+    return api.profileGet().then((r) => { if (!apiScopeCurrent(backendScope)) return;
         const nc = hexColorOf(r && r.nameColor);
         const av = hexColorOf(r && r.avColor);
         /* ★★W131（2026-10-09 · 作者原话："大萌1 的颜色怎么在我现在的电脑端看到是正常的黄色 但是我在手机端
@@ -8979,6 +9082,7 @@ function cardBodyHtml(c) {
  *  `aria-expanded="true"`）；② **下次展开这张卡会直接弹出上次那一页评论**（串味，作者会以为"点了简介却进评论"）。
  *  写法与既有的 `fav-see` / `sewn-see`（它们换页前都先 `S.cm.openId = ''`）对齐。 */
 function toggleCard(id, opt) {
+    const backendScope = apiScope();
     const sid = String(id || '');
     /* ★★W110-D（作者 2026-10-07）：`opt.auto=true` = **真界面里点卡片本体**那一条路（onClick 的
        `case 'toggle-card'` 传进来的）—— 展开卡片时顺手把评论区也摊开（带 8 秒防抖，见 `cmAutoLoad`）。
@@ -9030,14 +9134,14 @@ function toggleCard(id, opt) {
     renderAll();
     if (S.cardView.pack) { computeRows(); renderAll(); return; }
     api.pack(sid)
-        .then(r => {
+        .then(r => { if (!apiScopeCurrent(backendScope)) return;
             if (!r || !r.pack) throw new Error('服务端没给全文');
             if (!S.cardView || String(S.cardView.card.id) !== sid) return;   // 用户已经点开别的卡了 → 别回写
             S.cardView.pack = r.pack; S.cardView.err = '';
             computeRows();                                                    // 算一次就缓存（别每次重绘都算）
             renderAll();
         })
-        .catch(e => {
+        .catch(e => { if (!apiScopeCurrent(backendScope)) return;
             if (!S.cardView || String(S.cardView.card.id) !== sid) return;
             S.cardView.err = '拉不到这一条的正文：' + (e.message || e);
             renderAll();
@@ -9073,19 +9177,20 @@ function toggleRow(key) {
 }
 /** 展开里重试（拉全文失败时） */
 function retryCard(id) {
+    const backendScope = apiScope();
     const sid = String(id || '');
     if (!sid || !S.cardView) return;
     S.cardView.err = '';
     S.cardView.pack = null;
     renderAll();
     api.pack(sid)
-        .then(r => {
+        .then(r => { if (!apiScopeCurrent(backendScope)) return;
             if (!r || !r.pack) throw new Error('服务端没给全文');
             if (!S.cardView || String(S.cardView.card.id) !== sid) return;
             S.cardView.pack = r.pack; S.cardView.err = '';
             computeRows(); renderAll();
         })
-        .catch(e => {
+        .catch(e => { if (!apiScopeCurrent(backendScope)) return;
             if (!S.cardView || String(S.cardView.card.id) !== sid) return;
             S.cardView.err = '拉不到这一条的正文：' + (e.message || e);
             renderAll(); toast('error', S.cardView.err);
@@ -9097,6 +9202,7 @@ function retryCard(id) {
  *  ★C8：缝的目标 = **"当前预设"**（沿用更新器 cloudPickMine 的默认值：给的名字找不到就用酒馆当前那份），
  *  所以这里不再画"缝进哪一份"下拉、不再写那句长文案 —— 只把 S.target（默认为当前预设）报过去。 */
 function openInUpdater(id) {
+    const backendScope = apiScope();
     const cid = String(id || S.openId || '');
     /* ★S1-4（人性化评审 §A ⑥ / §C 第 4 条）：**"缝入"以前没有离线前置检查** ——
        另外三个同族的入口（重新缝 `resew` / 一键更新 `updateAllEntry` / 编辑并更新 `startEdit`）都有，
@@ -9127,12 +9233,12 @@ function openInUpdater(id) {
     S.sewBusy = true;
     toast('info', '正在拉这一条的正文…');
     api.pack(cid)
-        .then(r => {
+        .then(r => { if (!apiScopeCurrent(backendScope)) return;
             if (!r || !r.pack) throw new Error('服务端没给全文');
             doOpenInUpdater(upd, { card, pack: r.pack });
         })
-        .catch(e => { toast('error', '拉不到这一条的正文：' + (e.message || e)); warn('拉卡片全文失败', e); })
-        .finally(() => { S.sewBusy = false; });
+        .catch(e => { if (!apiScopeCurrent(backendScope)) return; toast('error', '拉不到这一条的正文：' + (e.message || e)); warn('拉卡片全文失败', e); })
+        .finally(() => { if (!apiScopeCurrent(backendScope)) return; S.sewBusy = false; });
 }
 /** 真开更新器（包已经在手里了）：商店这边只报"哪个包 + 缝进哪一份"。
  *  ★§21 F20：**把卡片的标题与用途一起报过去**（更新器在对比页顶部会写"正在缝什么"）——
@@ -9340,22 +9446,33 @@ function resew(id) {
  *    "我哪几次缝过、当时是第几版"（只有本地记账知道这件事，后端不存中间版本）。
  *  ★T3 兜底：卡片不在本次列表里（`S.cards` 里找不到）时**不许把 rev 写成 1** —— 那会让
  *    `card.rev(3) > 记账 rev(1)` 永远成立 = 红点再也消不掉。这种情况**沿用上一次记的 rev**（拿不到就不动它）。 */
-function afterStitched(cardId, name) {
+function afterStitched(cardId, name, snap) {
     try {
         const id = String(cardId || '');
         if (!id) return false;
         const card = S.cards.find(c => String(c.id) === id) || null;
         const st = getSettings().stitched || (getSettings().stitched = {});
         const prev = st[id] || null;
-        const revNow = card ? revOf(card) : (Number(prev && prev.rev) > 0 ? Number(prev.rev) : 0);
+        /* ★★feedback11：**第三参 = 打开对比页那一刻的不可变 rev/fp 快照**（更新器在 `openStorePack()`
+           建会话时捕获，写盘成功后原样回传）。有它 ⇒ 记的是"这次真缝进去的那一版"，不是刷新后的最新 rev。
+           没它（老更新器 / 别的调用者）⇒ 沿用老口径记 rev，但打 `verified:false`：官方提醒**不认它**，
+           宁可继续 pending，也不把半路那版误当完成。 */
+        const snapRev = Math.max(0, Number(snap && snap.rev) || 0);
+        const snapFp = String((snap && snap.fp) || '');
+        const verified = snapRev > 0;
+        const revNow = verified ? snapRev : (card ? revOf(card) : (Number(prev && prev.rev) > 0 ? Number(prev.rev) : 0));
+        const fpNow = verified ? snapFp : (card && card.fp ? String(card.fp) : String((prev && prev.fp) || ''));
         const hist = Array.isArray(prev && prev.hist) ? prev.hist.slice(-19) : [];
         hist.push({ at: Date.now(), rev: revNow, name: String(name || '') });
         st[id] = {
-            at: Date.now(), name: String(name || ''), fp: String((card && card.fp) || ''),
+            at: Date.now(), name: String(name || ''), fp: fpNow,
             rev: revNow,                       // ★T3：红点只比这一个数（revNow < 卡片现在的 rev = 有更新）
+            verified: verified,                // ★feedback11：true 才代表"有打开对比时的快照"（官方提醒认它）
             hist: hist.slice(-20),             // ★T2：缝入流水（「更新记录」面板用它）
         };
         saveSettings();
+        /* ★feedback11：成功记账当场广播一次（首页把"官方更新"换成 done，不必等下一次 15 分钟轮询）。 */
+        emitOfficialUpdate(true);
         S.notes = ['已缝入：' + String(name || '')];
         S.lastSaved = String(name || '');        // 写盘在更新器里做，商店只记账（e2e 读它）
         api.sew(id).then(() => { if (card) card.sews = (card.sews || 0) + 1; }).catch(() => { /* 计数失败不重要 */ });
@@ -9468,6 +9585,7 @@ function startUpload(opts) {
  *  ★预填的口径：把线上那一版的包**原样铺进向导**（源预设 = 卡里记的 `src.presetName`；
  *   `picked` = 那条卡里**本来就有的**条目名，用户在此基础上改/加/删）。 */
 async function startEdit(id) {
+    const backendScope = apiScope();
     const sid = String(id || '');
     if (!sid) return;
     if (staleData()) { toast('warning', '离线：拉不到那张卡的正文，改不了。联网后再试。'); return; }
@@ -9494,8 +9612,8 @@ async function startEdit(id) {
     }
     toast('info', '正在拉这一条的正文…');
     let pack = null;
-    try { pack = await readFullPack(sid); }
-    catch (e) {
+    try { pack = await readFullPack(sid); if (!apiScopeCurrent(backendScope)) return; }
+    catch (e) { if (!apiScopeCurrent(backendScope)) return;
         /* ★★W27-B5（评审该修 · 陈旧界面下**真正会走到**的那一支）：多设备时"别的设备刚把它下架"，
            这一台还显示「已上线」⇒ 点「✎ 编辑并更新」→ `/pack` 读不回正文（下架卡在 `/pack` 上也像不存在）。
            改前只有一句「拉不到这一条的正文：这张卡片不在线上（或还没过审）」——**没说清它是谁的、该怎么办**
@@ -9594,7 +9712,7 @@ async function startEdit(id) {
             const wantVer = String(w.baseVersion || baseVerOf(w.baseName) || '');
             w.baseCloudState = 'loading';
             const fail = (why) => {
-                if (!S.wiz || String(S.wiz.baseName || '') !== wantBase) return;
+                if (!apiScopeCurrent(backendScope) || !S.wiz || String(S.wiz.baseName || '') !== wantBase) return;
                 S.wiz.baseCloudState = 'failed';
                 S.wiz.baseCloudWhy = String(why || '没取到');
                 S.wiz.baseCloudPreset = null;              // ★不许留旧的（换过基准就是脏数据）
@@ -9603,7 +9721,7 @@ async function startEdit(id) {
             try {
                 if (!wantVer) { fail('包里没记版本号'); return; }
                 api.basePack(wantVer).then(r => {
-                    if (!S.wiz || String(S.wiz.baseName || '') !== wantBase) return;   // 期间换过 ⇒ 丢弃
+                    if (!apiScopeCurrent(backendScope) || !S.wiz || String(S.wiz.baseName || '') !== wantBase) return;   // 切端或期间换过 ⇒ 丢弃
                     const preset = (r && r.preset) ? r.preset : (r && r.pack && r.pack.preset ? r.pack.preset : null);
                     if (!preset || !Array.isArray(preset.prompts)) { fail('这一版没进基准库'); return; }
                     S.wiz.baseCloudPreset = preset;
@@ -10672,18 +10790,20 @@ const PACK_CAP_FULL = 1024 * 1024;
  *  ★老后端（没这条路由）回 404 ⇒ `S.basesErr='old'` ⇒ 界面只给一句灰字（**不渲染空组**）+ 包里不带新字段
  *    （plan §9.1 的回退口径：老后端 `PACK_KEYS` 严格白名单，收到未知字段会 **400**）。 */
 async function loadBaseList(force) {
+    const backendScope = apiScope();
     if (S.basesBusy) return S.bases;
     if (!force && S.basesTried && (Date.now() - (S.basesAt || 0) < BASE_TTL)) return S.bases;
     S.basesBusy = true;
     try {
         const r = await api.bases();
+        if (!apiScopeCurrent(backendScope)) return;
         S.bases = (r && Array.isArray(r.items)) ? r.items.filter(x => x && x.ver) : [];
         S.basesErr = '';
-    } catch (e) {
+    } catch (e) { if (!apiScopeCurrent(backendScope)) return;
         S.bases = null;
         S.basesErr = (Number(e && e.status) === 404) ? 'old' : 'err';
         warn('拿不到官方基准清单（离线 / 服务端还没上线 —— 不影响上传）：' + ((e && e.message) || e));
-    } finally {
+    } finally { if (!apiScopeCurrent(backendScope)) return;
         S.basesBusy = false; S.basesTried = true; S.basesAt = Date.now();
         /* 清单回来了 → **就地补画**那个分组：只在"正在第一步"时补一次，且走模块既有的 `renderAll()`
            （它自己带 keepOuterScroll + 焦点还原 —— 全局铁律：任何重绘不许让滚动/输入跳掉）。 */
@@ -12480,6 +12600,7 @@ function resubmitNow() {
 
 // ---------------------------------------------------------------- 我的
 async function loadMine() {
+    const backendScope = apiScope();
     const s = getSettings();
     // ★P11（审查 #3）：状态先按"本地知道多少"填（**待审核**），服务端回了什么覆盖什么；
     //   服务端**没回**的那条 = "查不到"（不是"审核中"）—— 见 viewMine 的两行状态与下面的 missing 标记。
@@ -12497,6 +12618,7 @@ async function loadMine() {
            （含 status / likes / updatedAt / **rev**）—— 换卡不用换钥匙，改署名也不影响。
            ★老卡兜底：轮6 之前传的卡**没有 ownerHash**，owner 那条看不见它们 → 再按本地 `editKey` 捞一遍补上。 */
         const r = (await api.mine()) || {};
+        if (!apiScopeCurrent(backendScope)) return;
         const got = new Set();
         const put = (it) => {
             let row = S.myList.find(x => String(x.id) === String(it.id));
@@ -12522,8 +12644,8 @@ async function loadMine() {
         const miss = (s.creds || []).map(c => c.id).filter(id => !got.has(String(id)));
         if (miss.length) warn('owner 那条没带回来的老卡数：' + miss.length + '（下面按 editKey 再捞一遍）');
         if (miss.length) {
-            try { const r2 = await api.mineByKeys(miss); for (const it of (r2.items || [])) put(it); }
-            catch (e) { warn('老卡（按 editKey）没捞回来（不影响 owner 名下那些）', e); }
+            try { const r2 = await api.mineByKeys(miss); if (!apiScopeCurrent(backendScope)) return; for (const it of (r2.items || [])) put(it); }
+            catch (e) { if (!apiScopeCurrent(backendScope)) return; warn('老卡（按 editKey）没捞回来（不影响 owner 名下那些）', e); }
         }
         // ★★P11（审查 #3 · P1）：拉**成功**了、但服务端没给回这条 → 如实标"查不到（可能已下架）"，
         //   绝不显示成"审核中"（老口径：本地凭证默认全标"审核中"，服务端过滤掉就永远停在"审核中"，
@@ -12579,7 +12701,7 @@ async function loadMine() {
             S.mineEmptyHint = { had: Number((s.mineSeen && String(s.mineSeen.owner) === cleanOwner(ownerId())) ? (s.mineSeen.n || 0) : 0) > 0,
                 why: String(r.why || r.error || '').trim() };
         }
-    } catch (e) {
+    } catch (e) { if (!apiScopeCurrent(backendScope)) return;
         /* 离线/失败：只显示本地记录，一行都不许动（别把网络抖动说成"你的卡没了"）。
            ★但**必须留一条 console.warn**当证据 —— 以前这里静默，出问题时界面上分不出
              "服务端说我在审核中" 与 "这一发根本没发出去"（R6-d 复跑时真踩过：全行停在"待审核"）。 */
@@ -13509,6 +13631,15 @@ function apiSwitchNow(m) {
  *  不清的话，切过去的头几秒界面还画着上一个后端的东西（看着像"切了没生效"）。
  *  ★只清**内存里的读数**，用户数据（凭据 / 缝入记账 / 收藏 / 已阅账）一个字节都不动。 */
 function apiAfterSwitch(kind, addr) {
+    S.apiEpoch = (Number(S.apiEpoch) || 0) + 1;
+    S.notice = null; S.nadm = null; S.sewBusy = false;
+    S.mineGone = null; S.mineGhost = null;
+    if (S.wiz && S.wiz.baseIsCloud) {
+        S.wiz.baseCloudPreset = null; S.wiz.baseCloudState = 'failed';
+        S.wiz.baseCloudWhy = '后端已切换，请重新选择官方旧版或点重试。';
+        if (S.w) S.w.base = null;
+    }
+    if (S.prev) { S.prev.rows = null; S.prev.card = null; }
     S.cards = []; S.loaded = false; S.cached = false; S.cardsStale = false;
     S.stats = { total: 0, official: 0, unread: 0, mine: 0 };
     S.version = 0; S.busy = false;
@@ -13521,7 +13652,8 @@ function apiAfterSwitch(kind, addr) {
     /* ★F7 离线缓存（`settings.cache` = "最近一次成功拉到的**那个后端**的列表"）**也要扔掉** ——
        不扔的话，切过去之后万一新后端连不上，界面会把**上一个后端**的清单顶上来（虽然标着"这是上次的数据"，
        但那个"上次"根本不是这台后端的，正是作者最怕的"哪边才是最新的"）。★它只是显示缓存、不是用户数据。 */
-    try { const s0 = getSettings(); s0.cache = null; } catch (e) { }
+    try { const s0 = getSettings(); s0.cache = null; saveSettings(); } catch (e) { }
+    try { localStorage.removeItem(CACHE_KEY); } catch (e) { }
     S.cm.openId = ''; S.cm.items = []; S.cm.total = 0; S.cm.page = 1; S.cm.err = ''; S.cm.busy = false;
     S.cm.threads = {}; S.cm.replyTo = ''; S.cm.listId = ''; S.cm.at = {}; S.cm.autoId = '';
     S.rep.items = []; S.rep.err = ''; S.rep.at = 0; S.rep.busy = false;
@@ -13530,13 +13662,8 @@ function apiAfterSwitch(kind, addr) {
     toast(kind === 'backup' ? 'success' : 'info', kind === 'backup'
         ? ('切到备用后端了：' + addr + ' —— 以后商店就以它为准，不会再自己切回来（要回默认就把这个地址清空）。')
         : ('已切回默认后端（原来那条路）—— 提醒：备用那边的改动这边看不到。'));
-    /* 立刻从新后端拉一发。★正在飞的那一发是**旧后端**的（`refresh` 有 `S.busy` 防并发）⇒ 等它落地再发，
-       免得"刚切过去又被旧后端那一发的回话盖回来"（最多等 8 秒，之后照发不误）。 */
-    const kick = (n) => {
-        if (S.busy && n < 40) { setTimeout(() => kick(n + 1), 200); return; }
-        void refresh(true);
-    };
-    kick(0);
+    // Old work cannot publish or release the busy flag of this new generation.
+    void refresh(true);
 }
 function connHtml() {
     const s = getSettings();
@@ -13737,10 +13864,12 @@ function credImport(text, strict) {
 
 // ---------------------------------------------------------------- 待审（只有本地填了密钥才渲染）
 async function loadPending(offset) {
+    const backendScope = apiScope();
     // ★P11：不带参数 = 重拉**当前页**（通过/拒绝之后回原地，不把用户甩回第一页）；带 0/20/40… = 明确翻到那页
     const off = (offset === undefined || offset === null || !Number.isFinite(Number(offset))) ? (S.pendingOffset || 0) : Math.max(0, Number(offset));
     try {
         const r = await api.pending(off, pendingPer());
+        if (!apiScopeCurrent(backendScope)) return;
         S.pending = r.items || [];
         S.pendingOffset = Number(r.offset) || 0;
         S.pendingTotal = Number(r.pendingTotal || r.total || S.pending.length);
@@ -13755,7 +13884,7 @@ async function loadPending(offset) {
         if (S.awin && !S.awin.miss) S.awin.pendN = Math.max(0, Number(S.pendingTotal) || 0);
         // 处理完最后一页时会空掉 —— 自动退回第一页（别让用户对着"没有待审的"以为都审完了）
         if (!S.pending.length && S.pendingOffset > 0 && S.pendingTotal > 0) return await loadPending(0);
-    } catch (e) {
+    } catch (e) { if (!apiScopeCurrent(backendScope)) return;
         S.pending = [];
         S.pendingNext = null; S.pendingTotal = 0; S.pendingTruncated = false;
         if (e.status === 403) toast('error', '审核密钥不对（服务端说 403）—— 到「📤 我的」底部重新填一次');
@@ -13788,15 +13917,17 @@ async function loadPending(offset) {
  *  ★失败**一律不弹窗**（它只是后台的一件事），但**不许假装"关着"**：标 `miss` + 记住状态码，
  *    界面上那一行如实说"这台后端还没有这个功能"/"密钥不认"（铁律 27：给人话，不静默、不白屏）。 */
 async function loadAwin(silent) {
+    const backendScope = apiScope();
     if (!String(getSettings().reviewKey || '').trim()) { S.awin = null; updateCardTitle(); return null; }
     try {
         const r = await api.reviewAutoGet();
+        if (!apiScopeCurrent(backendScope)) return;
         S.awin = {
             on: r.on === true,                       // ★W78：只有这一位（"开着没"）；不再有 until/days/remain0
             pendN: Math.max(0, Number(r.pendingTotal) || 0),
             gotAt: Date.now(), miss: false, err: 0,
         };
-    } catch (e) {
+    } catch (e) { if (!apiScopeCurrent(backendScope)) return;
         const st = Number((e && e.status) || 0);
         S.awin = {
             on: false, gotAt: Date.now(), miss: true, err: st,
@@ -13875,16 +14006,18 @@ function awinHtml() {
    ★「当前在推什么」读的是 `GET /list` 的 `notice` 栏（后端那一波没给 `GET /notice`，保持"一条写接口"
      的最小面 —— 它的报告 §⑤ 也是这么建议的）；**只在进这一页 / 点「刷新」时才问一发**（没人进就不问）。 */
 async function loadNotice(silent) {
+    const backendScope = apiScope();
     if (!String(getSettings().reviewKey || '').trim()) { S.nadm = null; return null; }
     try {
         const r = await api.list(0);
+        if (!apiScopeCurrent(backendScope)) return null;
         const n = noticeOfList(r);
         S.nadm = { notice: n, gotAt: Date.now(), miss: false, err: 0 };
         /* ★这一发也是"一次成功的 /list 拉取"⇒ 本机那条横幅跟着对齐（与 `refresh()` 那一支同一把尺：
            拉到了就以它为准；横幅那边自带"一模一样就不重写"的闸）。 */
         S.notice = n;
         noticeTick();
-    } catch (e) {
+    } catch (e) { if (!apiScopeCurrent(backendScope)) return null;
         const st = Number((e && e.status) || 0);
         /* ★拿不到**保留上一份已知读数**（"问不到"不等于"没有公告"），只标 miss + 记状态码。 */
         S.nadm = { notice: (S.nadm && S.nadm.notice) || null, gotAt: Date.now(), miss: true, err: st };
@@ -14262,6 +14395,7 @@ function isPanelKeptCardClick(el) {
     return CARD_LEVEL_ACTS.indexOf(actAt(el)) >= 0 && panelKeepsClick(el);
 }
 function onClick(m, ev) {
+    const backendScope = apiScope();
     /* ★★W37-E：**点一下 = "你在这一页里"** ⇒ 开闸（见 `secSeenArmed` / `OFFI_DWELL_MS` 那两段注释）。
        只翻一个布尔、不重绘任何东西；真正的"看过了"仍由 `secAutoReadAll` 按"哪一区真在屏幕上"决定。 */
     /* ★★W48-B6（评审 R4 · 记账）：这里原来是 `if (armSecSeen(m) || true) { … }` —— `|| true` 让条件**恒真**，
@@ -14849,6 +14983,7 @@ function onClick(m, ev) {
             w0.baseCloudState = 'loading'; w0.baseCloudWhy = ''; renderAll();
             try {
                 api.basePack(ver0).then((r) => {
+                    if (!apiScopeCurrent(backendScope)) return;
                     if (!S.wiz || String(S.wiz.baseVersion || '') !== ver0) return;
                     const preset = (r && r.preset) ? r.preset : (r && r.pack && r.pack.preset ? r.pack.preset : null);
                     if (!preset || !Array.isArray(preset.prompts)) {
@@ -14859,7 +14994,7 @@ function onClick(m, ev) {
                     loadWizardPreset();
                     if (S.prev && S.prev.open) computePreview();
                     renderAll();
-                }).catch((e2) => { S.wiz.baseCloudState = 'failed'; S.wiz.baseCloudWhy = String((e2 && e2.message) || '网络没通'); renderAll(); });
+                }).catch((e2) => { if (!apiScopeCurrent(backendScope)) return; S.wiz.baseCloudState = 'failed'; S.wiz.baseCloudWhy = String((e2 && e2.message) || '网络没通'); renderAll(); });
             } catch (e) {
                 w0.baseCloudState = 'failed'; w0.baseCloudWhy = String((e && e.message) || '发起失败'); renderAll();
             }
@@ -15213,6 +15348,7 @@ function onClick(m, ev) {
     }
 }
 function onChange(m, ev) {
+    const backendScope = apiScope();
     const t = ev.target;
     const inp = t.getAttribute && t.getAttribute('data-in');
     if (!inp) return;
@@ -15275,7 +15411,7 @@ function onChange(m, ev) {
                 const wantVer = S.wiz.baseVersion;
                 S.wiz.baseCloudState = 'loading';
                 const fail = (why) => {
-                    if (!S.wiz || S.wiz.baseVersion !== wantVer) return;
+                    if (!apiScopeCurrent(backendScope) || !S.wiz || S.wiz.baseVersion !== wantVer) return;
                     S.wiz.baseCloudState = 'failed';
                     S.wiz.baseCloudWhy = String(why || '没取到');
                     S.wiz.baseCloudPreset = null;
@@ -15283,7 +15419,7 @@ function onChange(m, ev) {
                 };
                 try {
                     api.basePack(wantVer).then(r => {
-                        if (!S.wiz || S.wiz.baseVersion !== wantVer) return;      // 期间又换了一格 ⇒ 丢弃
+                        if (!apiScopeCurrent(backendScope) || !S.wiz || S.wiz.baseVersion !== wantVer) return;      // 切端或期间又换了一格 ⇒ 丢弃
                         const preset = (r && r.preset) ? r.preset : (r && r.pack && r.pack.preset ? r.pack.preset : null);
                         if (!preset || !Array.isArray(preset.prompts)) { fail('这一版没进基准库'); return; }
                         S.wiz.baseCloudPreset = preset;
@@ -15581,6 +15717,129 @@ function newestOfficialFull() {
         .filter(c => c.official && c.kind === 'ywp-preset')
         .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))[0] || null;
 }
+/* ================================================================ ★★feedback11（2026-11-13 · 作者反馈）
+   **首页「官方预设更新」提醒** —— 唯一的判据出口 `getOfficialUpdateNotice()`。
+   ------------------------------------------------------------------
+   作者要求（逐条落在这里，别在首页另写一套）：
+     · 官方更新补丁包（真实 kind = `ywp-entry` / `ywp-patch`，**不是**整份 `ywp-preset`）如果**没缝到当前 rev**
+       （包括从来没缝过的人）⇒ pending=true；多个补丁各按卡 id/rev 判，任一没缝就 pending；
+     · **成功缝入**（更新器写盘后的 `afterStitched`）才变 done；
+     · **点已读不许清** —— 本函数**一个字节都不读** `offiRead` / `readVersion` / `bannerVersion`；
+     · 换设备 / 没缝过的人也看得到；**不扩后端**，只用现有 `/list` 全量列表（`/list?since=0` 全量，分页只在客户端）；
+     · 列表失败 / 离线缓存 / 上一次的旧列表 ⇒ **保留上一次已知结果**（只把 ready 报成 false），
+       既不伪造 pending、也不把已知 pending 清成 false；
+     · 不额外高频请求：只有 `refresh()` 成功（本来就要拉列表）与 `afterStitched` 成功时广播事件。
+   ★why 不能拿 `cardHasUpdate()` 当判据：它只回答"我缝过、作者之后改过没有"，**没缝过恒 false** ——
+     而作者要的提醒对"从来没缝过官方预设的人"也必须出现。
+   ★为什么用 `rec.verified === false` 挡一道：旧版更新器回调没有第三参（没有"打开对比时那一刻的 rev/fp 快照"），
+     那种记账**不能当作"缝到了当前 rev"**（可能缝的是半路那版）⇒ 继续 pending，等下一次带快照的成功缝入。 */
+function officialListReady() {
+    return !!(S.loaded && !S.cached && !S.cardsStale && !S.lastErr && S.online !== false);
+}
+/** 最新官方整份预设，我是否已经**成功缝到它当前这一版**（保守：旧回调/证据不足一律 false） */
+function officialStitchedDone(c) {
+    const rec = stitchedRec(c && c.id);
+    if (!rec) return false;
+    if (rec.verified === false) return false;          // ★旧回调（没有快照）不许当完成
+    const cardRev = revOf(c);
+    const recRev = Number(rec.rev) || 0;
+    if (recRev > 0) return recRev >= cardRev;           // 旧记录也按"当前卡身份 + rev"识别 done
+    /* 更老的记录连 rev 都没有：退回内容指纹（与 `cardHasUpdate()` 的老记账兜底同一口径）。 */
+    const recFp = String(rec.fp || '');
+    const cardFp = String((c && c.fp) || '');
+    if (recFp && cardFp) return recFp === cardFp;
+    /* hist 里若有 rev（T2 之后的流水），拿最后一条当证据 */
+    const hist = Array.isArray(rec.hist) ? rec.hist : [];
+    for (let i = hist.length - 1; i >= 0; i--) {
+        const r = Number(hist[i] && hist[i].rev) || 0;
+        if (r > 0) return r >= cardRev;
+    }
+    return false;
+}
+/** ★★feedback12（2026-11-13 · 作者最新纠正）：**官方更新补丁包** = 官方非整份预设的条目/补丁包。
+ *  真实 `/list` 已证：官方补丁包的 kind 是 **`ywp-entry`**（partial / scope multi），
+ *  另有一张 `ywp-preset` 是整份预设（可能长期不变，**不算更新提醒**）。
+ *  口径（**不按标题字符串 / id 写死**）：`official && kind in ['ywp-entry','ywp-patch']`；
+ *  剧场（ywp-play）/ 许愿（ywp-wish）/ 整份（ywp-preset）/ 用户上传（非 official）一律不算。 */
+function officialPatchCards() {
+    return (S.cards || []).filter(c => c && c.official
+        && (String(c.kind) === 'ywp-entry' || String(c.kind) === 'ywp-patch'));
+}
+function computeOfficialNotice() {
+    const patches = officialPatchCards();
+    if (!patches.length) return { pending: false, ready: true, pendingCount: 0 };
+    /* 多包**不许假设最新包含旧的**：每一张官方补丁按自己的卡 id/rev 判完成；
+       只要还有没缝的就算 pending，返回**最新那个待处理包**（按 updatedAt 倒序）。 */
+    const pending = patches
+        .filter(c => !officialStitchedDone(c))
+        .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+    if (!pending.length) return { pending: false, ready: true, pendingCount: 0 };
+    const c = pending[0];
+    return { pending: true, ready: true, cardId: String(c.id), rev: revOf(c), pendingCount: pending.length };
+}
+/** ★★feedback11：**首页官方更新提醒的唯一出口**（主 index 的桥直接调它）。
+ *  @returns {{pending:boolean, ready:boolean, cardId?:string, rev?:number, pendingCount?:number}}
+ *    · `ready:false` = 这一刻的列表**不可信**（没拉到过 / 离线缓存 / 上次的旧列表 / 还在出错）——
+ *      这时返回的是**上一次已知结果**（pending 原样保留），调用方据此决定"先别改显示 / 标一下"；
+ *    · `ready:true` + `pending:false` = 可信地确认"最新官方预设已经缝到当前 rev"（或商店里没有官方整份预设）。 */
+export function getOfficialUpdateNotice() {
+    if (!officialListReady()) {
+        const last = S.officialNotice;
+        if (last && typeof last.pending === 'boolean') {
+            const out = { pending: !!last.pending, ready: false };
+            if (last.cardId) out.cardId = String(last.cardId);
+            if (Number(last.rev) > 0) out.rev = Number(last.rev);
+            return out;
+        }
+        return { pending: false, ready: false };
+    }
+    const n = computeOfficialNotice();
+    S.officialNotice = n;
+    return Object.assign({}, n);
+}
+/** ★★feedback11：列表成功 / 成功缝入后广播（首页只重画，不再发查询 ⇒ 不会形成刷新死循环）。
+ *  `force=true` = 这一次是"数据源真的变了"（列表成功 / afterStitched），必发一次；
+ *  force=false 时同一个签名不重复打扰。 */
+function emitOfficialUpdate(force) {
+    const n = getOfficialUpdateNotice();
+    const sig = JSON.stringify([!!n.pending, !!n.ready, String(n.cardId || ''), Number(n.rev) || 0]);
+    if (!force && sig === S.officialNoticeSig) return n;
+    S.officialNoticeSig = sig;
+    try {
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            const CE = (typeof CustomEvent !== 'undefined') ? CustomEvent : (window.CustomEvent || null);
+            if (CE) window.dispatchEvent(new CE('yw-store-official-update', { detail: n }));
+        }
+    } catch (e) { warn('广播官方更新提醒失败（不影响商店）', e); }
+    return n;
+}
+/** ★★feedback11：深链落到「官方条目」那一区 —— 用既有 `nearestScroller` 手工算 `scrollTop`
+ *  （本文件明令不用 `scrollIntoView`：那会把整页甩到底部）。DOM 还没画出来时补一次 0ms 重试。 */
+function scrollToOfficialSection() {
+    const find = () => {
+        try {
+            if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return null;
+            return document.querySelector('#kimi_presetstore_body .yws-sec[data-sec="official"] .yws-secdet[data-offi]')
+                || document.querySelector('#kimi_presetstore_body [data-sec="official"]');
+        } catch (e) { return null; }
+    };
+    const run = (el) => {
+        if (!el || typeof el.getBoundingClientRect !== 'function') return false;
+        let box = nearestScroller(el);
+        try {
+            const se = document.scrollingElement;
+            if (!box && se && se.scrollHeight > se.clientHeight + 1) box = se;
+        } catch (e) { /* 取不到页面滚动盒就只试最近的祖先 */ }
+        if (!box || typeof box.getBoundingClientRect !== 'function') return false;
+        const top = box.scrollTop + el.getBoundingClientRect().top - box.getBoundingClientRect().top - 8;
+        box.scrollTop = Math.max(0, top);
+        return true;
+    };
+    const el = find();
+    if (el) return run(el);
+    try { setTimeout(() => { const e2 = find(); if (e2) run(e2); }, 0); } catch (e) { /* 没有计时器也不影响跳转 */ }
+    return false;
+}
 /** 人话确认：优先用酒馆原生弹窗（async，不冻住页面/不挡 toast）；取不到就退化成浏览器原生 confirm。
  *  ★传进来的 html 里凡是远端文本（预设名/署名）**必须已经 esc()**（§1.7：陌生人文本一律转义） */
 /** ★★W27-B1（评审必修 · 判据只许有一处）：**"手里这份到底是不是刚拉到的真数据"的唯一判据**。
@@ -15790,6 +16049,7 @@ function registerStoreApiPortal() {
     try {
         window.__ywStoreApi = {
             base: STORE_API,
+            apiBase: apiBaseOf, apiEpoch: () => Number(S.apiEpoch) || 0,
             list: () => api.list(0),                                  // 已上线卡片（含 official/kind/updatedAt/fp）
             pack: (id) => readFullPack(id),                            // 某一张卡的全文（官方整份预设走它）
             // ★P7（§15）：更新器把商店的包"缝"完（另存新名写盘成功）后回调这里——
@@ -15817,7 +16077,28 @@ function registerStoreApiPortal() {
  *  @param {string} [seg] 显式要落的段（可省；省 = 用记忆）
  *  @returns {boolean} 真的跳过去了没有（工具箱据此决定要不要给人话） */
 export function openStorePage(name, seg) {
-    if (String(name || '') !== 'playfav') return false;
+    const page = String(name || '');
+    /* ★★feedback11（2026-11-13 · 首页「官方预设更新」提醒点进来）：**落到官方条目那一区**。
+       口径（作者要求）：清掉会挡住官方卡的筛选（q / who / only / authorFilter）、官方页码回 1、
+       官方区展开并**真的滚到它**；**不走 `markRead()`**（点开看一眼 ≠ 把已读水位线推平，
+       首页那条提醒也不能被"打开就清"）。 */
+    if (page === 'official') {
+        try {
+            S.view = 'main';
+            S.q = ''; S.who = ''; S.only = 'all';
+            S.page = 1; S.pageO = 1; S.pageP = 1; S.pageW = 1;
+            S.newFirst = false;
+            S.authorFilter = '';
+            const s = getSettings();
+            s.authorFilter = '';
+            saveUiPrefs();                 // q / only 落回本机（与用户自己点「全部」同一套）
+            setOffiOpen(true, true);        // 展开 + 记住"用户要看官方"（重绘/刷新不许再折回去）
+            renderAll();
+            scrollToOfficialSection();
+            return true;
+        } catch (e) { warn('打开官方条目失败', e); return false; }
+    }
+    if (page !== 'playfav') return false;
     try {
         S.view = 'fav';
         /* ★★W155（作者 2026-10-23）：**任何入口打开收藏记录，都沿用「上次看的那一段」**（`S.favSeg` 的跨会话记忆，
@@ -15847,6 +16128,8 @@ export function initStoreDebug() {
         apiBase: apiBaseOf, apiBackup: backupApiOf, apiOnBackup,
         state: S, settings: getSettings, core: PM,
         mount: mountPresetStore, render: renderAll, refresh, checkStats, unreadInfo, markRead,
+        /* ★feedback11：首页官方更新提醒的唯一判据也挂给探针（与 index.js 调的是同一个导出）。 */
+        getOfficialUpdateNotice,
         setView: (v) => { S.view = v; renderAll(); },
         // ★§17：点卡 = 就地展开（手风琴）；行 = 摊开只读差异；「缝入当前预设」跳更新器
         //   （`openCard` 这个老名字留着 = toggleCard 的别名，e2e/文档里到处是它）

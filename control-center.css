@@ -1,0 +1,2275 @@
+/* ==========================================================================
+   余小温主控 · 统一总控台（ywcc）
+   奶油底 + 暖焰 / 浅蓝点缀；深浅色跟随 ST 主题变量。
+   只作用于 .ywcc-* 与 #ywcc-root 外壳，不覆盖外部卡片业务样式。
+   ========================================================================== */
+
+.ywcc-root,
+.ywcc-setting-card {
+    --ywcc-ink: var(--SmartThemeBodyColor, #dcdcd2);
+    --ywcc-bg: var(--SmartThemeBlurTintColor, rgba(23, 23, 23, 1));
+    --ywcc-quote: var(--SmartThemeQuoteColor, #e18a24);
+    --ywcc-cream: #f8ecd6;
+    --ywcc-flame: color-mix(in srgb, var(--ywcc-quote) 68%, #ff8b4a 32%);
+    --ywcc-flame-soft: color-mix(in srgb, var(--ywcc-flame) 16%, transparent);
+    --ywcc-flame-ink: color-mix(in srgb, var(--ywcc-flame) 58%, #5b260b 42%);
+    --ywcc-flame-core: #fff3db;
+    --ywcc-on-flame: #2a1407;
+    --ywcc-blue: #1c789a;
+    --ywcc-blue-soft: color-mix(in srgb, #6fc6e6 24%, transparent);
+    --ywcc-surface: color-mix(in srgb, var(--ywcc-bg) 78%, var(--ywcc-cream) 22%);
+    --ywcc-surface-2: color-mix(in srgb, var(--ywcc-bg) 86%, var(--ywcc-cream) 14%);
+    --ywcc-surface-3: color-mix(in srgb, var(--ywcc-bg) 68%, var(--ywcc-cream) 32%);
+    --ywcc-line: color-mix(in srgb, var(--ywcc-ink) 15%, transparent);
+    --ywcc-line-strong: color-mix(in srgb, var(--ywcc-ink) 26%, transparent);
+    --ywcc-muted: color-mix(in srgb, var(--ywcc-ink) 70%, transparent);
+    --ywcc-radius: 20px;
+    --ywcc-radius-sm: 14px;
+    --ywcc-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ywcc-shadow: 0 18px 46px rgba(38, 24, 12, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    --ywcc-font: var(--mainFontFamily, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif);
+}
+
+#ywcc-root.ywcc-root[data-ywcc-theme="dark"],
+.ywcc-setting-card[data-ywcc-theme="dark"] {
+    --ywcc-cream: #e8d4b3;
+    --ywcc-flame-soft: color-mix(in srgb, var(--ywcc-flame) 20%, transparent);
+    --ywcc-flame-ink: color-mix(in srgb, var(--ywcc-flame) 78%, #ffd9b5 22%);
+    --ywcc-flame-core: #5a2610;
+    --ywcc-blue: #9adcf5;
+    --ywcc-blue-soft: color-mix(in srgb, #6fc6e6 26%, transparent);
+    --ywcc-surface: color-mix(in srgb, var(--ywcc-bg) 82%, var(--ywcc-cream) 18%);
+    --ywcc-surface-2: color-mix(in srgb, var(--ywcc-bg) 90%, var(--ywcc-cream) 10%);
+    --ywcc-surface-3: color-mix(in srgb, var(--ywcc-bg) 74%, var(--ywcc-cream) 26%);
+    --ywcc-line: color-mix(in srgb, var(--ywcc-ink) 17%, transparent);
+    --ywcc-line-strong: color-mix(in srgb, var(--ywcc-ink) 30%, transparent);
+    --ywcc-muted: color-mix(in srgb, var(--ywcc-ink) 74%, transparent);
+    --ywcc-shadow: 0 22px 56px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ---------- 外壳 ---------- */
+
+#ywcc-root.ywcc-root {
+    position: fixed;
+    inset: 0;
+    /* 低于方案编辑弹窗（30000）：从首页方案卡点「设置」时弹窗必须盖在总控台上面。 */
+    z-index: 29990;
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: none;
+    max-height: none;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+    background: transparent;
+    color: var(--ywcc-ink);
+    font-family: var(--ywcc-font);
+    font-size: 14px;
+    line-height: 1.5;
+    text-align: left;
+    text-shadow: none;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: none;
+    transform: none;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#ywcc-root.ywcc-root .ywcc-panel {
+    position: fixed;
+    top: 18px;
+    right: 18px;
+    display: flex;
+    flex-direction: column;
+    width: min(434px, calc(100vw - 36px));
+    height: min(780px, calc(100vh - 36px));
+    height: min(780px, calc(100dvh - 36px));
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid var(--ywcc-line-strong);
+    border-radius: var(--ywcc-radius);
+    background-color: var(--ywcc-surface);
+    color: var(--ywcc-ink);
+    box-shadow: var(--ywcc-shadow);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(10px) scale(0.985);
+    transform-origin: 100% 0;
+    transition: opacity 0.2s var(--ywcc-ease), transform 0.24s var(--ywcc-ease), visibility 0.24s linear;
+}
+
+@supports (background: color-mix(in srgb, red 50%, blue)) {
+    #ywcc-root.ywcc-root .ywcc-panel {
+        background-image:
+            radial-gradient(120% 70% at 100% 0%, color-mix(in srgb, var(--ywcc-flame) 15%, transparent), transparent 58%),
+            radial-gradient(90% 55% at 0% 100%, color-mix(in srgb, var(--ywcc-blue) 10%, transparent), transparent 62%),
+            linear-gradient(160deg, var(--ywcc-surface-3), var(--ywcc-surface) 48%, var(--ywcc-surface-2));
+    }
+}
+
+#ywcc-root.ywcc-root.ywcc-is-open .ywcc-panel {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+}
+
+#ywcc-root.ywcc-root.ywcc-dragging .ywcc-panel {
+    transition: none;
+}
+
+/* ---------- 头部 ---------- */
+
+#ywcc-root.ywcc-root .ywcc-head {
+    position: relative;
+    z-index: 4;
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 9px;
+    min-height: 60px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--ywcc-line);
+    background-color: color-mix(in srgb, var(--ywcc-surface) 82%, transparent);
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-head::after {
+    content: "";
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: -1px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ywcc-flame) 45%, transparent), transparent);
+    pointer-events: none;
+}
+
+#ywcc-root.ywcc-root.ywcc-dragging .ywcc-head {
+    cursor: grabbing;
+}
+
+#ywcc-root.ywcc-root .ywcc-head-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+#ywcc-root.ywcc-root .ywcc-title {
+    margin: 0;
+    overflow: hidden;
+    color: var(--ywcc-ink);
+    font-family: inherit;
+    font-size: 16.5px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#ywcc-root.ywcc-root .ywcc-sub {
+    margin: 2px 0 0;
+    overflow: hidden;
+    color: color-mix(in srgb, var(--ywcc-ink) 80%, transparent);
+    font-size: 12px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 标题右侧独立宿主：PC 只往这里挂自己的「编辑布局/取消钉选」。 */
+#ywcc-root.ywcc-root .ywcc-head-tools {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 62%;
+}
+
+#ywcc-root.ywcc-root .ywcc-head-tools:empty {
+    display: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-mark,
+.ywcc-setting-card .ywcc-setting-mark {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border: 1px solid color-mix(in srgb, var(--ywcc-flame) 30%, transparent);
+    border-radius: 13px;
+    background: linear-gradient(145deg, var(--ywcc-flame-soft), color-mix(in srgb, var(--ywcc-blue) 12%, transparent));
+    color: var(--ywcc-flame-ink);
+}
+
+#ywcc-root.ywcc-root .ywcc-mark svg,
+.ywcc-setting-card .ywcc-setting-mark svg {
+    display: block;
+    width: 21px;
+    height: 21px;
+}
+
+#ywcc-root.ywcc-root .ywcc-mark .ywcc-mark-img {
+    display: block;
+    width: 21px;
+    height: 21px;
+    border-radius: 5px;
+    object-fit: contain;
+}
+
+/* 有生效方案时标题左图标换成方案图标；没图标时这里是 emoji 文本兜底。 */
+#ywcc-root.ywcc-root .ywcc-mark.is-scheme {
+    border-color: color-mix(in srgb, var(--ywcc-blue) 32%, transparent);
+    background: linear-gradient(145deg, var(--ywcc-blue-soft), color-mix(in srgb, var(--ywcc-flame) 10%, transparent));
+    color: var(--ywcc-blue);
+    font-size: 19px;
+    line-height: 1;
+}
+
+#ywcc-root.ywcc-root .ywcc-icon-btn {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--ywcc-ink);
+    font: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+#ywcc-root.ywcc-root .ywcc-icon-btn:hover {
+    border-color: var(--ywcc-line-strong);
+    background-color: color-mix(in srgb, var(--ywcc-surface-2) 76%, transparent);
+}
+
+#ywcc-root.ywcc-root .ywcc-back {
+    color: var(--ywcc-blue);
+}
+
+#ywcc-root.ywcc-root .ywcc-close:hover {
+    border-color: color-mix(in srgb, var(--ywcc-flame) 36%, var(--ywcc-line));
+    background-color: var(--ywcc-flame-soft);
+    color: var(--ywcc-flame-ink);
+}
+
+#ywcc-root.ywcc-root .ywcc-back[hidden] {
+    display: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-ico {
+    display: inline-grid;
+    place-items: center;
+    line-height: 0;
+    pointer-events: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-ico svg {
+    display: block;
+}
+
+/* ---------- 单一滚动区 ---------- */
+
+#ywcc-root.ywcc-root .ywcc-body {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#ywcc-root.ywcc-root .ywcc-scroll {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 14px 14px 22px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    /* 键盘/点选把控件滚进视野时，给上下留出呼吸位：贴边时不切半行字。 */
+    scroll-padding-block: 16px 26px;
+    -webkit-overflow-scrolling: touch;
+}
+
+#ywcc-root.ywcc-root .ywcc-scroll:focus {
+    outline: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-scroll::-webkit-scrollbar {
+    width: 8px;
+}
+
+#ywcc-root.ywcc-root .ywcc-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#ywcc-root.ywcc-root .ywcc-scroll::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ywcc-ink) 22%, transparent);
+    background-clip: padding-box;
+}
+
+#ywcc-root.ywcc-root .ywcc-page-root,
+#ywcc-root.ywcc-root .ywcc-page,
+#ywcc-root.ywcc-root .ywcc-host,
+#ywcc-root.ywcc-root .ywcc-module-host {
+    min-width: 0;
+}
+
+#ywcc-root.ywcc-root .ywcc-page {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+}
+
+/* ---------- 首页 ---------- */
+
+#ywcc-root.ywcc-root .ywcc-hero {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0 10px;
+    overflow: hidden;
+    padding: 14px;
+    border: 1px solid var(--ywcc-line);
+    border-radius: 17px;
+    background-color: var(--ywcc-surface-2);
+}
+
+#ywcc-root.ywcc-root .ywcc-hero-text {
+    position: relative;
+    z-index: 1;
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+}
+
+#ywcc-root.ywcc-root .ywcc-hero::after {
+    content: "";
+    position: absolute;
+    top: -28px;
+    right: -20px;
+    width: 92px;
+    height: 92px;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--ywcc-flame) 22%, transparent), transparent 68%);
+    pointer-events: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-eyebrow {
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    color: var(--ywcc-muted);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+#ywcc-root.ywcc-root .ywcc-preset-name {
+    position: relative;
+    z-index: 1;
+    margin: 4px 0 0;
+    overflow-wrap: anywhere;
+    color: var(--ywcc-ink);
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+#ywcc-root.ywcc-root .ywcc-preset-name.is-muted {
+    color: var(--ywcc-muted);
+    font-size: 15px;
+    font-weight: 600;
+}
+
+#ywcc-root.ywcc-root .ywcc-active-scheme {
+    margin: 4px 0 0;
+    overflow: hidden;
+    color: var(--ywcc-muted);
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#ywcc-root.ywcc-root .ywcc-active-scheme[hidden] {
+    display: none;
+}
+
+/* ---------- 首页：预设方案（名称+图标；右侧横排小按钮） ---------- */
+
+#ywcc-root.ywcc-root .ywcc-schemes,
+#ywcc-root.ywcc-root .ywcc-scheme-list {
+    min-width: 0;
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-card {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    min-height: 38px;
+    overflow: hidden;
+    border: 1px solid var(--ywcc-line);
+    border-radius: 10px;
+    background-color: var(--ywcc-surface-2);
+    transition: border-color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease;
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-card.is-active {
+    border-color: color-mix(in srgb, var(--ywcc-flame) 55%, var(--ywcc-line));
+    background-color: color-mix(in srgb, var(--ywcc-flame) 9%, var(--ywcc-surface-2));
+    box-shadow: inset 3px 0 0 var(--ywcc-flame);
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-card.is-locked {
+    opacity: 0.84;
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-card.is-busy {
+    opacity: 0.62;
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-main {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    min-height: 36px;
+    margin: 0;
+    padding: 3px 6px;
+    border: 0;
+    background: transparent;
+    color: var(--ywcc-ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-main:disabled {
+    cursor: default;
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    overflow: hidden;
+    border-radius: 6px;
+    background-color: var(--ywcc-blue-soft);
+    color: var(--ywcc-blue);
+    font-size: 14px;
+    line-height: 1;
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-img {
+    display: block;
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-name {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-card.is-active .ywcc-scheme-name {
+    color: var(--ywcc-flame-ink);
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-actions {
+    display: flex;
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    border-left: 1px solid color-mix(in srgb, var(--ywcc-ink) 7%, transparent);
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-act {
+    display: grid;
+    flex: 1 1 0;
+    place-items: center;
+    width: 28px;
+    min-height: 32px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ywcc-muted);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-act + .ywcc-scheme-act {
+    border-left: 1px solid color-mix(in srgb, var(--ywcc-ink) 7%, transparent);
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-act:hover:not(:disabled) {
+    background-color: var(--ywcc-surface-3);
+    color: var(--ywcc-flame-ink);
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-act:disabled {
+    opacity: 0.34;
+    cursor: default;
+}
+
+#ywcc-root.ywcc-root .ywcc-scheme-act .ywcc-ico svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* ---------- 首页：整理模式工具条（紧凑、编辑态明显） ---------- */
+
+#ywcc-root.ywcc-root .ywcc-home-tools {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    min-width: 0;
+    min-height: 0;
+}
+
+#ywcc-root.ywcc-root .ywcc-hero > .ywcc-home-tools {
+    position: relative;
+    z-index: 1;
+}
+
+/* 整理态不再单独占一行、也不加外框：只在当前预设卡右上角换成「完成」。 */
+#ywcc-root.ywcc-root .ywcc-home-tools.is-editing {
+    justify-content: flex-end;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+#ywcc-root.ywcc-root .ywcc-home-tool {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 32px;
+    margin: 0;
+    padding: 0 10px;
+    border: 1px solid var(--ywcc-line);
+    border-radius: 9px;
+    background-color: var(--ywcc-surface-2);
+    color: var(--ywcc-ink);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+#ywcc-root.ywcc-root .ywcc-home-tool:hover {
+    border-color: color-mix(in srgb, var(--ywcc-flame) 46%, var(--ywcc-line));
+    background-color: var(--ywcc-surface-3);
+}
+
+#ywcc-root.ywcc-root .ywcc-home-edit-btn {
+    padding: 0;
+    border: 0;
+    border-color: transparent;
+    background-color: transparent;
+    color: var(--ywcc-flame-ink);
+    font-weight: 500;
+}
+
+#ywcc-root.ywcc-root .ywcc-home-edit-btn:hover {
+    border-color: transparent;
+    background-color: transparent;
+    color: var(--ywcc-flame);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+#ywcc-root.ywcc-root .ywcc-home-edit-btn .ywcc-ico {
+    color: var(--ywcc-flame);
+}
+
+#ywcc-root.ywcc-root .ywcc-home-tool .ywcc-ico svg {
+    width: 14px;
+    height: 14px;
+}
+
+#ywcc-root.ywcc-root .ywcc-home-done {
+    border-color: color-mix(in srgb, var(--ywcc-flame) 65%, var(--ywcc-line));
+    background-color: var(--ywcc-flame);
+    color: var(--ywcc-on-flame);
+}
+
+#ywcc-root.ywcc-root .ywcc-home-done:hover {
+    border-color: var(--ywcc-flame);
+    background-color: var(--ywcc-flame);
+    filter: brightness(1.04);
+}
+
+#ywcc-root.ywcc-root .ywcc-home-edit-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ywcc-flame-ink);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+#ywcc-root.ywcc-root .ywcc-home-edit-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ywcc-flame);
+    box-shadow: 0 0 0 3px var(--ywcc-flame-soft);
+}
+
+/* ---------- 首页：hero 右侧纵排（首页修改 / 商店与更新广播） ---------- */
+
+/* 编辑入口留右上，提醒使用完整底行，长句也不用挤占预设名称。 */
+#ywcc-root.ywcc-root .ywcc-hero > .ywcc-home-tools.is-stacked {
+    display: contents;
+}
+
+#ywcc-root.ywcc-root .ywcc-hero > .ywcc-home-tools .ywcc-home-edit-btn {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+    justify-self: end;
+    padding-inline: 0;
+}
+
+/* 只留一句可点击文字；独占完整底行，手机也完整单行显示。 */
+#ywcc-root.ywcc-root .ywcc-home-store-btn {
+    position: relative;
+    z-index: 1;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: end;
+    max-width: 100%;
+    min-height: 32px;
+    margin-top: 2px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    transition: color 0.15s ease;
+    line-height: 1.25;
+    text-align: right;
+    white-space: nowrap;
+    color: var(--ywcc-flame-ink);
+    font-weight: 500;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-home-store-icon {
+    flex: none;
+    width: 14px;
+    line-height: 1;
+}
+
+#ywcc-root.ywcc-root .ywcc-home-store-text {
+    min-width: 0;
+    text-align: center;
+}
+
+#ywcc-root.ywcc-root .ywcc-home-store-dot {
+    display: none;
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ywcc-flame);
+    box-shadow: 0 0 0 3px var(--ywcc-flame-soft);
+}
+
+#ywcc-root.ywcc-root .ywcc-home-store-btn.is-update {
+    color: var(--ywcc-flame-ink);
+    font-weight: 500;
+}
+
+#ywcc-root.ywcc-root .ywcc-home-store-btn:hover {
+    color: var(--ywcc-flame);
+    border: 0;
+    background: transparent;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+/* 浅色底上只靠 flame-ink 只有约 4.36；混入 body ink 压深到约 6.1（含 hover）。 */
+#ywcc-root.ywcc-root[data-ywcc-theme="light"] .ywcc-home-store-btn,
+#ywcc-root.ywcc-root[data-ywcc-theme="light"] .ywcc-home-edit-btn {
+    color: color-mix(in srgb, var(--ywcc-flame-ink) 70%, var(--ywcc-ink) 30%);
+}
+
+#ywcc-root.ywcc-root .ywcc-home-store-btn.is-update .ywcc-home-store-dot {
+    display: inline-block;
+}
+
+/* 编辑态：常用区整体套一层很薄的强调框，明显但不加层高。 */
+#ywcc-root.ywcc-root .ywcc-home.is-editing .ywcc-home-common {
+    padding: 7px;
+    border: 1px dashed color-mix(in srgb, var(--ywcc-flame) 42%, var(--ywcc-line));
+    border-radius: 14px;
+    background-color: color-mix(in srgb, var(--ywcc-flame) 5%, transparent);
+}
+
+#ywcc-root.ywcc-root .ywcc-quick {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+#ywcc-root.ywcc-root .ywcc-quick-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--ywcc-line);
+    border-radius: 12px;
+    background-color: var(--ywcc-surface-2);
+    color: var(--ywcc-ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
+}
+
+#ywcc-root.ywcc-root .ywcc-quick-card:hover {
+    border-color: color-mix(in srgb, var(--ywcc-flame) 46%, var(--ywcc-line));
+    background-color: var(--ywcc-surface-3);
+    transform: translateY(-1px);
+}
+
+#ywcc-root.ywcc-root .ywcc-quick-ico {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background-color: var(--ywcc-blue-soft);
+    color: var(--ywcc-blue);
+}
+
+#ywcc-root.ywcc-root .ywcc-quick-ico .ywcc-ico svg {
+    width: 17px;
+    height: 17px;
+}
+
+#ywcc-root.ywcc-root .ywcc-quick-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+#ywcc-root.ywcc-root .ywcc-quick-label {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#ywcc-root.ywcc-root .ywcc-quick-sub {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    color: color-mix(in srgb, var(--ywcc-ink) 78%, transparent);
+    font-size: 12px;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#ywcc-root.ywcc-root .ywcc-quick-sub:empty {
+    display: none;
+}
+
+/* ---------- 分区 / 模块小行 ---------- */
+
+#ywcc-root.ywcc-root .ywcc-section {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    min-width: 0;
+}
+
+/* 作者样式里的 display:flex 会盖掉浏览器对 hidden 的默认 display:none，
+   空收藏/空最近必须显式隐藏，不能只靠 hidden 属性。 */
+#ywcc-root.ywcc-root .ywcc-section[hidden] {
+    display: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    padding: 0 2px;
+}
+
+#ywcc-root.ywcc-root .ywcc-section-head h3 {
+    margin: 0;
+    color: var(--ywcc-muted);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    line-height: 1.3;
+}
+
+/* ---------- 首页收藏：统一等宽两列（含右侧动作），不再按内容宽 ---------- */
+
+#ywcc-root.ywcc-root .ywcc-fav-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    min-width: 0;
+}
+
+#ywcc-root.ywcc-root .ywcc-fav-chip {
+    display: flex;
+    align-items: stretch;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--ywcc-line);
+    border-radius: 12px;
+    background-color: var(--ywcc-surface-2);
+}
+
+#ywcc-root.ywcc-root .ywcc-fav-chip.is-missing {
+    border-style: dashed;
+    opacity: 0.78;
+}
+
+#ywcc-root.ywcc-root .ywcc-fav-main {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    min-height: 32px;
+    margin: 0;
+    padding: 3px 7px;
+    border: 0;
+    background: transparent;
+    color: var(--ywcc-ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+#ywcc-root.ywcc-root .ywcc-fav-main.is-missing {
+    cursor: default;
+}
+
+#ywcc-root.ywcc-root .ywcc-fav-name {
+    min-width: 0;
+    font-size: 12.5px;
+    font-weight: 650;
+    line-height: 1.35;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+#ywcc-root.ywcc-root .ywcc-fav-remove.ywcc-star {
+    width: 30px;
+    min-width: 30px;
+    height: 32px;
+    min-height: 32px;
+    border-left: 1px solid var(--ywcc-line);
+    border-radius: 0;
+}
+
+#ywcc-root.ywcc-root .ywcc-fav-remove.ywcc-star .ywcc-ico svg {
+    width: 15px;
+    height: 15px;
+}
+
+#ywcc-root.ywcc-root .ywcc-emoji {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
+    font-size: 15px;
+    line-height: 1;
+}
+
+#ywcc-root.ywcc-root .ywcc-emoji-fallback {
+    color: var(--ywcc-flame-ink);
+    font-size: 14px;
+}
+
+#ywcc-root.ywcc-root .ywcc-mini-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+#ywcc-root.ywcc-root .ywcc-mini {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--ywcc-line);
+    border-radius: 13px;
+    background-color: var(--ywcc-surface-2);
+}
+
+#ywcc-root.ywcc-root .ywcc-mini.is-missing {
+    border-style: dashed;
+    opacity: 0.78;
+}
+
+#ywcc-root.ywcc-root .ywcc-mini-main {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 46px;
+    margin: 0;
+    padding: 8px 10px;
+    border: 0;
+    background: transparent;
+    color: var(--ywcc-ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+#ywcc-root.ywcc-root .ywcc-mini-missing {
+    cursor: default;
+}
+
+#ywcc-root.ywcc-root .ywcc-mini-dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ywcc-blue);
+    box-shadow: 0 0 0 4px var(--ywcc-blue-soft);
+}
+
+#ywcc-root.ywcc-root .ywcc-mini-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+#ywcc-root.ywcc-root .ywcc-mini-title {
+    overflow: hidden;
+    font-size: 12.5px;
+    font-weight: 650;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#ywcc-root.ywcc-root .ywcc-mini-meta {
+    overflow: hidden;
+    color: color-mix(in srgb, var(--ywcc-ink) 78%, transparent);
+    font-size: 12px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#ywcc-root.ywcc-root .ywcc-mini-chev {
+    flex: none;
+    color: var(--ywcc-muted);
+}
+
+#ywcc-root.ywcc-root .ywcc-mini-chev svg {
+    width: 14px;
+    height: 14px;
+}
+
+#ywcc-root.ywcc-root .ywcc-mini-del {
+    width: 42px;
+    height: auto;
+    min-width: 42px;
+    min-height: 42px;
+    border-left: 1px solid var(--ywcc-line);
+    border-radius: 0;
+    color: var(--ywcc-muted);
+}
+
+#ywcc-root.ywcc-root .ywcc-star {
+    width: 42px;
+    height: auto;
+    min-width: 42px;
+    min-height: 42px;
+    border-left: 1px solid var(--ywcc-line);
+    border-radius: 0;
+    color: var(--ywcc-muted);
+}
+
+#ywcc-root.ywcc-root .ywcc-star[aria-pressed="true"] {
+    background-color: var(--ywcc-flame-soft);
+    color: var(--ywcc-flame-ink);
+}
+
+#ywcc-root.ywcc-root .ywcc-star:hover {
+    color: var(--ywcc-flame-ink);
+}
+
+/* ---------- 搜索 / 模块列表 ---------- */
+
+#ywcc-root.ywcc-root .ywcc-search {
+    position: sticky;
+    top: -14px;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin: 0 -2px 2px;
+    padding: 2px 12px;
+    border: 1px solid var(--ywcc-line);
+    border-radius: 14px;
+    /* 不透明底：sticky 吸顶后滚过去的字不会从底下透出来（半字遮挡）。 */
+    background-color: var(--ywcc-surface);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--ywcc-ink) 8%, transparent);
+}
+
+#ywcc-root.ywcc-root .ywcc-search-ico {
+    flex: none;
+    color: var(--ywcc-blue);
+}
+
+#ywcc-root.ywcc-root .ywcc-search-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--ywcc-ink);
+    font: inherit;
+    font-size: 14px;
+}
+
+#ywcc-root.ywcc-root .ywcc-search-input::placeholder {
+    color: var(--ywcc-muted);
+}
+
+#ywcc-root.ywcc-root .ywcc-search-input::-webkit-search-cancel-button {
+    cursor: pointer;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    min-width: 0;
+}
+
+#ywcc-root.ywcc-root .ywcc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+#ywcc-root.ywcc-root .ywcc-row {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--ywcc-line);
+    border-radius: 14px;
+    background-color: var(--ywcc-surface-2);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+#ywcc-root.ywcc-root .ywcc-row:hover {
+    border-color: color-mix(in srgb, var(--ywcc-flame) 42%, var(--ywcc-line));
+    background-color: var(--ywcc-surface-3);
+}
+
+/* 快捷动作：整行单击直接执行，不再套一层同名按钮。 */
+#ywcc-root.ywcc-root .ywcc-row-action {
+    border-color: color-mix(in srgb, var(--ywcc-flame) 28%, var(--ywcc-line));
+}
+
+#ywcc-root.ywcc-root .ywcc-row-action .ywcc-row-main {
+    min-height: 52px;
+}
+
+#ywcc-root.ywcc-root .ywcc-row-action .ywcc-row-title {
+    font-weight: 700;
+}
+
+#ywcc-root.ywcc-root .ywcc-row-main {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+    min-height: 58px;
+    margin: 0;
+    padding: 9px 10px;
+    border: 0;
+    background: transparent;
+    color: var(--ywcc-ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+#ywcc-root.ywcc-root .ywcc-row-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ywcc-blue);
+    box-shadow: 0 0 0 4px var(--ywcc-blue-soft);
+}
+
+#ywcc-root.ywcc-root .ywcc-row-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+#ywcc-root.ywcc-root .ywcc-row-title {
+    overflow: hidden;
+    font-size: 13.5px;
+    font-weight: 650;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#ywcc-root.ywcc-root .ywcc-row-desc {
+    display: -webkit-box;
+    overflow: hidden;
+    color: color-mix(in srgb, var(--ywcc-ink) 78%, transparent);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+#ywcc-root.ywcc-root .ywcc-row-badge {
+    flex: none;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background-color: color-mix(in srgb, var(--ywcc-flame) 13%, transparent);
+    color: var(--ywcc-flame-ink);
+    font-size: 9.5px;
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+#ywcc-root.ywcc-root .ywcc-chev {
+    flex: none;
+    color: var(--ywcc-muted);
+}
+
+#ywcc-root.ywcc-root .ywcc-chev svg {
+    width: 15px;
+    height: 15px;
+}
+
+/* ---------- 模块详情 ---------- */
+
+#ywcc-root.ywcc-root .ywcc-detail-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 8px 11px;
+    border: 1px solid var(--ywcc-line);
+    border-left: 2px solid color-mix(in srgb, var(--ywcc-flame) 46%, transparent);
+    border-radius: 12px;
+    background-color: var(--ywcc-surface-2);
+}
+
+#ywcc-root.ywcc-root .ywcc-tag {
+    align-self: flex-start;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background-color: var(--ywcc-blue-soft);
+    color: var(--ywcc-blue);
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+}
+
+#ywcc-root.ywcc-root .ywcc-detail-desc {
+    margin: 0;
+    color: var(--ywcc-muted);
+    font-size: 12px;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+/* ---------- 空态 / 错误 / 按钮 ---------- */
+
+#ywcc-root.ywcc-root .ywcc-empty {
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px dashed var(--ywcc-line-strong);
+    border-radius: 12px;
+    color: var(--ywcc-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+#ywcc-root.ywcc-root .ywcc-note {
+    padding: 13px 14px;
+    border: 1px dashed var(--ywcc-line-strong);
+    border-radius: 14px;
+    background-color: color-mix(in srgb, var(--ywcc-surface-2) 72%, transparent);
+    color: var(--ywcc-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+#ywcc-root.ywcc-root .ywcc-note.is-error {
+    border-color: color-mix(in srgb, var(--ywcc-flame) 45%, var(--ywcc-line));
+}
+
+#ywcc-root.ywcc-root .ywcc-note strong {
+    display: block;
+    margin-bottom: 3px;
+    color: var(--ywcc-ink);
+    font-size: 12.5px;
+    font-weight: 650;
+}
+
+#ywcc-root.ywcc-root .ywcc-note-text {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+#ywcc-root.ywcc-root .ywcc-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 44px;
+    margin: 8px 0 0;
+    padding: 0 16px;
+    border: 1px solid var(--ywcc-line-strong);
+    border-radius: 12px;
+    background-color: var(--ywcc-surface-2);
+    color: var(--ywcc-ink);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 650;
+    line-height: 1.2;
+    text-decoration: none;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+#ywcc-root.ywcc-root .ywcc-btn:hover {
+    border-color: var(--ywcc-line-strong);
+    background-color: var(--ywcc-surface-3);
+}
+
+#ywcc-root.ywcc-root .ywcc-btn-primary {
+    border-color: color-mix(in srgb, var(--ywcc-flame) 68%, var(--ywcc-line));
+    background-color: var(--ywcc-flame);
+    background-image: linear-gradient(135deg, color-mix(in srgb, var(--ywcc-flame) 82%, #ffffff 18%), var(--ywcc-flame));
+    color: var(--ywcc-on-flame);
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--ywcc-flame) 20%, transparent);
+}
+
+#ywcc-root.ywcc-root .ywcc-btn-primary:hover {
+    border-color: var(--ywcc-flame);
+    background-color: var(--ywcc-flame);
+    filter: brightness(1.04);
+}
+
+#ywcc-root.ywcc-root .ywcc-btn-ghost {
+    margin-top: 10px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--ywcc-flame-ink);
+}
+
+#ywcc-root.ywcc-root .ywcc-btn-ghost:hover {
+    border-color: color-mix(in srgb, var(--ywcc-flame) 36%, transparent);
+    background-color: var(--ywcc-flame-soft);
+}
+
+/* ---------- 手机底栏 / Toast ---------- */
+
+#ywcc-root.ywcc-root .ywcc-nav {
+    display: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-toast {
+    position: absolute;
+    right: 14px;
+    bottom: 16px;
+    z-index: 6;
+    max-width: calc(100% - 28px);
+    padding: 9px 13px;
+    border: 1px solid var(--ywcc-line-strong);
+    border-radius: 12px;
+    background-color: var(--ywcc-ink);
+    color: var(--ywcc-surface);
+    box-shadow: 0 8px 24px color-mix(in srgb, #000 24%, transparent);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(6px);
+    transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+#ywcc-root.ywcc-root .ywcc-toast.is-show {
+    opacity: 1;
+    transform: none;
+}
+
+/* ---------- ST 设置页卡片 ---------- */
+
+.ywcc-setting-card {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    margin: 10px 0;
+    padding: 13px 14px;
+    border: 1px solid var(--ywcc-line-strong);
+    border-radius: 16px;
+    background-color: var(--ywcc-surface);
+    color: var(--ywcc-ink);
+    font-family: var(--ywcc-font);
+    font-size: 13px;
+    line-height: 1.5;
+    text-align: left;
+    text-shadow: none;
+    box-shadow: 0 10px 28px color-mix(in srgb, var(--ywcc-ink) 10%, transparent);
+}
+
+.ywcc-setting-card .ywcc-setting-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    min-width: 0;
+}
+
+.ywcc-setting-card .ywcc-setting-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+}
+
+.ywcc-setting-card .ywcc-setting-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ywcc-setting-card .ywcc-setting-title {
+    margin: 0;
+    color: var(--ywcc-ink);
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.ywcc-setting-card .ywcc-setting-actions {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 0;
+    margin-left: auto;
+}
+
+/* 主模块把原版本卡整节点移进这个空槽；未移入时整行收起。 */
+.ywcc-setting-card .ywcc-setting-version {
+    margin-top: 10px;
+}
+
+.ywcc-setting-card .ywcc-setting-version:empty {
+    display: none;
+}
+
+.ywcc-setting-card .ywcc-setting-version .kimi-ver-card {
+    margin: 0;
+}
+
+/* 11 张原业务卡与动态商店/更新器的容纳槽：空时收起，有内容时顺排。 */
+.ywcc-setting-card .ywcc-setting-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ywcc-setting-card .ywcc-setting-content:empty {
+    display: none;
+}
+
+.ywcc-setting-card .ywcc-setting-content:not(:empty) {
+    margin-top: 10px;
+}
+
+/* 原 11 张卡移入总控卡：只压“外层套娃”的 padding/gap，不动卡内输入与业务排版。
+   :not(#ywcc-scope-boost) 只是把具体度抬到跟原卡 #kimi_..._settings .kimi-card 同级再多一档，
+   压过原卡的 margin/padding；它不是状态选择器（页面里没有这个 id）。 */
+.ywcc-setting-card:not(#ywcc-scope-boost) .ywcc-setting-content > details.kimi-card {
+    margin: 0;
+    border-radius: 10px;
+}
+
+.ywcc-setting-card:not(#ywcc-scope-boost) .ywcc-setting-content > details.kimi-card:first-of-type,
+.ywcc-setting-card:not(#ywcc-scope-boost) .ywcc-setting-content > details.kimi-card.kimi-last {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+/* 折叠标题统一一行：图标、标题左对齐，副标题/箭头靠右，间距从 12px 收到 7px。 */
+.ywcc-setting-card:not(#ywcc-scope-boost) .ywcc-setting-content > details.kimi-card > summary {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 7px;
+    min-height: 36px;
+    padding: 6px 9px;
+    font-size: 12.5px;
+    line-height: 1.3;
+    text-align: left;
+}
+
+.ywcc-setting-card:not(#ywcc-scope-boost) .ywcc-setting-content > details.kimi-card > summary .kimi-card-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: left;
+}
+
+.ywcc-setting-card:not(#ywcc-scope-boost) .ywcc-setting-content > details.kimi-card > summary .kimi-card-sub {
+    flex: none;
+    margin-left: auto;
+}
+
+/* 卡内正文只收外圈 padding；里面的控件、分组、输入框尺寸完全保持原样。 */
+.ywcc-setting-card:not(#ywcc-scope-boost) .ywcc-setting-content > details.kimi-card > .kimi-card-body {
+    padding: 8px 10px;
+}
+
+.ywcc-setting-card {
+    padding: 10px 11px;
+    border-radius: 14px;
+}
+
+.ywcc-setting-card .ywcc-setting-head {
+    gap: 6px 8px;
+}
+
+.ywcc-setting-card .ywcc-setting-mark {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+}
+
+.ywcc-setting-card .ywcc-setting-title {
+    font-size: 14.5px;
+}
+
+.ywcc-setting-card .ywcc-setting-version,
+.ywcc-setting-card .ywcc-setting-content:not(:empty) {
+    margin-top: 6px;
+}
+
+.ywcc-setting-card .ywcc-setting-content {
+    gap: 5px;
+}
+
+.ywcc-setting-card .ywcc-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    margin: 0;
+    padding: 0 12px;
+    border: 1px solid var(--ywcc-line-strong);
+    border-radius: 9px;
+    background-color: var(--ywcc-surface-2);
+    color: var(--ywcc-ink);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 650;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.ywcc-setting-card .ywcc-btn:hover {
+    border-color: var(--ywcc-line-strong);
+    background-color: var(--ywcc-surface-3);
+}
+
+.ywcc-setting-card .ywcc-btn-primary {
+    border-color: color-mix(in srgb, var(--ywcc-flame) 68%, var(--ywcc-line));
+    background-color: var(--ywcc-flame);
+    background-image: linear-gradient(135deg, color-mix(in srgb, var(--ywcc-flame) 82%, #ffffff 18%), var(--ywcc-flame));
+    color: var(--ywcc-on-flame);
+}
+
+.ywcc-setting-card .ywcc-setting-note {
+    margin: 9px 0 0;
+    color: var(--ywcc-muted);
+    font-size: 10.5px;
+    line-height: 1.45;
+}
+
+.ywcc-setting-card .ywcc-setting-note[hidden] {
+    display: none;
+}
+
+/* ---------- 焦点 / 动效 ---------- */
+
+#ywcc-root.ywcc-root :focus-visible,
+.ywcc-setting-card :focus-visible {
+    outline: 2px solid var(--ywcc-blue);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #ywcc-root.ywcc-root .ywcc-panel,
+    #ywcc-root.ywcc-root .ywcc-quick-card,
+    #ywcc-root.ywcc-root .ywcc-row,
+    #ywcc-root.ywcc-root .ywcc-btn,
+    #ywcc-root.ywcc-root .ywcc-toast,
+    .ywcc-setting-card .ywcc-btn {
+        transition: none;
+    }
+}
+
+/* ---------- 手机：底部全屏 sheet ---------- */
+
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
+    #ywcc-root.ywcc-root .ywcc-panel {
+        top: var(--ywcc-vvtop, 0px);
+        right: 0;
+        left: 0;
+        width: 100%;
+        height: 100vh;
+        height: var(--ywcc-vvh, 100dvh);
+        min-height: 0;
+        border-width: 0;
+        border-radius: 0;
+        transform: translateY(100%);
+    }
+
+    #ywcc-root.ywcc-root .ywcc-panel {
+        transition: transform 0.26s var(--ywcc-ease), opacity 0.18s ease, visibility 0.26s linear;
+    }
+
+    #ywcc-root.ywcc-root.ywcc-is-open .ywcc-panel {
+        transform: none;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-head {
+        min-height: 60px;
+        padding-top: max(10px, env(safe-area-inset-top));
+        padding-bottom: 10px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-title {
+        font-size: 16px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-icon-btn {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-mark {
+        width: 40px;
+        height: 40px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-scroll {
+        padding: 12px 12px 18px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-quick {
+        gap: 7px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-quick-card {
+        gap: 6px;
+        min-height: 0;
+        padding: 8px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-quick-ico {
+        width: 24px;
+        height: 24px;
+        border-radius: 8px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-quick-label {
+        font-size: 12.5px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-mini-main {
+        min-height: 48px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-mini-del,
+    #ywcc-root.ywcc-root .ywcc-star {
+        width: 46px;
+        min-width: 46px;
+        min-height: 46px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-fav-main {
+        min-height: 36px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-fav-remove.ywcc-star {
+        width: 32px;
+        min-width: 32px;
+        height: 36px;
+        min-height: 36px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-home-tool {
+        min-height: 40px;
+        padding: 0 12px;
+        font-size: 12.5px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-home-store-btn {
+        min-height: 32px;
+        padding: 0;
+        font-size: 12px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-scheme-card {
+        min-height: 38px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-scheme-main {
+        min-height: 36px;
+        padding: 3px 5px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-scheme-act {
+        width: 32px;
+        min-height: 32px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-scheme-act .ywcc-ico svg {
+        width: 15px;
+        height: 15px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-head-tools .ywpc-header-state {
+        display: none;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-head:has(.ywcc-head-tools:not(:empty)) .ywcc-mark {
+        display: none;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-row-action .ywcc-row-main {
+        min-height: 62px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-row-main {
+        min-height: 62px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-search {
+        top: -12px;
+        margin-left: -1px;
+        margin-right: -1px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-nav {
+        display: grid;
+        flex: none;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 3px;
+        min-height: 58px;
+        padding: 4px 6px max(5px, env(safe-area-inset-bottom));
+        border-top: 1px solid var(--ywcc-line);
+        background-color: var(--ywcc-surface);
+    }
+
+    #ywcc-root.ywcc-root .ywcc-nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        min-width: 0;
+        min-height: 50px;
+        margin: 0;
+        padding: 2px;
+        border: 0;
+        border-radius: 13px;
+        background: transparent;
+        color: var(--ywcc-muted);
+        font: inherit;
+        font-size: 10.5px;
+        font-weight: 600;
+        line-height: 1.2;
+        cursor: pointer;
+        transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-nav-item .ywcc-ico svg {
+        width: 19px;
+        height: 19px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-nav-item[aria-current="page"] {
+        background-color: var(--ywcc-flame-soft);
+        color: var(--ywcc-ink);
+    }
+
+    #ywcc-root.ywcc-root .ywcc-toast {
+        right: 12px;
+        bottom: calc(68px + env(safe-area-inset-bottom));
+    }
+}
+
+@media (max-width: 370px) {
+    #ywcc-root.ywcc-root .ywcc-quick-sub {
+        display: none;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-quick-card {
+        gap: 5px;
+        min-height: 0;
+        padding: 7px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-quick-ico {
+        width: 22px;
+        height: 22px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-quick-label {
+        font-size: 12px;
+    }
+}
+
+@media (max-height: 560px) and (pointer: coarse) {
+    #ywcc-root.ywcc-root .ywcc-head {
+        min-height: 52px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-nav {
+        min-height: 50px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-nav-item {
+        min-height: 44px;
+    }
+}
+
+/* ==========================================================================
+   总控内原卡片：只统一“周边观感”（边框/底/控件皮肤/焦点/触摸热区），
+   不改原卡结构、事件、禁用与错误语义；商店/更新器内部保持原样，只换外框。
+   ========================================================================== */
+
+#ywcc-root.ywcc-root .ywcc-module-host {
+    color: var(--ywcc-ink);
+    font-family: var(--ywcc-font);
+    font-size: 14px;
+    line-height: 1.5;
+    min-width: 0;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card {
+    margin: 0 0 10px;
+    border: 1px solid var(--ywcc-line);
+    border-left: 3px solid color-mix(in srgb, var(--ywcc-flame) 58%, var(--ywcc-line));
+    border-radius: 15px;
+    background-color: var(--ywcc-surface-2);
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--ywcc-ink) 5%, transparent);
+    overflow: hidden;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:last-child {
+    margin-bottom: 0;
+}
+
+/* 商店 / 更新器：只到这里为止（外框），body 内部一律不碰。 */
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-card-body {
+    padding: 12px 13px;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-card-body .kimi-label {
+    color: var(--ywcc-ink);
+    font-weight: 650;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-card-body label.checkbox_label {
+    color: var(--ywcc-ink);
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-hint {
+    /* 说明/警告小字统一用正文色，不靠降透明度或浅一档色硬撑层级。 */
+    color: var(--ywcc-ink);
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-section-label,
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-entry-group-title {
+    color: var(--ywcc-ink);
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-inner-card {
+    border-color: var(--ywcc-line);
+    border-radius: 12px;
+    background-color: color-mix(in srgb, var(--ywcc-surface-3) 62%, transparent);
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-inner-card > summary {
+    color: var(--ywcc-ink);
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) input[type="text"],
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) input[type="number"],
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) input[type="search"],
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) textarea,
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) select {
+    max-width: 100%;
+    border: 1px solid var(--ywcc-line-strong);
+    border-radius: 9px;
+    background-color: color-mix(in srgb, var(--ywcc-surface-3) 74%, transparent);
+    color: var(--ywcc-ink);
+    box-shadow: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) textarea {
+    line-height: 1.55;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) input:not([type="checkbox"]):not([type="radio"]):focus,
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) textarea:focus,
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) select:focus {
+    border-color: var(--ywcc-blue);
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ywcc-blue) 20%, transparent);
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) input[type="checkbox"],
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) input[type="radio"] {
+    accent-color: var(--ywcc-flame);
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-btn {
+    min-height: 34px;
+    padding: 5px 12px;
+    border: 1px solid var(--ywcc-line-strong);
+    border-radius: 10px;
+    background-color: var(--ywcc-surface-3);
+    color: var(--ywcc-ink);
+    font-size: 12.5px;
+    font-weight: 650;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-btn:hover {
+    border-color: var(--ywcc-blue);
+    background-color: color-mix(in srgb, var(--ywcc-surface-3) 86%, var(--ywcc-blue) 14%);
+    filter: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card .kimi-sep {
+    border-top-color: var(--ywcc-line);
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host [data-card="presetupd"] #ywpu-base-select {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* 快捷动作是直接挂在模块 host 上的裸 .kimi-btn（不在原卡里），同皮肤但只认直接子级。 */
+#ywcc-root.ywcc-root .ywcc-module-host > .kimi-btn {
+    min-height: 40px;
+    padding: 6px 14px;
+    border: 1px solid var(--ywcc-line-strong);
+    border-radius: 11px;
+    background-color: var(--ywcc-surface-3);
+    color: var(--ywcc-ink);
+    font-size: 13px;
+    font-weight: 650;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host > .kimi-btn:hover {
+    border-color: var(--ywcc-blue);
+    background-color: color-mix(in srgb, var(--ywcc-surface-3) 86%, var(--ywcc-blue) 14%);
+    filter: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card .kimi-fold-head {
+    border-radius: 10px;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card .kimi-fold-head:hover {
+    background-color: var(--ywcc-flame-soft);
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card :focus-visible {
+    outline: 2px solid var(--ywcc-blue);
+    outline-offset: 2px;
+}
+
+/* summary 自带 overflow:hidden，外扩焦点环会被裁掉 ⇒ 卡内 summary 用内缩环。 */
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card summary:focus-visible {
+    outline-offset: -2px;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card [disabled],
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card [aria-disabled="true"] {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
+    #ywcc-root.ywcc-root .ywcc-module-host {
+        --ywcc-control-height: 44px;
+    }
+
+    /* 主勾选行与折叠行给足 44px 热区；密集多选行（.kimi-entry-row，作者定过 26/32px）保持原紧凑度。 */
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-card-body label.checkbox_label:not(.kimi-entry-row) {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 44px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-fold-head,
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-inner-card > summary {
+        min-height: 44px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .kimi-btn,
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .menu_button.menu_button,
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) input:not([type]),
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) input[type="password"],
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) input[type="text"],
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) input[type="number"],
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) input[type="search"],
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) select {
+        min-height: 44px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-module-host > .kimi-btn {
+        min-height: 44px;
+    }
+
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) textarea {
+        min-height: 88px;
+    }
+}
+
+/* ==========================================================================
+   旧悬浮条显隐（主 Agent 追加在角色设置里的新 label）
+   - 真旧 floatbar 单源：这里只做皮肤与 44px 热区，不改默认值/存储逻辑。
+   - 勾选框保持原生小尺寸；正文走正文色，不做后台管理风的大表单。
+   ========================================================================== */
+
+#ywcc-root.ywcc-root .ywcc-launcher-choice {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 44px;
+    margin: 8px 0 0;
+    padding: 6px 10px;
+    border: 1px solid var(--ywcc-line);
+    border-radius: 11px;
+    background-color: var(--ywcc-surface-2);
+    color: var(--ywcc-ink);
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+#ywcc-root.ywcc-root .ywcc-launcher-choice:hover {
+    border-color: var(--ywcc-line-strong);
+    background-color: var(--ywcc-surface-3);
+}
+
+#ywcc-root.ywcc-root .ywcc-launcher-choice input[type="checkbox"] {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    min-height: 16px;
+    margin: 0;
+    accent-color: var(--ywcc-flame);
+}
+
+#ywcc-root.ywcc-root .ywcc-launcher-choice :focus-visible {
+    outline: 2px solid var(--ywcc-blue);
+    outline-offset: 2px;
+}
+
+/* ---------- 原卡控件统一：checkbox 16px / 次级按钮 ghost / 随机身份层级 ---------- */
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) input[type="checkbox"] {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    min-height: 16px;
+    margin: 0;
+    accent-color: var(--ywcc-flame);
+}
+
+/* ST 原生 .menu_button 在卡内常是厚黑底；统一降为 ghost，避免比主操作还重。 */
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .menu_button {
+    min-height: 32px;
+    padding: 4px 10px;
+    border: 1px solid var(--ywcc-line);
+    border-radius: 9px;
+    background-color: transparent;
+    color: color-mix(in srgb, var(--ywcc-ink) 82%, transparent);
+    box-shadow: none;
+    font-size: 12.5px;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) .menu_button:hover {
+    border-color: var(--ywcc-line-strong);
+    background-color: var(--ywcc-surface-2);
+    color: var(--ywcc-ink);
+}
+
+/* 「编辑AI名字库 / 编辑用户名字库 / 编辑诗库」= 次级操作，不跟主按钮抢。 */
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) [id$="_rand_name_edit"],
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) [id$="_rand_user_edit"],
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) [id$="_rand_head_edit"] {
+    min-height: 32px;
+    padding: 4px 10px;
+    border-color: var(--ywcc-line-strong);
+    background-color: transparent;
+    color: var(--ywcc-ink);
+    font-weight: 600;
+    box-shadow: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) [id$="_rand_name_edit"]:hover,
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) [id$="_rand_user_edit"]:hover,
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) [id$="_rand_head_edit"]:hover {
+    border-color: color-mix(in srgb, var(--ywcc-flame) 42%, var(--ywcc-line));
+    background-color: var(--ywcc-flame-soft);
+    color: var(--ywcc-flame-ink);
+}
+
+/* 随机AI身份：三个折叠行做成真正的组头，展开内容加左侧层级线。 */
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) {
+    /* 原卡折叠标题行内联用的是 var(--golden-color,#e0a800)；换肤时统一到可读的火色强调。 */
+    --golden-color: var(--ywcc-flame-ink);
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) #kimi_rand_card > .kimi-fold-head {
+    min-height: 38px;
+    margin: 2px 0;
+    padding: 5px 8px;
+    border: 1px solid var(--ywcc-line);
+    border-radius: 10px;
+    background-color: var(--ywcc-surface-2);
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) #kimi_rand_card > .kimi-fold-head:hover {
+    background-color: var(--ywcc-flame-soft);
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) #kimi_rand_card > .kimi-fold-head + div[id] {
+    margin: 3px 0 2px 3px;
+    padding-left: 9px;
+    border-left: 2px solid color-mix(in srgb, var(--ywcc-flame) 24%, transparent);
+}
+
+/* 父总开关关着：子设置仍可编辑，不再整块降透明度/滤镜；只用一行 badge 说明暂不生效。 */
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) #kimi_rand_card:has(> .kimi-fold-head > input[id$="_rand_master"]:not(:checked)) > [id$="_rand_name_box"]::before {
+    content: "以下设置暂不生效";
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    margin: 0 0 6px;
+    padding: 1px 8px;
+    border: 1px solid var(--ywcc-line-strong);
+    border-radius: 999px;
+    background-color: var(--ywcc-surface-2);
+    color: var(--ywcc-ink);
+    font-size: 11px;
+    font-weight: 650;
+}
+
+/* Opencode 红字警告：标题与状态分开，右侧给一枚启用状态 badge（纯视觉，勾选照旧）。 */
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) label.checkbox_label:has(> input[id$="_opencode_headers"]) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) label.checkbox_label:has(> input[id$="_opencode_headers"])::after {
+    content: "需启用";
+    flex: none;
+    margin-left: auto;
+    padding: 1px 8px;
+    border: 1px solid var(--ywcc-line-strong);
+    border-radius: 999px;
+    background-color: var(--ywcc-surface-2);
+    color: var(--ywcc-ink);
+    font-size: 10px;
+    font-weight: 650;
+    line-height: 1.6;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) label.checkbox_label:has(> input[id$="_opencode_headers"]):has(> input:checked)::after {
+    content: "已启用";
+    border-color: color-mix(in srgb, var(--ywcc-blue) 34%, var(--ywcc-line));
+    background-color: var(--ywcc-blue-soft);
+    color: var(--ywcc-blue);
+}
+
+/* Opencode 警示字：原卡内联 #e57373/说明档在浅色底对比不足，用正文色接管。 */
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) label.checkbox_label:has(> input[id$="_opencode_headers"]),
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) label.checkbox_label:has(> input[id$="_opencode_headers"]) span,
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) label.checkbox_label:has(> input[id$="_opencode_headers"]) + details summary,
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) label.checkbox_label:has(> input[id$="_opencode_headers"]) + details p {
+    color: var(--ywcc-ink);
+    -webkit-text-fill-color: var(--ywcc-ink);
+}
+
+/* Gemini OC 折叠标题：原卡 summary 可能被主题/inline 居中，cc 内统一左对齐。 */
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) details[id$="_oc_fold"] > summary {
+    justify-content: flex-start;
+    text-align: left;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card:not([data-card="presetstore"]):not([data-card="presetupd"]) details[id$="_oc_fold"] > summary > .kimi-label {
+    margin-right: auto;
+    text-align: left;
+}
+
+/* 名字输入前的真实 label（由 control-center.js 挂载时补，切页 cleanup 删除）。 */
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-field-label {
+    display: block;
+    margin: 0 0 4px;
+    color: var(--ywcc-ink);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.3;
+}
+
+/* 预设页：外壳已有「预设控制」标题，隐藏模块内重复标题，只留 badge/状态。 */
+#ywcc-root.ywcc-root .ywcc-host .ywpc-title {
+    display: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-host .ywpc-status,
+#ywcc-root.ywcc-root .ywcc-host .ywpc-sec-note,
+#ywcc-root.ywcc-root .ywcc-host .ywpc-word-hint,
+#ywcc-root.ywcc-root .ywcc-host .ywpc-control-label,
+#ywcc-root.ywcc-root .ywcc-host .ywpc-toggle-sub {
+    color: color-mix(in srgb, var(--ywcc-ink) 78%, transparent);
+    font-size: 12px;
+}
+
+/* 手机：设置总控卡的折叠标题恢复 44px 热区，间距仍比原卡小。 */
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
+    #ywcc-root.ywcc-root .ywcc-head-tools {
+        max-width: 52%;
+    }
+
+    .ywcc-setting-card:not(#ywcc-scope-boost) .ywcc-setting-content > details.kimi-card > summary {
+        min-height: 44px;
+        padding: 8px 10px;
+    }
+}
+
+/* 首页紧凑330 */
+#ywcc-root.ywcc-root .ywcc-home { gap: 8px; }
+#ywcc-root.ywcc-root .ywcc-scheme-list,
+#ywcc-root.ywcc-root .ywcc-fav-grid { gap: 4px; }

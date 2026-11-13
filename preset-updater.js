@@ -11,6 +11,18 @@ import { extension_settings } from '../../../extensions.js';
 import { eventSource, event_types, saveSettingsDebounced } from '../../../../script.js';
 import { Popup, POPUP_RESULT } from '../../../popup.js';   // ★S1-2：危险动作的确认走酒馆原生弹窗（与商店同一个入口）
 import * as PM from './preset-merge.js';
+/* ★M02（2026-11-11 隔离质量批）：另存新名的"宿主同口径清洗 + 防撞名 + 保存后复核"收在一个纯逻辑模块里；
+   本文件只负责把它接到原有流程（不改变正常覆盖当前预设那条路）。 */
+import * as PS from './preset-save.js?b=v1.0.0';
+/* 逐项解构（而不是直接命名导入）：本仓库的静态检查 `chk-updater-defs` 不认 import 说明符，
+   直接命名导入会被误报成"叫了但没定义"；写成 const 赋值后判据干净。行为与命名导入完全一致。 */
+const presetNameInfo = PS.presetNameInfo;
+const presetNameKey = PS.presetNameKey;
+const uniquePresetName = PS.uniquePresetName;
+const reservePresetName = PS.reservePresetName;
+const releasePresetName = PS.releasePresetName;
+const projectPresetPayload = PS.projectPresetPayload;
+const isCaseInsensitiveHost = PS.isCaseInsensitiveHost;
 
 const EXT = 'preset_updater';
 /* ★W23 收口（2026-09-25 · 发布准备）：v5.3.18 → **v5.3.19**（更新器三 BUG + 四处文案 + 判据矩阵全维 + 内核 6 行"挑到一半" + 两个触摸目标；与 index.js 的 updaterBuild 成对升） */
@@ -88,7 +100,9 @@ const EXT = 'preset_updater';
      （点它一下 = 排除，再点一下 = 收回；小标「已默认收进来 / 不要它」）；③**没点过的不同处按新版**。
      ⇒ chip 文案、结果行那句人话、正文顶上说明同步；**「按原顺序全收」那颗按钮删掉**（用途已被②整份覆盖）。
    读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md §修订；台账 §XXVIII） */
-const VERSION = '5.3.54';   // 更新器模块版本（随工具箱一起发布）
+/* ★★feedback11（2026-11-13 · 商店官方更新提醒）：5.3.57 → **5.3.58** ——
+   只在商店会话里捕获 card rev/fp 快照并随 `sp.stitched()` 第三参回传；与 index.js 的 updaterBuild 成对升。 */
+const VERSION = '5.3.58';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -173,7 +187,7 @@ const VERSION = '5.3.54';   // 更新器模块版本（随工具箱一起发布�
      正文顶上说明 · **删掉「按原顺序全收」**（用途已被②整份覆盖，避免语义重叠的按钮）。
      判据仍全走既有 `source:'custom'` + `customText` 通路 ⇒ **内核改动继续为 0**；与 index.js 的 updaterBuild 成对升） */
 /* ★W279a（2026-10-29 · 收口补救）：BUILD 从 v5.3.43 追平 VERSION=5.3.54（W256~W263 四波只升 VERSION 漏了 BUILD；纯显示对齐，逻辑零改动） */
-const BUILD = 'v5.3.54';
+const BUILD = 'v5.3.58';
 const API_ID = 'openai';                       // 对话补全预设（用户只使用对话补全）
 
 // ---------------------------------------------------------------- 设置
@@ -209,7 +223,7 @@ const saveSettings = () => saveSettingsDebounced();
 // ---------------------------------------------------------------- 运行时状态
 
 const S = {
-    mine: null, mineName: '', mineFrom: '',      // mineFrom: 'preset' | 'file'
+    mine: null, mineName: '', mineFrom: '', mineRawDigest: '',   // mineFrom: 'preset' | 'file'；mineRawDigest = 开对比时**文件原样**摘要（不是混了 live 的 S.mine）
     next: null, nextName: '', nextFrom: '',
     base: null, baseName: '', baseFrom: '',
     analysis: null,
@@ -410,6 +424,24 @@ function listPresetNames() {
     const pm = presetManager();
     try { return pm ? (pm.getAllPresets() || []) : []; } catch (e) { return []; }
 }
+/** ★B1（独立复查 2026-11-11）：**保存/另存前的列表读取不许吞错**。
+ *  上面那个 `listPresetNames()` 给 UI/浏览用，"读不到当空"是安全的；但名字查重如果也当空，
+ *  就会把一个已存在的同名预设当成"空位"覆盖掉。这个严格版：管理器/列表任一读不到就抛。 */
+function listPresetNamesStrict() {
+    const pm = presetManager();
+    if (!pm) throw new Error('取不到酒馆的预设管理器');
+    const list = pm.getAllPresets();
+    if (!Array.isArray(list)) throw new Error('酒馆返回的预设列表不是数组');
+    return list.slice();
+}
+/** 写盘/另存路径专用：严格读列表；读不到就 toast 并返回 null（调用方必须直接 return，不许写）。 */
+function strictPresetNamesForWrite() {
+    try { return listPresetNamesStrict(); }
+    catch (e) {
+        try { toast('error', '读不到预设列表（不能保证不覆盖同名）—— 这次先不写：' + ((e && e.message) || e), { timeOut: 14000 }); } catch (e2) { }
+        return null;
+    }
+}
 
 /** 按名字读一份已安装预设（返回深拷贝，避免改到内存里的对象）
  *  ★★W121（作者 2026-10-08 转来用户报告："更新插件后…如果修改了预设，插件似乎只能读取到修改前的预设"）：
@@ -452,70 +484,207 @@ function readPreset(name) {
     return JSON.parse(JSON.stringify(body));
 }
 
+/** ★M02：按名字读**文件那本账**（不合并内存里的 live 值）—— 用于"盘上那份到底追上内存没有"的判定。
+ *  与 `readPreset()` 的分工：那个是"给用户看的最新态"（当前选中的那份会混入内存 prompts），
+ *  这个是**保存前后对比用的原样**。读不到返回 null（绝不抛给调用方）。 */
+function readPresetFile(name) {
+    try {
+        const pm = presetManager();
+        if (!pm) return null;
+        const list = pm.getPresetList(API_ID);
+        const names = list.preset_names || {};
+        for (const [i, n] of Object.entries(names)) if (n === name) return list.presets?.[i] || null;
+        const idx = pm.findPreset(name);
+        return (idx !== undefined && idx !== null) ? (list.presets?.[idx] || null) : null;
+    } catch (e) { return null; }
+}
+/** ★B2（独立复查 2026-11-11）：**文件原样**摘要。`S.mine` / `readPreset()` 会混入内存 live 值，
+ *  拿它做"目标有没有被外部改过"的复核会看不见外改（page live 仍旧值时，混 live 的读法恰好等于旧值）。
+ *  这个只读 `readPresetFile()` 的 raw 副本；读不到返回 ''（调用方按"不能证明"处理，绝不猜没改）。 */
+function rawDigestOfPresetFile(name) {
+    const raw = readPresetFile(name);
+    return raw ? presetDigestOf(raw) : '';
+}
+
 /** ★★W123（作者 2026-10-08 拍板 · 原话："**缝预设之前 先帮你们 保存预设** …… 就是**点击每个缝入之前
  *  先帮用户点击一次 保存预设**"）—— 作者自己的实测复现：**保存条目但没保存预设 ⇒ 缝完没保存的条目消失**；
  *  **先保存预设再缝 ⇒ 没问题**。
  *  为什么需要：ST 的面板编辑只进「内存 + settings.json」，**不点「更新预设」不进预设文件**；而缝入是
  *  **覆盖 ① 那份预设的文件** ⇒ 用户刚加的条目 / 拨的开关（还没保存的）会在缝的那一刻被写没。
- *  ⇒ 口径：**每次"缝"之前，先替用户把他在用的这份预设存一次** —— 走**酒馆自己的「更新预设」按钮**那一条
- *     （`$('#update_oai_preset').trigger('click')`，与行内插入功能 `inlineInsFlush` 逐字同一条路，
- *      也与手点同一条：POST `/api/presets/save` + 回填 `openai_settings`），再读、再对比、再覆盖。
+ *  ⇒ 口径：**每次"缝"之前，先替用户把他在用的这份预设存一次** —— 走**宿主同一个保存接口**
+ *     （`pm.savePreset(name, 完整payload)`；★M02 起不再点 `#update_oai_preset` 按钮：按钮写的是
+ *      `saveOpenAIPreset(live)`，会丢掉文件里 `settingsToUpdate` 映射表之外的顶层键；`pm.savePreset`
+ *      发的是同一份 API、同一份正文，仍然只覆盖同一份预设，不新增文件）。
  *  ★★为什么**不用** `pm.updatePreset()`（第一版就踩了，探针当场抓住）：酒馆的 `PresetManager.getPresetSettings`
  *     对 **openai 这一档返回 `{}`**（`preset-manager.js` 的 `getSettingsByApiId` 里 openai 没分支）⇒
  *     `updatePreset()` 会把用户的预设文件**写成一个空的 `{}`**（实测：文件变成 128 字节的 `{}`）。
  *     按钮那条路走的是 `saveOpenAIPreset(name, oai_settings)`，写的是**内存里正在用的那份** ✓。
  *  ★**已经一致就一个字都不写**（文件那本账已经追上内存了 ⇒ 直接返回，不白写用户文件）。
+ *  ★★M02（2026-11-11）：改前的判据是"条目数 + 100001 顺序表逐条 id:开关"——**只数条数和开关**，
+ *     同条目数/同开关下改正文、名字、注入深度、正则、temperature 都会返回"本来一致=true" ⇒ 不保存、
+ *     缝入时拿旧文件覆盖。现在改成**完整持久化正文摘要**：
+ *       · 现代 ST：`openai.js` 的 `getChatCompletionPreset(live)`（= 宿主自己 POST 的那份正文）；
+ *       · 旧 ST（1.13 没有这个导出）：`settingsToUpdate` 的映射 + **文件现有键集合**投影
+ *         （旧版保存函数是硬编码字段，多出来的键它本来就不写 ⇒ 不投进去，避免永远追不上）。
+ *     判据 = `presetDigestOf(payload)` 与 `presetDigestOf(file)` 逐字节相等；拿不到摘要就**不猜**（返回 false，
+ *     后面 `mineChangedSinceAnalysis` / `liveChangedSinceAnalysis` 还有防线），绝不再用"条数开关"冒充全量。
  *  ★只存**当前选中的那份**（`getSelectedPresetName()`）；按钮不在 / 没选中 / 等不到落盘 ⇒ **如实跳过 + 说人话**，绝不硬撑。
  *  ★真写了才报一句（toast）：让用户知道"我没点保存、插件替我按了一次「更新预设」"。
+ *  @param {string} tag 调用方标记（generate / stitch / store，只进日志）
+ *  @param {{attempts?:number, waitMs?:number}} [opts] 只给测试缩短等待；产品不传 ⇒ 30 次 × 120ms
  *  @returns {Promise<boolean>} 真存了（或本来就已经一致）= true
  */
-async function saveCurrentPresetFirst(tag) {
+let _presaveInflight = null;
+/** ★M02d（真实宿主契约 2026-11-11）：在"宿主即将应用预设"的 BEFORE 事件里**同步**抓 live 快照。
+ *  为什么不在 `await savePreset()` 之后再抓：ST 的 updateList → change → OAI_PRESET_CHANGED_BEFORE
+ *  是 async emit，真正的"把预设写回 live"在 emit 的 `.finally` 里。监听器数量变化会改变微任务次序；
+ *  极端情况下（BEFORE 监听器被清空 / 事件实现变化）apply 可能先于 savePreset 的续体跑。
+ *  这里在 save 前挂一个**自己的** BEFORE 监听器（从此至少 1 个监听器），在 apply 之前拿到 live；
+ *  save 返回后立刻摘掉。拿不到（老宿主 / 没有这个事件）⇒ 返回 null，调用方退回"保存后同步深拷贝"；
+ *  两者都拿不到才按"不能证明"严格处理。 */
+function watchPresetApplyBefore(name) {
+    try {
+        if (typeof eventSource === 'undefined' || !eventSource || typeof eventSource.on !== 'function') return null;
+        const type = (typeof event_types !== 'undefined' && event_types) ? event_types.OAI_PRESET_CHANGED_BEFORE : '';
+        if (!type) return null;
+        let snap = null;
+        let stopped = false;
+        const handler = (event) => {
+            if (stopped || snap) return;
+            try {
+                const n = event && event.presetName;
+                if (String(n || '') !== String(name || '')) return;
+                const ctx = window.SillyTavern?.getContext?.();
+                const live = ctx && ctx.chatCompletionSettings;
+                if (live) snap = JSON.parse(JSON.stringify(live));
+            } catch (e) { /* 拿不到就退回后面的同步快照 */ }
+        };
+        eventSource.on(type, handler);
+        return {
+            get: () => snap,
+            stop: () => {
+                stopped = true;
+                try {
+                    if (typeof eventSource.removeListener === 'function') eventSource.removeListener(type, handler);
+                    else if (typeof eventSource.off === 'function') eventSource.off(type, handler);
+                } catch (e) { }
+            },
+        };
+    } catch (e) { return null; }
+}
+async function saveCurrentPresetFirst(tag, opts) {
+    /* 同页并发（两次点缝入/生成、商店开对比 + 按钮）只让一次"替用户按保存"在飞：
+       第二次直接复用第一次的结果，不会连点两次宿主按钮。 */
+    if (_presaveInflight) return _presaveInflight;
+    _presaveInflight = _saveCurrentPresetFirst(tag, opts).finally(() => { _presaveInflight = null; });
+    return _presaveInflight;
+}
+async function _saveCurrentPresetFirst(tag, opts) {
+    const o = opts || {};
+    const attempts = Number.isFinite(o.attempts) ? Math.max(1, Math.floor(o.attempts)) : 30;
+    const waitMs = Number.isFinite(o.waitMs) ? Math.max(0, Number(o.waitMs)) : 120;
     let name = '';
-    const readRaw = (nm) => {   // 文件那本账（openai_settings 里那份；与 readPreset 的老取法同源）
-        try {
-            const pm2 = presetManager();
-            const list = pm2.getPresetList(API_ID);
-            const names = list.preset_names || {};
-            for (const [i, n] of Object.entries(names)) if (n === nm) return list.presets?.[i] || null;
-            const idx2 = pm2.findPreset(nm);
-            return (idx2 !== undefined && idx2 !== null) ? (list.presets?.[idx2] || null) : null;
-        } catch (e) { return null; }
-    };
-    /** "这一份现在长什么样"的摘要：条目数 + 100001 顺序表逐条 `id:开/关`（缝入关心的就这两样） */
-    const snapOf = (p) => {
-        if (!p) return null;
-        try {
-            const t = (p.prompt_order || []).find(o => o.character_id === 100001) || (p.prompt_order || [])[0];
-            return JSON.stringify({ n: (p.prompts || []).length, o: ((t && t.order) || []).map(e => e.identifier + ':' + (e.enabled ? 1 : 0)) });
-        } catch (e) { return null; }
-    };
     try {
         const pm = presetManager();
         if (!pm) return false;
         name = (typeof pm.getSelectedPresetName === 'function') ? String(pm.getSelectedPresetName() || '') : '';
         if (!name) return false;
         const ctx = window.SillyTavern?.getContext?.();
-        const want = snapOf(ctx && ctx.chatCompletionSettings);
-        if (!want) return false;
-        if (snapOf(readRaw(name)) === want) return true;                 // ★已经一致 ⇒ 一个字都不写
-        const btn = document.getElementById('update_oai_preset');
-        if (!btn) {
-            try { toast('warning', '想先替你保存「' + name + '」但找不到酒馆的「更新预设」按钮 —— 先把你在面板里改的那份保存一下，再缝。', { timeOut: 10000 }); } catch (e) { }
+        const live = ctx && ctx.chatCompletionSettings;
+        if (!live) return false;
+        const raw = readPresetFile(name);
+        /* ★M02：完整 payload（把 live 投影成宿主真正会写进文件的那份；不是 live 本身 ——
+           oai_settings 里有一堆不进预设文件的运行期键，拿 live 直接比会永远"不一致"）。 */
+        const want = await chatCompletionPayloadOf(live, raw);
+        const wantDigest = want ? presetDigestOf(want) : '';
+        if (!wantDigest) {
+            console.warn('[预设更新器] 算不出「' + name + '」的完整持久化摘要 —— 不猜"已一致"，交给后面的写盘防线', { tag: String(tag || '') });
             return false;
         }
-        try { $(btn).trigger('click'); } catch (e) {
-            try { toast('warning', '想先替你保存「' + name + '」但按不动酒馆的「更新预设」—— 先自己保存一下再缝。', { timeOut: 10000 }); } catch (e2) { }
+        if (raw && presetDigestOf(raw) === wantDigest) {
+            if (String(S.mineName || '') === name) S.mineRawDigest = presetDigestOf(raw);   // 只有基线就是这份时才对齐
+            return true;                                                 // ★已经一致 ⇒ 一个字都不写
+        }
+        /* ★★B2（独立复查 2026-11-11）：**文件被外部窗口改过**时不能拿页面里的旧 live 自动保存覆盖它。
+           改前只比 `raw != live` ⇒ 外窗把文件改成 OTHER_NEW、page live 仍是旧值 ⇒ 直接写 PAGE_OLD 并返回 true
+           （旧盖新）。现在先比"文件原样摘要"与**开对比时记录的 raw 基线**；不一致就停。
+           · 有 raw 基线：文件 != 基线 ⇒ 外改，停；
+           · 没 raw 基线（很老的会话）：若 page 没有本地未保存改动（live 摘要 == S.mine 摘要）且文件 != S.mine
+             ⇒ 同样是外改，停；page 有本地改动且无基线时无法区分，走后面的 live 防线（不猜）。 */
+        const rawDigest = raw ? presetDigestOf(raw) : '';
+        /* 只有"基线说的就是当前这份预设"时才拿它做外部改动判据；用户切到另一份时不能拿旧预设的基线误拦。 */
+        const baselineApplies = !!(S.mineName && String(S.mineName) === name && S.mineFrom === 'preset');
+        const baselineRaw = baselineApplies ? String(S.mineRawDigest || '') : '';
+        const mineDigest = (baselineApplies && S.analysis && S.mine) ? presetDigestOf(S.mine) : '';
+        if (baselineRaw && rawDigest && rawDigest !== baselineRaw) {
+            try { toast('warning', '「' + name + '」的文件在别处被改过（跟这个页面开对比时那份不一样）—— 这次不自动保存：先重新对比/确认，别拿旧页面盖掉新文件。', { timeOut: 14000 }); } catch (e) { }
+            console.info('[预设更新器] 预保存发现文件被外部改过 ⇒ 不写', { 名字: name, 文件: rawDigest.slice(0, 24), 基线: baselineRaw.slice(0, 24) });
             return false;
         }
-        for (let i = 0; i < 30; i++) {                                   // 等它落盘 + 回填（≈3.6 秒封顶）
-            await new Promise(r => setTimeout(r, 120));
-            if (snapOf(readRaw(name)) === want) {
+        if (!baselineRaw && mineDigest && rawDigest && wantDigest === mineDigest && rawDigest !== mineDigest) {
+            try { toast('warning', '「' + name + '」的文件在别处被改过（这个页面没有新改动）—— 这次不自动保存，先重新对比/刷新。', { timeOut: 14000 }); } catch (e) { }
+            return false;
+        }
+        /* 保存前**同步**再核一次"现在选中的还是不是 name"（中间没有 await ⇒ 不会插进用户事件）。
+           防止用户在 await 上方别的异步里切了预设，这一下把另一份存了/切了。 */
+        let selNow = '';
+        try { selNow = (typeof pm.getSelectedPresetName === 'function') ? String(pm.getSelectedPresetName() || '') : ''; } catch (e) { selNow = ''; }
+        if (selNow && selNow !== name) {
+            try { toast('warning', '你刚把当前预设切成了「' + selNow + '」，这次先不替「' + name + '」保存 —— 回面板确认一下再缝。', { timeOut: 10000 }); } catch (e) { }
+            return false;
+        }
+        /* ★M02：不再走 `#update_oai_preset` 按钮 —— 按钮那条路是 `saveOpenAIPreset(live)`，会把文件里
+           `settingsToUpdate` 映射表之外的顶层键（别的扩展写进去的非 UI 字段）丢掉。这里用**宿主同一个保存接口**
+           写完整 payload（modern = getChatCompletionPreset + 文件独有顶层键；1.13 = settingsToUpdate + 文件键），
+           仍然是**覆盖同一份**预设、不新增任何文件。 */
+        const applyProbe = watchPresetApplyBefore(name);                 // ★M02d：apply 前快照（不依赖微任务次序）
+        try { await savePreset(name, want); } catch (e) {
+            if (applyProbe) applyProbe.stop();
+            try { toast('warning', '想先替你保存「' + name + '」但保存接口没成功 —— 先把你在面板里改的那份保存一下，再缝。', { timeOut: 10000 }); } catch (e2) { }
+            return false;
+        }
+        if (applyProbe) applyProbe.stop();
+        /* ★M02d（真实宿主契约 2026-11-11）：**保存返回那一刻**的 live 快照才代表"用户提交的那一份"。
+           宿主在 pm.savePreset() 之后会走 updateList → change → OAI_PRESET_CHANGED_* 的**异步**应用；
+           应用期间宿主可能按 UI 约束把值夹回/迁移（隔离 host 实测：temp_openai 2.5 → range max 2.0），
+           那是宿主自己的规范化，不是用户在保存过程中又改设置 —— 不能因此否决已经成功的保存。
+           反过来：用户真在请求在飞时改了 live ⇒ 快照与 want 不一致 ⇒ 仍按原口径 false + 警告。
+           ★优先用 applyProbe 在 BEFORE 事件里抓到的快照；没抓到时退回"保存后同步深拷贝"
+             （JSON 深拷贝中间不许 await，否则宿主应用的回调可能先插进来）。 */
+        let liveSnapAfterSave = applyProbe ? applyProbe.get() : null;
+        if (!liveSnapAfterSave) {
+            try { liveSnapAfterSave = JSON.parse(JSON.stringify(live)); } catch (e) { liveSnapAfterSave = null; }
+        }
+        let liveChangeCheck = null;                                      // null = 还没算；true = 保存期间用户改了
+        const liveChangedWhileSaving = async () => {
+            if (liveChangeCheck !== null) return liveChangeCheck;
+            try {
+                const snapPayload = liveSnapAfterSave ? await chatCompletionPayloadOf(liveSnapAfterSave, raw) : null;
+                liveChangeCheck = !snapPayload || presetDigestOf(snapPayload) !== wantDigest;
+            } catch (e) {
+                liveChangeCheck = true;                                  // 不能证明 ⇒ 保持严格（原口径）
+            }
+            return liveChangeCheck;
+        };
+        for (let i = 0; i < attempts; i++) {                             // 等它落盘 + 回填（产品默认 ≈3.6 秒封顶）
+            if (waitMs > 0) await new Promise(r => setTimeout(r, waitMs));
+            else await Promise.resolve();
+            const nowFile = readPresetFile(name);
+            if (nowFile && presetDigestOf(nowFile) === wantDigest) {
+                /* 文件现在就是 want；只有基线就是这份预设时把 raw 基线推进到这一刻。 */
+                if (String(S.mineName || '') === name) S.mineRawDigest = wantDigest;
+                /* ★M02d：只把"保存返回前 live 就与 want 不一致"当成用户改动；
+                   返回后宿主自己应用/夹取造成的差异不再误杀（见上面快照注释）。 */
+                if (await liveChangedWhileSaving()) {
+                    try { toast('warning', '「' + name + '」存好了，但你在保存过程中又改了设置 —— 再点一次这个按钮，让文件追上最新改动再继续。', { timeOut: 12000 }); } catch (e) { }
+                    return false;
+                }
                 try { toast('info', '缝入前先替你保存了一次「' + name + '」（免得你刚改、还没保存的部分被覆盖）', { timeOut: 6000 }); } catch (e) { }
-                console.info('[预设更新器] 缝入前先保存预设（W123）', { tag: String(tag || ''), 名字: name });
+                console.info('[预设更新器] 缝入前先保存预设（W123 · M02 全量判据）', { tag: String(tag || ''), 名字: name, 摘要: presetDigestTag(want) });
                 return true;
             }
         }
-        try { toast('warning', '替你按了「更新预设」但没等到落盘（3.6 秒）—— 缝之前先回面板看一眼这份存好了没。', { timeOut: 10000 }); } catch (e) { }
+        try { toast('warning', '替你保存「' + name + '」但没等到落盘（' + Math.round(attempts * waitMs / 100) / 10 + ' 秒）—— 缝之前先回面板看一眼这份存好了没。', { timeOut: 10000 }); } catch (e) { }
         return false;
     } catch (e) {
         console.warn('[预设更新器] 缝入前替你保存预设没成（照旧往下走；读取那道还有一层）', e);
@@ -633,6 +802,51 @@ function slotNeedsReread(curDigest, freshDigest) {
 }
 /* ==== ywpu-fresh-core:end ==== */
 
+/* ==== M02：完整持久化 payload（预保存判据 / 确认期间 live 改动判据共用）==== */
+/** 缓存的 `openai.js` 动态导入。取不到（老分支/怪分支）⇒ null，走下面的键表投影，绝不因此把保存流程炸掉。 */
+let _oaiPresetModulePromise = null;
+function loadOpenAIPresetHelpers() {
+    if (!_oaiPresetModulePromise) {
+        _oaiPresetModulePromise = import('../../../openai.js')
+            .then(m => m || null)
+            .catch(e => { console.warn('[预设更新器] 读不到 openai.js 的预设正文工具，改用本机键表兜底', e); return null; });
+    }
+    return _oaiPresetModulePromise;
+}
+/** 把"文件里有、但现代 getChatCompletionPreset 的映射表里没有"的顶层键补回 payload。
+ *  为什么要补：预设文件里可能有别的扩展写进去的非 UI 顶层字段（不在 ST 的 settingsToUpdate 里）。
+ *  如果只拿映射表那份跟文件比，会**每次都被判脏**；真按映射表保存又会把它们从文件里抹掉。
+ *  ⇒ 口径：这些键**以文件现值为准**并保留在 payload 里（runtime 里同名但不可持久化的杂项不参与），
+ *    这样既不会每次判脏，也不会在真要保存时把别人的顶层字段丢掉。
+ *  注：`extensions`（含 `extensions.regex_scripts`）在 ST 的映射表里，**以 live 为准** —— 不在这里覆盖。 */
+function mergePayloadWithFileKeys(payload, file) {
+    const out = (payload && typeof payload === 'object') ? JSON.parse(JSON.stringify(payload)) : {};
+    if (file && typeof file === 'object') {
+        for (const k of Object.keys(file)) {
+            if (!Object.prototype.hasOwnProperty.call(out, k)) out[k] = file[k];
+        }
+    }
+    return out;
+}
+/** 当前内存设置 → **酒馆「更新预设」真正会写进文件的那份正文**（与宿主同口径）。
+ *  · 现代 ST：`getChatCompletionPreset(live)`（宿主自己 POST 的就是它）；
+ *  · ST 1.13：没有这个导出 ⇒ `projectPresetPayload(live, file, settingsToUpdate)`：
+ *    按**文件现有键集合**投影（旧版保存函数是硬编码字段，`extensions` 之类它本来就不写；
+ *    若用全集投影会永远追不上 ⇒ 每次点保存都白写）。
+ *  · `JSON.parse(JSON.stringify(...))` 与真正 POST 的序列化同口径（去掉 undefined、NaN→null）。
+ *  @returns {Promise<object|null>} */
+async function chatCompletionPayloadOf(live, file) {
+    if (!live || typeof live !== 'object') return null;
+    let mod = null;
+    try { mod = await loadOpenAIPresetHelpers(); } catch (e) { mod = null; }
+    if (mod && typeof mod.getChatCompletionPreset === 'function') {
+        try { return mergePayloadWithFileKeys(JSON.parse(JSON.stringify(mod.getChatCompletionPreset(live))), file); }
+        catch (e) { console.warn('[预设更新器] getChatCompletionPreset 失败，改走键表投影', e); }
+    }
+    return projectPresetPayload(live, file || null, (mod && mod.settingsToUpdate) || null);
+}
+/* ==== M02 完整持久化 payload:end ==== */
+
 /** ★Wave K1 · 顺带修复（2026-09-24 · 实测复现的真 BUG）：**读出来的这东西到底是不是一份能用的预设？**
  *  触发场景：用户那份预设文件**坏掉 / 被外部改坏**（实测现象：文件内容变成"一个 JSON 字符串"、没有 `prompts`）
  *    ⇒ 而 ST 的"当前预设"正指向它 ⇒ 挂载路上 `restoreSaved() → renderSource() → stateOf()` 读
@@ -647,6 +861,68 @@ async function savePreset(name, preset) {
     const pm = presetManager();
     if (!pm) throw new Error('取不到酒馆的预设管理器，请刷新页面重试');
     await pm.savePreset(name, preset);
+}
+
+/** ★M02：名字查重选项（与宿主同口径：清洗后 + 平台大小写规则）。 */
+function presetNameOpts() {
+    return { caseInsensitive: isCaseInsensitiveHost() };
+}
+/** 这份名字在现有列表里有没有"同一个文件名"（清洗后 + 平台大小写）。 */
+function presetNameInList(name, names, opts) {
+    const o = opts || presetNameOpts();
+    const key = presetNameKey(name, o);
+    return !!key && (Array.isArray(names) ? names : []).some(n => presetNameKey(n, o) === key);
+}
+/** ★M02：覆盖前的**可读回备份** —— 不再拿 `a.click()` 冒充"备份成功"（那只能叫"已触发下载"，
+ *  浏览器拦没拦、文件落没落盘都不知道）。这里用宿主同一个保存接口另存一份**备份预设**（新名字、绝不覆盖谁），
+ *  再从预设列表 + 读回内容双重确认它真的在，确认不了就返回 ok:false（调用方必须停止覆盖）。
+ *  ★保护范围：读回的是宿主 `getPresetList()` 在保存后回填的那份（`updateList` 同步写入），不是独立磁盘读；
+ *    真正的磁盘回读由主 Agent 的隔离宿主验收脚本做。但"接口 2xx + 列表里有这个名字 + 内容摘要一致"已经
+ *    比 `a.click()` 强一个量级，且失败会阻止覆盖。
+ *  @returns {Promise<{ok:boolean, name?:string, why?:string}>} */
+async function createHostBackupPreset(targetName, old, opts) {
+    const o = opts || presetNameOpts();
+    const base = String(targetName || '') + '（覆盖前备份 ' + nowStamp() + '）';
+    let current = [];
+    try { current = listPresetNamesStrict(); }
+    catch (e) { return { ok: false, why: '读不到预设列表（不能保证备份名不撞已有文件）' }; }
+    const u = uniquePresetName(base, current, o);
+    if (!u.ok) return { ok: false, why: u.why || '备份名不能用' };
+    const token = {};
+    if (!reservePresetName(u.name, token, o)) return { ok: false, why: '备份名正被另一个保存占用' };
+    try {
+        const before = current;
+        await savePreset(u.name, old);
+        const actual = resolveSavedPresetName(u.name, before);
+        let listed = false;
+        try { listed = listPresetNamesStrict().includes(actual); } catch (e) { listed = false; }
+        if (!listed) return { ok: false, why: '备份预设写完后，预设列表里看不到它' };
+        const back = readPresetFile(actual);
+        const wantDigest = presetDigestOf(old);
+        const backDigest = back ? presetDigestOf(back) : '';
+        if (!wantDigest || !backDigest || wantDigest !== backDigest) {
+            return { ok: false, why: '备份预设读回来的内容跟原文不一致' };
+        }
+        return { ok: true, name: actual };
+    } catch (e) {
+        return { ok: false, why: '备份预设没写成（' + ((e && e.message) || e) + '）' };
+    } finally {
+        releasePresetName(u.name, token, o);
+    }
+}
+
+/** 保存后从列表复核"宿主实际把它存成了什么名字"：
+ *  · 首选名在列表里 ⇒ 它；
+ *  · 不在 ⇒ 取"保存前没有、保存后多出来"的唯一一个新名字（宿主清洗规则与复刻有细微差别时用）；
+ *  · 都不是 ⇒ 返回首选名（调用方再做"列表里有没有"的复核，绝不把没出现的名字当成功）。 */
+function resolveSavedPresetName(preferred, beforeNames) {
+    try {
+        const now = listPresetNames();
+        if (now.includes(preferred)) return preferred;
+        const before = new Set(Array.isArray(beforeNames) ? beforeNames : []);
+        const added = now.filter(n => !before.has(n));
+        return added.length === 1 ? added[0] : preferred;
+    } catch (e) { return preferred; }
 }
 
 /** 宽松解析 JSON（容忍 BOM / 前后废话） */
@@ -675,9 +951,52 @@ function downloadJson(filename, obj) {
 
 // ================================================================ 一、设置抽屉里的分页（入口）
 
+// One module owns one active host. The singleton event never captures an old card.
+let updaterMount = null;
+let updaterPresetBound = false;
+let updaterReadEpoch = 0;
+function cancelUpdaterReads() {
+    updaterReadEpoch++;
+    S.lockCloudSeq = (Number(S.lockCloudSeq) || 0) + 1;
+    S.lockBackendOwner = null; S.lockBusy = ''; S.lockPending = false;
+    for (const cancel of updaterMount?.pending || []) cancel();
+    updaterMount?.pending.clear();
+}
+function releaseUpdaterMount() {
+    const old = updaterMount;
+    if (!old) return;
+    cancelUpdaterReads();
+    old.observer?.disconnect();
+    old.card?.removeEventListener('toggle', old.toggle);
+    delete old.host.dataset.ywpuMounted;
+    updaterMount = null;
+}
+function currentUpdaterMount() {
+    if (updaterMount && !updaterMount.host.isConnected) releaseUpdaterMount();
+    return updaterMount;
+}
+// Automatic base fetches may update S.base within this same run. Manual base edits
+// invalidate the read epoch instead; mine/next identity pins the comparison inputs.
+function updaterReadScope() {
+    return { mount: currentUpdaterMount(), epoch: updaterReadEpoch, mine: S.mine, next: S.next, mineName: S.mineName, nextName: S.nextName };
+}
+function updaterReadCurrent(scope) {
+    return currentUpdaterMount() === scope.mount && updaterReadEpoch === scope.epoch
+        && S.mine === scope.mine && S.next === scope.next
+        && S.mineName === scope.mineName && S.nextName === scope.nextName;
+}
+function refreshUpdaterSource() {
+    const active = currentUpdaterMount();
+    if (active && active.card?.open) renderSource();
+}
+
 /** 挂载到余温工具箱的一张卡片里（本插件作为工具箱的一个分页，不再单独占一个扩展） */
 export function mountPresetUpdater(container) {
-    if (!container || container.dataset.ywpuMounted) return;
+    if (!container || !container.isConnected) return;
+    if (currentUpdaterMount()?.host === container) return;
+    releaseUpdaterMount();
+    const mount = { host: container, card: container.closest('details.kimi-card'), pending: new Set(), observer: null, toggle: () => { if (currentUpdaterMount() === mount) refreshUpdaterSource(); } };
+    updaterMount = mount;
     container.dataset.ywpuMounted = '1';
     container.innerHTML = `
 <div id="ywpu-card" class="ywpu-box">
@@ -714,24 +1033,15 @@ export function mountPresetUpdater(container) {
        本卡的下拉是**挂载时画一次**；商店下载走 ST 的 updateList 会即时把新预设加进酒馆下拉，
        但我们这份不重画 ⇒ 看不到。修两处（都只重画「来源」那块，按名字保留已选中的项）：
        ① 本卡展开时（details toggle）；② 酒馆预设变化时（PRESET_CHANGED），若本卡正开着也重画。 */
+    try { mount.card?.addEventListener('toggle', mount.toggle); } catch (e) { }
     try {
-        const card = container.closest('details.kimi-card');
-        if (card && !card.dataset.ywpuSrcRefresh) {
-            card.dataset.ywpuSrcRefresh = '1';
-            card.addEventListener('toggle', () => {
-                if (!card.open) return;
-                try { renderSource(); } catch (e) { }
+        if (!updaterPresetBound) {
+            eventSource.on(event_types.PRESET_CHANGED, () => {
+                cancelUpdaterReads();
+                try { refreshUpdaterSource(); } catch (e) { }
             });
+            updaterPresetBound = true;
         }
-    } catch (e) { }
-    try {
-        eventSource.on(event_types.PRESET_CHANGED, () => {
-            try {
-                const card = container.closest('details.kimi-card');
-                if (!card || !card.open) return;
-                renderSource();
-            } catch (e) { }
-        });
     } catch (e) { }
     /* ★Wave K1 · 顺带修复：读不出内容的预设（文件坏了/被外部改过）**当场说一句人话** ——
        常驻那一行在来源区（`.ywpu-risk`，见 renderSource），这里再补一条 toast（打开面板就能看见）。 */
@@ -740,18 +1050,21 @@ export function mountPresetUpdater(container) {
     }
     buildWindow();
     watchThemeChange();     // ★A-2：换主题当场重算（挂一次；回调 = 既有的 applyAutoInkAll）
-    container.querySelector('#ywpu-run').addEventListener('click', () => startCompare());
+    container.querySelector('#ywpu-run').addEventListener('click', () => { if (currentUpdaterMount() === mount) startCompare(); });
     // 📥 用户侧入口（P1）：选一个更新包文件 → 认版本 → 确认页 → 应用并另存（见文件末尾那一节）
     const patchInput = container.querySelector('#ywpu-patch-input');
     container.querySelector('#ywpu-check-patch').addEventListener('click', () => {
+        if (currentUpdaterMount() !== mount) return;
         if (!S.mine) { toast('warning', '先在「① 你的预设」里选你现在正在用的那份（也可以点「选文件…」），再检查更新'); return; }
         patchInput.value = ''; patchInput.click();
     });
     patchInput.addEventListener('change', async function () {
         const f = this.files?.[0]; this.value = '';
-        if (!f) return;
-        try { acceptPatchFile(f.name, await f.text()); }
-        catch (e) { toast('error', '读文件失败：' + (e?.message || e)); console.warn('[预设更新器] 读更新包失败', e); }
+        if (!f || currentUpdaterMount() !== mount) return;
+        cancelUpdaterReads();
+        const scope = updaterReadScope();
+        try { const text = await f.text(); if (updaterReadCurrent(scope)) acceptPatchFile(f.name, text); }
+        catch (e) { if (updaterReadCurrent(scope)) { toast('error', '读文件失败：' + (e?.message || e)); console.warn('[预设更新器] 读更新包失败', e); } }
     });
     // 调试出口（e2e / 控制台自检用）
     window.__ywpu = {
@@ -945,6 +1258,9 @@ function nameScore(a, b) {
 }
 
 function renderSource() {
+    const host = currentUpdaterMount()?.host;
+    const source = host?.querySelector('#ywpu-sec-source');
+    if (!source) return;
     const names = listPresetNames();
     // ② 新版候选：跟①的名字最像的排前面（并给第一个标 ★）
     const nextSorted = (() => {
@@ -974,7 +1290,7 @@ function renderSource() {
         }
         return '<span class="ywpu-ok">✓ 已载入</span> <span class="ywpu-dim">· ' + o.prompts.length + ' 条</span>';
     };
-    $el('#ywpu-sec-source').innerHTML = `
+    source.innerHTML = `
 ${(S.badPresets && S.badPresets.length) ? `<div class="ywpu-risk" id="ywpu-badpreset">⚠ 读不出「${esc(S.badPresets.join('、'))}」的内容（这份预设文件可能坏了、或被外部改过）—— 这次先跳过它，你可以在下面的下拉里另选一份。</div>` : ''}
 <div class="ywpu-src" id="ywpu-src-mine">
     ${/* ★W58-a（作者 2026-09-27 反馈 · 第 1~4 条）：三槽位标题行的**括注全部删掉**（原来每份后面都跟着一个
@@ -1084,7 +1400,7 @@ function restoreSaved() {
             if (slot === 'base') {
                 const hit = baseCacheGet(lockKey(want));
                 if (hit) {
-                    S.base = hit; S.baseName = want; S.baseFrom = 'cloud';
+                    S.base = hit; S.baseName = want; S.baseFrom = 'cloud'; S.baseBackend = storeBackendScope().base;
                     lockNet.cacheHit++;
                     loaded.push('③：' + want + '（从本机缓存恢复，不用重下）');
                     continue;
@@ -1114,9 +1430,14 @@ function restoreSaved() {
 }
 
 function wireSource() {
+    const mount = currentUpdaterMount();
+    if (!mount) return;
+    const $el = sel => mount.host.querySelector(sel);
+    const active = () => currentUpdaterMount() === mount;
     const s = getSettings();
     const bindSelect = (slot, sel) => {
         $el(sel)?.addEventListener('change', function () {
+            if (!active()) return;
             const name = this.value;
             if (!name) return;
             try {
@@ -1132,6 +1453,7 @@ function wireSource() {
     bindSelect('mine', '#ywpu-mine-select');
     bindSelect('next', '#ywpu-next-select');
     $el('#ywpu-base-select')?.addEventListener('change', function () {
+        if (!active()) return;
         const name = this.value;
         if (!name) { S.base = null; S.baseName = ''; S.baseFrom = ''; s.lastBaseName = ''; s.lastBaseFor = ''; saveSettings(); invalidate(); renderSource(); return; }
         try {
@@ -1145,12 +1467,14 @@ function wireSource() {
         } catch (e) { toast('error', e.message); }
     });
     const bindFile = (slot, btn, input) => {
-        $el(btn)?.addEventListener('click', () => $el(input).click());
+        $el(btn)?.addEventListener('click', () => { if (active()) $el(input)?.click(); });
         $el(input)?.addEventListener('change', async function () {
             const f = this.files?.[0]; this.value = '';
-            if (!f) return;
-            try { acceptPreset(parseJsonLoose(await f.text()), slot, f.name.replace(/\.json$/i, ''), 'file'); }
-            catch (e) { toast('error', '读文件失败：' + e.message); }
+            if (!f || !active()) return;
+            cancelUpdaterReads();
+            const scope = updaterReadScope();
+            try { const text = await f.text(); if (updaterReadCurrent(scope)) acceptPreset(parseJsonLoose(text), slot, f.name.replace(/\.json$/i, ''), 'file'); }
+            catch (e) { if (updaterReadCurrent(scope)) toast('error', '读文件失败：' + e.message); }
         });
     };
     bindFile('mine', '#ywpu-mine-file', '#ywpu-mine-input');
@@ -1165,15 +1489,18 @@ function wireSource() {
         row.addEventListener('drop', async (e) => {
             e.preventDefault();
             const f = e.dataTransfer?.files?.[0];
-            if (!f) return;
-            try { acceptPreset(parseJsonLoose(await f.text()), 'next', f.name.replace(/\.json$/i, ''), 'file'); }
-            catch (err) { toast('error', '读文件失败：' + err.message); }
+            if (!f || !active()) return;
+            cancelUpdaterReads();
+            const scope = updaterReadScope();
+            try { const text = await f.text(); if (updaterReadCurrent(scope)) acceptPreset(parseJsonLoose(text), 'next', f.name.replace(/\.json$/i, ''), 'file'); }
+            catch (err) { if (updaterReadCurrent(scope)) toast('error', '读文件失败：' + err.message); }
         });
     }
 }
 
 /** 源变了 → 旧结果作废 */
 function invalidate() {
+    cancelUpdaterReads();
     S.analysis = null; S.decisions = {}; S.params = {}; S.expanded = {}; S.unpair = []; S.posMap = null;
     S.lock = null; S.lockDeclared = ''; S.lockBusy = ''; S.lockPending = false;   // ★Wave B2/E2：源变了 ⇒ 三状态判定也作废（别留旧读数）
     /* ★W17C-2：源一变 ⇒ `S.decisions` 清空（上面那行）⇒ 那两颗"一键"的高亮自然灭
@@ -1187,6 +1514,8 @@ function acceptPreset(obj, slot, name, from = 'file') {
         return false;
     }
     S[slot] = obj; S[slot + 'Name'] = name || ''; S[slot + 'From'] = from;
+    /* ★B2：① 来自已安装预设时，记下**文件原样**摘要（不是混了 live 的 obj）。 */
+    if (slot === 'mine') S.mineRawDigest = (from === 'preset' && name) ? rawDigestOfPresetFile(name) : '';
     invalidate(); renderSource();
     toast('success', slotLabel(slot) + '已载入：' + (name || '（未命名）') + '（' + obj.prompts.length + ' 条）');
     return true;
@@ -1208,12 +1537,24 @@ function rereadSlot(slot) {
     let fresh = null;
     try { fresh = readPreset(out.name); } catch (e) { out.why = '读不出来：' + ((e && e.message) || e); return out; }
     if (!usablePreset(fresh)) { out.why = '读出来的不是一份能用的预设（没有 prompts）'; return out; }
+    /* ★B2：① 这个槽位还要看**文件原样**——`readPreset()` 会混入 live，外窗改了文件而 page live 仍旧值时
+       它看不出来。文件原样跟开对比基线不一致 ⇒ 直接用文件原样作为 fresh（别让 live 把外改盖回去）。 */
+    let raw = null;
+    if (slot === 'mine') {
+        raw = readPresetFile(out.name);
+        out.raw = raw ? presetDigestOf(raw) : '';
+    }
+    const rawChanged = slot === 'mine' && !!raw && !!S.mineRawDigest && !!out.raw && out.raw !== S.mineRawDigest;
+    if (rawChanged) fresh = JSON.parse(JSON.stringify(raw));
     out.ok = true;
     out.before = presetDigestOf(S[slot]);
     out.after = presetDigestOf(fresh);
-    if (slotNeedsReread(out.before, out.after)) {
+    if (slotNeedsReread(out.before, out.after) || rawChanged) {
         S[slot] = fresh;
+        if (slot === 'mine') S.mineRawDigest = out.raw || presetDigestOf(fresh);
         out.changed = true;
+    } else if (slot === 'mine' && !S.mineRawDigest && out.raw) {
+        S.mineRawDigest = out.raw;                 // 老会话第一次重读：把基线补上
     }
     return out;
 }
@@ -1234,6 +1575,46 @@ function mineChangedSinceAnalysis() {
     toast('warning', '①「' + S.mineName + '」你刚在酒馆里改过 —— 已经按**最新内容**重算了一遍对比；'
         + '看一眼有没有要重新挑的，再点一次这个按钮。', { timeOut: 12000 });
     console.info('[预设更新器] 写盘前发现 ① 被改过 ⇒ 不写盘，先重算', { 名字: S.mineName, 条目数: (S.mine && S.mine.prompts || []).length, 摘要: presetDigestTag(S.mine) });
+    return true;
+}
+
+/** ★★M02：**确认框开着的时候，用户又在酒馆面板里改了 ①**（只进内存、没点「更新预设」）——
+ *  这时 `mineChangedSinceAnalysis()` 看的是**文件那本账**，文件没变 ⇒ 它放行；而我们的 `S.mine` 是开对比时的
+ *  旧快照 ⇒ 缝入会把用户确认期间的新改动**悄悄吃掉**。
+ *  判据：① 仍是盘上那份 + 它仍是当前选中的那份 + **当前内存设置投影出的完整持久化正文**
+ *  与 `S.mine` 的摘要不相等 ⇒ 拦下（true），不写盘，提示先保存再重来。
+ *  ★读不到内存在设置 / 读不到完整摘要 ⇒ **也拦**（"读失败不能当没改过"，评审 §3 的口径），
+ *    宁可让用户多点一次，也不拿旧快照覆盖。
+ *  ★目标不是当前选中的那份时返回 false：内存 live 与它无关，文件那道 `mineChangedSinceAnalysis` 负责。
+ *  @returns {Promise<boolean>} true = 拦下（调用方必须直接 return，不许写盘） */
+async function liveChangedSinceAnalysis() {
+    if (!S.analysis || S.mineFrom !== 'preset' || !S.mine) return false;
+    const name = String(S.mineName || '');
+    if (!name) return false;
+    const pm = presetManager();
+    if (!pm) {
+        toast('warning', '取不到酒馆的预设管理器，没法确认「' + name + '」在确认期间有没有被改过 —— 这次先不写盘。');
+        return true;
+    }
+    let sel = '';
+    try { sel = (typeof pm.getSelectedPresetName === 'function') ? String(pm.getSelectedPresetName() || '') : ''; } catch (e) { sel = ''; }
+    if (sel !== name) return false;
+    const ctx = window.SillyTavern?.getContext?.();
+    const live = ctx && ctx.chatCompletionSettings;
+    if (!live) return false;
+    const file = readPresetFile(name) || S.mine;
+    let payload = null;
+    try { payload = await chatCompletionPayloadOf(live, file); } catch (e) { payload = null; }
+    const dLive = payload ? presetDigestOf(payload) : '';
+    const dMine = presetDigestOf(S.mine);
+    if (!dLive || !dMine) {
+        toast('warning', '读不到「' + name + '」现在的完整内容，没法确认你有没有在确认期间改过它 —— 这次先不写盘。', { timeOut: 12000 });
+        return true;
+    }
+    if (dLive === dMine) return false;
+    toast('warning', '「' + name + '」在确认期间又被改过（酒馆面板里的改动还没保存）。这次先不写盘：'
+        + '先点「更新预设」保存，再重新对比一次。', { timeOut: 12000 });
+    console.info('[预设更新器] 确认期间 ① 的内存内容变了 ⇒ 不写盘', { 名字: name, 摘要: presetDigestTag(payload) });
     return true;
 }
 
@@ -2037,18 +2418,21 @@ function applyAutoInkAll() { for (const sel of INK_ROOTS) { const el = $el(sel);
        （用户不会看到"先闪一下错色再变"；实测①换完立刻量 = 全达标）；
      · 只有真的动过 documentElement 的 style 才触发，且 `applyAutoInk` 自己有 key 缓存 ⇒ 没变就是零开销。
    ★没新造第二套机制：回调里调的就是 `applyAutoInkAll()`（与 renderAll 末尾同一个入口）。 */
-let _themeWatched = false;
 function watchThemeChange() {
-    if (_themeWatched) return false;
+    const mount = currentUpdaterMount();
+    if (!mount || mount.observer) return false;
     try {
         const de = document.documentElement;
         if (!de || typeof MutationObserver !== 'function') return false;
-        new MutationObserver(() => {
+        mount.observer = new MutationObserver((records) => {
+            if (currentUpdaterMount() !== mount) return;
+            if (!records.some(r => r.type === 'attributes' && r.target === de)) return;
             try { applyAutoInkAll(); } catch (e) { /* 算不出来就照主题原色显示，不影响功能 */ }
-        }).observe(de, { attributes: true, attributeFilter: ['style'] });
-        _themeWatched = true;
-    } catch (e) { /* 挂不上就退回老行为（下次 render 时重算），不报错、不影响任何功能 */ }
-    return _themeWatched;
+        });
+        // Child-list delivery also releases a detached host, without a polling timer.
+        mount.observer.observe(de, { attributes: true, attributeFilter: ['style'], childList: true, subtree: true });
+    } catch (e) { mount.observer?.disconnect(); mount.observer = null; }
+    return !!mount.observer;
 }
 
 /** 把用户选的颜色写到各个容器的 CSS 变量上（不选就用内置默认值）
@@ -5422,12 +5806,8 @@ function assembleMergeSeq(it, seq, excluded) {
         out.splice(at, 0, { block: bl.i, side });
         if (at <= head) head++;
     }
-    const lines = [];
-    for (const s of out) {
-        const bl = blocks.find(b => b.i === s.block);
-        if (bl) lines.push(...pieceLines(bl, s.side));
-    }
-    return lines.join('\n');
+    // pieceLines 仅供展示。写回交给内核原文跨度拼装，保留共同区及两侧片的原始字节。
+    return PM.assembleBlockSequence(blocks, out, 'mine');
 }
 /** 顺序 → `blockDecision`：每一处取"这一处被点到的那一版"（同一处点了两版 ⇒ 取最后点的那一版）。
  *  只为让内核「每一处都挑过才算完」那道闸照旧管得住半成品（见本段顶部 ★）。 */
@@ -5620,7 +6000,8 @@ function decideProgress(it, dec) {
     if (!it || !it.mine || !it.next) return { total: 0, decided: 0, left: 0 };
     const changes = blocksOf(it).filter(b => b.changed);
     const bd = dec.blockDecision || {};
-    const whole = dec.source === 'mine' || dec.source === 'next' || dec.source === 'both';
+    const whole = dec.source === 'mine' || dec.source === 'next' || dec.source === 'both'
+        || (dec.source === 'custom' && dec.customEdited && typeof dec.customText === 'string');
     const picked = (v) => v === 'mine' || v === 'next' || v === 'both';
     const contentDecided = whole ? changes.length : changes.filter(b => picked(bd[b.i])).length;
     const paired = !!(it && it.mine && it.next);
@@ -6456,7 +6837,7 @@ function bindListEvents(host) {
         if (!ta) return;
         const key = ta.getAttribute('data-custom');
         const v = ta.value;
-        S.decisions[key] = { ...(S.decisions[key] || {}), customText: v, customEdited: !!v };
+        S.decisions[key] = { ...(S.decisions[key] || {}), source: 'custom', customText: v, customEdited: true };
         // v4.2：右边那行"结果说明"文字已经删掉了 → 这里只刷计数
         syncCounters();
     };
@@ -7802,8 +8183,54 @@ async function askPendingAnyway(verb) {
     ], { ok: '继续' + verb, cancel: '回去挑' });
 }
 
+/* ★★M02：**本页单写者闸**。三个会写盘/会弹确认的动作（生成新预设 / 缝入当前 / 应用更新包）从入口到收尾
+   只允许一个在飞 —— 改前 `S.busy` 是"确认框点完之后"才置位，两次快速点击（或脚本/探针并发调用）能同时走到
+   备份/保存，两个异步保存的目标可能不同、后完成的旧请求会把先完成的新内容盖掉。
+   ★这只管**本页**；别的窗口/外部进程的并发见 preset-save.js 文件头的保护范围。 */
+let activePresetWrite = null;
+function beginPresetWrite(op) {
+    if (activePresetWrite) return null;
+    const token = { op: String(op || ''), at: Date.now() };
+    activePresetWrite = token;
+    return token;
+}
+function endPresetWrite(token) { if (activePresetWrite === token) activePresetWrite = null; }
+
+/* ★★M02：**确认框期间的名字预留**。用户在确认框上可能停很久；这段时间里商店下载/另一个探针如果也选到
+   同一个"还不存在的名字"，两边会先后写同一个文件（后写覆盖先写）。所以名字一旦定下（弹窗前）就在本页
+   同步预留，`uniquePresetName()` 会把预留键当成已占用；流程结束（成功/取消/异常）在 wrapper 的 finally 释放。
+   ★这只管本页；跨页/跨进程的最终写盘竞态见 preset-save.js 文件头。 */
+let dialogNameReservation = null;
+function reserveDialogName(name, opts) {
+    releaseDialogName();
+    const token = {};
+    if (!reservePresetName(name, token, opts)) return false;
+    dialogNameReservation = { name, token, opts };
+    return true;
+}
+function moveDialogName(name, opts) { return reserveDialogName(name, opts); }
+function releaseDialogName() {
+    if (!dialogNameReservation) return;
+    try { releasePresetName(dialogNameReservation.name, dialogNameReservation.token, dialogNameReservation.opts); } catch (e) { /* ignore */ }
+    dialogNameReservation = null;
+}
+
 async function doGenerate() {
+    if (S.busy || activePresetWrite) return;
+    const gate = beginPresetWrite('generate');
+    if (!gate) return;
+    try { return await doGenerateInner(); }
+    finally { releaseDialogName(); endPresetWrite(gate); }
+}
+
+async function doGenerateInner() {
     if (S.busy) return;
+    /* ★★feedback11（2026-11-13）：**进入任何 await 之前先冻住这次商店会话**。
+       下面 `saveCurrentPresetFirst()` / `liveChangedSinceAnalysis()` / 确认框都会 await；期间用户可能
+       点开另一张卡（`openStorePack` 换掉 S.store）。写盘成功后必须回传**这次打开的卡**的 rev/fp，
+       不能读那时候的全局 S.store（会把另一张卡记成已缝）。 */
+    const storeRef = S.store;
+    const storeContext = storeRef ? { ...storeRef } : null;
     // ★M11（跨批契约）：预览（伪缝入）模式 —— **绝不写盘**（按钮已 disabled，这里再兜一道，脚本/接口也绕不过去）
     if (S.preview) { toast('info', '这是预览（伪缝入）：不会真的写盘。想真缝就到商店卡片上点「缝入」'); return; }
     /* ★★W123（作者 2026-10-08 拍板 · 与 stitchIntoCurrent 同一句口径）：**缝（生成）之前先把在用的这份存一次** ——
@@ -7813,6 +8240,8 @@ async function doGenerate() {
        又被改过，生成出来的新预设会**缺掉他刚改的那些**（另存新名不覆盖原文件，但"看着像没改过"同样是坑）。
        先拦、先按最新内容重算，让他看一眼再点。 */
     if (mineChangedSinceAnalysis()) return;
+    /* ★M02：确认框还没弹之前也查一次"内存里有没有没保存的改动"（用户可能在上一步的 await 里改了面板）。 */
+    if (await liveChangedSinceAnalysis()) return;
     /* ★W29（作者 2026-09-25 拍板，走"甲"）：**没处理完 = 问一句，不再直接拦**。
        改前这里读 `PM.pendingCount(...) > 0` 就 toast + `return`（"点不动"）；
        现在改成弹确认框：点「继续生成」照原流程走（内核兜底），点「回去挑」跳回第一条没处理的、一个字不写。
@@ -7823,20 +8252,59 @@ async function doGenerate() {
     }
     const typed = (($el('#ywpu-name')?.value || S.newName || '') + '').trim();
     if (!typed) { toast('warning', '给新预设起个名字'); return; }
-    // ★P7（§15）：从商店来的这条路**绝不覆盖同名** —— 撞名自动加（2）（3）…（跟 P1/P6 的另存新名同一个口径）。
-    //   别的路仍是老规矩（撞名问一句 + 覆盖前备份），一个字没动。
-    const names = listPresetNames();
-    let name = typed;
-    if (S.store) { let n = 2; while (names.includes(name)) { name = typed + '（' + n + '）'; n++; } }
+    /* ★★M02：**先按宿主 sanitize-filename@1.6.3 的规则清洗，再按清洗后的文件名查重**。
+       改前只拿原始字符串 `names.includes(typed)` ⇒ `Neutral:Name` 看着不重名，服务端却落成
+       `NeutralName.json`，把已有的同名预设**直接覆盖**；成功提示/切换还拿原始名去找一份不存在的预设。
+       · 商店那条路（S.store）**绝不覆盖同名**：查重撞了就在清洗后的基名上加（2）（3）…；
+       · 普通那条路仍保持"撞名问一句 + 覆盖前备份"的老行为（作者口径：正常保存就是覆盖同一份，不是无限另存）。 */
+    const nameOpts = presetNameOpts();
+    const info = presetNameInfo(typed, nameOpts);
+    if (!info.ok) { toast('warning', info.why); return; }
+    const names = strictPresetNamesForWrite();
+    if (!names) return;
+    let name = info.canonical;
+    let exists = presetNameInList(name, names, nameOpts);
+    let storeRenamed = false;
+    if (storeContext && exists) {
+        const u = uniquePresetName(typed, names, nameOpts);
+        if (!u.ok) { toast('warning', u.why); return; }
+        name = u.name;
+        exists = false;
+        storeRenamed = !!u.renamed;
+    }
     S.newName = name;
-    const exists = names.includes(name);
-    // ★S1-2：原来是 window.confirm（可能被浏览器静默拦下 → 点了没反应）→ 走酒馆原生弹窗
-    if (!S.store && exists) {
+    /* ★M02：弹窗之前就把名字**同步预留**下来；如果本页另一个流程刚占了它，换一个空闲名（不让两个确认框
+       指向同一个还不存在的文件）。 */
+    if (!reserveDialogName(name, nameOpts)) {
+        const namesNow = strictPresetNamesForWrite();
+        if (!namesNow) return;
+        const u2 = uniquePresetName(typed, namesNow, nameOpts);
+        if (!u2.ok) { toast('warning', u2.why); return; }
+        name = u2.name;
+        S.newName = name;
+        exists = presetNameInList(name, namesNow, nameOpts);
+        storeRenamed = true;
+        if (!reserveDialogName(name, nameOpts)) { toast('warning', '另一个保存正在用这个名字 —— 这次先不生成。', { timeOut: 10000 }); return; }
+    }
+    const sanitizeLine = (info.sanitized || info.truncated)
+        ? '（你输入的「' + typed + '」里有些字符不能进文件名' + (info.truncated ? '、或名字太长会被截断' : '') + ' —— 酒馆实际会存成「' + name + '」。）'
+        : '';
+    /* 覆盖确认是异步的（弹窗可能开很久）：**确认前**先把目标当前内容的完整摘要记下来，等摘要框也点完、
+       真正要写之前再比一次；期间目标被别的窗口/别的保存改过 ⇒ 这次不覆盖。 */
+    let targetDigestAtEntry = '';
+    if (!storeContext && exists) {
+        const before = readPresetFile(name);
+        targetDigestAtEntry = before ? presetDigestOf(before) : '';
+        if (!targetDigestAtEntry) {
+            toast('warning', '酒馆里有「' + name + '」这个名字，但读不到它的原文（没法先备份）—— 这次先不覆盖：到预设面板确认一下，或者换个名字。', { timeOut: 12000 });
+            return;
+        }
         const goOver = await askYes('已经有一个同名的预设了', [
             '已经有一个叫「' + name + '」的预设了。',
+            sanitizeLine,
             '继续会覆盖它（你现在正在用的那份不会被动）。',
-            '覆盖前会自动把它的备份 JSON 下到你的下载目录。',
-        ], { ok: '覆盖它', cancel: '算了' });
+            '覆盖前会先把它的完整原文另存成一份**备份预设**（在预设下拉里能选到它）；**备份没成功就不覆盖**。',
+        ].filter(Boolean), { ok: '覆盖它', cancel: '算了' });
         if (!goOver) { toast('info', '好，这次不生成 —— 那个同名的预设一个字都没动'); return; }
     }
 
@@ -7856,7 +8324,8 @@ async function doGenerate() {
         const sum = PM.summarizeMerge(preset, S.next, S.mine);
 
         const lines = [
-            '将生成新预设：「' + name + '」' + (S.store && name !== typed ? '\n（本来叫「' + typed + '」，已经有同名的了 —— 商店这条路不覆盖任何同名，所以给你换个名字）' : ''),
+            '将生成新预设：「' + name + '」'
+                + ((storeRenamed || sanitizeLine) ? '\n' + (storeRenamed ? '（本来叫「' + typed + '」，已经有同名的了 —— 商店这条路不覆盖任何同名，所以给你换个名字）' : sanitizeLine) : ''),
             '',
             /* ★★D2：**界面口径 = 可见条目数**（内核 `summarizeMerge().visible*`，与对比页/商店**同一个判据**）。
                改前印的是 `prompts` 全量（含 ST 里隐藏的幽灵 —— 他这份 22 条）⇒ 数字比列表里多几十条，看着像"多出来一堆"。 */
@@ -7889,15 +8358,90 @@ async function doGenerate() {
             return;
         }
 
-        // 只有"要覆盖掉一个已存在的预设"时才自动备份：其余情况我们从不动任何已有预设，备份是噪音
-        if (exists) {
-            try {
-                const old = readPreset(name);
-                if (downloadJson(name + '.覆盖前备份-' + nowStamp() + '.json', old)) toast('info', '已把被覆盖的「' + name + '」备份到下载目录');
-            } catch (e) { /* 读不到就算了，继续生成 */ }
+        /* ★★M02：**两个确认框都点完了** —— 真正写盘前按最新列表/最新目标内容再核一遍：
+           · 要覆盖的那份（确认前存在）在确认期间被改过/读不到 ⇒ 不写（绝不拿旧备份/旧摘要盖新内容）；
+           · 确认前不存在、但现在被别人创建了 ⇒ 没拿到覆盖授权 ⇒ 自动改成（2）…（商店/普通都安全）；
+           · 商店这条路永远不覆盖：确认期间出现同名 ⇒ 重新取一个空闲名。 */
+        if (mineChangedSinceAnalysis()) return;
+        if (await liveChangedSinceAnalysis()) return;
+        const namesFinal = strictPresetNamesForWrite();
+        if (!namesFinal) return;
+        let existsFinal = presetNameInList(name, namesFinal, nameOpts);
+        let shouldBackup = !!targetDigestAtEntry;
+        if (storeContext || !targetDigestAtEntry) {
+            if (existsFinal) {
+                const u = uniquePresetName(typed, namesFinal, nameOpts);
+                if (!u.ok) { toast('warning', u.why); return; }
+                name = u.name;
+                S.newName = name;
+                existsFinal = false;
+                shouldBackup = false;
+                if (!moveDialogName(name, nameOpts)) { toast('warning', '另一个保存刚占了这个新名字 —— 这次先不写，再点一次。', { timeOut: 10000 }); return; }
+                toast('info', '刚有同名的预设出现了 —— 这次不覆盖它，改存成「' + name + '」。', { timeOut: 10000 });
+            }
+        } else if (!existsFinal) {
+            /* 用户同意覆盖的那份在确认期间被删/改名了 ⇒ 没有东西可覆盖，也没有备份可做；当新文件写。 */
+            shouldBackup = false;
+            toast('info', '你要覆盖的「' + name + '」在确认期间不在了 —— 这次按新预设写。', { timeOut: 10000 });
+        } else {
+            const nowTarget = readPresetFile(name);
+            const dNow = nowTarget ? presetDigestOf(nowTarget) : '';
+            if (!dNow || dNow !== targetDigestAtEntry) {
+                toast('warning', '你要覆盖的「' + name + '」在你确认期间被改过（或读不到原文）—— 这次先不写：再点一次，让它按最新内容重来。', { timeOut: 14000 });
+                return;
+            }
+        }
+        // 只有"要覆盖掉一个已存在的预设"时才自动备份：其余情况我们从不动任何已有预设，备份是噪音。
+        // ★M02：备份读失败 / 备份预设写失败 / 读回不一致 **一律停止覆盖**（改前是 catch 吞掉继续写）。
+        if (shouldBackup) {
+            let old = null;
+            try { old = readPresetFile(name); } catch (e) { old = null; }
+            if (!old) { toast('error', '覆盖前读不到「' + name + '」的原文 —— 没有备份就不覆盖，这次一个字都没写。'); return; }
+            const dOld = presetDigestOf(old);
+            if (!dOld || dOld !== targetDigestAtEntry) {
+                toast('warning', '「' + name + '」在备份前又被改过 —— 这次先不写：再点一次让它按最新内容重来。', { timeOut: 14000 });
+                return;
+            }
+            const bak = await createHostBackupPreset(name, old, nameOpts);
+            if (!bak.ok) {
+                toast('error', '覆盖前没做成备份：' + bak.why + ' —— 这次一个字都没写。', { timeOut: 14000 });
+                return;
+            }
+            toast('info', '已把被覆盖的「' + name + '」备份成预设「' + bak.name + '」（在预设下拉里能选到它）');
+        }
+        /* ★★B4（独立复查 2026-11-11）：`createHostBackupPreset` 是 **await** —— 备份写盘期间外部窗口仍可能
+           把目标改成 NEW。改前备份完只重读列表名就直接 save ⇒ 拿旧 merged 覆盖外改 NEW，备份还是旧的。
+           这里在**备份成功后、主 save 前**再读一次**文件原样**，必须仍等于覆盖确认时记下的 targetDigestAtEntry；
+           读失败 / 不一致 ⇒ 主文件 0 写、人话中止（备份已经在了，可退回）。 */
+        if (shouldBackup) {
+            const finalTarget = readPresetFile(name);
+            const dFinal = finalTarget ? presetDigestOf(finalTarget) : '';
+            if (!dFinal || dFinal !== targetDigestAtEntry) {
+                toast('warning', '备份完成后、写盘前「' + name + '」又被改过（或读不到原文）—— 这次**主文件一个字都没写**：'
+                    + '重新点一次，让它按最新内容重来（你已经有了覆盖前备份，不会丢旧内容）。', { timeOut: 16000 });
+                console.info('[预设更新器] B4 备份 await 期间目标被改 ⇒ 主文件不写', { 名字: name, 现在: dFinal ? dFinal.slice(0, 24) : '(空)', 基线: String(targetDigestAtEntry || '').slice(0, 24) });
+                return;
+            }
         }
 
+        const beforeSaveNames = strictPresetNamesForWrite();
+        if (!beforeSaveNames) return;
         await savePreset(name, preset);
+        /* 宿主可能把名字清洗成别的（未来 sanitize-filename 升级）⇒ 以保存后的列表为准；
+           列表里既没有首选名、也没有唯一新增名 ⇒ **不把"接口返回了"当成功**：不清选择、不关窗。 */
+        const actualName = resolveSavedPresetName(name, beforeSaveNames);
+        let verified = false;
+        try { verified = listPresetNames().includes(actualName); } catch (e) { verified = false; }
+        if (!verified) {
+            toast('warning', '保存接口返回了，但预设列表里暂时没看到「' + actualName + '」—— 先刷新酒馆确认；这次不清掉你挑的选择，也不当作完全成功。', { timeOut: 15000 });
+            S.newName = actualName;
+            return;
+        }
+        if (actualName !== name) {
+            toast('info', '酒馆把名字清洗成了「' + actualName + '」。', { timeOut: 8000 });
+            name = actualName;
+            S.newName = name;
+        }
         S.extraEntries = [];          // 已经写进新预设了，清掉避免下次重复缝
         S.selIdents = []; S.orderVisibleIds = null;    // ★W9-5：选择清了 ⇒ "看得见的那份"一起作废（下次渲染重算）
         S.lastSaved = name;
@@ -7909,8 +8453,9 @@ async function doGenerate() {
         toast('success', '已生成「' + name + '」——' + savedWhereText(name, '（你原来那份没动，还在下拉里）'));
         // ★P7（§15）：商店来的这次缝，写盘成功后回商店记账（"已缝入"标记 + 服务端 sews 计数 + 提示"你缝过的这条变了"）。
         //   商店模块没加载起来（发布隔离）→ 静默跳过，只留痕：预设已经写好了，不能因为记账失败就报错。
-        notifyStoreStitched(name);
-        S.store = null;              // 这一次商店的会话结束了（下次点卡片再建）
+        notifyStoreStitched(name, storeContext);   // ★feedback11：用打开时那份副本，不读此刻的全局 S.store
+        /* ★feedback11：只清**这一次**那个会话；期间若已换成另一张卡（identity 不同）不许清别人的。 */
+        if (S.store === storeRef) S.store = null;  // 这一次商店的会话结束了（下次点卡片再建）
         // ★F2：商店「一键更新全部」带过来的一批 → 写盘成功后**自动带出下一张**（没有批量就照常关窗）
         const advanced = storeBatchAdvance('这一张已经写好了：' + name);
         if (!advanced) closeWindow();
@@ -7924,11 +8469,18 @@ async function doGenerate() {
 }
 
 /** ★P7：写盘成功后回商店记账（生成 / 缝入当前预设**两条路共用**，一个字不差）。 */
-function notifyStoreStitched(name) {
-    if (!S.store) return;
+function notifyStoreStitched(name, storeContext) {
+    /* ★★feedback11：第二参**显式传入**时一律用它（哪怕传 null = 这次不是商店会话 / 已过期），
+       绝不回退到此刻的全局 `S.store` —— 那是"await 期间换了卡就记错卡"的入口。
+       不传第二参的老调用才退回全局（兼容）。 */
+    const ctx = (storeContext !== undefined) ? storeContext : S.store;
+    if (!ctx) return;
     try {
         const sp = (typeof window !== 'undefined') ? window.__ywStoreApi : null;
-        if (sp && typeof sp.stitched === 'function') sp.stitched(S.store.cardId, name);
+        /* ★★feedback11：第三参 = **这次会话打开对比时那一版的不可变快照**（cardRev/cardFp）。
+           商店拿它当"真缝进去的是第几版"的唯一证据；老商店不认第三参也无害（多一个对象参数）。 */
+        const snap = { rev: Math.max(0, Number(ctx.cardRev) || 0), fp: String(ctx.cardFp || '') };
+        if (sp && typeof sp.stitched === 'function') sp.stitched(ctx.cardId, name, snap);
         else console.warn('[预设更新器] 商店模块没加载起来 → 这次没回商店记账（预设已写好，不影响）');
     } catch (e) { console.warn('[预设更新器] 回商店记账失败（预设已写好，不影响）', e); }
 }
@@ -7967,18 +8519,39 @@ async function stitchWrite(o) {
     const merged = o && o.merged;
     const io = (o && o.io) || {};
     const wantBackup = !!(o && o.backup === true);        // ★B12：默认不备份（只有显式 true 才备份）
-    const list = () => { try { return (typeof io.list === 'function' ? io.list() : []) || []; } catch (e) { return []; } };
+    const listLoose = () => { try { return (typeof io.list === 'function' ? io.list() : []) || []; } catch (e) { return []; } };
     if (!name) return { ok: false, why: '没有"你正在用的那份预设"的名字' };
     if (!merged || typeof merged !== 'object' || !Array.isArray(merged.prompts)) return { ok: false, why: '要写进去的内容不完整（没有 prompts）' };
     if (typeof io.read !== 'function' || typeof io.save !== 'function') return { ok: false, why: '写盘接口不齐（缺 read / save）' };
 
-    const names = list();
+    /* ★B1：要备份时，备份名必须基于**严格读到的**列表（读失败不能当空 ⇒ 否则可能覆盖一个已有备份）。 */
+    let names = [];
+    if (wantBackup) {
+        try { names = (typeof io.list === 'function' ? io.list() : []); }
+        catch (e) { return { ok: false, why: '读不到预设列表（不能保证备份名不撞已有文件）—— 一个字都没写' }; }
+        if (!Array.isArray(names)) return { ok: false, why: '预设列表不是数组（不能保证备份名不撞已有文件）—— 一个字都没写' };
+    } else {
+        names = listLoose();
+    }
     const backupName = stitchBackupName(name, names, o && o.today);
+    const digestOf = (o && typeof o.digestOf === 'function') ? o.digestOf : null;
+    const expectDigest = String((o && o.expectDigest) || '');
 
     // ① 先把原文读出来（读不到就绝不往下走：没有原文就不知道会不会写坏东西）
     let original = null;
     try { original = io.read(name); } catch (e) { return { ok: false, why: '读不到 ' + name + '的原文（' + ((e && e.message) || e) + '）—— 一个字都没写' }; }
     if (!original || typeof original !== 'object') return { ok: false, why: '读不到 ' + name + '的原文 —— 一个字都没写' };
+
+    /* ★★M02：确认框点完之后才读原文 —— 如果它已经不是开对比时那份（用户在别处保存/另一个窗口写了），
+       这次覆盖就是"旧盖新"。有 expectDigest 就必须逐字节相等才往下走；算不出摘要也不写（不猜）。 */
+    let firstDigest = '';
+    if (digestOf) { try { firstDigest = String(digestOf(original) || ''); } catch (e) { firstDigest = ''; } }
+    if (expectDigest && digestOf) {
+        if (!firstDigest) return { ok: false, why: '算不出 ' + name + '原文的完整摘要 —— 没法确认它还是不是你要覆盖的那份，一个字都没写' };
+        if (firstDigest !== expectDigest) {
+            return { ok: false, why: '你要覆盖的 ' + name + ' 在确认期间被改过了（不是开对比时那份）—— 一个字都没写。重新点一次让它按最新内容重来' };
+        }
+    }
 
     // ② 勾了「同时自动备份」才备份：另存一份（新名字，绝不覆盖谁）
     if (wantBackup) {
@@ -7989,6 +8562,40 @@ async function stitchWrite(o) {
             let there = false;
             try { there = !!io.has(backupName); } catch (e) { there = false; }
             if (!there) return { ok: false, why: '备份 ' + backupName + '没落到盘上 —— 一个字都没写', backupName };
+        }
+        /* ★B2（独立复查）：列表里有名字不等于内容对 —— 备份也要**读回内容摘要**跟原文比。
+           读不到 / 不一致 ⇒ 主文件一个字都不写（createHostBackupPreset 同一口径）。 */
+        if (digestOf && typeof io.read === 'function') {
+            let back = null;
+            try { back = io.read(backupName); } catch (e) { back = null; }
+            const backDigest = back ? digestOf(back) : '';
+            const wantDigest = firstDigest || (original ? digestOf(original) : '');
+            if (!backDigest || !wantDigest || backDigest !== wantDigest) {
+                return { ok: false, backupName, backedUp: true, why: '备份读回来的内容跟原文不一致 —— 主文件一个字都没写' };
+            }
+        }
+    }
+
+    /* ★M02：真正覆盖前再读一次 —— 备份那一步也是异步的（尤其勾了备份时），期间目标如果又变了，
+       这次覆盖仍会拿旧内容盖新内容。有摘要函数就核；没有摘要函数维持老行为（纯探针兼容）。 */
+    if (digestOf) {
+        let beforeSave = null;
+        try { beforeSave = io.read(name); } catch (e) { return { ok: false, backupName: wantBackup ? backupName : '', backedUp: wantBackup, why: '写之前重读不到 ' + name + '（' + ((e && e.message) || e) + '）—— 一个字都没写' }; }
+        if (!beforeSave || typeof beforeSave !== 'object') {
+            return { ok: false, backupName: wantBackup ? backupName : '', backedUp: wantBackup, why: '写之前重读不到 ' + name + ' —— 一个字都没写' };
+        }
+        let secondDigest = '';
+        try { secondDigest = String(digestOf(beforeSave) || ''); } catch (e) { secondDigest = ''; }
+        const base = expectDigest || firstDigest;
+        if (base) {
+            if (!secondDigest) return { ok: false, backupName: wantBackup ? backupName : '', backedUp: wantBackup, why: '写之前算不出 ' + name + '的完整摘要 —— 没法确认它没被改过，一个字都没写' };
+            if (secondDigest !== base) {
+                return {
+                    ok: false, backupName: wantBackup ? backupName : '', backedUp: wantBackup,
+                    why: '准备/备份期间 ' + name + ' 被改过了 —— 主文件一个字都没写'
+                        + (wantBackup ? '（你勾的备份 ' + backupName + '已经在了，想退回原样就选它）' : ''),
+                };
+            }
         }
     }
 
@@ -8013,7 +8620,19 @@ async function stitchWrite(o) {
  *    "退路开关要和危险动作在同一次交互里"）。底栏那颗已经删掉，底栏因此也少一行。
  *    —— 用户看到的：一眼看清后果（覆盖原文件 / 没有副本可退）+ 当场就能勾上退路，点「确定」就走。 */
 async function stitchIntoCurrent() {
+    if (S.busy || activePresetWrite) return;
+    const gate = beginPresetWrite('stitch');
+    if (!gate) return;
+    try { return await stitchIntoCurrentInner(); }
+    finally { endPresetWrite(gate); }
+}
+
+async function stitchIntoCurrentInner() {
     if (S.busy) return;
+    /* ★★feedback11（2026-11-13）：与 doGenerateInner 同一条纪律 —— **进入任何 await 之前冻住会话**。
+       下面 `saveCurrentPresetFirst()` / `liveChangedSinceAnalysis()` / 确认框期间 S.store 可能被换卡。 */
+    const storeRef = S.store;
+    const storeContext = storeRef ? { ...storeRef } : null;
     if (S.preview) { toast('info', '这是预览（伪缝入）：不会真的写盘。想真缝就到商店卡片上点「缝入」'); return; }   // ★M11：预览模式绝不写盘
     if (!S.analysis) { toast('warning', '先点「开始对比」'); return; }
     /* ★★W123（作者 2026-10-08 拍板："缝预设之前 先帮你们 保存预设"）：**缝之前先把在用的这份存一次** ——
@@ -8024,6 +8643,8 @@ async function stitchIntoCurrent() {
     /* ★W19A ①：**写盘前的同一族防线** —— ① 那份预设如果在开对比之后又被改过（用户在酒馆里改的），
        这一缝就是拿旧快照去**覆盖原文件** ⇒ 他刚改的那些会被悄悄吃掉。所以先拦、先重算、先让他看一眼。 */
     if (mineChangedSinceAnalysis()) return;
+    /* ★M02：开确认框之前先查一次"内存里有没有没保存的改动"（presave 之后用户可能又改了面板）。 */
+    if (await liveChangedSinceAnalysis()) return;
     /* ★W29（作者 2026-09-25 拍板）：与「生成新预设」**同一句判据、同一份文案**（只有动词不同）——
        这里从"拦掉"改成"问一句"。点「回去挑」不写盘；点「继续缝入」才往下走（下面还有那道覆盖确认）。 */
     if (pendingForWrite().total > 0) {
@@ -8061,6 +8682,15 @@ async function stitchIntoCurrent() {
         extraOut: bakBox,
     });
     if (!ans.ok) { toast('info', '好，这次不缝 —— ' + name + ' 一个字都没动'); return; }
+    /* ★M02：确认框是异步的 —— 点完之后再验一次：① 的**文件**有没有被改过（mineChangedSinceAnalysis）、
+       ① 的**内存**有没有没保存的改动（liveChangedSinceAnalysis）、目标还在不在。
+       任何一条不成立都不写盘（改前只查第一道，且只在弹窗前查）。 */
+    if (mineChangedSinceAnalysis()) return;
+    if (await liveChangedSinceAnalysis()) return;
+    if (!listPresetNames().includes(name)) {
+        toast('warning', '你要缝的「' + name + '」在确认期间被改名/删了 —— 这次先不写：到「① 你的预设」重新选一份。', { timeOut: 12000 });
+        return;
+    }
     /* ★B12-fix（R9-i）：**以弹窗的返回值 `ans.extra` 为准**（askYesX 现在会把勾选回写进 extraOut，
        但这里显式读返回值，避免将来有人改了 askYesX 的语义又踩同一个坑）。 */
     S.stitchBackup = !!ans.extra;      // 确认框里那一下勾选就是这次的最终口径（写盘用它）
@@ -8079,7 +8709,12 @@ async function stitchIntoCurrent() {
         });
         const r = await stitchWrite({
             name, merged: preset, backup: doBackup,
-            io: { list: listPresetNames, read: readPreset, save: savePreset, has: (n) => listPresetNames().includes(n) },
+            /* ★M02/B2：写盘核心自己再核一次"读到的**文件原样** == 开对比时那份"（确认框点完之后才读）——
+               期间目标被外部窗口改过 ⇒ 不写；备份写完之后、覆盖之前再读一次，仍不一致 ⇒ 也不写。
+               ★io.read 用 readPresetFile（raw），不用 readPreset（会混 live，外改看不见）。 */
+            expectDigest: S.mineRawDigest || presetDigestOf(S.mine),
+            digestOf: presetDigestOf,
+            io: { list: listPresetNamesStrict, read: readPresetFile, save: savePreset, has: (n) => listPresetNamesStrict().includes(n) },
         });
         if (!r.ok) {
             toast('error', '没写进去：' + r.why);
@@ -8103,6 +8738,7 @@ async function stitchIntoCurrent() {
         S.selIdents = []; S.orderVisibleIds = null;    // ★W9-5：同上（选择清了 ⇒ "看得见的那份"一起作废）
         S.lastSaved = name;           // ★两条路都真的写盘了（有没有备份不影响"最近一次写的是谁"）
         S.mine = JSON.parse(JSON.stringify(preset));   // ① 现在就是刚写进去的内容（再对比时以它为准）
+        S.mineRawDigest = rawDigestOfPresetFile(name) || presetDigestOf(preset);
         S.mineName = name; S.mineFrom = 'preset';
         S.analysis = null; S.decisions = {}; S.blocks = {}; S.posMap = null;
         // ★留个看得见的记录（回分页也能看到"备份在哪 / 这次没备份"）
@@ -8113,10 +8749,11 @@ async function stitchIntoCurrent() {
             : '已直接改 ' + name + '，没有备份。（下次想留一份退路，在确认框里把「同时自动备份」勾上再缝）',
             { timeOut: 15000 });
         console.info('[预设更新器] 缝入当前预设', { 目标: name, 备份: r.backedUp ? r.backupName : '（没备份：用户没勾）', 条目数: r.entries });
-        notifyStoreStitched(name);
+        notifyStoreStitched(name, storeContext);   // ★feedback11：同上，回传打开对比时的会话副本
         closeWindow();
         renderSource();
-        S.store = null;
+        /* ★feedback11：只有 identity 仍是这一次那个对象才清；期间换过卡就别动新会话。 */
+        if (S.store === storeRef) S.store = null;
     } catch (e) {
         toast('error', '缝入失败：' + (e?.message || e));
         console.warn('[预设更新器] 缝入当前预设炸了', e);
@@ -8212,17 +8849,31 @@ function cachedBaseCandidates() {
 /** 云端基准清单（`GET /base/list`，每版只带一个 ~4.7 KB 全量指纹）→ 候选
  *  · 老后端 / 离线 / 商店模块没加载 / 基准库还没上线 ⇒ 空数组（D3 = **正常情形**：console.info 一行、不弹错）；
  *  · 同一次会话只问一次（`baseListCache`）；★只读，绝不写。 */
+// evolve-20261111: read continuations
+// evolve-20261111: backend isolation. No backend means no shared legacy cache namespace.
+function storeBackendScope() {
+    const sp = (typeof window !== 'undefined') ? window.__ywStoreApi : null;
+    return { base: String(sp && (typeof sp.apiBase === 'function' ? sp.apiBase() : sp.base) || '').replace(/\/+$/, ''), epoch: sp && typeof sp.apiEpoch === 'function' ? sp.apiEpoch() : 0 };
+}
+function storeBackendCurrent(scope) { const now = storeBackendScope(); return scope.base === now.base && scope.epoch === now.epoch; }
+function baseCacheStorageKey() { return BASE_CACHE_KEY + ':' + encodeURIComponent(storeBackendScope().base); }
 let baseListCache = null;
+let baseListNamespace = null;
 /** ★Wave E2（项3"按需下载"的机器判据 + 项2"缓存三路径"）：**只记账，不改行为** ——
  *  探针读 `__ywpu.lock.net()` 就能证明"两方对比全程 0 次下载""同一版第二次不再下载"。 */
 const lockNet = { list: 0, pack: 0, local: 0, cacheHit: 0, cacheWrite: 0, cacheWriteFail: 0, listTimeout: 0 };
 async function cloudBaseCandidates() {
+    const scope = updaterReadScope();
+    const backendScope = storeBackendScope();
+    const namespace = JSON.stringify(backendScope);
+    if (baseListNamespace !== namespace) { baseListCache = null; baseListNamespace = namespace; }
     if (baseListCache) return baseListCache;
     const sp = (typeof window !== 'undefined') ? window.__ywStoreApi : null;
     if (!sp || typeof sp.bases !== 'function') { baseListCache = []; return baseListCache; }
     try {
         lockNet.list++;
         const r = await sp.bases();
+        if (!updaterReadCurrent(scope) || !storeBackendCurrent(backendScope)) return [];
         const items = (r && Array.isArray(r.items)) ? r.items : [];
         baseListCache = items.map(it => ({
             kind: 'cloud', name: String(it.ver || it.title || ''), ver: verKeyOf(it.ver || it.title),
@@ -8230,6 +8881,7 @@ async function cloudBaseCandidates() {
         })).filter(c => c.ver && c.fingerprint);
         console.info('[预设更新器] 官方基准清单：' + baseListCache.length + ' 版（' + baseListCache.map(c => c.ver).join(' / ') + '）');
     } catch (e) {
+        if (!updaterReadCurrent(scope) || !storeBackendCurrent(backendScope)) return [];
         console.info('[预设更新器] 基准清单没取到（离线 / 云端还没上线）⇒ 只用本机已装的那些当候选', (e && e.message) || e);
         baseListCache = [];
     }
@@ -8243,7 +8895,7 @@ async function cloudBaseCandidates() {
  *  本机那几版看着像 X，云端清单一到可能就翻成 Y；所以先显示"正在和云端核对基准…"。
  *  ★离线 / 取不到清单（`baseListCache` 落成 `[]`）⇒ 不再 pending，本机怎么算就怎么说（D3）。 */
 function lockPendingCloud(lk) {
-    if (baseListCache !== null) return false;
+    if (baseListNamespace === JSON.stringify(storeBackendScope()) && baseListCache !== null) return false;
     const sp = (typeof window !== 'undefined') ? window.__ywStoreApi : null;
     if (!sp || typeof sp.bases !== 'function') return false;
     return !!(lk && lk.state !== 'lit');
@@ -8258,11 +8910,14 @@ function lockPendingCloud(lk) {
      · 写入失败（配额满 / 私密模式）⇒ **降级为内存缓存 + console.info 一行，不弹错**（不阻塞任何操作）。 */
 const BASE_CACHE_KEY = 'yw_pu_base_pack';
 const BASE_CACHE_MAX = 3;
+let baseMemNamespace = null;
 let baseMemCache = null;          // 持久层写不进去时的降级落点（同一次会话内照样复用）
 function baseCacheAll() {
+    const namespace = baseCacheStorageKey();
+    if (baseMemNamespace !== namespace) { baseMemCache = null; baseMemNamespace = namespace; }
     if (baseMemCache) return baseMemCache;
     try {
-        const raw = localStorage.getItem(BASE_CACHE_KEY);
+        const raw = localStorage.getItem(namespace);
         baseMemCache = raw ? (JSON.parse(raw) || {}) : {};
     } catch (e) { baseMemCache = {}; }
     if (!baseMemCache || typeof baseMemCache !== 'object') baseMemCache = {};
@@ -8282,7 +8937,7 @@ function baseCachePut(ver, preset) {
         for (const k of vers.slice(0, vers.length - BASE_CACHE_MAX)) delete all[k];
     }
     baseMemCache = all;
-    try { localStorage.setItem(BASE_CACHE_KEY, JSON.stringify(all)); lockNet.cacheWrite++; return true; }
+    try { localStorage.setItem(baseCacheStorageKey(), JSON.stringify(all)); lockNet.cacheWrite++; return true; }
     catch (e) {
         // ★配额满 / 私密模式 ⇒ 降级成内存缓存（这一次会话照样能用），**不弹错、不阻塞**
         lockNet.cacheWriteFail++;      // ★Wave E2：写失败这一路径单独记账（探针据此给"降级"的读数）
@@ -8290,7 +8945,7 @@ function baseCachePut(ver, preset) {
         return false;
     }
 }
-function baseCacheClear() { baseMemCache = {}; try { localStorage.removeItem(BASE_CACHE_KEY); } catch (e) { } return true; }
+function baseCacheClear() { baseMemNamespace = baseCacheStorageKey(); baseMemCache = {}; try { localStorage.removeItem(baseMemNamespace); } catch (e) { } return true; }
 
 /* ---------------------------------------------------------------- 判据（纯函数） */
 
@@ -8582,7 +9237,8 @@ function lockRebuildWithBase() {
 /** 状态① 要的那一版整份：**本地优先**（你本机装着那一版 → readPreset，0 网络）→ 缓存 → 云端兜底
  *  @returns {boolean} 本地/缓存这一趟拿到了没有（拿不到 = 交给异步那一支去问云端） */
 function lockApplyBaseLocal(lk) {
-    if (S.base && PM.isValidPreset(S.base) && lockKey(S.baseName) === lk.declaredVer) return true;   // 已经拿着了
+    if (S.base && PM.isValidPreset(S.base) && lockKey(S.baseName) === lk.declaredVer
+        && (S.baseFrom !== 'cloud' || S.baseBackend === storeBackendScope().base)) return true;
     const pool = (lk.candidates || []).filter(c => lockKey(c.ver || c.name) === lk.declaredVer);
     let best = null, bestScore = -1;
     for (const c of pool) {
@@ -8599,23 +9255,26 @@ function lockApplyBaseLocal(lk) {
         } catch (e) { console.warn('[预设更新器] 基准整份读不出来（退回云端）', best.name, e); }
     }
     const hit = baseCacheGet(lk.declaredVer);
-    if (hit) { S.base = hit; S.baseName = lk.declaredVer; S.baseFrom = 'cloud'; lockNet.cacheHit++; return true; }
+    if (hit) { S.base = hit; S.baseName = lk.declaredVer; S.baseFrom = 'cloud'; S.baseBackend = storeBackendScope().base; lockNet.cacheHit++; return true; }
     return false;
 }
 
 /** 状态① 的云端兜底：`GET /base/pack?ver=`（~230 KB，一次）→ **永久缓存在本机**（同一个版本一辈子只下一次） */
 async function lockApplyBaseCloud(lk) {
+    const scope = updaterReadScope();
+    const backendScope = storeBackendScope();
     const sp = (typeof window !== 'undefined') ? window.__ywStoreApi : null;
     if (!sp || typeof sp.basePack !== 'function') return false;
     try {
         lockNet.pack++;                       // ★Wave E2：**真下载**只有这一处（项3 的读数锚点）
         const r = await sp.basePack(lk.declaredVer);
+        if (!updaterReadCurrent(scope) || !storeBackendCurrent(backendScope)) return false;
         const p = r && (r.preset || r.pack || r);
         if (!PM.isValidPreset(p)) { console.info('[预设更新器] 云端那一版读不出条目（没当基准用）', lk.declaredVer); return false; }
         baseCachePut(lk.declaredVer, p);
-        S.base = p; S.baseName = lk.declaredVer; S.baseFrom = 'cloud';
+        S.base = p; S.baseName = lk.declaredVer; S.baseFrom = 'cloud'; S.baseBackend = storeBackendScope().base;
         return true;
-    } catch (e) {
+    } catch (e) { if (!updaterReadCurrent(scope) || !storeBackendCurrent(backendScope)) return false;
         console.info('[预设更新器] 云端没取到「' + lk.declaredVer + '」的整份 ⇒ 这次退回两方对比', (e && e.message) || e);
         return false;
     }
@@ -8639,6 +9298,7 @@ function lockRedraw() {
  *  @param {{declaredVer?:string, who?:string, cloud?:boolean, redraw?:boolean}} o
  *  @returns {object} S.lock */
 function lockRun(o) {
+    cancelUpdaterReads();
     const opt = o || {};
     const declared = String(opt.declaredVer || '');
     const who = String(opt.who || '这张卡');
@@ -8652,8 +9312,9 @@ function lockRun(o) {
                 capsule: '两方对比（基准没取回来）',
             });
             // 异步：先把整份要回来（拿到 → 重算 + 就地重绘）
+            const scope = updaterReadScope();
             lockApplyBaseCloud(lk).then(got => {
-                if (!got) return;
+                if (!got || !updaterReadCurrent(scope)) return;
                 const again = lockVerdict(S.mine, localBaseCandidates(), declared, { who });
                 S.lock = again;
                 if (again.state === 'lit' && lockApplyBaseLocal(again)) { lockRebuildWithBase(); lockRedraw(); }
@@ -8690,20 +9351,31 @@ const LOCK_CLOUD_WAIT_MS = 3000;
  *    迟到的结果一条都不浪费；这里只是**不让界面等它**（Wave E2 的"按需下载 / 一版一辈子下一次"一个字没动）。
  *  @returns {Promise<Array>} 云端候选（拿不到就是空数组 ⇒ 调用方照 D3 说"这次没有基准可用"） */
 function lockCloudWait(declared, who) {
+    const backendScope = storeBackendScope();
     const seq = (S.lockCloudSeq = (Number(S.lockCloudSeq) || 0) + 1);
     let settled = false;
-    const p = Promise.resolve().then(() => cloudBaseCandidates());
+    const scope = updaterReadScope();
+    const p = Promise.resolve().then(() => updaterReadCurrent(scope) ? cloudBaseCandidates() : []);
     return new Promise((resolve) => {
+        const pending = scope.mount?.pending;
+        const cancel = () => done([]);
         const t = setTimeout(() => {
             if (settled) return;
+            if (!updaterReadCurrent(scope)) { done([]); return; }
             settled = true;
+            pending?.delete(cancel);
             lockNet.listTimeout++;                       // ★只记账（探针据此给"超时"读数）
             console.info('[预设更新器] 基准清单这一趟等满 ' + Math.round(LOCK_CLOUD_WAIT_MS / 1000)
                 + ' 秒还没回来（网慢 / 连不上 / 后端挂住）⇒ 先按本机这几版照实说，界面不再等它');
             resolve([]);
         }, LOCK_CLOUD_WAIT_MS);
-        const done = (v) => { if (settled) return; settled = true; clearTimeout(t); resolve(v || []); };
-        p.then((extra) => { if (settled) return lockCloudLate(seq, extra, declared, who); done(extra); }, () => done([]));
+        const done = (v) => { if (settled) return; settled = true; clearTimeout(t); pending?.delete(cancel); resolve(v || []); };
+        pending?.add(cancel);
+        p.then((extra) => {
+            if (!updaterReadCurrent(scope) || !storeBackendCurrent(backendScope)) { done([]); return; }
+            if (settled) return lockCloudLate(seq, extra, declared, who);
+            done(extra);
+        }, () => done([]));
     });
 }
 /** 超时之后**才回来**的云端清单：只有它还是"当前那一趟"时才补算 + 就地重绘
@@ -8719,11 +9391,14 @@ function lockCloudLate(seq, extra, declared, who) {
  *  `lockRunCloud`（正常那一趟）与 `lockCloudLate`（超时后补的那一趟）**共用这一个**（原来这两件事粘在 lockRunCloud 里）。
  *  @param {boolean} forceRedraw 旗子刚从"正在核对"放下来 ⇒ 欠用户一次重画（药丸必须翻成照实那一句） */
 async function lockCloudApply(extra, declared, who, forceRedraw) {
+    const scope = updaterReadScope();
+    const backendScope = storeBackendScope();
     const cands = localBaseCandidates().concat(extra);
     let lk = lockVerdict(S.mine, cands, declared, { who });
     let rebuilt = false;
     if (lk.state === 'lit' && !lockApplyBaseLocal(lk)) {
         const got = await lockApplyBaseCloud(lk);
+        if (!updaterReadCurrent(scope) || !storeBackendCurrent(backendScope)) return;
         if (got) rebuilt = lockRebuildWithBase();       // ★Wave E2：云端到手 ⇒ 把三方分析补齐（否则 threeWay 还是 false）
         else {
             lk = Object.assign({}, lk, {
@@ -8743,6 +9418,8 @@ async function lockCloudApply(extra, declared, who, forceRedraw) {
 /** 异步那一趟：云端清单 → 重算 →（够得着就）把整份也取回来 → 就地重绘。
  *  ★网络慢/没有网都不会让界面等：这一支只在**算完有变化**时才动 DOM。 */
 async function lockRunCloud(declared, who) {
+    const scope = updaterReadScope();
+    const backendScope = storeBackendScope();
     /* ★没有云端那一层（老后端 / 商店模块没加载 / 基准库还没上线）⇒ **一个字节都不动**：
        连那句「正在核对基准…」都不出现（否则每次开一次对比都要白重绘两遍）。 */
     const sp = (typeof window !== 'undefined') ? window.__ywStoreApi : null;
@@ -8751,11 +9428,14 @@ async function lockRunCloud(declared, who) {
     /* ★Wave W12：这趟要把药丸印成"正在核对" ⇒ 等一下**欠用户一次重画**（旗子放下之后必须翻成照实那句）。 */
     const pillWasPending = !!S.lockPending;
     S.lockBusy = '正在核对基准…';
+    const owner = {}; S.lockBackendOwner = owner;
     let extra = [];
     try {
         if (isOpen()) lockRedraw();
         extra = await lockCloudWait(declared, who);
+        if (!updaterReadCurrent(scope) || !storeBackendCurrent(backendScope)) return;
     } catch (e) {
+        if (!updaterReadCurrent(scope) || !storeBackendCurrent(backendScope)) return;
         console.info('[预设更新器] 云端清单这一趟没走完（离线 / 出岔子都算"这次没有清单"）', (e && e.message) || e);
         extra = [];
     } finally {
@@ -8763,8 +9443,10 @@ async function lockRunCloud(declared, who) {
            两面旗一律在这放下。改前这两行排在 `await` **之后** ⇒ 只要上面没回来，药丸就永远印
            「正在核对基准（本机那几版还不能确定）」，而且每一次「开始对比」都会被 `startCompare()` 开头那句
            `if (S.lockBusy)` 吞掉 —— 界面上看就是"一直核对不完"。 */
-        S.lockBusy = '';
-        S.lockPending = false;               // ★Wave E2：问过了（拿到 / 没拿到 / 等超时都算问过）⇒ 不再"别说死"
+        if (updaterReadCurrent(scope) && S.lockBackendOwner === owner) {
+            S.lockBusy = '';
+            S.lockPending = false;
+        }               // ★Wave E2：问过了（拿到 / 没拿到 / 等超时都算问过）⇒ 不再"别说死"
     }
     /* ★这一趟**收尾**也一律接住：拿不到清单时那句"降级重画"同样在 try 里 ——
        否则它一抛，async 函数照样 reject（旗子虽然已经放下了，但控制台会多一条 unhandled rejection）。 */
@@ -8779,6 +9461,7 @@ async function lockRunCloud(declared, who) {
 /** 手动路 / 商店路都要：给 **①** 换人了 ⇒ 上次手选的基准自动作废（plan §3.2③ 第 6 步 / §6.3 ④）
  *  "假归属"的第二大来源（仅次于版本认错）。① 一变 ⇒ `lastBaseFor` 对不上 ⇒ 这条手选不认。 */
 function basePickStillValid() {
+    if (S.baseFrom === 'cloud' && S.baseBackend !== storeBackendScope().base) return false;
     const st = getSettings();
     if (!st.lastBaseName) return true;                 // 压根没有手选过
     if (!st.lastBaseFor) return true;                  // 老数据（没记过"给哪份①选的"）⇒ 按老行为保留，由门禁兜
@@ -8799,6 +9482,7 @@ function dropStaleBasePick() {
  *  ★为什么必须有：手选选**错**一版（或本来就不想填了）时，用户得能自己退回来 ——
  *    否则那笔手选会一直挂到"① 换人"才作废（=`S.base` 也一直算着三方，属于用户按不掉的残留）。 */
 function clearLockBase() {
+    cancelUpdaterReads();
     const st = getSettings();
     const had = !!(S.base || S.baseName || st.lastBaseName);
     st.lastBaseName = ''; st.lastBaseFor = '';
@@ -8823,6 +9507,9 @@ function clearLockBase() {
  *  @param {object} [presetObj] file 路：已经读好的那份预设
  *  @returns {Promise<boolean>} */
 async function applyLockChoice(from, value, presetObj) {
+    cancelUpdaterReads();
+    const scope = updaterReadScope();
+    const backendScope = storeBackendScope();
     const name = String(value || '');
     if (!name && from !== 'file') { return false; }
     if (!S.mine || !S.next) { toast('warning', '先选好 ① 你的预设 和 ② 新版预设'); return false; }
@@ -8837,12 +9524,13 @@ async function applyLockChoice(from, value, presetObj) {
             else if (sp && typeof sp.basePack === 'function') {
                 lockNet.pack++;                                                                     // ★Wave E2：真下载（只在"缓存里没有"时）
                 const r = await sp.basePack(name);
+                if (!updaterReadCurrent(scope) || !storeBackendCurrent(backendScope)) return false;
                 base = r && (r.preset || r.pack || r);
                 baseCachePut(name, base);
                 baseName = name;
             } else { toast('info', '这次取不到云端那一版（离线 / 基准库还没上线）⇒ 基准先不换，两方照样能挑。'); return false; }
         }
-    } catch (e) {
+    } catch (e) { if (!updaterReadCurrent(scope) || !storeBackendCurrent(backendScope)) return false;
         toast('error', '读不出那一版：' + ((e && e.message) || e));
         return false;
     }
@@ -8854,6 +9542,7 @@ async function applyLockChoice(from, value, presetObj) {
     // 4. 落 S.base ⇒ 就地重算（**同一个 recomputeWithBase**）
     const prevBase = S.base, prevName = S.baseName, prevFrom = S.baseFrom;
     S.base = base; S.baseName = baseName; S.baseFrom = from;
+    S.baseBackend = from === 'cloud' ? backendScope.base : '';
     const { analysis, decisions } = recomputeWithBase({ mine: S.mine, next: S.next, base: base, preserve: true, decisions: S.decisions });
     S.analysis = analysis; S.decisions = decisions;
     analyzeRegexesIntoState(S.regexDecisions);        // 正则那一层跟着基准一起重算（同一个 base）
@@ -8895,7 +9584,7 @@ function lockPickOptions() {
     const local = listPresetNames()
         .filter(n => looksLikeBaseName(n) && String(n) !== skip)
         .map(n => ({ name: String(n), ver: verKeyOf(n) }));
-    const cloud = (baseListCache || []).map(c => ({ name: c.ver, ver: c.ver, title: c.title || c.ver }));
+    const cloud = (baseListNamespace === JSON.stringify(storeBackendScope()) ? (baseListCache || []) : []).map(c => ({ name: c.ver, ver: c.ver, title: c.title || c.ver }));
     return { local, cloud };
 }
 
@@ -9045,12 +9734,16 @@ function bindLockBar(host) {
         const f = this.files && this.files[0];
         this.value = '';
         if (!f) return;
+        cancelUpdaterReads();
+        const scope = updaterReadScope();
         try {
-            const obj = parseJsonLoose(await f.text());
+            const text = await f.text();
+            if (!updaterReadCurrent(scope)) return;
+            const obj = parseJsonLoose(text);
             if (!PM.isValidPreset(obj)) { toast('warning', '这个文件不是一份对话补全预设（读不出条目）⇒ 它当不了基准。'); return; }
             await applyLockChoice('file', f.name, obj);
             toast('success', '基准文件：' + f.name + '（' + (obj.prompts || []).length + ' 条）');
-        } catch (e) { toast('error', '读文件失败：' + ((e && e.message) || e)); }
+        } catch (e) { if (updaterReadCurrent(scope)) toast('error', '读文件失败：' + ((e && e.message) || e)); }
     });
     h.querySelectorAll('[data-lock-pick]').forEach(b => b.addEventListener('click', () => {
         const v = String(b.getAttribute('data-lock-pick') || '');
@@ -9455,15 +10148,42 @@ function renderPatchWindow() {
 
 /** 用户侧最后一步：应用 → 写盘（★绝不覆盖同名：重名自动加 (2)；写的是新预设，不动他现在这份） */
 async function applyPatchAndSave() {
+    if (S.busy || activePresetWrite) return;
+    const gate = beginPresetWrite('patch');
+    if (!gate) return;
+    try { return await applyPatchAndSaveInner(); }
+    finally { releaseDialogName(); endPresetWrite(gate); }
+}
+
+async function applyPatchAndSaveInner() {
     const P = S.patch;
     if (!P || S.busy) return;
     if (S.preview) { toast('info', '这是预览（伪缝入）：不会真的写盘'); return; }   // ★M11：写盘口兜底
     const typed = ($el('#ywpu-patch-name')?.value || P.name || '').trim();
     P.name = typed;
     if (!typed) { toast('warning', '给新预设起个名字'); return; }
-    const names = listPresetNames();
-    let final = typed, n = 2;
-    while (names.includes(final)) { final = typed + '（' + n + '）'; n++; }     // ← 云端路径绝不覆盖同名
+    /* ★M02：更新包这条路是**另存新名**，同样要按宿主清洗后的文件名查重（改前只查原始字符串）。 */
+    const nameOpts = presetNameOpts();
+    const info = presetNameInfo(typed, nameOpts);
+    if (!info.ok) { toast('warning', info.why); return; }
+    const names0 = strictPresetNamesForWrite();
+    if (!names0) return;
+    let pick = uniquePresetName(typed, names0, nameOpts);
+    if (!pick.ok) { toast('warning', pick.why); return; }
+    let final = pick.name;
+    /* ★M02：弹窗前同步预留，避免同一页两个确认框指向同一个还不存在的名字。 */
+    if (!reserveDialogName(final, nameOpts)) {
+        const names1 = strictPresetNamesForWrite();
+        if (!names1) return;
+        const u2 = uniquePresetName(typed, names1, nameOpts);
+        if (!u2.ok) { toast('warning', u2.why); return; }
+        final = u2.name;
+        pick = u2;
+        if (!reserveDialogName(final, nameOpts)) { toast('warning', '另一个保存正在用这个名字 —— 这次先不生成。', { timeOut: 10000 }); return; }
+    }
+    const renameLine = (info.sanitized || info.truncated || pick.renamed)
+        ? '（本来想叫「' + typed + '」，' + (pick.renamed ? '已经有同名的了、' : '') + '酒馆的文件名清洗后实际存成「' + final + '」——绝不覆盖同名）'
+        : '';
     try {
         S.busy = true;
         const { preset, report } = PM.applyPatch({ preset: S.mine, patch: P.pack, decisions: P.decisions });
@@ -9472,7 +10192,7 @@ async function applyPatchAndSave() {
         const okGo = await askYes('应用更新包', [
             '把更新包应用到「' + (S.mineName || '你的预设') + '」，另存成新预设：',
             '',
-            '「' + final + '」' + (final !== typed ? '（本来想叫「' + typed + '」，已经有同名的了，所以没覆盖它）' : ''),
+            '「' + final + '」' + renameLine,
             '',
             '· 改了 ' + report.summary.update + ' 条 · 新增 ' + report.summary.add + ' 条 · 删除 ' + report.summary.remove + ' 条 · 开关 ' + report.summary.switch + ' 条',
             (report.summary.kept ? '· 你选了"用我的" ' + report.summary.kept + ' 条（官方那些不动你的）' : ''),
@@ -9481,8 +10201,36 @@ async function applyPatchAndSave() {
             '',
             '你现在用的那份不会被改动，也不会覆盖任何同名预设。',
         ], { ok: '生成', cancel: '算了' });
-        if (!okGo) { S.busy = false; toast('info', '好，这次不生成 —— 你的预设一个字都没动'); return; }
+        if (!okGo) { toast('info', '好，这次不生成 —— 你的预设一个字都没动'); return; }
+        /* ★M02：确认框是异步的 —— 点完再验 ① 文件/内存有没有被改过；并重新查一次重名
+           （期间别的窗口/商店下载可能刚创建了同名）。 */
+        if (mineChangedSinceAnalysis()) return;
+        if (await liveChangedSinceAnalysis()) return;
+        const namesLater = strictPresetNamesForWrite();
+        if (!namesLater) return;
+        const pickLater = uniquePresetName(typed, namesLater, nameOpts);
+        if (!pickLater.ok) { toast('warning', pickLater.why); return; }
+        if (pickLater.key !== presetNameKey(final, nameOpts)) {
+            toast('info', '刚有同名的预设出现了 —— 这次不覆盖它，改存成「' + pickLater.name + '」。', { timeOut: 10000 });
+            final = pickLater.name;
+            P.name = final;
+            if (!moveDialogName(final, nameOpts)) { toast('warning', '另一个保存刚占了这个新名字 —— 这次先不写，再点一次。', { timeOut: 10000 }); return; }
+        }
+        const beforeSaveNames = strictPresetNamesForWrite();
+        if (!beforeSaveNames) return;
         await savePreset(final, preset);
+        const actual = resolveSavedPresetName(final, beforeSaveNames);
+        let verified = false;
+        try { verified = listPresetNames().includes(actual); } catch (e) { verified = false; }
+        if (!verified) {
+            toast('warning', '保存接口返回了，但预设列表里暂时没看到「' + actual + '」—— 先刷新酒馆确认；这次保留补丁窗口，不当作完全成功。', { timeOut: 15000 });
+            P.name = actual;
+            return;
+        }
+        if (actual !== final) {
+            toast('info', '酒馆把名字清洗成了「' + actual + '」。', { timeOut: 8000 });
+            final = actual;
+        }
         // §5.3 的门禁：记下"已应用官方版本号"（下次检查更新时用它提示"跳代"，不靠内容 hash）
         const st = getSettings();
         st.appliedOfficial = String(P.pack.to || '');
@@ -9923,6 +10671,11 @@ function openStorePack(opt) {
         if (!o.keepBatch) S.storeBatch = null;                // 单张打开 = 退出上一次的批量（批量内部重开会带 keepBatch）
         S.store = {
             cardId: String(card.id || ''), title, why, author, official, srcPreset, kind: String(pack.kind),
+            /* ★★feedback11（2026-11-13）：**打开对比这一刻的卡版本快照**（标量，写死在这个会话上下文里）。
+               商店的 `afterStitched()` 只认它 —— 否则对比页开着时作者又传一版，这次缝入会把**没缝的新 rev**
+               误当成功。取消 / 失败 / 预览都不会走到 `notifyStoreStitched()`，快照不会变成"成功"。 */
+            cardRev: Math.max(0, Number(card.rev) || 0),
+            cardFp: String(card.fp || ''),
             target: mine.name, at: Date.now(), report: rep, anchors: built.anchors || null, preview,
         };
         S.next = built.next;                            // ★B（临时新版）——不落盘，就是把包应用出来的那份
