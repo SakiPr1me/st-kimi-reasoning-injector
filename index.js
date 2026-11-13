@@ -375,7 +375,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.337'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.338'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -4500,6 +4500,7 @@ async function renderUpstream(force) {
 // 自动取自身文件夹名（从脚本 URL 提取，不硬编码）：无论插件装在什么文件夹名下，自更新都能正确调官方接口
 try {
     const __selfUrl = new URL(import.meta.url);
+    window.__kimiSelfManifestUrl = new URL('./manifest.json', __selfUrl).href;
     const __parts = __selfUrl.pathname.split('/').filter(Boolean);
     __parts.pop(); // 去掉 index.js
     window.__kimiSelfFolder = __parts[__parts.length - 1] || 'st-kimi-reasoning-injector'; // 文件夹名（如 st-kimi-reasoning-injector）
@@ -4551,7 +4552,7 @@ async function fetchRemoteVersion(report) {
             }
         } catch (e) { throw new Error('parse'); }
         v = String(v || '').trim();
-        if (!v) throw new Error('empty');
+        if (!validUpdateVersion(v)) throw new Error('invalid version');
         seen[url.split('/')[2]] = v;
         if (url.includes('gitee.com/api')) window.__kimiRemoteAuthoritative = true; // 0.13.0 权威仅认 Gitee API(与 st-chat-sync 统一): GitHub API 镜像滞后会被当权威→误报"已是最新/本地更高"
         return v;
@@ -4593,8 +4594,77 @@ if (typeof window.__kimiCoordReload !== 'function') {
     };
     window.__kimiReloadFired = false;
 }
-async function doSelfUpdate(btn, remoteVer, auto) {
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ 更新中…'; }
+
+// 安装事实只认当前加载副本同目录的 manifest，远端检测值不能当作已安装版本。
+let kimiUpdateFlight = null;
+const kimiUpdateButtons = new Set();
+let kimiUpdateVerifySeq = 0;
+function validUpdateVersion(value) {
+    return typeof value === 'string' && /^\d+(?:\.\d+){1,3}$/.test(value.trim())
+        && value.trim().split('.').every(part => Number.isSafeInteger(Number(part)));
+}
+async function readInstalledUpdateVersion() {
+    const address = window.__kimiSelfManifestUrl;
+    if (!address) throw new Error('找不到当前插件的版本文件');
+    const url = new URL(address);
+    url.searchParams.set('_yw_verify', Date.now() + '-' + (++kimiUpdateVerifySeq));
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    try {
+        const response = await fetch(url.href, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal });
+        if (!response.ok) throw new Error('版本文件读取失败：HTTP ' + response.status);
+        const manifest = await response.json();
+        if (!manifest || !validUpdateVersion(manifest.version)) throw new Error('版本文件内容不完整');
+        return manifest.version.trim();
+    } finally { clearTimeout(timer); }
+}
+async function reconcileUpdatedVersion() {
+    try {
+        const installed = await readInstalledUpdateVersion();
+        try { localStorage.setItem('kimi_updated_to', installed); } catch (e) { }
+        return installed;
+    } catch (e) {
+        // 无法核验时旧标记不参与跳过判据，保留原有五分钟冷却。
+        try { localStorage.removeItem('kimi_updated_to'); } catch (err) { }
+        return '';
+    }
+}
+function finishUpdateButtons(result) {
+    for (const btn of kimiUpdateButtons) {
+        btn.disabled = false;
+        btn.textContent = result.label;
+        delete btn.dataset.busy;
+    }
+    kimiUpdateButtons.clear();
+}
+function doSelfUpdate(btn, remoteVer, auto) {
+    if (btn) {
+        kimiUpdateButtons.add(btn);
+        btn.disabled = true;
+        btn.textContent = '⏳ 更新中…';
+    }
+    if (kimiUpdateFlight) return kimiUpdateFlight;
+    const run = async () => {
+        const locks = typeof navigator !== 'undefined' && navigator.locks;
+        if (locks && typeof locks.request === 'function') {
+            return locks.request('kimi-self-update:' + (window.__kimiSelfFolder || 'st-kimi-reasoning-injector'),
+                { ifAvailable: true }, lock => lock ? doSelfUpdateOnce(remoteVer, auto)
+                    : { ok: false, label: '另一页面正在更新' });
+        }
+        return doSelfUpdateOnce(remoteVer, auto);
+    };
+    kimiUpdateFlight = Promise.resolve().then(run).catch(error => {
+        console.warn('[余温工具箱] 更新未能确认', error);
+        try { toastr.error('未能确认更新结果，请稍后检查；没有执行重复更新。'); } catch (e) { }
+        return { ok: false, label: '未能确认 · 可重试' };
+    }).then(result => {
+        finishUpdateButtons(result);
+        return result;
+    }).finally(() => { kimiUpdateFlight = null; });
+    return kimiUpdateFlight;
+}
+
+async function doSelfUpdateOnce(remoteVer, auto) {
     const selfName = window.__kimiSelfFolder || 'st-kimi-reasoning-injector';
     const fullName = 'third-party/' + selfName;
     // 组合排序（目标：第一路即命中，杜绝 404——手机 TT 会把 404 响应弹成全局「后端错误」toast）：
@@ -4626,7 +4696,7 @@ async function doSelfUpdate(btn, remoteVer, auto) {
     let lastErr = null;
     // v1.37.43 自动重试: 首次全灭后等 2s 再试一轮(救瞬时抖动/代理短暂不可用), 仍失败才提示
     for (let __attempt = 0; __attempt < 2; __attempt++) {
-        if (__attempt > 0) { if (btn) btn.textContent = '⏳ 重试中…'; await new Promise((r) => setTimeout(r, 2000)); }
+        if (__attempt > 0) { await new Promise((r) => setTimeout(r, 2000)); }
         for (const c of combos) {
         let resp;
         try {
@@ -4638,40 +4708,45 @@ async function doSelfUpdate(btn, remoteVer, auto) {
         } catch (e) { lastErr = e; continue; }
         if (resp.status === 404) continue; // 这个目录组合不存在
         if (!resp.ok) { lastErr = new Error('HTTP ' + resp.status); continue; }
-        const j = await resp.json().catch(() => ({}));
-        if (j.isUpToDate) {
-            // v1.37.15：git 已是最新时【不自动刷新】——磁盘代码已就位，页面旧是 WebView 缓存所致，
-            // 普通 reload 仍加载缓存 → 又检测到更新 → isUpToDate → 又刷新 → 无限循环（"一直刷新进不去酒馆"）。
-            // 只提示用户手动刷新一次（或等缓存过期）。真 pull 到新代码（非 isUpToDate）才需要自动刷新。
-            try {
-                localStorage.setItem('kimi_upd_combo', JSON.stringify(c));
-                localStorage.setItem('kimi_updated_to', String(remoteVer || PLUGIN_VERSION)); // 记录已达版本
-            } catch (e) { }
-            if (btn) { btn.disabled = false; btn.textContent = '✅ 已是最新'; }
-            try { toastr.success('余温工具箱已是最新版本 v' + (remoteVer || PLUGIN_VERSION) + '。若界面仍显示旧版，请手动刷新一次页面', null, { timeOut: 5000 }); } catch (e) { }
-            console.log('[余温工具箱] git 已最新，跳过自动刷新（防缓存导致刷新循环）');
-            return;
-        }
-        if (btn) btn.textContent = '✅ 已更新';
-        // v1.37.32：更新接口返回成功 = git pull 完成，不再做 manifest 自校验——
-        // 校验靠 HTTP fetch 拼安装路径极易 404 误报（1.37.30 多路径探测仍偶发），
-        // 误判会让用户卡在"已更新但提示校验失败不刷新"。官方 update 成功即可信，统一走协调刷新。
+        let installed, j;
         try {
-            localStorage.setItem('kimi_updated_to', String(remoteVer || PLUGIN_VERSION)); // v1.37.15：记录已达版本，防刷新后缓存旧代码重复触发
+            j = await resp.json();
+            if (!j || typeof j !== 'object' || Array.isArray(j) || typeof j.isUpToDate !== 'boolean') {
+                throw new Error('更新接口返回的内容不完整');
+            }
+            installed = await readInstalledUpdateVersion();
+        } catch (error) {
+            // 服务器可能已经执行过 pull，未知结果不能立刻再发一次。
+            try { toastr.error('更新结果未能核实，请稍后检查；没有重复执行更新。'); } catch (e) { }
+            console.warn('[余温工具箱] 更新结果核验失败', error);
+            return { ok: false, label: '未能确认 · 可重试' };
+        }
+        try {
+            localStorage.setItem('kimi_upd_combo', JSON.stringify(c));
+            localStorage.setItem('kimi_updated_to', installed);
         } catch (e) { }
-        try { toastr.success('🔥 余温工具箱：已更新到 v' + remoteVer + '，即将自动刷新', null, { timeOut: 4000 }); } catch (e) { }
-        window.__kimiCoordReload(3000); // 协调刷新：多插件并发更新时由最后完成者统一刷新
-        return;
+        const target = validUpdateVersion(remoteVer) ? remoteVer.trim() : '';
+        if (target && compareVer(installed, target) < 0) {
+            try { toastr.warning('插件文件目前为 v' + installed + '，尚未达到检测到的 v' + target + '。请稍后检查更新。'); } catch (e) { }
+            return { ok: false, installed, label: '尚未更新到目标版本' };
+        }
+        if (j.isUpToDate) {
+            try { toastr.success('插件文件已核实为 v' + installed + '。若界面仍显示旧版，请手动刷新一次页面', null, { timeOut: 5000 }); } catch (e) { }
+            return { ok: true, installed, label: '✅ 文件版本 v' + installed };
+        }
+        try { toastr.success('🔥 余温工具箱：已核实更新到 v' + installed + '，即将自动刷新', null, { timeOut: 4000 }); } catch (e) { }
+        window.__kimiCoordReload(3000);
+        return { ok: true, installed, label: '✅ 已更新 v' + installed };
         }
     }
     // 更新失败保留原安装。删除/安装不能作为自动重试的兜底事务。
-    if (btn) { btn.disabled = false; btn.textContent = '更新失败 · 可重试'; }
     try { toastr.error('自动更新失败，已保留现有安装。请稍后重试，或在管理扩展中检查更新。', null, { timeOut: 15000 }); } catch (e) { }
     console.warn('[余温工具箱] 更新失败，保留现有安装', lastErr);
-    return false;
+    return { ok: false, label: '更新失败 · 可重试' };
 }
 async function checkUpdate() {
     try {
+        const installed = await reconcileUpdatedVersion();
         const remoteVer = await fetchRemoteVersion();
         if (compareVer(remoteVer, PLUGIN_VERSION) > 0) {
             // 默认自动更新：检测到云端更新直接更新到最新（不弹询问）
@@ -4681,7 +4756,7 @@ async function checkUpdate() {
                 // ② 冷却期（5分钟）内不再自动更新（即使刷新后缓存旧代码，也只 pull 一次）。
                 let updatedTo = '';
                 let lastAuto = 0;
-                try { updatedTo = String(localStorage.getItem('kimi_updated_to') || ''); } catch (e) { }
+                updatedTo = installed;
                 try { lastAuto = Number(localStorage.getItem('kimi_last_auto_upd') || 0); } catch (e) { }
                 const cooldownMs = 5 * 60 * 1000;
                 if (updatedTo && compareVer(remoteVer, updatedTo) <= 0) {
@@ -4712,6 +4787,7 @@ async function checkUpdate() {
 // 手动检查：⏳ → ✓可更新/✅已最新/⚠本地更高/❌失败；再点还原（st-chat-sync 同款状态机）
 // 检测失败后再点：直接走官方更新（更新不依赖检测成功，多为本次网络抖动，不给用户留"点了没反应"）
 async function manualCheckUpdate(btn) {
+    if (kimiUpdateFlight) return doSelfUpdate(btn, '', false);
     if (btn.dataset.busy) return;
     if (btn.dataset.forceUpdate) {
         const ver = btn.dataset.forceUpdVer || '最新版';
@@ -4730,13 +4806,14 @@ async function manualCheckUpdate(btn) {
     btn.textContent = '⏳'; btn.title = '正在检测…';
     let failedRemoteVer = '';
     try {
+        const installed = await reconcileUpdatedVersion();
         const remoteVer = await fetchRemoteVersion(true);
         failedRemoteVer = remoteVer;
-        const cmp = compareVer(remoteVer, PLUGIN_VERSION);
-        if (cmp === 0) {
+        const cmp = compareVer(remoteVer, installed || PLUGIN_VERSION);
+        if (cmp <= 0) {
             const seen = window.__kimiUpdSources ? JSON.stringify(window.__kimiUpdSources) : '';
-            btn.textContent = '✅ 已是最新'; btn.style.color = '';
-            btn.title = '本机 v' + PLUGIN_VERSION + ' / 远端取最大 v' + remoteVer + (seen ? '\n各源: ' + seen : '')
+            btn.textContent = installed ? '✅ 文件版本 v' + installed : '未能核实本机版本'; btn.style.color = '';
+            btn.title = '本机文件 v' + (installed || '未核实') + ' / 远端取最大 v' + remoteVer + (seen ? '\n各源: ' + seen : '')
                 + (window.__kimiRemoteAuthoritative ? '' : '\n(⚠️权威API源均未成功, 结果可能受CDN缓存影响)');
             btn.dataset.result = 'same'; btn.dataset.done = '1';
             delete btn.dataset.busy;
