@@ -160,7 +160,7 @@ const EXT = 'preset_store';
    （VERSION/BUILD 两处 + index.js 的 storeBuild = 三处成对；主 Agent 接手 index.js 那一位）。 */
 /* ★★feedback12（2026-11-13 · 作者纠正）：更新对象是官方**补丁包**（真实 kind = ywp-entry / ywp-patch），
    不是整份 ywp-preset。2.2.121 → **2.2.122**（VERSION/BUILD 两处 + index.js storeBuild 成对）。 */
-const VERSION = '2.2.122';
+const VERSION = '2.2.123';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -262,7 +262,7 @@ const VERSION = '2.2.122';
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
 /* ★W279a（2026-10-29 · 收口补救）：BUILD 从 v2.2.87 追平（W211 起多波只升 VERSION/storeBuild 漏了 BUILD；纯显示对齐，逻辑零改动）；★W279b 随发版升 v2.2.118 */
-const BUILD = 'v2.2.122';
+const BUILD = 'v2.2.123';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -16054,7 +16054,7 @@ function registerStoreApiPortal() {
             pack: (id) => readFullPack(id),                            // 某一张卡的全文（官方整份预设走它）
             // ★P7（§15）：更新器把商店的包"缝"完（另存新名写盘成功）后回调这里——
             //   商店只记账：已缝入标记 + 服务端 sews 计数 + 回主列表（§9 的"你缝过的这条变了"靠 stitched[].fp）
-            stitched: (cardId, name) => afterStitched(cardId, name),
+            stitched: (cardId, name, snap) => afterStitched(cardId, name, snap),
             /* ★★E1（plan §5.3【修正-附加①】）：portal 现有四个成员（list/pack/stitched/base）**一个都没动**，
                这里只**追加**两个只读方法给更新器用（Wave E2 的"取用与缓存"靠它，商店这一侧不许再被改）。 */
             bases: () => api.bases(),

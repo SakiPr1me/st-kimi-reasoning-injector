@@ -102,7 +102,7 @@ const EXT = 'preset_updater';
    读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md §修订；台账 §XXVIII） */
 /* ★★feedback11（2026-11-13 · 商店官方更新提醒）：5.3.57 → **5.3.58** ——
    只在商店会话里捕获 card rev/fp 快照并随 `sp.stitched()` 第三参回传；与 index.js 的 updaterBuild 成对升。 */
-const VERSION = '5.3.59';   // 更新器模块版本（随工具箱一起发布）
+const VERSION = '5.3.60';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -187,7 +187,7 @@ const VERSION = '5.3.59';   // 更新器模块版本（随工具箱一起发布�
      正文顶上说明 · **删掉「按原顺序全收」**（用途已被②整份覆盖，避免语义重叠的按钮）。
      判据仍全走既有 `source:'custom'` + `customText` 通路 ⇒ **内核改动继续为 0**；与 index.js 的 updaterBuild 成对升） */
 /* ★W279a（2026-10-29 · 收口补救）：BUILD 从 v5.3.43 追平 VERSION=5.3.54（W256~W263 四波只升 VERSION 漏了 BUILD；纯显示对齐，逻辑零改动） */
-const BUILD = 'v5.3.59';
+const BUILD = 'v5.3.60';
 const API_ID = 'openai';                       // 对话补全预设（用户只使用对话补全）
 
 // ---------------------------------------------------------------- 设置
@@ -8495,6 +8495,17 @@ async function doGenerateInner() {
     }
 }
 
+/** 条目与正则各有独立报告，两处都没有遗漏才可确认整包完成。 */
+function storeReportIncomplete(report) {
+    const failed = (r) => !!r && (
+        (Array.isArray(r.unresolved) && r.unresolved.length > 0)
+        || (Array.isArray(r.ops) && r.ops.some(o => o && (o.action === 'error' || o.action === 'unknown')))
+        || (Array.isArray(r.errors) && r.errors.length > 0)
+        || !!r.error
+    );
+    return failed(report) || failed(report && report.regex);
+}
+
 /** ★P7：写盘成功后回商店记账（生成 / 缝入当前预设**两条路共用**，一个字不差）。 */
 function notifyStoreStitched(name, storeContext) {
     /* ★★feedback11：第二参**显式传入**时一律用它（哪怕传 null = 这次不是商店会话 / 已过期），
@@ -8502,6 +8513,10 @@ function notifyStoreStitched(name, storeContext) {
        不传第二参的老调用才退回全局（兼容）。 */
     const ctx = (storeContext !== undefined) ? storeContext : S.store;
     if (!ctx) return;
+    if (storeReportIncomplete(ctx.report)) {
+        console.warn('[预设更新器] 包里仍有未应用的内容 → 保留更新提醒');
+        return;
+    }
     try {
         const sp = (typeof window !== 'undefined') ? window.__ywStoreApi : null;
         /* ★★feedback11：第三参 = **这次会话打开对比时那一版的不可变快照**（cardRev/cardFp）。
@@ -10611,7 +10626,8 @@ function storePackToPatch(pack, mine) {
 /** 店包里的一条正则 → 内核的 regex-* op（纯函数；`scope:"regex"` 走它） */
 function regexOpOf(r, i) {
     if (!r || typeof r !== 'object') return null;
-    const mode = String(r.mode || (r.base ? 'patch' : 'new'));
+    // 没有旧版基准的 patch 是完整快照，沿新增路径核对已有项，避免缺原件时直接跳过。
+    const mode = (r.mode === 'patch' && !r.base) ? 'new' : String(r.mode || (r.base ? 'patch' : 'new'));
     const key = String(r.key || ('store:regex-' + mode + '#' + i));
     const name = String((r.reg && r.reg.scriptName) || (r.next && r.next.scriptName) || (r.base && r.base.scriptName) || '');
     if (mode === 'remove') return { op: 'regex-remove', key, name, base: r.base || r.reg || null };
@@ -10636,7 +10652,9 @@ function storePackToNext(pack, mine) {
     }
     const { patch, sameName } = storePackToPatch(pack, mine);
     const hasRegex = Array.isArray(patch.regexOps) && patch.regexOps.length;
-    if (!Array.isArray(patch.ops) || (!patch.ops.length && !hasRegex)) throw new Error('这个包里没有能缝进来的条目');
+    const hasRegexInput = String(pack.kind || '') === 'ywp-entry'
+        && Array.isArray(pack.regexes) && pack.regexes.some((r, i) => !!regexOpOf(r, i));
+    if (!Array.isArray(patch.ops) || (!patch.ops.length && !hasRegex && !hasRegexInput)) throw new Error('这个包里没有能缝进来的条目');
     const r = PM.applyPatch({ preset: mine, patch, decisions: {} });     // 纯函数：跑一遍 = 把包全应用上
     if (sameName.length) r.report.storeSameName = sameName;              // 同名那几条给页顶提示用（不静默）
     const anchors = patch.ops.map(o => ({ name: String((o && o.name) || ''), place: (o && o.place) || {} }));
@@ -10687,11 +10705,12 @@ function openStorePack(opt) {
         const built = storePackToNext(pack, mine.preset);   // ② B（内存里拼，全程不落盘）
         const same = JSON.stringify(built.next) === JSON.stringify(mine.preset);
         const rep = built.report;
-        if (same) {
-            toast('info', '这个包跟 ' + mine.name + '没有任何不一样的地方，没有要缝的。'
-                + (rep && rep.unresolved.length ? '（另外有 ' + rep.unresolved.length + ' 条没在你这份里找到）' : ''));
+        if (same && storeReportIncomplete(rep)) {
+            toast('warning', '这个包还有内容没能应用，更新提醒会保留。请核对缺失的条目或正则后再缝入。');
+            console.warn('[预设更新器] 没有生成差异，但包内仍有未应用内容', rep);
             return false;
         }
+        if (same) toast('info', '这份预设已包含包内内容，仍可进入核对；保存成功后才会确认已处理。');
         // 这次会话 = "从商店来的"：头部写来源、生成时绝不覆盖同名、写盘后回商店记账
         S.base = null; S.baseName = ''; S.baseFrom = '';      // 商店路是两方对比（别残留上次的③）
         S.extraEntries = []; S.selIdents = []; S.orderVisibleIds = null; S.orderOverride = null; S.unpair = [];   // ★W9-5：新会话 = 选择与"看得见的那份"都重来

@@ -376,7 +376,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.341'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.342'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -11304,7 +11304,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
            点过的片按点击顺序 + 没被点走的同文段默认收进原位 + 没点过的不同处按新版；「按原顺序全收」删掉（用途被覆盖）；
            内核改动仍为 0；与 preset-updater.js 的 VERSION/BUILD 成对升） */
         /* ★W279a（2026-10-29 · 收口补救）：v5.3.50 → **v5.3.54**（W256/W260/W261/W263 四波只升了 preset-updater.js 的 VERSION、漏了本戳 ⇒ ?b= 不变 = 用户浏览器可能一直吃旧缓存；本波把戳追平到更新器现值，业务逻辑零改动；与 preset-updater.js 的 VERSION/BUILD 成对升） */
-        const updaterBuild = 'v5.3.59';
+        const updaterBuild = 'v5.3.60';
     import('./preset-updater.js?b=' + updaterBuild)
         .then(mod => {
             if (!panelScope.alive()) return;
@@ -11473,7 +11473,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
    ★同时升工具箱 PLUGIN_VERSION（1.46.27 → 1.46.28）：用户的自更新是拿**远端 manifest 的版本号**比本机 ——
      只升商店号、不升工具箱号，用户端就**不会**自动更新（作者今天当场踩到过）。 */
 /* ★W279b：v2.2.117 → **v2.2.118**（本波 preset-store.js 内容变了 [BUILD 对齐]，戳跟着走防旧缓存；与商店 VERSION/BUILD 成对） */
-const storeBuild = 'v2.2.122';
+const storeBuild = 'v2.2.123';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (!panelScope.alive()) return;
