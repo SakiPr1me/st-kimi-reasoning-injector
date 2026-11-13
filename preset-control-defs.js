@@ -6,7 +6,7 @@
      本文件里的 enabled 一律不写死。
    ========================================================================== */
 
-export const PRESET_CONTROLS_VERSION = '1.4.14';
+export const PRESET_CONTROLS_VERSION = '1.4.15';
 export const CHARACTER_ID = 100001;
 export const LENGTH_PROMPT_ID = 'e54f6cda-5eee-421c-921f-1bb405f9e968';
 export const LENGTH_PROMPT_NAME = '🔢字数要求';
@@ -590,6 +590,7 @@ export const PROMPT_NAMES = Object.freeze({
   [ID.paragraphAlt]: '🧶长短段落交替',
   [ID.paragraphLong]: '🧶长段落为主',
   ...Object.fromEntries(WRITING_PROMPTS.map(item => [item.id, item.label])),
+  ...Object.fromEntries(NSFW_WRITING_PROMPTS.map(item => [item.id, item.label])),
   /* 兼容保留：旧文风已不在写作默认列表、反刻板已归 NSFW，但 prompt 自定义副本、
      首页 pin 与旧布局缺项提示仍要用真名识别。 */
   [ID.wStyleAutoOld]: '✍自适应文风(旧)',

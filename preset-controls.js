@@ -37,7 +37,7 @@ import {
   NARRATION_PROMPT_IDS,
   TOOLBOX_FLAG_RAND_HEAD,
   TOOLBOX_FLAG_KEYS,
-} from './preset-control-defs.js?b=v1.4.14';
+} from './preset-control-defs.js?b=v1.4.15';
 import { readEditableLengthRule, replaceLengthRule } from './preset-length.js?b=v1.0.1';
 import {
   LAYOUT_SETTINGS_KEY,
@@ -836,6 +836,7 @@ export function createPresetControls(deps = {}) {
     dispose,
     getSnapshot,
     captureIdentity,
+    resolvePromptId,
     requestPresetSave,
   };
 
@@ -1609,15 +1610,50 @@ export function createPresetControls(deps = {}) {
     }
 
     const actualIds = Object.create(null);
+    const promptIdCounts = new Map(), orderIdCounts = new Map(), promptsByName = new Map();
+    for (const prompt of prompts || []) {
+      if (!prompt || typeof prompt.identifier !== 'string') continue;
+      promptIdCounts.set(prompt.identifier, (promptIdCounts.get(prompt.identifier) || 0) + 1);
+      const exactName = typeof prompt.name === 'string' ? prompt.name.trim() : '';
+      if (exactName) {
+        if (!promptsByName.has(exactName)) promptsByName.set(exactName, []);
+        promptsByName.get(exactName).push(prompt);
+      }
+    }
+    for (const row of Array.isArray(scenario?.order) ? scenario.order : []) {
+      if (row && typeof row.identifier === 'string') orderIdCounts.set(row.identifier, (orderIdCounts.get(row.identifier) || 0) + 1);
+    }
+    const definitionsByName = new Map();
+    for (const canonical of ALL_KNOWN_IDS) {
+      const exactName = String(PROMPT_NAMES[canonical] || '').trim();
+      if (!exactName) continue;
+      if (!definitionsByName.has(exactName)) definitionsByName.set(exactName, []);
+      definitionsByName.get(exactName).push(canonical);
+    }
+    const claimed = new Set();
+    function bindFallback(canonical, prompt) {
+      if (promptById.has(canonical) || orderIdCounts.has(canonical)) return false;
+      if (!prompt || !isOrdinaryPrompt(prompt)) return false;
+      const actual = prompt.identifier;
+      if (KNOWN_ID_SET.has(actual) || claimed.has(actual) || promptIdCounts.get(actual) !== 1
+        || orderIdCounts.get(actual) !== 1 || !hasOwn(orderMap, actual)) return false;
+      actualIds[canonical] = actual;
+      claimed.add(actual);
+      promptById.set(canonical, prompt);
+      orderMap[canonical] = orderMap[actual];
+      toggles[canonical] = toggles[actual];
+      return true;
+    }
+    // 已核别名仍按编号优先；同名副本不遮住这条已经确认的身份。
     for (const alias of STORE_PROMPT_ALIASES) {
-      if (promptById.has(alias.canonical) || hasOwn(orderMap, alias.canonical)) continue;
-      const matches = (prompts || []).filter(prompt => prompt && prompt.identifier === alias.actual && prompt.name === alias.name);
-      if (matches.length !== 1 || !hasOwn(orderMap, alias.actual)) continue;
-      // 读模型补一个规范引用，真实条目/顺序表/编号一个字不写；点击时再翻译回实际ID。
-      actualIds[alias.canonical] = alias.actual;
-      promptById.set(alias.canonical, matches[0]);
-      orderMap[alias.canonical] = orderMap[alias.actual];
-      toggles[alias.canonical] = toggles[alias.actual];
+      const prompt = promptById.get(alias.actual);
+      if (prompt && String(prompt.name || '').trim() === alias.name.trim()) bindFallback(alias.canonical, prompt);
+    }
+    // 仅内置定义可按完整准确名字兜底；不去emoji、不去副本/旧版/数字后缀，不改真实预设。
+    for (const [exactName, definitions] of definitionsByName) {
+      if (definitions.length !== 1) continue;
+      const matches = promptsByName.get(exactName) || [];
+      if (matches.length === 1) bindFallback(definitions[0], matches[0]);
     }
     const wordPrompt = promptById.get(LENGTH_PROMPT_ID) || null;
     let wordState = 'missing';
@@ -1714,6 +1750,7 @@ export function createPresetControls(deps = {}) {
       (m.shortcutPool || []).map(item => item.id + '=' + item.label).join('|'),
       m.wordState,
       m.availableIds.slice().sort().join(','),
+      Object.entries(m.actualIds || {}).map(([id, actual]) => id + '=' + actual).sort().join(','),
       m.layoutSignature || '',
       editing ? 'E1' : 'E0',
       editSectionId,
@@ -1721,6 +1758,11 @@ export function createPresetControls(deps = {}) {
       editRemovedControls.slice().sort().join(','),
       editRemovedSections.slice().sort().join(','),
     ].join('|');
+  }
+
+  function resolvePromptId(id) {
+    const current = buildModel();
+    return hasOwn(current.orderMap, id) ? (current.actualIds[id] || id) : null;
   }
 
   function isAvailable(m, id) {
@@ -2123,7 +2165,20 @@ export function createPresetControls(deps = {}) {
     try {
       const current = buildModel();
       const actualMap = {};
-      for (const [id, value] of Object.entries(map)) actualMap[current.actualIds[id] || id] = value;
+      for (const [id, value] of Object.entries(map)) {
+        const previous = model?.actualIds[id] || id;
+        const actual = current.actualIds[id] || id;
+        if (previous !== actual || !hasOwn(current.orderMap, actual)) {
+          showToast('条目绑定刚有变化，这次没有写入，请重新操作。', 'warn');
+          refresh({ force: true, reason: 'binding-changed' });
+          return false;
+        }
+        if (hasOwn(actualMap, actual) && actualMap[actual] !== value) {
+          showToast('同一条目有冲突选择，这次没有写入。', 'warn');
+          return false;
+        }
+        actualMap[actual] = value;
+      }
       deps.writeToggles(actualMap);
     } catch (e) {
       showToast('写入失败，没有保存：' + humanError(e), 'error');
@@ -5755,6 +5810,13 @@ export function createPresetControls(deps = {}) {
       wordError = '预设已切换；这次字数没有提交（离开输入框后会刷新）。';
       updateWordHintOnly();
       showToast('预设已切换，这次字数没有提交。', 'warn');
+      return false;
+    }
+    const currentWordModel = buildModel();
+    if (currentWordModel.wordPrompt !== m.wordPrompt || currentWordModel.wordState !== 'ok') {
+      wordError = '字数条目绑定刚有变化，这次没有写入，请重新操作。';
+      updateWordHintOnly();
+      refresh({ force: true, reason: 'word-binding-changed' });
       return false;
     }
     let result;
