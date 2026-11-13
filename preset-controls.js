@@ -36,7 +36,7 @@ import {
   NARRATION_PROMPT_IDS,
   TOOLBOX_FLAG_RAND_HEAD,
   TOOLBOX_FLAG_KEYS,
-} from './preset-control-defs.js?b=v1.4.12';
+} from './preset-control-defs.js?b=v1.4.13';
 import { readEditableLengthRule, replaceLengthRule } from './preset-length.js?b=v1.0.1';
 import {
   LAYOUT_SETTINGS_KEY,
@@ -545,7 +545,12 @@ export const PRESET_CONTROLS_CSS = `
   .ywpc-root .ywpc-word-step{width:44px;height:44px}
   .ywpc-root .ywpc-shortcut-remove{width:24px;min-width:24px;padding:0;border:0;background:transparent}
   .ywpc-sec[data-ywpc-section="common"] .ywpc-shortcut{gap:2px}
-  .ywpc-sec[data-ywpc-section="common"] .ywpc-shortcut .ywpc-toggle{gap:6px}
+  .ywpc-root .ywpc-sec[data-ywpc-section="common"] .ywpc-shortcut .ywpc-toggle{gap:4px;padding-inline:4px}
+  .ywpc-sec[data-ywpc-section="common"] .ywpc-switch{width:26px;height:16px;margin-left:auto}
+  .ywpc-sec[data-ywpc-section="common"] .ywpc-knob{width:10px;height:10px}
+  .ywpc-sec[data-ywpc-section="common"] .ywpc-toggle[aria-checked="true"] .ywpc-knob{transform:translateX(10px)}
+  .ywpc-sec[data-ywpc-section="common"] .ywpc-toggle[aria-checked="mixed"] .ywpc-knob{transform:translateX(5px)}
+  @media(max-width:359px){.ywpc-sec[data-ywpc-section="common"] .ywpc-shortcuts{grid-template-columns:1fr}}
   .ywpc-root .ywpc-edit-iconbtn,.ywpc-root .ywpc-member-remove{min-width:44px}
 }
 /* 思维链 5 项：DS1/DS2 同一行，KIMI 整行，Gemini 两项同一行（在手机档也保持）。 */
