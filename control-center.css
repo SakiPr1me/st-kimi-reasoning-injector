@@ -99,7 +99,7 @@
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transform: translateY(10px) scale(0.985);
+    transform: scale(0.985);
     transform-origin: 100% 0;
     transition: opacity 0.2s var(--ywcc-ease), transform 0.24s var(--ywcc-ease), visibility 0.24s linear;
 }
@@ -678,12 +678,33 @@
     padding-inline: 0;
 }
 
+/* 条目编辑紧随首页修改，沿用文字入口，不挤占当前预设名称。 */
+#ywcc-root.ywcc-root .ywcc-hero > .ywcc-home-tools .ywcc-home-content-edit {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+    min-height: 32px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ywcc-flame-ink);
+    font-weight: 500;
+}
+#ywcc-root.ywcc-root .ywcc-hero > .ywcc-home-tools .ywcc-home-content-edit:hover {
+    color: var(--ywcc-flame);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+#ywcc-root.ywcc-root[data-ywcc-theme="light"] .ywcc-home-content-edit {
+    color: color-mix(in srgb, var(--ywcc-flame-ink) 70%, var(--ywcc-ink) 30%);
+}
+
 /* 只留一句可点击文字；独占完整底行，手机也完整单行显示。 */
 #ywcc-root.ywcc-root .ywcc-home-store-btn {
     position: relative;
     z-index: 1;
     grid-column: 1 / -1;
-    grid-row: 2;
+    grid-row: 3;
     justify-self: end;
     max-width: 100%;
     min-height: 32px;
@@ -1627,7 +1648,7 @@
         min-height: 0;
         border-width: 0;
         border-radius: 0;
-        transform: translateY(100%);
+        transform: scale(0.985);
     }
 
     #ywcc-root.ywcc-root .ywcc-panel {

@@ -5,7 +5,7 @@
    - 不写业务数据；只通过 getSettings/saveSettings 保存 controlCenter.favorites/recent。
    ========================================================================== */
 
-export const CONTROL_CENTER_VERSION = '1.3.7';
+export const CONTROL_CENTER_VERSION = '1.3.13';
 export const PANEL_SELECTOR = '#ywcc-root .ywcc-panel';
 
 const ROOT_ID = 'ywcc-root';
@@ -31,6 +31,8 @@ const ICONS = {
     star: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3.6l2.5 5.1 5.6.8-4 3.9.9 5.5-5-2.6-5 2.6.9-5.5-4-3.9 5.6-.8z"/></svg>',
     starFilled: '<svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3.6l2.5 5.1 5.6.8-4 3.9.9 5.5-5-2.6-5 2.6.9-5.5-4-3.9 5.6-.8z"/></svg>',
     chev: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 6l6 6-6 6"/></svg>',
+    up: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>',
+    down: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14"/><path d="M6 13l6 6 6-6"/></svg>',
     edit: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="M13.5 6.5l3 3"/></svg>',
     check: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7"/></svg>',
     gear: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
@@ -98,7 +100,10 @@ export function createControlCenter(options) {
         headerHost: null,
         schemeBusy: '',
         schemeSig: '',
-        markSig: ''
+        markSig: '',
+        /* 收藏区的渲染签名：收藏顺序/整理态/模块清单都没变就不重画（保存后的
+           SETTINGS_UPDATED 刷新不会拆掉刚点过的箭头、不会丢焦点）。 */
+        homeFavSig: ''
     };
 
     function H(tag, cls, text) {
@@ -193,6 +198,10 @@ export function createControlCenter(options) {
         }).join('\u0002');
     }
 
+    function favoriteSigOf(favs, result) {
+        return (state.homeEdit ? 'E' : 'N') + '\u0003' + favs.join('\u0002') + '\u0003' + registrySigOf(result);
+    }
+
     function moduleById(id) {
         if (typeof id !== 'string' || !id.trim()) return null;
         const result = getModulesSafe();
@@ -280,8 +289,19 @@ export function createControlCenter(options) {
             if (typeof onFailure === 'function') onFailure(err);
             return false;
         }
+        /* 有的宿主用同步 false 表示没保存成功（不是 Promise），不能当成功放过去。 */
+        if (ret === false) {
+            if (typeof onFailure === 'function') onFailure(new Error('保存接口返回失败'));
+            return false;
+        }
         if (ret && typeof ret.then === 'function') {
-            ret.catch(function (err) {
+            /* Promise 也可能 resolve(false) 表示没保存成功，不能只看 reject。 */
+            ret.then(function (value) {
+                if (value !== false) return;
+                const err = new Error('保存接口返回失败');
+                console.error('[余小温主控] 保存设置失败', err);
+                if (typeof onFailure === 'function') onFailure(err);
+            }, function (err) {
                 console.error('[余小温主控] 保存设置失败', err);
                 if (typeof onFailure === 'function') onFailure(err);
             });
@@ -888,6 +908,29 @@ export function createControlCenter(options) {
         return btn;
     }
 
+    /* 首页整理模式：收藏的 ↑/↓ 只改 settings.controlCenter.favorites 的相邻顺序，
+       不动成员、不执行模块动作；保存成功后按同一份数组就地挪 DOM，焦点不丢。 */
+    function favoriteMoveButton(id, dir, label, disabled) {
+        const btn = iconButton(dir < 0 ? 'up' : 'down', label);
+        btn.classList.add('ywcc-fav-move');
+        btn.setAttribute('data-ywcc-move-id', id);
+        btn.setAttribute('data-ywcc-move-dir', dir < 0 ? '-1' : '1');
+        if (disabled) {
+            btn.disabled = true;
+            /* 沿用预设钉选行同一档禁用透明度；共享 CSS 不动，只在按钮自身标状态。 */
+            btn.style.opacity = '0.35';
+        }
+        btn.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            moveFavorite(id, dir);
+        });
+        ['pointerdown', 'mousedown', 'touchstart'].forEach(function (type) {
+            btn.addEventListener(type, function (ev) { ev.stopPropagation(); }, { passive: true });
+        });
+        return btn;
+    }
+
     function syncFavoriteButtons(id, on) {
         if (!state.root) return;
         state.root.querySelectorAll('[data-ywcc-fav]').forEach(function (btn) {
@@ -939,6 +982,105 @@ export function createControlCenter(options) {
             renderHomeFavorites();
             renderHomeRecent();
         }
+    }
+
+    function moveFavorite(id, dir) {
+        const delta = Number(dir) < 0 ? -1 : 1;
+        const settings = settingsObject();
+        if (!settings) {
+            flash('设置还没准备好，收藏顺序没有保存。');
+            return false;
+        }
+        const before = listFrom(settings, 'favorites');
+        const from = before.indexOf(id);
+        const to = from + delta;
+        if (from < 0 || to < 0 || to >= before.length) return false;
+        const next = before.slice();
+        next[from] = before[to];
+        next[to] = before[from];
+        if (sameList(next, before)) return false;
+        if (!setListOn(settings, 'favorites', next)) {
+            flash('收藏顺序没有保存：设置里没有可写的位置。');
+            return false;
+        }
+        const onFailure = function (err) {
+            const current = listFrom(settings, 'favorites');
+            /* 与收藏增删同一口径：只有当前顺序仍是这次写下的那一份才回滚，
+               用户已经接着调下一次时不拿旧快照盖掉。 */
+            const untouched = sameList(current, next);
+            if (untouched) {
+                setListOn(settings, 'favorites', before);
+                syncFavoriteOrderDom();
+            }
+            flash('收藏顺序没有保存：' + messageOf(err) + (untouched ? '。已恢复原来的顺序。' : '。刚才的改动可能没保存。'));
+        };
+        if (!persist(onFailure)) return false;
+        syncFavoriteOrderDom();
+        return true;
+    }
+
+    /* 收藏调序后不整块重画：按新数组把已有 chip 依次 append 回来（同一节点 ⇒ 滚动不跳），
+       再同步首尾箭头的禁用状态。appendChild 移动已聚焦节点时部分浏览器会按 focus fixup
+       规则把焦点退回 body，所以移动前记住本区焦点、移动后显式恢复（优先 preventScroll 不滚动）。 */
+    function syncFavoriteOrderDom() {
+        const host = state.refs.homeFavHost;
+        if (!host || !host.isConnected) return;
+        const list = host.querySelector('.ywcc-fav-grid, .ywcc-mini-list');
+        if (!list) return;
+        const active = doc.activeElement;
+        const refocus = active && active !== doc.body && host.contains(active)
+            && typeof active.focus === 'function' ? active : null;
+        const order = listFrom(settingsObject(), 'favorites');
+        const nodes = new Map();
+        Array.from(list.children).forEach(function (node) {
+            const id = node.getAttribute ? node.getAttribute('data-ywcc-id') : '';
+            if (id) nodes.set(id, node);
+        });
+        order.forEach(function (id) {
+            const node = nodes.get(id);
+            if (node) list.appendChild(node);
+        });
+        nodes.forEach(function (node, id) {
+            if (order.indexOf(id) < 0 && node.parentNode) node.parentNode.removeChild(node);
+        });
+        syncFavoriteMoveButtons();
+        /* 就地挪完把签名对齐，避免紧接着的 SETTINGS_UPDATED 刷新又整块重画。 */
+        state.homeFavSig = favoriteSigOf(order, getModulesSafe());
+        if (!refocus || !refocus.isConnected) return;
+        let target = refocus;
+        /* 移到首/末时原箭头会变 disabled，焦点改落到同一收藏还可用的一侧箭头。 */
+        if (refocus.classList && refocus.classList.contains('ywcc-fav-move')) {
+            const id = refocus.getAttribute('data-ywcc-move-id');
+            const dir = Number(refocus.getAttribute('data-ywcc-move-dir')) < 0 ? -1 : 1;
+            const buttons = Array.from(list.querySelectorAll('.ywcc-fav-move'));
+            target = buttons.find(function (btn) {
+                return btn.getAttribute('data-ywcc-move-id') === id
+                    && Number(btn.getAttribute('data-ywcc-move-dir')) === dir && !btn.disabled;
+            }) || buttons.find(function (btn) {
+                return btn.getAttribute('data-ywcc-move-id') === id
+                    && Number(btn.getAttribute('data-ywcc-move-dir')) === -dir && !btn.disabled;
+            }) || refocus;
+        }
+        if (target.disabled) return;
+        try {
+            target.focus({ preventScroll: true });
+        } catch (err) {
+            try { target.focus(); } catch (ignore) { /* 忽略 */ }
+        }
+    }
+
+    function syncFavoriteMoveButtons() {
+        const host = state.refs.homeFavHost;
+        if (!host || !host.isConnected) return;
+        const order = listFrom(settingsObject(), 'favorites');
+        host.querySelectorAll('.ywcc-fav-move').forEach(function (btn) {
+            const id = btn.getAttribute('data-ywcc-move-id');
+            const dir = Number(btn.getAttribute('data-ywcc-move-dir')) < 0 ? -1 : 1;
+            const index = order.indexOf(id);
+            const disabled = index < 0 || (dir < 0 ? index === 0 : index === order.length - 1);
+            btn.disabled = disabled;
+            btn.style.opacity = disabled ? '0.35' : '';
+        });
     }
 
     function rememberRecent(id) {
@@ -1391,6 +1533,21 @@ export function createControlCenter(options) {
         edit.addEventListener('click', function () { setHomeEdit(true); });
         bar.appendChild(edit);
 
+        const contentEdit = H('button', 'ywcc-home-tool ywcc-home-content-edit');
+        contentEdit.type = 'button';
+        contentEdit.setAttribute('data-ywcc-content-edit', '1');
+        contentEdit.appendChild(icon('edit'));
+        contentEdit.appendChild(H('span', '', '条目编辑'));
+        contentEdit.addEventListener('click', function () {
+            try {
+                if (typeof deps.openPresetContentEditor !== 'function') throw new Error('条目编辑还没有加载好，请稍后再试。');
+                const ret = deps.openPresetContentEditor();
+                if (ret === false) throw new Error('当前预设暂时不能编辑内容。');
+                if (ret && typeof ret.catch === 'function') ret.catch(function (err) { flash(messageOf(err)); });
+            } catch (err) { flash(messageOf(err)); }
+        });
+        bar.appendChild(contentEdit);
+
         /* 作者要求：首页修改下面再一颗“条目商店 / 预设有更新”广播入口。
            pending 只读主模块的 getStoreUpdateNotice()；点击只走 openOfficialStore()。 */
         const notice = getStoreUpdateNoticeSafe();
@@ -1541,9 +1698,10 @@ export function createControlCenter(options) {
         return row;
     }
 
-    function favoriteChip(id, mod, favSet, kind = 'fav') {
+    function favoriteChip(id, mod, favSet, kind = 'fav', opts) {
         const chip = H('div', 'ywcc-fav-chip' + (mod ? '' : ' is-missing'));
         chip.dataset.ywccId = id;
+        const entryLabel = mod ? mod.label : '这个收藏';
         if (!mod) {
             const missing = H('span', 'ywcc-fav-main is-missing');
             const glyph = H('span', 'ywcc-emoji ywcc-emoji-fallback');
@@ -1562,9 +1720,13 @@ export function createControlCenter(options) {
             });
             chip.appendChild(main);
         }
+        if (opts && opts.edit) {
+            chip.appendChild(favoriteMoveButton(id, -1, '上移 ' + entryLabel, opts.index === 0));
+            chip.appendChild(favoriteMoveButton(id, 1, '下移 ' + entryLabel, opts.index >= opts.total - 1));
+        }
         const remove = !mod && kind === 'recent'
             ? iconButton('close', '移除 ' + id, 'ywcc-fav-remove')
-            : starButton({ id: id, label: mod ? mod.label : '这个收藏' }, favSet);
+            : starButton({ id: id, label: entryLabel }, favSet);
         if (!mod && kind === 'recent') remove.addEventListener('click', function () { forgetRecent(id); });
         remove.classList.add('ywcc-fav-remove');
         chip.appendChild(remove);
@@ -1578,13 +1740,24 @@ export function createControlCenter(options) {
         const favs = listFrom(settings, 'favorites');
         const favSet = new Set(favs);
         const result = getModulesSafe();
+        /* 收藏顺序/整理态/模块清单都没变就保留现有 chip 节点：保存成功后的
+           SETTINGS_UPDATED 刷新不再拆掉刚点过的箭头，焦点和滚动都不跳。 */
+        const sig = favoriteSigOf(favs, result);
+        if (!host.firstChild) state.homeFavSig = '';
+        if (sig === state.homeFavSig) return;
+        state.homeFavSig = sig;
         const map = new Map(result.modules.map(function (m) { return [m.id, m]; }));
         const section = state.refs.homeFavSection;
         if (section) section.hidden = !favs.length;
         host.replaceChildren();
         if (!favs.length) return;
-        const grid = H('div', 'ywcc-fav-grid');
-        favs.forEach(function (id) { grid.appendChild(favoriteChip(id, map.get(id), favSet)); });
+        /* 整理模式用现有竖向列表容器（一项一行，箭头放得下）；普通首页保持两列网格。 */
+        const edit = state.homeEdit;
+        const grid = edit ? H('div', 'ywcc-mini-list') : H('div', 'ywcc-fav-grid');
+        favs.forEach(function (id, index) {
+            grid.appendChild(favoriteChip(id, map.get(id), favSet, 'fav',
+                edit ? { edit: true, index: index, total: favs.length } : null));
+        });
         host.appendChild(grid);
     }
 
@@ -1594,14 +1767,17 @@ export function createControlCenter(options) {
         const settings = settingsObject();
         const recent = listFrom(settings, 'recent');
         const favSet = new Set(listFrom(settings, 'favorites'));
+        /* 收藏区已经有一份的条目不再在「最近使用」重复出现；只过滤这次显示，
+           不回写 settings.recent —— 取消收藏后原记录还在，能重新露出来。 */
+        const visible = recent.filter(function (id) { return !favSet.has(id); });
         const result = getModulesSafe();
         const map = new Map(result.modules.map(function (m) { return [m.id, m]; }));
         const section = state.refs.homeRecentSection;
-        if (section) section.hidden = !recent.length;
+        if (section) section.hidden = !visible.length;
         host.replaceChildren();
-        if (!recent.length) return;
+        if (!visible.length) return;
         const list = H('div', 'ywcc-fav-grid ywcc-recent-grid');
-        recent.forEach(function (id) { list.appendChild(favoriteChip(id, map.get(id), favSet, 'recent')); });
+        visible.forEach(function (id) { list.appendChild(favoriteChip(id, map.get(id), favSet, 'recent')); });
         host.appendChild(list);
     }
 

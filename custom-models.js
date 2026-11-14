@@ -1,5 +1,5 @@
 // Custom model lists and target-bound selection. No request or credential interception.
-export const VERSION = '1.0.3';
+export const VERSION = '1.0.4';
 
 const SOURCES = Object.freeze(Object.fromEntries([
     ['openai', 'openai'], ['claude', 'claude'], ['openrouter', 'openrouter'],
@@ -137,7 +137,9 @@ export function createCustomModelManager({ getSettings, saveSettings, oaiSetting
     }
     function apply(source, model, rememberChoice = true) {
         const c = config(source), select = selectOf(source), stamp = target(source);
-        if (dead || suspended || !c || !select || sourceNow() !== source || !list(source).includes(model)) return false;
+        // 原生下拉里已有的模型也允许直接选中（不写进 customModels）；没有原生项才要求它在自定义列表。
+        const nativeOption = !!select && Array.from(select.options).some(op => op.value === model);
+        if (dead || suspended || !c || !select || sourceNow() !== source || (!list(source).includes(model) && !nativeOption)) return false;
         addOptions(source, select);
         lastError = '';
         applying = true;
@@ -153,7 +155,7 @@ export function createCustomModelManager({ getSettings, saveSettings, oaiSetting
             oaiSettings[c.field] = model;
             select.value = model;
             if (select.value !== model || valueOf(source) !== model) return false;
-            states.set(source, { select, target: stamp, model, managed: true });
+            states.set(source, { select, target: stamp, model, managed: list(source).includes(model) });
             const recorded = rememberChoice ? remember(source, model) : false;
             // Re-selecting the same managed model (or restoring it after a native redraw)
             // changes neither the field nor the record, but a previous failed save
@@ -163,6 +165,47 @@ export function createCustomModelManager({ getSettings, saveSettings, oaiSetting
         } catch { return false; }
         finally { applying = false; render(); }
     }
+    /** 读取当前来源（或指定来源）的模型名；未知来源返回空串，绝不猜。 */
+    function getModel(source = sourceNow()) {
+        if (source === 'custom') return String(oaiSettings.custom_model ?? '');
+        const c = config(source);
+        return c ? String(oaiSettings[c.field] ?? '') : '';
+    }
+    function inputOfCustom() {
+        const input = doc.getElementById('custom_model_id');
+        return input && input.tagName === 'INPUT' ? input : null;
+    }
+    /** 把模型写到「实际来源」并选中；未知来源/没有选择器/保存失败一律 false（调用方须报失败）。 */
+    function selectModel(model, options = {}) {
+        if (dead || suspended) return false;
+        const value = String(model ?? '').trim();
+        const source = String(options.source ?? sourceNow());
+        if (!value || sourceNow() !== source) return false;
+        if (source === 'custom') {
+            const input = inputOfCustom();
+            if (!input) return false;   // 当前宿主没有 custom 模型输入框 ⇒ 明确失败，不假成功
+            oaiSettings.custom_model = value;
+            input.value = value;
+            const jq = win?.jQuery || win?.$;
+            if (typeof jq === 'function') jq(input).trigger('input');
+            else input.dispatchEvent(new (win?.Event || globalThis.Event)('input', { bubbles: true }));
+            const saved = persist();
+            return saved !== false && !lastError && String(oaiSettings.custom_model ?? '') === value;
+        }
+        const c = config(source), select = selectOf(source);
+        if (!c || !select) return false;
+        const known = list(source).includes(value)
+            || Array.from(select.options).some(op => op.value === value);
+        if (!known) {
+            // 参照「工具箱自定义模型」：先记进该来源的列表，再由 addOptions/apply 注入并选中。
+            batchWrites(() => {
+                const models = list(source);
+                if (!models.includes(value)) { models.push(value); put(settings().customModels, source, models); persist(); }
+            });
+        }
+        return apply(source, value, options.remember !== false);
+    }
+
     function reconcile(source, removed = false) {
         if (dead) return;
         const select = selectOf(source);
@@ -402,7 +445,7 @@ export function createCustomModelManager({ getSettings, saveSettings, oaiSetting
     observer?.observe(doc.documentElement || doc, { childList: true, subtree: true });
     sync();
     return {
-        mount, sync,
+        mount, sync, selectModel, getModel,
         // Explicit host actions (e.g. OC Apply) release saved ownership before selecting.
         clearSelection(source = sourceNow()) { if (dead) return; states.delete(source); forget(source); if (intent?.source === source) intent = null; render(); },
         isManaged(source = sourceNow()) { const st = states.get(source); return !!(st?.managed && st.target === target(source) && valueOf(source) === st.model && selectOf(source)?.value === st.model); },

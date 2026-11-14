@@ -6,7 +6,7 @@
      本文件里的 enabled 一律不写死。
    ========================================================================== */
 
-export const PRESET_CONTROLS_VERSION = '1.4.15';
+export const PRESET_CONTROLS_VERSION = '1.4.22';
 export const CHARACTER_ID = 100001;
 export const LENGTH_PROMPT_ID = 'e54f6cda-5eee-421c-921f-1bb405f9e968';
 export const LENGTH_PROMPT_NAME = '🔢字数要求';
@@ -25,6 +25,8 @@ export const TOOLBOX_FLAG_KEYS = Object.freeze([TOOLBOX_FLAG_RAND_HEAD]);
 
 export const ID = Object.freeze({
   // 常用
+  loveUser: '9ee39432-93e2-49e3-8c55-32c8be4f9183',
+  antiSunshine: '117be307-9648-444f-86bf-c9f1762bbd0a',
   bilingual: '10aed42b-90cd-48db-baa5-c66bff2446ca',
   localize: 'ad63e236-9b8e-45c5-bf0d-245e5fa0ea49',
   acid: '3f0dd53e-69bf-48c4-bf58-a92064761ce2',
@@ -220,6 +222,8 @@ const COMBO = (key, label, options, allIds, extra) => Object.freeze({
    作者 2026-11-13 要求：内置「自适应文风(旧)」不再显示（不删 prompt、兼容保留），
    因此这里不收录；用户自建的 prompt 副本仍可保留。名字逐字取自当前预设。 */
 export const WRITING_PROMPTS = Object.freeze([
+  [ID.loveUser, '💘人人都爱U(选开)'],
+  [ID.antiSunshine, '🖤抗阳光叙事(基有基味)'],
   [ID.wStyleAuto, '✍自适应文风(灵感TAG·荐✨)'],
   [ID.wStyleSeam, '✍文风缝这'],
   [ID.bilingual, '🗣️双语对白'],
@@ -459,7 +463,14 @@ const SECTION_DEFS = [
       ], [
         ID.chainDs, ID.chainKimi, ID.chainGmn,
         ID.dsTail1, ID.dsTail2, ID.kimiTail, ID.gmnTail1, ID.gmnTail2,
-      ]),
+      ], { optionLayout: Object.freeze([
+        { type: 'option', value: 'ds1', width: 6 },
+        { type: 'option', value: 'ds2', width: 6 },
+        { type: 'option', value: 'kimi', width: 6 },
+        { type: 'spacer', uid: 'space:thinking-kimi', width: 6 },
+        { type: 'option', value: 'gmn1', width: 6 },
+        { type: 'option', value: 'gmn2', width: 6 },
+      ]) }),
       D(ID.break1, '破限 Part 1'),
       D(ID.break2, '破限 Part 2'),
       D(ID.niah, '插小说防道歉'),
@@ -526,7 +537,7 @@ export const FIXED_SHORTCUT_IDS = Object.freeze([
 /* 常用默认展示（可移除，不是固定）：默认四项；段落两项已合成 writing.paragraph
    单选组，不再作为两条独立 prompt 放进常用。 */
 export const DEFAULT_COMMON_IDS = Object.freeze([
-  ...FIXED_SHORTCUT_IDS,
+  ID.loveUser, ID.antiSunshine, ...FIXED_SHORTCUT_IDS,
 ]);
 
 export const PARAGRAPH_RADIO_KEY = 'writing.paragraph';
@@ -566,7 +577,13 @@ export function sectionsForOrder(orderMap, orderRows) {
       })
       .slice()
       .sort((a, b) => controlOrder(a) - controlOrder(b));
-    const controls = section.id === 'writing' ? [...paragraph, ...toggles] : toggles;
+    /* 两个新增要求固定在‘其它要求’开头，仅调整显示，不动真实 order。 */
+    const leadIds = [ID.loveUser, ID.antiSunshine];
+    const lead = leadIds.map(id => toggles.find(c => c.id === id)).filter(Boolean);
+    const rest = toggles.filter(c => !leadIds.includes(c.id));
+    const narrationAt = rest.findIndex(c => c.key === NARRATION_RADIO_KEY);
+    if (section.id === 'writing') rest.splice(narrationAt >= 0 ? narrationAt + 1 : 0, 0, ...lead);
+    const controls = section.id === 'writing' ? [...paragraph, ...rest] : toggles;
     return Object.freeze({ ...section, controls: Object.freeze(controls) });
   });
 }
