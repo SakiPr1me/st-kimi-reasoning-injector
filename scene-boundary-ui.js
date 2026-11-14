@@ -38,7 +38,7 @@ const FIELD_SET = new Set(FIELDS);
  *  closeScene 默认 true = 延续 361（原场记本轮关闭）；omitTag 默认 false = 模块内容照常发送。 */
 export const SCENE_FIELD_DEFAULTS = { closeScene: true, omitTag: false };
 /** 本 UI 模块版本（362 波次升 1.0.1；主插件加载戳与 manifest 由主统一配对）。 */
-export const SCENE_BOUNDARY_UI_VERSION = '1.0.1';
+export const SCENE_BOUNDARY_UI_VERSION = '1.0.2';
 /** 布尔兜底：'true'/'false' 字符串也认（防手改 settings.json）；缺（undefined/null）给同源缺省值。 */
 const asBool = (v, dflt) => (v === 'true' ? true : v === 'false' ? false : (v === undefined || v === null) ? dflt : v === true);
 
@@ -99,8 +99,10 @@ const KIND_PARTS = {
 };
 const KIND_LABELS = {
     prompt: '提示词', regex: '正则', content: '正文', module: '模块', tag: '标签', order: '顺序',
+    disabled: '本轮关闭',
     'guide-remove': '场记要求', 'guide-paste': '新模块',
     'format-remove': '输出格式', 'format-replace': '输出格式', 'format-reuse': '输出格式',
+    'format-in-place': '输出格式', 'format-move': '输出格式', 'format-insert': '输出格式',
     'chain-content': '思维链', 'chain-retag': '思维链',
     'world-neutral': '世界支线', 'regex-wrap': '分界正则',
 };
@@ -611,7 +613,7 @@ export function mountSceneBoundaryUI(host, deps) {
     tagInput.id = uid + '-tag';
     tagInput.placeholder = '填已缝入模块的标签';
     tagInput.setAttribute('autocomplete', 'off');
-    const tagHint = el('p', 'kimi-hint', '按标签找到已有模块：只改它的分界标签，整段模块结构原样保留，不搬动、不重复注入。');
+    const tagHint = el('p', 'kimi-hint', '将原有<scene>的条目（包括格式条目）和正则都改成你的标签，你不需要额外修改');
     tagRow.append(tagLabel, tagInput, tagHint);
     const pasteRow = el('div', 'ywsb-field');
     const pasteLabel = el('label', 'kimi-label', '完整模块内容');
@@ -693,8 +695,8 @@ export function mountSceneBoundaryUI(host, deps) {
             const frag = diffFragment(c.before, c.after);
             const card = doc.createElement('details');
             card.className = 'ywsb-change';
-            // 改动量小（前后合计 ≤400 字）默认直接展开看得清；整段大改默认收起保页面
-            card.open = frag.identical ? false : (frag.beforeLen + frag.afterLen) <= 400;
+            // 预览条目统一收起，按需展开查看改动。
+            card.open = false;
             const sum = doc.createElement('summary');
             const head = el('div', 'ywsb-change-head');
             head.appendChild(el('span', 'ywsb-kind', kindLabel(c.kind)));

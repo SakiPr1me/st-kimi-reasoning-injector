@@ -44,7 +44,7 @@
 // 阻断原则：必要目标缺失/重复/锚点歧义 → plan.ok=false，一个字都不改；场记引导"未启用/缺失"不再是硬阻断
 // （362：直接正文或已有模块不要求先开场记），只给 warning 与具体预览。
 
-export const SCENE_BOUNDARY_VERSION = '1.0.1';
+export const SCENE_BOUNDARY_VERSION = '1.0.2';
 
 /* ========================================================================
  * 小工具
@@ -596,8 +596,8 @@ export function buildScenePlan(input) {
   // ---------- 4. 场记引导的关闭（362：kind='disabled' 显式，不是 remove；原内容与顺序一字不动） ----------
   if (guide && guideEnabled && effClose) {
     const closeTitle = isContentMode
-      ? '场记本轮关闭：原提示词内容与顺序一字不动，仅本轮不发送；format 的 {{getvar::scene_mod}} 行保留（由初始化变量清空为空）'
-      : `场记本轮关闭：原提示词内容与顺序一字不动，仅本轮不发送；format 的 {{getvar::scene_mod}} 行保留并清空为空，新模块占位见 format 条目`;
+      ? '本轮关闭开幕场记，保留原条目和格式变量。'
+      : '本轮关闭开幕场记，保留原条目和格式变量。';
     addEdit(guide, 'disabled', closeTitle, '',
       '原件零改动；关闭=preparePrompt 层克隆置空（宏替换前生效，setvar 不会执行）+ 集合副本兜底');
   }
@@ -627,7 +627,7 @@ export function buildScenePlan(input) {
         if (atCritique >= 0 && atTok > atCritique && atTok < atScene) {
           changes.push({
             kind: 'format-in-place',
-            title: `format：已有 <${tag}> 占位（${reuseDesc}）已在 critique_mod 之后、scene_mod 之前，原样保留（{{getvar::scene_mod}} 永远保留）`,
+            title: `输出格式：<${tag}> 已在点评之后、场记之前，无需调整。`,
             id: format.identifier,
             name: format.name || '',
             before: c,
@@ -647,7 +647,7 @@ export function buildScenePlan(input) {
               errors.push('format 复用占位不在 critique 之后、scene_mod 之前，拒绝执行');
             } else {
               addEdit(format, 'format-move',
-                `format：已有 <${tag}> 占位（${reuseDesc}）挪到 {{getvar::scene_mod}} 行前（critique 后、scene_mod 前，各恰一次）`, after);
+                `输出格式：将已有 <${tag}> 移到点评之后、场记之前，不重复添加。`, after);
             }
           }
         }
@@ -663,7 +663,7 @@ export function buildScenePlan(input) {
             errors.push('format 新占位不在 critique 之后、scene_mod 之前，拒绝执行');
           } else {
             addEdit(format, 'format-insert',
-              `format：在 {{getvar::scene_mod}} 行前插入新占位 ${pairToken}（critique 后、scene_mod 前，恰一次；scene_mod 行保留）`, after);
+              `输出格式：在点评之后、场记之前加入 ${pairToken}，只添加一处。`, after);
           }
         }
       }
