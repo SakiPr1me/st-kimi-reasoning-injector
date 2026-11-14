@@ -2,6 +2,11 @@ import { extension_settings } from "../../../extensions.js";
 import { saveSettingsDebounced, messageFormatting, eventSource, event_types } from "../../../../script.js";
 import { t } from "./index.js"; // 三语文案（index.js 导出；函数声明循环引用安全）
 
+let tagBoundaryProvider = null;
+export function setTagBoundaryProvider(provider) {
+	tagBoundaryProvider = typeof provider === 'function' ? provider : null;
+}
+
 // ============================================
 // ===== 合并模块：一键标签修复 (原 st-tag-auto-fixer) =====
 // ============================================
@@ -81,8 +86,19 @@ function indentLevel(line) {
 	return Math.max(1, Math.round(level));
 }
 
+function effectiveTagTree() {
+	let boundary = null;
+	try { boundary = tagBoundaryProvider?.(); } catch { }
+	const tag = typeof boundary === 'string' ? boundary : boundary?.tag;
+	if (typeof tag !== 'string' || !/^[A-Za-z][\w:-]*$/.test(tag)) return settings.tagTree;
+	const lines = settings.tagTree.split('\n');
+	const hasTag = lines.some(line => line.trim() === tag);
+	return lines.flatMap(line => line.trim() === 'scene'
+		? (boundary?.keepScene ? (hasTag ? [line] : [line.replace('scene', tag), line]) : (hasTag ? [] : [line.replace('scene', tag)]))
+		: [line]).join('\n');
+}
 function parseTagTree() {
-	const lines = settings.tagTree.split('\n').filter(l => l.trim());
+	const lines = effectiveTagTree().split('\n').filter(l => l.trim());
 	const allTags = new Set();
 	const siblings = new Set();
 	const children = {}; // { parentName: Set of childNames }
@@ -201,7 +217,7 @@ async function scanAndFill(replaceMode = false) {
 	clean = clean.replace(/<output_format>[\s\S]*?<\/output_format>/gi, '');
 
 	// 树内声明的名字：权威依据（已在树里的任何名字都保留，扫描/跳过都不碰它）
-	const treeNames = new Set(settings.tagTree.split('\n').map(l => l.trim()).filter(Boolean));
+	const treeNames = new Set(effectiveTagTree().split('\n').map(l => l.trim()).filter(Boolean));
 
 	// 小剧场/HTML 容器：用户可配置的标签名（默认 extra）。扫描时这些标签的内部一律跳过（保留标签本身）。
 	let containerNames = new Set((settings.htmlContainer || '').split(/[\s,]+/).filter(Boolean));

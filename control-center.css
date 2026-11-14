@@ -346,11 +346,11 @@
 #ywcc-root.ywcc-root .ywcc-hero {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
-    gap: 0 10px;
+    gap: 4px;
     overflow: hidden;
-    padding: 14px;
+    padding: 10px 12px 6px;
     border: 1px solid var(--ywcc-line);
     border-radius: 17px;
     background-color: var(--ywcc-surface-2);
@@ -571,6 +571,12 @@
 #ywcc-root.ywcc-root .ywcc-hero > .ywcc-home-tools {
     position: relative;
     z-index: 1;
+    grid-column: 1;
+    grid-row: 2;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 2px 14px;
 }
 
 /* 整理态不再单独占一行、也不加外框：只在当前预设卡右上角换成「完成」。 */
@@ -663,11 +669,11 @@
     box-shadow: 0 0 0 3px var(--ywcc-flame-soft);
 }
 
-/* ---------- 首页：hero 右侧纵排（首页修改 / 商店与更新广播） ---------- */
+/* ---------- 首页：预设信息下方的紧凑横排入口 ---------- */
 
 /* 编辑入口留右上，提醒使用完整底行，长句也不用挤占预设名称。 */
 #ywcc-root.ywcc-root .ywcc-hero > .ywcc-home-tools.is-stacked {
-    display: contents;
+    display: flex;
 }
 
 #ywcc-root.ywcc-root .ywcc-hero > .ywcc-home-tools .ywcc-home-edit-btn {
@@ -708,7 +714,7 @@
     justify-self: end;
     max-width: 100%;
     min-height: 32px;
-    margin-top: 2px;
+    margin-top: 0;
     padding: 0;
     border: 0;
     border-radius: 0;
@@ -756,6 +762,10 @@
     color: var(--ywcc-flame);
     border: 0;
     background: transparent;
+    text-decoration: none;
+}
+
+#ywcc-root.ywcc-root .ywcc-home-store-btn:hover .ywcc-home-store-text {
     text-decoration: underline;
     text-underline-offset: 3px;
 }
@@ -2294,3 +2304,26 @@
 #ywcc-root.ywcc-root .ywcc-home { gap: 8px; }
 #ywcc-root.ywcc-root .ywcc-scheme-list,
 #ywcc-root.ywcc-root .ywcc-fav-grid { gap: 4px; }
+
+/* 三个入口同排、同图标与文字比例；长更新提醒仅在空间不足时换行。 */
+#ywcc-root.ywcc-root .ywcc-hero > .ywcc-home-tools > .ywcc-home-tool {
+    min-height: 32px;
+    padding: 0;
+    font-size: 12px;
+    flex: 0 0 auto;
+}
+#ywcc-root.ywcc-root .ywcc-hero > .ywcc-home-tools > .ywcc-home-store-btn {
+    flex: 0 1 auto;
+    min-width: 0;
+    white-space: normal;
+}
+#ywcc-root.ywcc-root .ywcc-home-store-btn .ywcc-home-store-icon {
+    display: inline-flex;
+    width: 14px;
+    height: 14px;
+    color: var(--ywcc-flame);
+}
+#ywcc-root.ywcc-root .ywcc-home-store-btn .ywcc-home-store-icon svg {
+    width: 14px;
+    height: 14px;
+}

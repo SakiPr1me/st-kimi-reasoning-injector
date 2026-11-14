@@ -6,7 +6,10 @@ import { saveSettings, saveSettingsDebounced, substituteParams, eventSource, eve
 import * as ST_Script from "../../../../script.js";
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
 import { toggleDrawer } from "../../../utils.js";
-import { stTagMountSettings } from "./tag-fixer.js";
+import { stTagMountSettings, setTagBoundaryProvider } from "./tag-fixer.js?b=v1.46.362";
+import { buildScenePlan, normalizeSceneConfig, createSceneRuntime, makeOmitTagRegex } from './scene-boundary.js?b=v1.0.1';
+import { mountSceneBoundaryUI } from './scene-boundary-ui.js?b=v1.0.1';
+import { RegexProvider, runRegexScript } from '../../regex/engine.js';
 import { mountApiPoolCard } from "./api-pool.js?b=v1.46.327";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
@@ -15,7 +18,7 @@ import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检
 import { createCustomModelManager } from './custom-models.js?b=v1.0.4';
 import { createSchemeSwitcher } from './scheme-api.js?b=v1.0.0';
 import { createSelfUpdater } from './self-update.js?b=v1.0.0';
-import { createControlCenter } from './control-center.js?b=v1.3.13';
+import { createControlCenter } from './control-center.js?b=v1.3.14';
 import { createPresetControls } from './preset-controls.js?b=v1.4.22';
 import { createCompanion, COMPANION_DEFAULTS } from './companion.js?b=v1.3.4';
 import { applyConsoleHomeDefaults, HOME_ACTION_FAVORITES, HOME_SCHEME_IDS } from './console-home-defaults.js?b=v1.0.2';
@@ -377,7 +380,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.360'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.363'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -463,6 +466,7 @@ const defaultSettings = {
     ocRelayUrl: '',                  // ★W166c：OpenCode Go 中转地址（自建 CF 部署脚本打印的 ywoc1: 那行；空 = 没配过）
     ocRelayKey: '',                  // ★W166u：OpenCode Key（TT 启动时会把 oai_settings.proxy_password 清空，这里留一份用来恢复）
     wrap4aEnabled: false,            // ★W167：4A 破限包裹（默认关；关着一律不读前后缀、请求里一个字都不加）
+    sceneBoundaryByPreset: {},       // 按预设保存临时场记分界配置，缺省关闭
     wrap4aPrefix: '',                // 前置小说（上面一段）
     wrap4aSuffix: '',                // 后置小说（下面一段）
     randHeadEnabled: false,          // ★W177（作者 2026-10-28 拍板）：三个防标记**新装全默认关**（塞小说/头部/身份同一口径；用户手动勾选受尊重）
@@ -1182,6 +1186,7 @@ if (settings.opencodeHeadersEnabled === undefined) settings.opencodeHeadersEnabl
 if (settings.ocRelayUrl === undefined) settings.ocRelayUrl = defaultSettings.ocRelayUrl;   // ★W166c（铁律 32）：新装/升级同一份默认
 if (settings.ocRelayKey === undefined) settings.ocRelayKey = defaultSettings.ocRelayKey;
 if (settings.wrap4aEnabled === undefined) settings.wrap4aEnabled = defaultSettings.wrap4aEnabled;
+if (settings.sceneBoundaryByPreset === undefined) settings.sceneBoundaryByPreset = structuredClone(defaultSettings.sceneBoundaryByPreset);
 if (settings.wrap4aPrefix === undefined) settings.wrap4aPrefix = defaultSettings.wrap4aPrefix;
 if (settings.wrap4aSuffix === undefined) settings.wrap4aSuffix = defaultSettings.wrap4aSuffix;
 if (settings.randHeadEnabled === undefined) settings.randHeadEnabled = defaultSettings.randHeadEnabled;   // ★W177（铁律 32）：新装/升级同一份默认 = 关（作者 2026-10-28 改）
@@ -1864,8 +1869,7 @@ function applyClineProvider(bodyObj) {
 function wrapLastUserMessage(msgs) {
     try {
         if (!Array.isArray(msgs) || !settings.wrap4aEnabled) return false;
-        const pre = String(settings.wrap4aPrefix || '').trim();
-        const suf = String(settings.wrap4aSuffix || '').trim();
+        const { pre, suf } = effectiveWrap4aText(settings.wrap4aPrefix, settings.wrap4aSuffix);
         if (!pre && !suf) return false;
         const NLC = String.fromCharCode(10);
         const wrapInner = (inner) => (pre ? pre + NLC + NLC : '') + '————' + NLC + '本轮真实输入：' + NLC + inner + NLC + '————' + (suf ? NLC + NLC + suf : '');
@@ -2377,6 +2381,12 @@ function estimateTokens(text) {
     if (!t) return 0;
     return Math.max(1, Math.round(t.length / 1.6));
 }
+function effectiveWrap4aText(prefix, suffix) {
+    const pre = String(prefix || '').trim(), suf = String(suffix || '').trim();
+    return pre || suf ? { pre, suf, builtin: false }
+        : { pre: WRAP4A_EXAMPLE_PREFIX.trim(), suf: WRAP4A_EXAMPLE_SUFFIX.trim(), builtin: true };
+}
+
 /** ★W167：token 估算（字符数/1.6）。实测在部分环境里调酒馆分词器会把面板拖死，
  *  这里只用本地估算 —— 秒出、绝不卡，展示时带「≈」。 */
 async function countTokensAsync(text) {
@@ -2486,6 +2496,8 @@ function applyRequestInjections(bodyObj) {
                 }
             }
         }
+
+        if (applySceneOmitTag(msgs)) changed = true;
 
         if (changed && msgs && msgs.length) {
             const last = msgs[msgs.length - 1];
@@ -2908,7 +2920,7 @@ function checkStreamingAbort(messageId) {
 
         const reasoning = String(msg.extra?.reasoning ?? '').trim();
         const mes = String(msg.mes ?? '');
-        const marker = settings.foldMarker || '<scene>';
+        const marker = effectiveFoldMarker();
         const output = currentGenerationOutput(messageId);
         if (!output) return;
         const continuing = output.type === 'continue' || output.type === 'append';
@@ -2928,7 +2940,7 @@ function checkStreamingAbort(messageId) {
                 let sample = newRs0;
                 if (!sample) {
                     // partial：思考在 content（newMes0）里，取 <scene> 前的正文开头检测
-                    const markerIdx = newMes0.lastIndexOf(marker);
+                    const markerIdx = foldMarkerIndex(newMes0, marker);
                     sample = markerIdx > 0 ? newMes0.slice(0, markerIdx) : newMes0;
                 }
                 sample = stripUrlsAndTags(sample).trim().slice(0, 120); // v1.37.66：先剥 URL/HTML 标签再取样
@@ -2944,7 +2956,7 @@ function checkStreamingAbort(messageId) {
         // ② 无思考直接出正文：content 以 <scene> 开头 且 reasoning_content 通道也空（非原生楼）
         //    → 真·无思考出正文，立即截断（由 rerollOnNoThinking 开关控制；原生楼 reasoning 有内容不误伤）
         if (!stopReason && settings.rerollOnNoThinking) {
-            const markerIdx = newMes0.lastIndexOf(marker); // 只看本次新写出的正文
+            const markerIdx = foldMarkerIndex(newMes0, marker); // 只看本次新写出的正文
             if (markerIdx === 0 && newRs0.length === 0 && newMes0.length > marker.length) {
                 stopReason = `无思考直接出了<${marker}>`; earlyRerollReason = 'nothink';   // ★W66
             }
@@ -2958,7 +2970,7 @@ function checkStreamingAbort(messageId) {
         // ★W45A：本判据归「无思维链直接出正文（没思考 or 少思考）」这一勾（勾选文案里的"少思考"就是它）。
         //   以前它不受任何勾选控制 ⇒ 勾全关也照样截断重roll（作者实机：没开重roll 但还是自动重roll了）。
         if (!stopReason && settings.rerollOnNoThinking && settings.rerollMinThinkingTokens > 0) {
-            const markerIdx = newMes0.lastIndexOf(marker); // 只看本次新写出的正文
+            const markerIdx = foldMarkerIndex(newMes0, marker); // 只看本次新写出的正文
             if (markerIdx >= 0) { // 正文已开始（<scene> 已出现，无论前缀有没有内容）
                 const thinkingPart = newRs0 + (markerIdx > 0 ? newMes0.slice(0, markerIdx) : '');
                 const estTokens = Math.round(thinkingPart.replace(/\s/g, '').length / 1.5);
@@ -3388,7 +3400,7 @@ function checkNativeReroll(messageId) {
 
         const reasoning = String(msg.extra?.reasoning ?? '').trim();
         const mes = String(msg.mes ?? '');
-        const marker = settings.foldMarker || '<scene>';
+        const marker = effectiveFoldMarker();
         const stopMarker = String(settings.autoStopMarker || '').trim();
         let shouldReroll = false;
         let reason = '';
@@ -3401,7 +3413,7 @@ function checkNativeReroll(messageId) {
                 shouldReroll = true;
                 reason = '思维链开头是英文（夺舍失败）';
             }
-        } else if (settings.rerollOnNoThinking && reasoning.length === 0 && mes.length > 0 && mes.lastIndexOf(marker) === 0) {
+        } else if (settings.rerollOnNoThinking && reasoning.length === 0 && mes.length > 0 && foldMarkerIndex(mes, marker) === 0) {
             // 无原生思维链 + 正文直接从 <scene> 开始（真·直接出正文）；
             // 被迫partial（思考在 content 里，idx>0）不算——用户接受那种
             shouldReroll = true;
@@ -3412,7 +3424,7 @@ function checkNativeReroll(messageId) {
         // 覆盖"模型降智：思维链很短/不出思维链，直接出正文但没出 <scene> 或 <scene> 前思考太短"。
         // ★W45A：与流式同源，同样归「没思考 or 少思考」这一勾（两条路此前不一致：流式不看勾、完成时看四勾总门）。
         if (!shouldReroll && settings.rerollOnNoThinking && settings.rerollMinThinkingTokens > 0 && mes.length > 0) {
-            const markerIdx2 = mes.lastIndexOf(marker);
+            const markerIdx2 = foldMarkerIndex(mes, marker);
             // 思考量 = reasoning 通道 + content 里 <scene> 前缀（没 <scene> 则前缀为空，只算 reasoning）
             const thinkingPart2 = reasoning + (markerIdx2 > 0 ? mes.slice(0, markerIdx2) : '');
             const estTokens2 = Math.round(thinkingPart2.replace(/\s/g, '').length / 1.5);
@@ -3923,7 +3935,7 @@ if (Date.now() < deleteGuardUntil) return; // v1.37.55 删除后的抑制窗口�
         const key = curChatKey() + '|' + messageId + '|' + (msg.swipe_id ?? 0) + '|' + ((msg.swipes && msg.swipes.length) || 0) + '|' + mes.length + '|' + reasoning.length;
         if (judgedBranchKey === key) return; // 同一条分支已判过/已提示过，不重复
         const modes = Array.isArray(settings.injectModes) ? settings.injectModes : [];
-        const marker = settings.foldMarker || '<scene>';
+        const marker = effectiveFoldMarker();
         const stopMarker0 = String(settings.autoStopMarker || '').trim();
         // v1.37.58（用户拍板）：判定规则不变，但**只提示、不自动动**。
         // 现象：停止重roll 后点开上一条分支查看，旧逻辑命中即发一次右滑 → 界面被顶回下一条分支。
@@ -3931,7 +3943,7 @@ if (Date.now() < deleteGuardUntil) return; // v1.37.55 删除后的抑制窗口�
         let hitReason = '';
         if (settings.rerollOnEnglishThinking && settings.injectTarget === 'kimi' && !seedIsEnglish() && reasoning.length > 0 && startsWithEnglish(reasoning)) {
             hitReason = '的思维链是英文（夺舍失败）';
-        } else if (settings.rerollOnNoThinking && reasoning.length === 0 && mes.length > 0 && mes.lastIndexOf(marker) === 0) {
+        } else if (settings.rerollOnNoThinking && reasoning.length === 0 && mes.length > 0 && foldMarkerIndex(mes, marker) === 0) {
             hitReason = '没有思维链就直接出正文';
         } else if (settings.rerollOnNoMutter && stopMarker0 && mes.length > 0 && !autoStopHitIn(mes, stopMarker0).hit) {   // ★W105：同一口径（起始标记留空=旧行为）
             hitReason = '没有收尾标记（可能是半截楼）';
@@ -4819,6 +4831,84 @@ function getPresetNames() {
     } catch (e) { /* 就是没有 */ }
     return [];
 }
+let sceneBoundaryUi = null;
+let scenePlanCache = null;
+function readSceneBoundaryConfig() {
+    const name = getCurrentPresetName();
+    const map = settings.sceneBoundaryByPreset;
+    return name && map && typeof map === 'object' && !Array.isArray(map) && Object.hasOwn(map, name) ? map[name] : {};
+}
+function scenePlanFor(config = readSceneBoundaryConfig()) {
+    const prompts = oai_settings?.prompts;
+    const order = getPromptScenario()?.order;
+    const regexScripts = oai_settings?.extensions?.regex_scripts;
+    const name = getCurrentPresetName();
+    if (scenePlanCache && scenePlanCache.name === name && scenePlanCache.config === config
+        && scenePlanCache.prompts === prompts && scenePlanCache.order === order && scenePlanCache.regexScripts === regexScripts) return scenePlanCache.plan;
+    const plan = buildScenePlan({ prompts, order, regexScripts, config });
+    scenePlanCache = { name, config, prompts, order, regexScripts, plan };
+    return plan;
+}
+const sceneBoundaryRuntime = createSceneRuntime({
+    getPlan: () => scenePlanFor(),
+    getEnabled: () => settings.enabled === true && readSceneBoundaryConfig()?.enabled === true,
+    regexProvider: RegexProvider.instance,
+});
+sceneBoundaryRuntime.installRegexProvider();
+setTagBoundaryProvider(() => {
+    if (!settings.enabled || !readSceneBoundaryConfig()?.enabled) return null;
+    const plan = scenePlanFor();
+    return plan.ok ? { tag: plan.config.tag, keepScene: plan.config.mode === 'replace' && plan.config.closeScene === false } : null;
+});
+async function ensureScenePromptHook() {
+    const pm = await inlineInsGetPm();
+    if (pm) sceneBoundaryRuntime.installPromptManager(pm);
+}
+function applySceneOmitTag(messages) {
+    if (!settings.enabled || !readSceneBoundaryConfig()?.enabled || !Array.isArray(messages)) return false;
+    const plan = scenePlanFor();
+    if (!plan.ok) return false;
+    const rule = makeOmitTagRegex(plan.config);
+    if (!rule) return false;
+    let changed = false;
+    for (const message of messages) {
+        if (message?.role !== 'assistant' || typeof message.content !== 'string') continue;
+        const content = runRegexScript(rule, message.content);
+        if (content !== message.content) { message.content = content; changed = true; }
+    }
+    return changed;
+}
+function effectiveFoldMarker() {
+    return sceneBoundaryRuntime.boundaryMarkers(settings.foldMarker || '<scene>');
+}
+function foldMarkerIndex(text, markers) {
+    const original = settings.foldMarker || '<scene>';
+    if (markers === original) return String(text || '').lastIndexOf(markers);
+    const masked = autoStopMaskCode(String(text || ''));
+    let first = -1;
+    for (const marker of markers.split(',').map(value => value.trim()).filter(Boolean)) {
+        const at = autoStopFindMarker(masked, marker, 0);
+        if (at >= 0 && (first < 0 || at < first)) first = at;
+    }
+    return first;
+}
+async function saveSceneBoundaryConfig(raw, expectedPreset) {
+    const name = getCurrentPresetName();
+    if (!name || (expectedPreset && expectedPreset !== name)) return false;
+    await ensureScenePromptHook();
+    if (name !== getCurrentPresetName()) return false;
+    const normalized = normalizeSceneConfig(raw);
+    scenePlanCache = null;
+    if (raw.enabled && (!normalized.ok || !scenePlanFor(raw).ok)) return false;
+    const map = settings.sceneBoundaryByPreset;
+    const next = map && typeof map === 'object' && !Array.isArray(map) ? { ...map } : {};
+    Object.defineProperty(next, name, { value: normalized.config, enumerable: true, configurable: true, writable: true });
+    settings.sceneBoundaryByPreset = next;
+    scenePlanCache = null;
+    saveSettingsDebounced();
+    return true;
+}
+
 /** 当前选中的预设名（DOM 直读选中项 text；兜底 oai_settings.preset_settings_openai；都没有 = null） */
 function getCurrentPresetName() {
     try {
@@ -10758,8 +10848,8 @@ function getYwUnifiedConsole() {
         status: () => ({ open: center.isOpen(), preset: presets.getSnapshot(), actor: actor.status() }),
     };
     const events = [event_types.OAI_PRESET_CHANGED_AFTER, event_types.PRESET_CHANGED, event_types.CHAT_CHANGED, event_types.SETTINGS_UPDATED].filter(Boolean);
-    for (const event of new Set(events)) eventSource.on(event, () => { ywSyncLinkedControls(); subscribers.forEach(fn => fn()); ywConsoleChanged(); });
-    document.addEventListener('click', event => { if (event.target?.closest?.('#completion_prompt_manager .prompt-manager-toggle-action')) queueMicrotask(() => { ywSyncLinkedControls(); subscribers.forEach(fn => fn()); ywConsoleChanged(); }); });
+    for (const event of new Set(events)) eventSource.on(event, () => { scenePlanCache = null; sceneBoundaryUi?.refresh(); ensureScenePromptHook().catch(() => {}); ywSyncLinkedControls(); subscribers.forEach(fn => fn()); ywConsoleChanged(); });
+    document.addEventListener('click', event => { if (event.target?.closest?.('#completion_prompt_manager .prompt-manager-toggle-action')) queueMicrotask(() => { scenePlanCache = null; sceneBoundaryUi?.refresh(); ywSyncLinkedControls(); subscribers.forEach(fn => fn()); ywConsoleChanged(); }); });
     /* 列表广播不是强制重置：仍走签名门槛；刚缝入新增条目/改开关会因签名变化自然应用。 */
     window.addEventListener('yw-store-official-update', () => { ywSyncLinkedControls(); ywConsoleChanged(); });
     ywSyncLinkedControls();
@@ -11029,6 +11119,7 @@ ${t('showTpsLabel')}
      顺序仍是 塞小说防道歉 → 随机头部 → 随机AI身份；请求注入顺序没动（头 → 名字 → 包裹）；
      全部元素 id 原样保留（_wrap4a/_wrap4a_box/_wrap4a_prefix/_wrap4a_suffix/_wrap4a_demo/
      _rand_head/_rand_head_box/_rand_head_demo/_rand_name/_rand_name_box/_rand_name_val/_rand_name_reroll/_rand_name_src）。 -->
+<div id="yw-scene-boundary-settings"></div>
 <div class="kimi-inner-card" id="kimi_rand_card">
 <div class="kimi-fold-head${foldIsOpen('wrap4a', settings.wrap4aEnabled) ? ' open' : ''}" data-fold="wrap4a">
 <input type="checkbox" id="${extensionName}_wrap4a" ${settings.wrap4aEnabled ? 'checked' : ''}/>
@@ -11037,6 +11128,7 @@ ${t('showTpsLabel')}
 </div>
 <div id="${extensionName}_wrap4a_box" style="display:${foldIsOpen('wrap4a', settings.wrap4aEnabled) ? '' : 'none'}">
 <p class="kimi-hint" style="margin:2px 0 6px;line-height:1.5">${ocr('wrap4aHint')}</p>
+<p class="kimi-hint" id="yw-wrap4a-source" style="margin:2px 0 6px">两框留空使用内置小说。</p>
 <div style="margin:0 0 6px">
 <button type="button" id="${extensionName}_wrap4a_demo" class="menu_button" style="flex:none;white-space:nowrap">${ocr('wrap4aDemo')}</button>
 </div>
@@ -11598,7 +11690,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
            点过的片按点击顺序 + 没被点走的同文段默认收进原位 + 没点过的不同处按新版；「按原顺序全收」删掉（用途被覆盖）；
            内核改动仍为 0；与 preset-updater.js 的 VERSION/BUILD 成对升） */
         /* ★W279a（2026-10-29 · 收口补救）：v5.3.50 → **v5.3.54**（W256/W260/W261/W263 四波只升了 preset-updater.js 的 VERSION、漏了本戳 ⇒ ?b= 不变 = 用户浏览器可能一直吃旧缓存；本波把戳追平到更新器现值，业务逻辑零改动；与 preset-updater.js 的 VERSION/BUILD 成对升） */
-        const updaterBuild = 'v5.3.61';
+        const updaterBuild = 'v5.3.62';
     import('./preset-updater.js?b=' + updaterBuild)
         .then(mod => {
             if (!panelScope.alive()) return;
@@ -11767,7 +11859,7 @@ ${(settings.clinePriority && settings.clinePriority.length ? settings.clinePrior
    ★同时升工具箱 PLUGIN_VERSION（1.46.27 → 1.46.28）：用户的自更新是拿**远端 manifest 的版本号**比本机 ——
      只升商店号、不升工具箱号，用户端就**不会**自动更新（作者今天当场踩到过）。 */
 /* ★W279b：v2.2.117 → **v2.2.118**（本波 preset-store.js 内容变了 [BUILD 对齐]，戳跟着走防旧缓存；与商店 VERSION/BUILD 成对） */
-const storeBuild = 'v2.2.123';
+const storeBuild = 'v2.2.124';
             import('./preset-store.js?b=' + storeBuild)
                 .then(smod => {
                     if (!panelScope.alive()) return;
@@ -12908,6 +13000,18 @@ const storeBuild = 'v2.2.123';
         toggleInjectMode('reasoning_content', $(this).is(":checked"));
     });
 
+    {
+        const host = panelScope.panel.querySelector('#yw-scene-boundary-settings');
+        if (host) {
+            const mounted = mountSceneBoundaryUI(host, {
+                getPresetKey: () => getCurrentPresetName() || '', getConfig: readSceneBoundaryConfig,
+                preview: scenePlanFor, saveConfig: saveSceneBoundaryConfig,
+                onError: message => toastr.warning(message),
+            });
+            sceneBoundaryUi = mounted;
+            panelScope.own(() => { mounted.destroy(); if (sceneBoundaryUi === mounted) sceneBoundaryUi = null; });
+        }
+    }
     // ★W167：4A 破限包裹（默认关；关着一律不读前后缀）
     (function bindWrap4a() {
         const $chk = $("#" + extensionName + "_wrap4a");
@@ -12928,8 +13032,11 @@ const storeBuild = 'v2.2.123';
             }).catch(() => { });
         };
         const renderTok = () => {
-            setTok($pre[0], extensionName + '_wrap4a_prefix_tok', $pre.val());
-            setTok($suf[0], extensionName + '_wrap4a_suffix_tok', $suf.val());
+            const effective = effectiveWrap4aText($pre.val(), $suf.val());
+            const note = document.getElementById('yw-wrap4a-source');
+            if (note) note.textContent = effective.builtin ? '当前使用内置小说；填写后改用你的内容。' : '当前使用自定义内容；两框清空后使用内置小说。';
+            setTok($pre[0], extensionName + '_wrap4a_prefix_tok', effective.pre);
+            setTok($suf[0], extensionName + '_wrap4a_suffix_tok', effective.suf);
         };
         renderTok();
         $chk.on("change", function () {
@@ -13201,6 +13308,8 @@ const storeBuild = 'v2.2.123';
 
 // 全局事件只绑定一次（语言切换重渲染 initSettingsPanel 时不会重复监听）
 eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, onSettingsReady);
+if (event_types.CHAT_COMPLETION_PROMPT_READY) eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, data => applySceneOmitTag(data?.chat));
+eventSource.on(event_types.GENERATION_AFTER_COMMANDS, async () => { scenePlanCache = null; try { await ensureScenePromptHook(); } catch (e) { console.warn('[余温工具箱] 场记适配未挂载，本轮保持原样', e); } });
 
 // ★W167c（作者报：429 限流时「空回自动重roll」不动作）：
 //   429 这类接口失败时，ST 连一条空占位消息都不会生成（聊天最后一条还是 user），
@@ -14466,6 +14575,6 @@ try {
     };
 } catch (e) { }
 
-jQuery(initSettingsPanel);
+jQuery(() => { ensureScenePromptHook().catch(e => console.warn('[余温工具箱] 场记适配挂载失败', e)); initSettingsPanel(); });
 
 

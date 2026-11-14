@@ -102,7 +102,7 @@ const EXT = 'preset_updater';
    读数 / 假证 / 未验项见 waveW124-合二为一与两版命名-日间.md §修订；台账 §XXVIII） */
 /* ★★feedback11（2026-11-13 · 商店官方更新提醒）：5.3.57 → **5.3.58** ——
    只在商店会话里捕获 card rev/fp 快照并随 `sp.stitched()` 第三参回传；与 index.js 的 updaterBuild 成对升。 */
-const VERSION = '5.3.61';   // 更新器模块版本（随工具箱一起发布）
+const VERSION = '5.3.62';   // 更新器模块版本（随工具箱一起发布）
 /** 构建戳：每次改完把这个号加一 —— 界面上会显示出来，方便确认"刷新后看到的是不是新版"
  *  ★2026-09-21 这一轮（R9 · 五份评审交叉批次，台账 §S 的 6 条更新器项）：**死路/静默失败 + 紧凑度**
  *    · **S1-2 ★**：5 处 `window.confirm` **全部收敛到酒馆原生 `Popup.show.confirm`**（`askYesX` / `askYes`）——
@@ -3932,33 +3932,8 @@ function undoDrag() {
     return true;
 }
 
-/** ★P7（§15）：商店来的这次对比，页顶照实写"这是谁的东西 + 挑完怎么落盘"，并把**包应用时的风险**说人话：
- *  · 没找到这条 / 位置不太确定 / 你已有同名 / id 撞了 → 逐条列出来（不静默）
- *  这就是 §15 的"降级照旧"：包应用有冲突/同名/锚点找不到时，用户在对比页里自己挑。
- *  ★§22：卡片标题 / 用途备注 / 出处挪进上面的**来源块**（`sourceBarHtml`）；这里只留"风险提示"，
- *    两句老文案（"找不到位置（…）——这些没动" / "你已经有同名的了"）**一个字没动**（e2e 钉着它们）。 */
-function storeBarHtml() {
-    const st = S.store;
-    if (!st) return '';
-    const r = st.report || null;
-    const notes = [];
-    if (r) {
-        /* ★S2-1（UI P4 + 台账 S2-1）：**"位置待定"这件事现在只在上面那个琥珀块里说**
-           （lowConf / unresolved / 内核那句「没找到邻居」已经并进 `anchorTrouble()` 的正文与 title）。
-           这里只留**它管不到的两条"同名"** —— 那是另一件事（你已经有同名条目），不是位置问题。
-           ⇒ 灰蓝块在"只是位置待定"的场景里**整块不渲染**（省 2 行），信息一条都没丢。 */
-        if (r.storeSameName && r.storeSameName.length) notes.push('有 ' + r.storeSameName.length + ' 条你已经有同名的了（' + r.storeSameName.slice(0, 3).map(String).join('、') + (r.storeSameName.length > 3 ? '…' : '') + '）→ 按「改你那条」进对比，你可以选用我的 / 用新版 / 保存为两版');
-        if (r.storeFieldDefaults && r.storeFieldDefaults.length) {
-            const fd = r.storeFieldDefaults;
-            notes.push('有 ' + fd.length + ' 条是你漏缝后补进来的（' + fd.slice(0, 3).map(x => String(x && x.name || '')).join('、') + (fd.length > 3 ? '…' : '')
-                + '）：包里只带了名字和正文，角色 / 系统提示 / 注入位置·深度·顺序 / 触发词 / 禁止覆盖 / marker / 开关这些按酒馆默认值补全了——进对比可以核对。');
-        }
-        if (r.sameName && r.sameName.length) notes.push('有 ' + r.sameName.length + ' 条你已经有同名的了（会照常加一条，你自己删一个）');
-    }
-    return notes.length
-        ? `<div class="ywpu-row ywpu-storebar"><span class="ywpu-note">⚠ ${notes.map(esc).join('<br>⚠ ')}</span></div>`
-        : '';
-}
+// 差异在下方逐项展示，页顶不再重复统计同名、补入与操作说明。
+function storeBarHtml() { return ''; }
 
 /* ==== ywpu-bulk-core:start（纯逻辑，别在这段里引用外面的东西 —— 探针会把这段单独抽出来跑；
    ★这里唯一允许的外部依赖是内核（PM）：探针把**真内核**当参数喂进来，与产品里用的是同一个 PM）==== */
@@ -4637,8 +4612,7 @@ function renderResult() {
     $el('#ywpu-summary').innerHTML = `
 <div class="ywpu-box">
     ${sourceBarHtml()}
-    ${troubleBarHtml()}
-    ${storeBarHtml()}
+
 </div>
 <div id="ywpu-controls">
     <div class="ywpu-stats">${bulkBtns}<span class="ywpu-brk"></span>${scopeChipsHtml(S.scopeItems, S.scopeRx, (an.items || []).length, (S.regexItems || []).length)}${chips}</div>

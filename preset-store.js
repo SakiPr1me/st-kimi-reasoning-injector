@@ -160,7 +160,7 @@ const EXT = 'preset_store';
    （VERSION/BUILD 两处 + index.js 的 storeBuild = 三处成对；主 Agent 接手 index.js 那一位）。 */
 /* ★★feedback12（2026-11-13 · 作者纠正）：更新对象是官方**补丁包**（真实 kind = ywp-entry / ywp-patch），
    不是整份 ywp-preset。2.2.121 → **2.2.122**（VERSION/BUILD 两处 + index.js storeBuild 成对）。 */
-const VERSION = '2.2.123';
+const VERSION = '2.2.124';
 // ★P12（2026-09-20）默认后端从本地假后端切到**已部署的 Cloudflare Pages 真后端** + 加"测试隔离覆盖口子"
 //   （见下面 STORE_API 的注释）→ 与 index.js 的 storeBuild 一起升到 v1.7.0
 // ★§21（2026-09-21 · 商店交互 v3）：卡片收紧+标题用主题引用色+更新日期 / 顶栏只剩 4 颗统一样式 /
@@ -262,7 +262,7 @@ const VERSION = '2.2.123';
    `syncCommentCount` 两处字面必须逐字相同）；② 整份预设卡底排四颗统一外形 + 收紧（CSS 一条 (0,3,0) 规则 +
    手机档给「缝入」补 32 热区）。 */
 /* ★W279a（2026-10-29 · 收口补救）：BUILD 从 v2.2.87 追平（W211 起多波只升 VERSION/storeBuild 漏了 BUILD；纯显示对齐，逻辑零改动）；★W279b 随发版升 v2.2.118 */
-const BUILD = 'v2.2.123';
+const BUILD = 'v2.2.124';
 const API_ID = 'openai';
 /** ★后端地址就这一处（P12 已切真后端）。两层含义：
  *  ① **默认值 = 作者部署的 Cloudflare Pages 后端**（★★2026-10-09 切换后 = **`https://ywp-store-b.pages.dev`（备胎/D1）**；旧默认 `https://ywp-store-sakiprime.pages.dev` = 数据源，留档不删）：
@@ -11609,7 +11609,7 @@ function srcFallbackHtml(w) {
 function regexPickerInPart(w) {
     const all = (S.w && S.w.regexes) || [];
     const picked = new Set(w.pickedRegex || []);
-    const bar = '<div class="yws-pickbar" style="margin-top:6px"><span><b>正则</b> · 已选 <b>' + picked.size + '</b> 条 · 共 ' + numOf(all.length) + ' 条</span>' +
+    const bar = '<div class="yws-pickbar" style="margin-top:6px"><span><b>正则</b> · 已选 <b data-rxcount="1">' + picked.size + '</b> 条 · 共 ' + numOf(all.length) + ' 条</span>' +
         '<button class="yws-btn yws-mini" data-act="w-rxall">全选正则</button><button class="yws-btn yws-mini" data-act="w-rxnone">取消正则</button></div>';
     if (!all.length) return '<div class="yws-dim" style="margin-top:6px">这份预设里没有正则</div>';
     const rows = all.map(r => {
@@ -15665,14 +15665,26 @@ function syncRegexPickUi(m, oneId) {
         rows.forEach(row => {
             const id = String(row.getAttribute('data-id') || '');
             if (oneId != null && id !== String(oneId)) return;
+            /* ★★362（作者报：部分上传/编辑已有包时，勾正则卡**中间迟迟不打勾**，点别处切换后才显）：
+               W251 把这一行的勾选框从原生 `<input type=checkbox>` 换成了自绘 `span.yws-cb.yws-mark`（与条目行同款），
+               而这里还在查 `input[type="checkbox"]` ⇒ 恒 null ⇒ ☑/☐ 从不就地更新 —— 底色在变、勾不变，
+               要等下一次整页重绘（点条目/换范围…）才显出勾。W193 的"不重绘"铁律本身没错，错的是刷错了对象。
+               ⇒ 改走与条目行同一把刷子 `setMarkText($('.yws-mark', row))`（顺带 aria-checked 一起就地改）；
+                 原生 input 那两行保留当兜底（将来渲染再换回去，就地同步也不瞎）。 */
+            const mk = $('.yws-mark', row);
+            if (mk) setMarkText(mk, picked.has(id));
             const cb = $('input[type="checkbox"]', row);
             if (cb) cb.checked = picked.has(id);
             row.classList.toggle('yws-selrow', picked.has(id));
         });
-        /* 计数：正则区那一行的 "已选 N 条"（它自己那颗 <b>） */
-        const bars = $$('.yws-pickbar', m.el).filter(b => String(b.textContent || '').indexOf('正则') >= 0 && String(b.textContent || '').indexOf('已选') >= 0);
-        const bar = bars[0] || null;
-        if (bar) { const b = $('b', bar); if (b) b.textContent = String(picked.size); }
+        /* ★★362（同一条真因的另一半）：计数条原来按"文本含'正则'+'已选'取第一个 .yws-pickbar 的第一颗 <b>"——
+           部分上传里**条目区**的 pickbar 也含这两个词（「正则」勾选标签就在它里面、条数行写着"已选"），
+           而且它在 DOM 里排前面 ⇒ 正则一点，改的是**条目区**的"已选 N 个条目"（真实现场读数见 362 测试），
+           正则自己的"已选 N 条"永远不动。
+           ⇒ 改读 regexPickerInPart 渲染时带上的稳定钩子 `[data-rxcount]`（纯属性、不加类、不进 CSS）；
+             钩子不在（老渲染）⇒ **一个字都不动**（宁可等下一次重绘，也绝不再误改条目区）。 */
+        const cnt = $('[data-rxcount]', m.el);
+        if (cnt) cnt.textContent = String(picked.size);
     } catch (e) { /* 就地更新失败不影响勾选本身（状态已写进 S.wiz） */ }
 }
 function bindPaint() {
