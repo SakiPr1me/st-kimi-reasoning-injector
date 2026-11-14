@@ -8,7 +8,7 @@ import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../
 import { toggleDrawer } from "../../../utils.js";
 import { stTagMountSettings, setTagBoundaryProvider } from "./tag-fixer.js?b=v1.46.362";
 import { buildScenePlan, normalizeSceneConfig, createSceneRuntime, makeOmitTagRegex } from './scene-boundary.js?b=v1.0.2';
-import { mountSceneBoundaryUI } from './scene-boundary-ui.js?b=v1.0.2';
+import { mountSceneBoundaryUI } from './scene-boundary-ui.js?b=v1.0.3';
 import { RegexProvider, runRegexScript } from '../../regex/engine.js';
 import { mountApiPoolCard } from "./api-pool.js?b=v1.46.327";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
@@ -380,7 +380,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.364'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.365'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -4892,11 +4892,35 @@ function foldMarkerIndex(text, markers) {
     }
     return first;
 }
+function reopenSceneAfterBoundaryOff() {
+    const picked = selectStrictPromptScenario(oai_settings?.prompt_order);
+    const prompts = oai_settings?.prompts;
+    if (!picked.ok || !Array.isArray(prompts)) return false;
+    const rows = picked.scenario.order;
+    const resolved = ywResolvedPromptId(YW_PRESET_ID.scene);
+    let matches = prompts.filter(prompt => prompt?.identifier === resolved && prompt.marker !== true);
+    if (!matches.length) {
+        matches = prompts.filter(prompt => prompt?.marker !== true && typeof prompt?.content === 'string'
+            && /\{\{setvar::scene_mod::\s*[^}\s]/.test(prompt.content)
+            && rows.some(row => row?.identifier === prompt.identifier));
+    }
+    if (matches.length !== 1) return false;
+    const id = matches[0].identifier;
+    const targets = rows.filter(row => row?.identifier === id);
+    if (targets.length !== 1 || typeof targets[0].enabled !== 'boolean') return false;
+    if (targets[0].enabled) return true;
+    writePromptToggles({ [id]: true }, picked.scenario);
+    if (settings.inlineInsertSavePreset === true) {
+        ywUnifiedConsole?.presets?.requestPresetSave('yw-scene-boundary-off');
+    }
+    return true;
+}
 async function saveSceneBoundaryConfig(raw, expectedPreset) {
     const name = getCurrentPresetName();
     if (!name || (expectedPreset && expectedPreset !== name)) return false;
     await ensureScenePromptHook();
     if (name !== getCurrentPresetName()) return false;
+    const wasEnabled = readSceneBoundaryConfig()?.enabled === true;
     const normalized = normalizeSceneConfig(raw);
     scenePlanCache = null;
     if (raw.enabled && (!normalized.ok || !scenePlanFor(raw).ok)) return false;
@@ -4905,6 +4929,9 @@ async function saveSceneBoundaryConfig(raw, expectedPreset) {
     Object.defineProperty(next, name, { value: normalized.config, enumerable: true, configurable: true, writable: true });
     settings.sceneBoundaryByPreset = next;
     scenePlanCache = null;
+    if (wasEnabled && normalized.config.enabled === false && !reopenSceneAfterBoundaryOff()) {
+        try { toastr.warning('功能已关闭，但没有找到唯一的开幕场记条目，请检查预设开关。'); } catch (e) { }
+    }
     saveSettingsDebounced();
     return true;
 }
