@@ -19,11 +19,11 @@ import { createCustomModelManager } from './custom-models.js?b=v1.0.4';
 import { createSchemeSwitcher } from './scheme-api.js?b=v1.0.0';
 import { createSelfUpdater } from './self-update.js?b=v1.0.0';
 import { createControlCenter } from './control-center.js?b=v1.3.14';
-import { createPresetControls } from './preset-controls.js?b=v1.4.22';
+import { createPresetControls } from './preset-controls.js?b=v1.4.24';
 import { createCompanion, COMPANION_DEFAULTS } from './companion.js?b=v1.3.4';
 import { applyConsoleHomeDefaults, HOME_ACTION_FAVORITES, HOME_SCHEME_IDS } from './console-home-defaults.js?b=v1.0.2';
 import { getChatCompletionPreset } from '../../../openai.js';
-import { ID as YW_PRESET_ID } from './preset-control-defs.js?b=v1.4.22';
+import { ID as YW_PRESET_ID } from './preset-control-defs.js?b=v1.4.24';
 import { placeAfter, syncLinkedSetting, selectStrictPromptScenario, resolveNsfwPresetLink, nsfwLinkSignature, shouldApplyNsfwLink, clearNsfwLinkState, applyNsfwDefaults, applyNsfwLink, applyNsfwMaster, planNsfwMasterAction, NSFW_PROMPT_ID, NSFW_PROMPT_ALIAS_ID } from './console-linked-controls.js?b=v1.0.1';
 
 
@@ -380,7 +380,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.365'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.367'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {

@@ -37,7 +37,7 @@ import {
   NARRATION_PROMPT_IDS,
   TOOLBOX_FLAG_RAND_HEAD,
   TOOLBOX_FLAG_KEYS,
-} from './preset-control-defs.js?b=v1.4.22';
+} from './preset-control-defs.js?b=v1.4.24';
 import { readEditableLengthRule, replaceLengthRule } from './preset-length.js?b=v1.0.1';
 import {
   LAYOUT_SETTINGS_KEY,
@@ -8231,12 +8231,13 @@ export function createPresetControls(deps = {}) {
     }
     const token = ensureWritable();
     if (!token) return false;
-    const selected = new Set(option.ids);
+    const clearing = option.ids.length > 0 && selectedRadioValue(m, def) === value;
+    const selected = new Set(clearing ? [] : option.ids);
     const map = {};
     for (const id of def.allIds) {
       if (isAvailable(m, id)) map[id] = selected.has(id);
     }
-    if (def.masterId && value !== 'none' && isAvailable(m, def.masterId)) map[def.masterId] = true;
+    if (!clearing && def.masterId && value !== 'none' && isAvailable(m, def.masterId)) map[def.masterId] = true;
     let changed = false;
     for (const id of Object.keys(map)) {
       if (m.toggles[id] !== map[id]) changed = true;
@@ -8245,7 +8246,7 @@ export function createPresetControls(deps = {}) {
     return writeToggleMap(map, 'ywpc-radio', token);
   }
 
-  /* 段落风格：点当前已选项 = 全部关（原两条可同时关），不另加“不开”第三张主卡。 */
+  /* 支持取消的单选组：点当前已选项 = 全部关，不另加“不开”选项。 */
   function applyRadioClear(key) {
     const m = model || buildModel();
     const def = definitionForKey(m, key, ['radio']);
@@ -8276,7 +8277,7 @@ export function createPresetControls(deps = {}) {
     }
     const token = ensureWritable();
     if (!token) return false;
-    const selected = new Set(option.ids);
+    const selected = new Set(selectedComboValue(m, def) === value ? [] : option.ids);
     const map = {};
     for (const id of def.allIds) {
       if (isAvailable(m, id)) map[id] = selected.has(id);
@@ -10225,7 +10226,7 @@ export function createPresetControls(deps = {}) {
       const value = radioEl.getAttribute('data-ywpc-value');
       const m = model || buildModel();
       const def = definitionForKey(m, key, ['radio']);
-      if ((key === PARAGRAPH_RADIO_KEY || key === NARRATION_RADIO_KEY)
+      if ((key === PARAGRAPH_RADIO_KEY || key === NARRATION_RADIO_KEY || key === 'nsfw.orientation')
         && def && selectedRadioValue(m, def) === value) {
         applyRadioClear(key);
       } else {

@@ -6,7 +6,7 @@
      本文件里的 enabled 一律不写死。
    ========================================================================== */
 
-export const PRESET_CONTROLS_VERSION = '1.4.22';
+export const PRESET_CONTROLS_VERSION = '1.4.24';
 export const CHARACTER_ID = 100001;
 export const LENGTH_PROMPT_ID = 'e54f6cda-5eee-421c-921f-1bb405f9e968';
 export const LENGTH_PROMPT_NAME = '🔢字数要求';
@@ -317,7 +317,7 @@ const SECTION_DEFS = [
         ['bl', 'BL', [ID.nsfwBl]],
         ['gl', 'GL', [ID.nsfwGl]],
         ['gb', 'GB', [ID.nsfwGb]],
-      ], { exactlyOne: true, allowNone: false }),
+      ], { exactlyOne: false, atMostOne: true, allowNone: true }),
       D(ID.nsfwCarnal, '多写肉体'),
       D(ID.nsfwMoanGuide, '叫床指导'),
       D(ID.moanHeart, '呻吟爱心'),
@@ -337,7 +337,7 @@ const SECTION_DEFS = [
         ['third', '第三人称', [ID.personThird]],
         ['second', '第二人称', [ID.personSecond]],
         ['first', '第一人称', [ID.personFirst]],
-      ], { exactlyOne: true, allowNone: false }),
+      ], { exactlyOne: false, atMostOne: true, allowNone: true }),
       D(ID.dynamic, '动态感知主体'),
       RADIO('pov.preference', '感知偏好', [
         ['c', '偏 C', [ID.prefC]],
@@ -427,7 +427,7 @@ const SECTION_DEFS = [
       RADIO('plot.protagonist', 'User 位置', [
         ['user_main', 'User 是主角', [ID.protagonistUser]],
         ['not_main', 'User 不是主角', [ID.protagonistNot]],
-      ], { exactlyOne: true, allowNone: false }),
+      ], { exactlyOne: false, atMostOne: true, allowNone: true }),
       D(ID.mainline, '主线开关'),
       D(ID.romance, '专注感情线'),
       D(ID.antiRush, '防秒车'),
@@ -437,7 +437,7 @@ const SECTION_DEFS = [
         ['medium', '缓速 · 推进', [ID.paceMedium]],
         ['natural', '自然 · 推进', [ID.paceNatural]],
         ['none', '不开', []],
-      ], { exactlyOne: true, allowNone: true }),
+      ], { exactlyOne: false, atMostOne: true, allowNone: true }),
       RADIO('plot.pace_boost', '加减速叠加', [
         ['decel', '减速剧情', [ID.boostDecel]],
         ['accel', '加速剧情', [ID.boostAccel]],
@@ -453,7 +453,7 @@ const SECTION_DEFS = [
         ['short', '短思考', [ID.thinkShort]],
         ['long', '长思考', [ID.thinkLong]],
         ['none', '不开（默认）', []],
-      ], { exactlyOne: true, allowNone: true }),
+      ], { exactlyOne: false, atMostOne: true, allowNone: true }),
       COMBO('think.model', '思维链', [
         ['ds1', 'Deepseek思维链1', [ID.chainDs, ID.dsTail1]],
         ['ds2', 'Deepseek思维链2', [ID.chainDs, ID.dsTail2]],
