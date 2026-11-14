@@ -377,7 +377,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.358'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.360'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -3174,15 +3174,60 @@ function autoStopPairArmedAt(t, pair) {
     }
     return null;
 }
+/** ★WXXX：把反引号里“承诺会输出”的标签提及遮成等长空格（与预设去美化正则同款口径）——
+ *  只影响截断判定用的文本，不改原文、不改变下标：`<content>…</content>` / `</content>` / `<talk>` / `<mutter>`
+ *  之类被反引号包住时，不再被当成真正的起始标签对或截断标记。单行、标签名 1-60 字；多行代码块不在此口径内。 */
+/** 代码块/行内代码遮罩：围栏（``` / ~~~，流式中未闭合也遮到末尾）、行内 `…` 全部换成等长空格，
+ *  这样代码块里提到的标签和截断标记都不会被当成真正的正文结构。保留换行和总长度，命中下标仍对齐原文。 */
+function autoStopMaskCode(text) {
+    const s = String(text == null ? '' : text);
+    const lines = s.split('\n');
+    let fence = null, changed = false;
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const m = /^([ \t]*)(`{3,}|~{3,})(.*)$/.exec(line);
+        if (fence) {
+            if (m && m[2][0] === fence.char && m[2].length >= fence.len && m[3].trim() === "") {
+                fence = null;
+            }
+            lines[i] = ' '.repeat(line.length);
+            changed = true;
+        } else if (m) {
+            fence = { char: m[2][0], len: m[2].length };
+            lines[i] = ' '.repeat(line.length);
+            changed = true;
+        } else {
+            const masked = line.replace(/`[^`\n]*`/g, part => ' '.repeat(part.length));
+            if (masked !== line) { lines[i] = masked; changed = true; }
+        }
+    }
+    return changed ? lines.join('\n') : s;
+}
+/** 截断标记查找：跳过紧挨反引号的命中（`<mutter>` 这类只出现在代码/引用里）。 */
+function autoStopFindMarker(text, marker, from) {
+    if (!marker) return -1;
+    let at = text.indexOf(marker, from || 0);
+    while (at >= 0) {
+        const before = at > 0 ? text[at - 1] : "";
+        const after = text[at + marker.length] || "";
+        if (before !== "`" && after !== "`") return at;
+        at = text.indexOf(marker, at + 1);
+    }
+    return -1;
+}
+const AUTO_STOP_MENTION_RE = /`[ \t]*(?:<([A-Za-z][\w:-]*)>[^`\r\n]*?<\/\1>|<[^`<>\r\n]{1,60}>)[ \t]*`/g;
+function autoStopMaskMentions(text) {
+    return autoStopMaskCode(text).replace(AUTO_STOP_MENTION_RE, m => ' '.repeat(m.length));
+}
 function autoStopHitIn(text, markerOpt, anchorOpt, needPairOpt) {
-    const t = String(text || '');
+    const t = autoStopMaskMentions(String(text || ''));
     const marker = (markerOpt === undefined) ? String(settings.autoStopMarker || '') : String(markerOpt || '');
     const rawAnchor = (anchorOpt === undefined) ? String(settings.autoStopFrom || '') : String(anchorOpt || '');
     /* ★W275：默认读设置；探针可以显式传第 4 个参数覆盖（纯判据，无副作用） */
     const needPair = (needPairOpt === undefined) ? (settings.autoStopNeedPair !== false) : (needPairOpt !== false);
     const anchors = autoStopAnchors(rawAnchor);
     if (!anchors.length) {
-        const i = marker ? t.indexOf(marker) : -1;
+        const i = marker ? autoStopFindMarker(t, marker, 0) : -1;
         return { on: true, hit: i >= 0, at: i, region: t, anchor: '' };
     }
     let on = false, hit = false, at = -1, region = '', armed = '', armedAt = -1, win = '';
@@ -3208,7 +3253,7 @@ function autoStopHitIn(text, markerOpt, anchorOpt, needPairOpt) {
         if (armedAt < 0 || startForOrder < armedAt) { armedAt = startForOrder; armed = armLabel; }
         if (!marker) continue;
         const seg = t.slice(armPos);
-        const ri = seg.indexOf(marker);
+        const ri = autoStopFindMarker(seg, marker, 0);
         if (ri < 0) continue;
         const abs = armPos + ri;
         if (at < 0 || abs < at) { hit = true; at = abs; region = seg; win = armLabel; }   // ★命中位置取**最早**
