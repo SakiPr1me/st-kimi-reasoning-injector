@@ -37,7 +37,7 @@ import {
   NARRATION_PROMPT_IDS,
   TOOLBOX_FLAG_RAND_HEAD,
   TOOLBOX_FLAG_KEYS,
-} from './preset-control-defs.js?b=v1.4.25';
+} from './preset-control-defs.js?b=v1.4.28';
 import { readEditableLengthRule, replaceLengthRule } from './preset-length.js?b=v1.0.1';
 import {
   LAYOUT_SETTINGS_KEY,
@@ -947,24 +947,32 @@ export const PRESET_CONTROLS_CSS = `
 /* 2026-11-15 导航+拨钮并列卡（scope：.ywpc-split，只有插小说防道歉 / 随机头部用）。
    外层 wrapper（.ywpc-shortcut / .ywpc-inline-pair）原样，里面两颗并列 button：
    前面 .ywpc-nav-btn 只导航，后面 .ywpc-split-toggle 只切换；其余控件不沾这些类。 */
-.ywpc-split{gap:5px}
+.ywpc-toggle-aside{font-size:.78em;font-weight:400;color:var(--ywpc-muted);margin-left:3px}
+.ywpc-split{gap:0;align-items:stretch;border-radius:9px;transition:background .14s ease}
+.ywpc-split:has(.ywpc-nav-btn:hover:not(:disabled)),
+.ywpc-split:has(.ywpc-split-toggle:hover:not(:disabled)){background:var(--ywpc-surface-2)}
 .ywpc-split .ywpc-nav-btn{
-  display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto;
-  min-height:36px;padding:6px 8px;border:1px solid var(--ywpc-line);border-radius:9px;
-  background:var(--ywpc-surface);text-align:left;
-  transition:border-color .14s ease,background .14s ease;
+  display:flex;align-items:center;gap:5px;min-width:0;flex:1 1 auto;
+  min-height:36px;padding:6px 8px;border:0;border-radius:0;
+  background:transparent;text-align:left;
 }
-.ywpc-split .ywpc-nav-btn:hover:not(:disabled){border-color:var(--ywpc-line-strong);background:var(--ywpc-surface-2)}
-.ywpc-split .ywpc-nav-btn:disabled{opacity:.62;border-style:dashed;cursor:not-allowed}
+.ywpc-split .ywpc-nav-btn:hover:not(:disabled){color:var(--ywpc-ink);text-decoration:none}
+.ywpc-split .ywpc-nav-btn:hover:not(:disabled) .ywpc-toggle-label{text-decoration:none}
+.ywpc-split .ywpc-nav-btn:disabled{opacity:.62;cursor:not-allowed}
 .ywpc-split .ywpc-nav-go{flex:none;color:var(--ywpc-muted);font-size:14px;line-height:1}
-.ywpc-split .ywpc-split-toggle{width:auto;flex:none;min-width:44px;justify-content:center}
-.ywpc-compact .ywpc-split .ywpc-nav-btn{min-height:34px;padding:5px 8px}
-.ywpc-compact .ywpc-split .ywpc-split-toggle{min-height:34px}
-.ywpc-sec[data-ywpc-section="common"] .ywpc-split{gap:2px}
-.ywpc-sec[data-ywpc-section="common"] .ywpc-split .ywpc-nav-btn{gap:4px;padding-inline:4px}
+.ywpc-root .ywpc-split .ywpc-split-toggle{
+  width:44px;min-width:44px;flex:none;justify-content:flex-end;gap:0;
+  min-height:36px;padding:6px 8px 6px 0;border:0;border-radius:0;background:transparent;
+}
+.ywpc-root .ywpc-split .ywpc-split-toggle:hover:not(:disabled),
+.ywpc-root .ywpc-split .ywpc-split-toggle[aria-checked="true"]{border:0;background:transparent}
+.ywpc-compact .ywpc-split .ywpc-nav-btn{min-height:32px;padding:4px 7px}
+.ywpc-root.ywpc-compact .ywpc-split .ywpc-split-toggle{min-height:32px;padding:4px 7px 4px 0}
 @media (max-width:520px){
-  .ywpc-root .ywpc-split .ywpc-nav-btn{min-height:44px}
-  .ywpc-root .ywpc-split .ywpc-split-toggle{min-height:44px;min-width:44px}
+  .ywpc-root.ywpc-compact .ywpc-split .ywpc-nav-btn,
+  .ywpc-root.ywpc-compact .ywpc-split .ywpc-split-toggle{min-height:36px}
+  .ywpc-root .ywpc-sec[data-ywpc-section="common"] .ywpc-split .ywpc-nav-btn{padding-left:4px}
+  .ywpc-root .ywpc-sec[data-ywpc-section="common"] .ywpc-split .ywpc-split-toggle{padding-right:4px}
 }
 `;
 
@@ -3208,6 +3216,7 @@ export function createPresetControls(deps = {}) {
     nav.setAttribute('data-ywpc-nav-kind', o.kind || 'prompt');
     nav.setAttribute('data-ywpc-nav-id', o.id || '');
     nav.setAttribute('data-ywpc-focus-key', o.focusKey || ('nav:' + section));
+    if (o.missing) nav.classList.add('ywpc-missing');
     const ready = canOpenInjectionSection();
     if (!ready) {
       nav.disabled = true;
@@ -3263,6 +3272,17 @@ export function createPresetControls(deps = {}) {
       ? '破限 Part 2(1不行再关)' : label;
   }
 
+  function appendToggleLabel(node, id, label) {
+    const match = [ID.break1, ID.break2].includes(id) ? /^(.*?)([（(][^（）()]*[）)])$/.exec(label) : null;
+    if (!match) { node.textContent = label; return; }
+    const name = createEl(doc, 'span', 'ywpc-toggle-name');
+    name.textContent = match[1];
+    const aside = createEl(doc, 'span', 'ywpc-toggle-aside');
+    aside.textContent = match[2];
+    append(node, name);
+    append(node, aside);
+  }
+
   function makeToggle(m, id, label, options) {
     const opts = options || {};
     label = part2DisplayLabel(id, label);
@@ -3285,7 +3305,7 @@ export function createPresetControls(deps = {}) {
 
     const main = createEl(doc, 'span', 'ywpc-toggle-main');
     const labelEl = createEl(doc, 'span', 'ywpc-toggle-label');
-    labelEl.textContent = toggleLabelText(label, realName);
+    appendToggleLabel(labelEl, id, toggleLabelText(label, realName));
     const subEl = createEl(doc, 'span', 'ywpc-toggle-sub');
     subEl.setAttribute('data-ywpc-sub', '1');
     subEl.setAttribute('data-ywpc-sub-default', opts.sub || '');
@@ -3894,6 +3914,7 @@ export function createPresetControls(deps = {}) {
         label,
         realName,
         sub: usable ? '' : reason,
+        missing: !usable,
         navTitle: '打开工具箱「塞小说防道歉」设置',
         focusKey: 'nav:' + INJECTION_SECTION_NIAH,
       });
@@ -8090,7 +8111,9 @@ export function createPresetControls(deps = {}) {
       /* 2026-11-15：并列卡（插小说防道歉）的状态字在外层 wrapper 的导航按钮里，
          拨钮本体没有 [data-ywpc-sub]，这里一并同步，避免不重建刷新时状态字过期。 */
       const splitCard = typeof node.closest === 'function' ? node.closest('.ywpc-split') : null;
-      const navSub = splitCard ? splitCard.querySelector('.ywpc-nav-btn [data-ywpc-sub]') : null;
+      const nav = splitCard ? splitCard.querySelector('.ywpc-nav-btn') : null;
+      if (nav) nav.classList.toggle('ywpc-missing', !usable);
+      const navSub = nav ? nav.querySelector('[data-ywpc-sub]') : null;
       if (navSub) {
         const navFallback = navSub.getAttribute('data-ywpc-sub-default') || '';
         if (!available) navSub.textContent = '当前预设没有这项';
