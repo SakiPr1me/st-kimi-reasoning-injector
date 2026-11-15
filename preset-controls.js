@@ -37,7 +37,7 @@ import {
   NARRATION_PROMPT_IDS,
   TOOLBOX_FLAG_RAND_HEAD,
   TOOLBOX_FLAG_KEYS,
-} from './preset-control-defs.js?b=v1.4.24';
+} from './preset-control-defs.js?b=v1.4.25';
 import { readEditableLengthRule, replaceLengthRule } from './preset-length.js?b=v1.0.1';
 import {
   LAYOUT_SETTINGS_KEY,
@@ -943,6 +943,28 @@ export const PRESET_CONTROLS_CSS = `
 }
 @media (prefers-reduced-motion:reduce){
   .ywpc-root *{transition:none!important;animation:none!important}
+}
+/* 2026-11-15 导航+拨钮并列卡（scope：.ywpc-split，只有插小说防道歉 / 随机头部用）。
+   外层 wrapper（.ywpc-shortcut / .ywpc-inline-pair）原样，里面两颗并列 button：
+   前面 .ywpc-nav-btn 只导航，后面 .ywpc-split-toggle 只切换；其余控件不沾这些类。 */
+.ywpc-split{gap:5px}
+.ywpc-split .ywpc-nav-btn{
+  display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto;
+  min-height:36px;padding:6px 8px;border:1px solid var(--ywpc-line);border-radius:9px;
+  background:var(--ywpc-surface);text-align:left;
+  transition:border-color .14s ease,background .14s ease;
+}
+.ywpc-split .ywpc-nav-btn:hover:not(:disabled){border-color:var(--ywpc-line-strong);background:var(--ywpc-surface-2)}
+.ywpc-split .ywpc-nav-btn:disabled{opacity:.62;border-style:dashed;cursor:not-allowed}
+.ywpc-split .ywpc-nav-go{flex:none;color:var(--ywpc-muted);font-size:14px;line-height:1}
+.ywpc-split .ywpc-split-toggle{width:auto;flex:none;min-width:44px;justify-content:center}
+.ywpc-compact .ywpc-split .ywpc-nav-btn{min-height:34px;padding:5px 8px}
+.ywpc-compact .ywpc-split .ywpc-split-toggle{min-height:34px}
+.ywpc-sec[data-ywpc-section="common"] .ywpc-split{gap:2px}
+.ywpc-sec[data-ywpc-section="common"] .ywpc-split .ywpc-nav-btn{gap:4px;padding-inline:4px}
+@media (max-width:520px){
+  .ywpc-root .ywpc-split .ywpc-nav-btn{min-height:44px}
+  .ywpc-root .ywpc-split .ywpc-split-toggle{min-height:44px;min-width:44px}
 }
 `;
 
@@ -2259,6 +2281,10 @@ export function createPresetControls(deps = {}) {
     /* 2026-11-13：固定剧场头部改用展示名；真实条目名只在缺项提示里保留 id 语义，
        不再让 PROMPT_NAMES/真实条目名里的「需开此头部」盖回新 label。 */
     if (id === ID.theaterParent) return '🍿固定剧场';
+    /* 2026-11-15：破限 Part 2 首页/钉选走展示名（与 defs 默认 label/PROMPT_NAMES
+       同一来源）；真实 prompt.name/body 一字不动。用户在布局/钉选里自定义的标题
+       走 control.label，不经过这里，仍优先保留。 */
+    if (id === ID.break2) return '🔓破限 Part 2(1不行再关)';
     const prompt = m && m.promptById ? m.promptById.get(id) : null;
     if (prompt && prompt.name) return String(prompt.name);
     return PROMPT_NAMES[id] || '未命名条目';
@@ -3156,8 +3182,90 @@ export function createPresetControls(deps = {}) {
     return 'toggle:' + id;
   }
 
+  /* 2026-11-15：插小说防道歉 / 随机头部改成「前面导航 + 后面拨钮」两颗并列按钮
+     （外层 wrapper 原样，里面两颗 button 并列，避免 nested button）：
+     - 前面只导航到工具箱注入段（deps.openInjectionSection），零开关、零保存；
+     - 后面拨钮保持原有写入路径（applyToggle / writeToolboxFlag）；
+     - 布局编辑/钉选/正文选条目时点击仍走各自原操作，绝不导航（见 onRootClick /
+       pinCandidateFromTarget）。普通控件不经过这里，仍是整卡单按钮。 */
+  const INJECTION_SECTION_NIAH = 'wrap4a';
+  const INJECTION_SECTION_RAND_HEAD = 'rand_head';
+
+  function canOpenInjectionSection() {
+    return typeof deps.openInjectionSection === 'function';
+  }
+
+  /* 与 makeToggle 同一条标签规则：label 带 emoji 用原样，否则借 realName 的 emoji。 */
+  function toggleLabelText(label, realName) {
+    return emojiPrefix(label) ? label : withEmoji(emojiPrefix(realName), label);
+  }
+
+  function makeInjectionNavButton(section, opts) {
+    const o = opts || {};
+    const nav = createEl(doc, 'button', 'ywpc-nav-btn');
+    nav.type = 'button';
+    nav.setAttribute('data-ywpc-nav-section', section);
+    nav.setAttribute('data-ywpc-nav-kind', o.kind || 'prompt');
+    nav.setAttribute('data-ywpc-nav-id', o.id || '');
+    nav.setAttribute('data-ywpc-focus-key', o.focusKey || ('nav:' + section));
+    const ready = canOpenInjectionSection();
+    if (!ready) {
+      nav.disabled = true;
+      nav.setAttribute('aria-disabled', 'true');
+    }
+    const hint = o.navTitle || '打开工具箱注入设置';
+    nav.title = ready ? hint + '（不改开关）' : '工具箱导航接口未就绪';
+    nav.setAttribute('aria-label', ready ? hint + '（不改开关）' : '工具箱导航接口未就绪');
+    const main = createEl(doc, 'span', 'ywpc-toggle-main');
+    const labelEl = createEl(doc, 'span', 'ywpc-toggle-label');
+    labelEl.textContent = toggleLabelText(o.label || '', o.realName || o.label || '');
+    append(main, labelEl);
+    if (o.sub) {
+      const subEl = createEl(doc, 'span', 'ywpc-toggle-sub');
+      subEl.setAttribute('data-ywpc-sub', '1');
+      subEl.setAttribute('data-ywpc-sub-default', o.sub);
+      subEl.textContent = o.sub;
+      append(main, subEl);
+    }
+    const go = createEl(doc, 'span', 'ywpc-nav-go');
+    go.setAttribute('aria-hidden', 'true');
+    go.textContent = '›';
+    append(nav, main);
+    append(nav, go);
+    return nav;
+  }
+
+  function makeSplitSwitchButton(attrs, opts) {
+    const o = opts || {};
+    const btn = createEl(doc, 'button', 'ywpc-toggle ywpc-split-toggle');
+    btn.type = 'button';
+    Object.keys(attrs || {}).forEach(key => { btn.setAttribute(key, String(attrs[key])); });
+    btn.setAttribute('data-ywpc-focus-key', o.focusKey || '');
+    btn.setAttribute('role', 'switch');
+    btn.setAttribute('aria-checked', o.on ? 'true' : 'false');
+    if (!o.available) {
+      btn.disabled = true;
+      btn.setAttribute('aria-disabled', 'true');
+      btn.classList.add('ywpc-missing');
+    }
+    btn.title = o.switchTitle || '';
+    btn.setAttribute('aria-label', o.switchTitle || '切换');
+    const sw = createEl(doc, 'span', 'ywpc-switch');
+    sw.setAttribute('aria-hidden', 'true');
+    append(sw, createEl(doc, 'span', 'ywpc-knob'));
+    append(btn, sw);
+    return btn;
+  }
+
+  function part2DisplayLabel(id, label) {
+    if (id !== ID.break2) return label;
+    return ['破限 Part 2', '🔓破限 Part 2', '🔓 破限 Part 2'].includes(String(label || ''))
+      ? '破限 Part 2(1不行再关)' : label;
+  }
+
   function makeToggle(m, id, label, options) {
     const opts = options || {};
+    label = part2DisplayLabel(id, label);
     const available = opts.availableOverride === undefined ? isAvailable(m, id) : !!opts.availableOverride;
     const on = available && isOn(m, id);
     const btn = createEl(doc, 'button', 'ywpc-toggle');
@@ -3177,7 +3285,7 @@ export function createPresetControls(deps = {}) {
 
     const main = createEl(doc, 'span', 'ywpc-toggle-main');
     const labelEl = createEl(doc, 'span', 'ywpc-toggle-label');
-    labelEl.textContent = emojiPrefix(label) ? label : withEmoji(emojiPrefix(realName), label);
+    labelEl.textContent = toggleLabelText(label, realName);
     const subEl = createEl(doc, 'span', 'ywpc-toggle-sub');
     subEl.setAttribute('data-ywpc-sub', '1');
     subEl.setAttribute('data-ywpc-sub-default', opts.sub || '');
@@ -3774,18 +3882,52 @@ export function createPresetControls(deps = {}) {
     const usable = present && ordinary;
     const realName = realNameFor(m, id);
     const reason = !present ? '当前预设没有这项' : (!ordinary ? '系统条目，不可切换' : '');
-    const toggle = makeToggle(m, id, customLabel || (fixed ? shortLabelFor(id) : realName), {
-      sub: '',
-      missingText: reason,
-      focusKey: 'toggle:' + id,
-      availableOverride: usable,
-      realName: realName,
-      shortcut: true,
-    });
-    /* 布局实例 uid：只表示“这个控件来自哪一份布局”，不是首页 pin 的实例 uid。
-       钉首页时另生成 pin.uid，两者不混用。 */
-    if (sourceUid) toggle.setAttribute('data-ywpc-source-uid', String(sourceUid));
-    append(card, toggle);
+    const label = customLabel || (fixed ? shortLabelFor(id) : realName);
+    if (id === ID.niah) {
+      /* 2026-11-15：插小说防道歉 = 前面导航 + 后面拨钮两颗并列按钮；
+         前面只导航到工具箱注入段（deps.openInjectionSection('wrap4a')），
+         后面拨钮保持 applyToggle 原写入路径。 */
+      card.classList.add('ywpc-split');
+      const nav = makeInjectionNavButton(INJECTION_SECTION_NIAH, {
+        kind: 'prompt',
+        id,
+        label,
+        realName,
+        sub: usable ? '' : reason,
+        navTitle: '打开工具箱「塞小说防道歉」设置',
+        focusKey: 'nav:' + INJECTION_SECTION_NIAH,
+      });
+      const swBtn = makeSplitSwitchButton({
+        'data-ywpc-toggle': id,
+        'data-ywpc-shortcut-toggle': '1',
+      }, {
+        focusKey: 'toggle:' + id,
+        available: usable,
+        on: usable && isOn(m, id),
+        switchTitle: usable
+          ? '切换：' + realName + '（只这个拨钮改开关）'
+          : realName + ' · ' + (reason || '当前预设没有这项'),
+      });
+      /* 布局实例 uid：只表示“这个控件来自哪一份布局”，不是首页 pin 的实例 uid。
+       钉首页时另生成 pin.uid，两者不混用。并列卡挂在外层 wrapper 上，
+       导航/拨钮两颗按钮都能被钉选识别。 */
+      if (sourceUid) card.setAttribute('data-ywpc-source-uid', String(sourceUid));
+      append(card, nav);
+      append(card, swBtn);
+    } else {
+      const toggle = makeToggle(m, id, label, {
+        sub: '',
+        missingText: reason,
+        focusKey: 'toggle:' + id,
+        availableOverride: usable,
+        realName: realName,
+        shortcut: true,
+      });
+      /* 布局实例 uid：只表示“这个控件来自哪一份布局”，不是首页 pin 的实例 uid。
+         钉首页时另生成 pin.uid，两者不混用。 */
+      if (sourceUid) toggle.setAttribute('data-ywpc-source-uid', String(sourceUid));
+      append(card, toggle);
+    }
     if (removable && !compact) {
       const remove = createEl(doc, 'button', 'ywpc-shortcut-remove');
       remove.type = 'button';
@@ -3807,6 +3949,31 @@ export function createPresetControls(deps = {}) {
     const on = usable && readToolboxFlag(flag);
     const card = createEl(doc, 'div', 'ywpc-shortcut');
     card.setAttribute('data-ywpc-shortcut', 'toolbox:' + flag);
+    const stateText = usable ? (on ? '已开启' : '已关闭') : '工具箱开关接口未就绪';
+    if (flag === TOOLBOX_FLAG_RAND_HEAD) {
+      /* 2026-11-15：随机头部 = 前面导航 + 后面拨钮两颗并列按钮；
+         前面只导航（deps.openInjectionSection('rand_head')），
+         后面拨钮保持 writeToolboxFlag 原写入路径。 */
+      card.classList.add('ywpc-split');
+      const nav = makeInjectionNavButton(INJECTION_SECTION_RAND_HEAD, {
+        kind: 'toolboxFlag',
+        id: flag,
+        label: definition.label || '🎲随机头部',
+        realName: definition.label || '随机头部',
+        sub: stateText,
+        navTitle: '打开工具箱「随机头部」设置',
+        focusKey: 'nav:' + INJECTION_SECTION_RAND_HEAD,
+      });
+      const btn = makeSplitSwitchButton({ 'data-ywpc-toolbox-flag': flag }, {
+        focusKey: 'toolbox:' + flag,
+        available: usable,
+        on,
+        switchTitle: (definition.label || '随机头部') + ' · 只这个拨钮改工具箱开关',
+      });
+      append(card, nav);
+      append(card, btn);
+      return card;
+    }
     const btn = createEl(doc, 'button', 'ywpc-toggle');
     btn.type = 'button';
     btn.setAttribute('data-ywpc-toolbox-flag', flag);
@@ -3824,8 +3991,8 @@ export function createPresetControls(deps = {}) {
     labelEl.textContent = definition.label || '随机头部';
     const subEl = createEl(doc, 'span', 'ywpc-toggle-sub');
     subEl.setAttribute('data-ywpc-sub', '1');
-    subEl.setAttribute('data-ywpc-sub-default', usable ? (on ? '已开启' : '已关闭') : '工具箱开关接口未就绪');
-    subEl.textContent = usable ? (on ? '已开启' : '已关闭') : '工具箱开关接口未就绪';
+    subEl.setAttribute('data-ywpc-sub-default', stateText);
+    subEl.textContent = stateText;
     append(main, labelEl);
     append(main, subEl);
     const sw = createEl(doc, 'span', 'ywpc-switch');
@@ -7306,6 +7473,12 @@ export function createPresetControls(deps = {}) {
     switch (control.kind) {
       case 'toggle':
       case 'action':
+        /* 2026-11-15：插小说防道歉无论落在哪个分组都保持「前面导航 + 后面拨钮」，
+           不走整卡单按钮，防止点标题误切换。 */
+        if (control.kind === 'toggle' && control.id === ID.niah) {
+          node = renderShortcutCard(m, ID.niah, false, false, control.label, controlUid(control));
+          break;
+        }
         node = makeToggle(m, control.id, control.label, {
           sub: control.sub || '',
           missingText: '当前预设没有这项',
@@ -7914,6 +8087,16 @@ export function createPresetControls(deps = {}) {
         else if (!ordinary) sub.textContent = '系统条目，不可切换';
         else sub.textContent = fallback;
       }
+      /* 2026-11-15：并列卡（插小说防道歉）的状态字在外层 wrapper 的导航按钮里，
+         拨钮本体没有 [data-ywpc-sub]，这里一并同步，避免不重建刷新时状态字过期。 */
+      const splitCard = typeof node.closest === 'function' ? node.closest('.ywpc-split') : null;
+      const navSub = splitCard ? splitCard.querySelector('.ywpc-nav-btn [data-ywpc-sub]') : null;
+      if (navSub) {
+        const navFallback = navSub.getAttribute('data-ywpc-sub-default') || '';
+        if (!available) navSub.textContent = '当前预设没有这项';
+        else if (!ordinary) navSub.textContent = '系统条目，不可切换';
+        else navSub.textContent = navFallback;
+      }
     }
 
     const toolboxNodes = root.querySelectorAll('[data-ywpc-toolbox-flag]');
@@ -7936,6 +8119,14 @@ export function createPresetControls(deps = {}) {
         const textValue = usable ? (on ? '已开启' : '已关闭') : '工具箱开关接口未就绪';
         sub.textContent = textValue;
         sub.setAttribute('data-ywpc-sub-default', textValue);
+      }
+      /* 2026-11-15：随机头部并列卡的状态字在导航按钮里，这里一并同步。 */
+      const splitFlagCard = typeof node.closest === 'function' ? node.closest('.ywpc-split') : null;
+      const navFlagSub = splitFlagCard ? splitFlagCard.querySelector('.ywpc-nav-btn [data-ywpc-sub]') : null;
+      if (navFlagSub) {
+        const navTextValue = usable ? (on ? '已开启' : '已关闭') : '工具箱开关接口未就绪';
+        navFlagSub.textContent = navTextValue;
+        navFlagSub.setAttribute('data-ywpc-sub-default', navTextValue);
       }
     }
 
@@ -8628,6 +8819,21 @@ export function createPresetControls(deps = {}) {
 
   function pinCandidateFromTarget(target) {
     if (!target) return null;
+    /* 2026-11-15：钉选模式下点「导航+拨钮」并列卡的任意一颗按钮（含前面的
+       导航按钮）都按它所属的控件钉首页——保持“点卡=钉”的原操作，绝不导航。 */
+    const navPin = closest(target, '[data-ywpc-nav-section]');
+    if (navPin) {
+      const kind = text(navPin.getAttribute('data-ywpc-nav-kind'));
+      const key = text(navPin.getAttribute('data-ywpc-nav-id'));
+      const sourceUid = sourceUidNear(navPin);
+      if (kind === 'toolboxFlag' && key && TOOLBOX_FLAG_SET.has(key)) {
+        return { type: 'toolboxFlag', key, ...(sourceUid ? { sourceUid } : {}) };
+      }
+      if (kind === 'prompt' && key) {
+        return { type: 'prompt', id: key, ...(sourceUid ? { sourceUid } : {}) };
+      }
+      return null;
+    }
     const comboToggle = closest(target, '[data-ywpc-combo-toggle]');
     if (comboToggle) {
       const key = comboToggle.getAttribute('data-ywpc-combo-toggle');
@@ -10217,6 +10423,27 @@ export function createPresetControls(deps = {}) {
         pinHomePin(candidate);
         return;
       }
+    }
+
+    /* 2026-11-15：工具箱注入段导航（插小说防道歉 / 随机头部的前面标题按钮）。
+       只导航，零开关、零保存；布局编辑/钉选/正文选条目在上面各自分支已先处理，
+       这里再兜一层：这几种模式下绝不导航。 */
+    const navEl = closest(target, '[data-ywpc-nav-section]');
+    if (navEl) {
+      if (navEl.disabled) return;
+      if (pinMode || editing || contentPick || contentEdit) return;
+      const section = text(navEl.getAttribute('data-ywpc-nav-section'));
+      if (!section) return;
+      if (typeof deps.openInjectionSection !== 'function') {
+        showToast('工具箱导航接口未就绪，没有打开任何设置。', 'warn');
+        return;
+      }
+      try {
+        deps.openInjectionSection(section);
+      } catch (e) {
+        showToast('打开工具箱设置失败：' + humanError(e), 'error');
+      }
+      return;
     }
 
     const radioEl = closest(target, '[data-ywpc-radio]');

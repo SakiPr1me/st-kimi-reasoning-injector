@@ -1,4 +1,4 @@
-// scene-boundary.js — 场记替换核心（SCENE_BOUNDARY_VERSION 1.0.1，362 修订语义）
+// scene-boundary.js — 场记替换核心（SCENE_BOUNDARY_VERSION 1.1.0，362 修订语义 + 自动分界）
 // 纯核心模块：无 DOM、无宿主依赖、不 import 其它插件文件；所有原件（预设 prompts / order / regex_scripts）
 // 只读，零 mutation；运行时改动一律发生在"克隆后的副本 / 本轮临时集合条目"上，
 // 绝不写 oai_settings、绝不 setLocalVariable、绝不写预设与正则原件。
@@ -10,6 +10,17 @@
 //                                                     promptEdits, boundaryTags, regexTargets,
 //                                                     guideId, formatId, worldId, chainIds,
 //                                                     closeGuide, collectionInsert, ...}
+//                                                     （1.0.x 手动语义原样保留；UI 手动预览继续用它）
+//   buildEffectiveScenePlan({prompts, order, regexScripts, config, resolvePromptId?, historyTags?})
+//                                                    -> raw 全字段 + {active, sceneEnabled, critiqueEnabled,
+//                                                     manualEnabled, boundaryTag, outputTag, critiqueTag, mode}
+//                                                     自动分界唯一入口：按 order 100001 实况决定首边界——
+//                                                     critique 开 → 首边界 critique（不管 scene 开/关）；
+//                                                     manual enabled 次之（模块决定仍归 manual）；
+//                                                     否则 scene 开 → 原 scene 路径（active=false，历史兼容除外），
+//                                                     scene 关 → 自动 content（没有 manual 配置也生效）。
+//                                                     config 永远回手动保存配置（自动路径 enabled 保持 false，
+//                                                     不会让 makeOmitTagRegex 自动启用）。
 //   transformScenePrompt(prompt, plan)               -> prompt 的浅拷贝（输入永不改动；命中 promptEdits 则换 content）
 //   createSceneRuntime({getPlan, getEnabled, regexProvider})
 //                                                    -> {installPromptManager, installPromptCollection,
@@ -44,7 +55,7 @@
 // 阻断原则：必要目标缺失/重复/锚点歧义 → plan.ok=false，一个字都不改；场记引导"未启用/缺失"不再是硬阻断
 // （362：直接正文或已有模块不要求先开场记），只给 warning 与具体预览。
 
-export const SCENE_BOUNDARY_VERSION = '1.0.2';
+export const SCENE_BOUNDARY_VERSION = '1.1.0';
 
 /* ========================================================================
  * 小工具
@@ -312,6 +323,7 @@ export function scanModuleTag(moduleText) {
 // V1028 已知锚点 id（识别的主判据永远是内容锚，id 只是链提示词的补充线索）
 const KNOWN_IDS = {
   guide: 'aca1b545-adae-4638-a638-f6f481583e34',   // 🎬开幕场记
+  critique: 'mp150ie2myxpbnujg2o',                 // 🦂毒舌自检（1.1.0：自动首边界识别用）
   format: '7f49c31f-87cf-4afb-a1d8-8c158f4c07c9',  // 💻格式(加模块这也要加)
   world: 'fc134310-8d48-4dc3-87f3-c080cad94488',   // 📢世界支线(推荐!!)
   chains: [
@@ -420,6 +432,112 @@ function moveTokenBeforeAnchor(c, anchorTok, token) {
   const endSpan = (atLineStart && c[end] === '\n') ? end + 1 : end;
   const c1 = c.slice(0, start) + c.slice(endSpan);
   return insertOwnLineBefore(c1, anchorTok, token);
+}
+
+/* ========================================================================
+ * 1.1.0 内部共享件（从 buildScenePlan 原样抽出；raw 与有效计划走同一套识别，行为逐字不变）
+ * ===================================================================== */
+
+/**
+ * 世界支线定位：优先已知 id，退而求其次"非空 setvar Events_mod"唯一候选。
+ * 多候选只给 warning（跳过其 <scene> 引用改写），不算硬阻断。
+ */
+function findWorldPrompt(prompts, warnings) {
+  let world = prompts.find(p => p && p.identifier === KNOWN_IDS.world && typeof p.content === 'string') || null;
+  if (!world) {
+    const cands = prompts.filter(p => {
+      if (!p || typeof p.content !== 'string') return false;
+      const v = setvarValue(p.content, 'Events_mod');
+      return v !== null && v.trim() !== '';
+    });
+    if (cands.length === 1) world = cands[0];
+    else if (cands.length > 1) warnings.push(`世界支线提示词候选 ${cands.length} 份，无法唯一定位，跳过其 <scene> 引用改写`);
+  }
+  return world;
+}
+
+/**
+ * 世界支线的 <scene> 时间引用 → "正文当前时间"中性描述（成功与否只进 changes/warnings，不改原件）。
+ * 前置条件（调用方负责）：world 存在、已启用、本轮场记确定关闭。
+ */
+function applyWorldNeutralRewrite(world, addEdit, warnings) {
+  const c = world.content;
+  let after = c;
+  let hit = 0;
+  if (after.includes('对比`<scene>`的时间')) {
+    after = after.replace('对比`<scene>`的时间', '对比正文当前时间');
+    hit++;
+  }
+  if (after.includes('格式对应`<scene>`')) {
+    after = after.replace('格式对应`<scene>`', '以正文当前时间为基准');
+    hit++;
+  }
+  const rest = countOccurrences(after, '<scene>');
+  if (hit > 0 && rest === 0) {
+    addEdit(world, 'world-neutral', '世界支线：<scene> 引用改为"正文当前时间"中性描述（不动其它正文）', after);
+  } else if (hit > 0) {
+    warnings.push(`世界支线还有 ${rest} 处 <scene> 引用未能按已知句式改写，保持不动`);
+  } else {
+    warnings.push('世界支线的 <scene> 引用句式与已知不同，保持不动');
+  }
+}
+
+/**
+ * 正则目标（两条思考剥离/折叠）收集：缺失/停用/重复/模式不符 → errors.push（是否硬阻断由调用方定）。
+ * 362：结构模板匹配——/…/flags 包裹与空格轻改都认；语义改动不识别（具体预览，绝不误用）。
+ * @returns {string[]} regexTargets（errors 非空时调用方不应采用）
+ */
+function collectRegexTargets(regexScripts, boundaryTags, errors, changes) {
+  const scripts = Array.isArray(regexScripts) ? regexScripts : [];
+  const regexTargets = [];
+  const wantWraps = [
+    { find: FIND_STRIP, struct: FIND_STRIP_STRUCT, expect: FIND_STRIP, name: '爆出的思维链不发送', promptOnly: true, markdownOnly: false },
+    { find: FIND_FOLD, struct: FIND_FOLD_STRUCT, expect: FIND_FOLD, name: '爆出的思维链折叠', promptOnly: false, markdownOnly: true },
+  ];
+  for (const w of wantWraps) {
+    // 362：结构模板匹配——/…/flags 包裹与空格轻改都认；语义改动不识别（硬阻断+具体预览）。
+    const hits = scripts.filter(s => s && normalizeFindStructure(s.findRegex) === w.struct);
+    if (hits.length === 0) {
+      const sceneCandidates = scripts
+        .filter(s => s && typeof s.findRegex === 'string' && s.findRegex.includes('<scene>'))
+        .map(s => `「${s.scriptName || ''}」${JSON.stringify(String(s.findRegex).slice(0, 60))}`)
+        .join('、');
+      errors.push(`正则脚本「${w.name}」找不到同结构 find（期望形如 ${w.expect}，允许 /…/flags 包裹与空格轻改；` +
+        `改了前缀/前瞻/标签名等语义不识别）${sceneCandidates ? '；现有含 <scene> 的规则：' + sceneCandidates : '；现有规则里没有含 <scene> 的 find'}，拒绝执行（不做半套）`);
+      continue;
+    }
+    const active = hits.filter(s => !s.disabled);
+    if (active.length === 0) {
+      errors.push(`正则脚本「${w.name}」同结构 find 有 ${hits.length} 条但全部停用（必要目标未启用），拒绝执行`);
+      continue;
+    }
+    if (active.length > 1) {
+      errors.push(`正则脚本「${w.name}」启用中且同结构 find 的有 ${active.length} 条（锚点重复），拒绝执行`);
+      continue;
+    }
+    const s = active[0];
+    const placementOk = Array.isArray(s.placement) && s.placement.includes(2);
+    const modeOk = (!!s.promptOnly === w.promptOnly) && (!!s.markdownOnly === w.markdownOnly);
+    if (!placementOk || !modeOk) {
+      errors.push(`正则脚本「${w.name}」的 placement/promptOnly/markdownOnly 与已知模式不符（placement=${JSON.stringify(s.placement)} promptOnly=${!!s.promptOnly} markdownOnly=${!!s.markdownOnly}），拒绝执行`);
+      continue;
+    }
+    // 运行时按"启用中那条的原串"派生（自改变体原串也进 targets，派生正则按结构识别）。
+    if (!regexTargets.includes(s.findRegex)) regexTargets.push(s.findRegex);
+    const tagDesc = boundaryTags.map(t => '<' + t + '>').join(' 或 ');
+    const sameAsOriginal = normalizeFindStructure(s.findRegex) === normalizeFindStructure(w.expect) && s.findRegex === w.expect;
+    changes.push({
+      kind: 'regex-wrap',
+      title: `正则「${w.name}」：保存/导出的 find 原串一字不动，仅运行时改用派生边界` +
+        (sameAsOriginal ? '' : `（识别为同结构自改变体：${JSON.stringify(String(s.findRegex).slice(0, 60))}）`) +
+        (hits.length > 1 ? `（另有 ${hits.length - 1} 条停用同结构副本，派生不生效于停用条目）` : ''),
+      id: s.id || '',
+      name: s.scriptName || w.name,
+      before: s.findRegex,
+      after: `【运行时派生·不写回文件】匹配边界 = 第一个非代码/反引号真标签（${tagDesc}），而不是贪婪的最后一个；捕获组与折叠 HTML 原样`,
+    });
+  }
+  return regexTargets;
 }
 
 /**
@@ -674,16 +792,7 @@ export function buildScenePlan(input) {
   }
 
   // ---------- 6. 世界支线定位（Events）：优先已知 id，退而求其次"非空 setvar Events_mod" ----------
-  let world = prompts.find(p => p && p.identifier === KNOWN_IDS.world && typeof p.content === 'string') || null;
-  if (!world) {
-    const cands = prompts.filter(p => {
-      if (!p || typeof p.content !== 'string') return false;
-      const v = setvarValue(p.content, 'Events_mod');
-      return v !== null && v.trim() !== '';
-    });
-    if (cands.length === 1) world = cands[0];
-    else if (cands.length > 1) warnings.push(`世界支线提示词候选 ${cands.length} 份，无法唯一定位，跳过其 <scene> 引用改写`);
-  }
+  const world = findWorldPrompt(prompts, warnings);
 
   // ---------- 7. 链联动（362：不受 closeScene 影响——新模块本来就在 scene 前，首输出声明必须指向新标签） ----------
   // 已知 9 个链 id（稳定 ID）→ 替换其全部 <scene> 引用；未知自定义 id → 只在 首个/第一个/首标签 声明处局部换；
@@ -736,25 +845,7 @@ export function buildScenePlan(input) {
       warnings.push('closeScene=false 且场记本轮仍在生成：世界支线的 <scene> 时间引用保留原样');
     } else {
       // 世界支线：改成"正文当前时间"中性描述——新模块/新状态栏未必有时间字段，不写死任何标签或字段。
-      const c = world.content;
-      let after = c;
-      let hit = 0;
-      if (after.includes('对比`<scene>`的时间')) {
-        after = after.replace('对比`<scene>`的时间', '对比正文当前时间');
-        hit++;
-      }
-      if (after.includes('格式对应`<scene>`')) {
-        after = after.replace('格式对应`<scene>`', '以正文当前时间为基准');
-        hit++;
-      }
-      const rest = countOccurrences(after, '<scene>');
-      if (hit > 0 && rest === 0) {
-        addEdit(world, 'world-neutral', '世界支线：<scene> 引用改为"正文当前时间"中性描述（不动其它正文）', after);
-      } else if (hit > 0) {
-        warnings.push(`世界支线还有 ${rest} 处 <scene> 引用未能按已知句式改写，保持不动`);
-      } else {
-        warnings.push('世界支线的 <scene> 引用句式与已知不同，保持不动');
-      }
+      applyWorldNeutralRewrite(world, addEdit, warnings);
     }
   } else {
     warnings.push('找不到世界支线提示词，其 <scene> 引用保持原样');
@@ -773,56 +864,8 @@ export function buildScenePlan(input) {
 
   // ---------- 10. 正则目标（两条思考剥离/折叠）——必要目标：缺失/停用/重复/模式不符 → 拒 plan ----------
   // 否则会出现"提示词换了但正则不换"的半套状态（误吞真场记/漏剥泄漏），已批准必须硬阻断。
-  const regexScripts = Array.isArray(inp.regexScripts) ? inp.regexScripts : [];
-  const regexTargets = [];
   const boundaryTags = isContentMode ? ['scene', 'content'] : ['scene', tag];
-  const wantWraps = [
-    { find: FIND_STRIP, struct: FIND_STRIP_STRUCT, expect: FIND_STRIP, name: '爆出的思维链不发送', promptOnly: true, markdownOnly: false },
-    { find: FIND_FOLD, struct: FIND_FOLD_STRUCT, expect: FIND_FOLD, name: '爆出的思维链折叠', promptOnly: false, markdownOnly: true },
-  ];
-  for (const w of wantWraps) {
-    // 362：结构模板匹配——/…/flags 包裹与空格轻改都认；语义改动不识别（硬阻断+具体预览）。
-    const hits = regexScripts.filter(s => s && normalizeFindStructure(s.findRegex) === w.struct);
-    if (hits.length === 0) {
-      const sceneCandidates = regexScripts
-        .filter(s => s && typeof s.findRegex === 'string' && s.findRegex.includes('<scene>'))
-        .map(s => `「${s.scriptName || ''}」${JSON.stringify(String(s.findRegex).slice(0, 60))}`)
-        .join('、');
-      errors.push(`正则脚本「${w.name}」找不到同结构 find（期望形如 ${w.expect}，允许 /…/flags 包裹与空格轻改；` +
-        `改了前缀/前瞻/标签名等语义不识别）${sceneCandidates ? '；现有含 <scene> 的规则：' + sceneCandidates : '；现有规则里没有含 <scene> 的 find'}，拒绝执行（不做半套）`);
-      continue;
-    }
-    const active = hits.filter(s => !s.disabled);
-    if (active.length === 0) {
-      errors.push(`正则脚本「${w.name}」同结构 find 有 ${hits.length} 条但全部停用（必要目标未启用），拒绝执行`);
-      continue;
-    }
-    if (active.length > 1) {
-      errors.push(`正则脚本「${w.name}」启用中且同结构 find 的有 ${active.length} 条（锚点重复），拒绝执行`);
-      continue;
-    }
-    const s = active[0];
-    const placementOk = Array.isArray(s.placement) && s.placement.includes(2);
-    const modeOk = (!!s.promptOnly === w.promptOnly) && (!!s.markdownOnly === w.markdownOnly);
-    if (!placementOk || !modeOk) {
-      errors.push(`正则脚本「${w.name}」的 placement/promptOnly/markdownOnly 与已知模式不符（placement=${JSON.stringify(s.placement)} promptOnly=${!!s.promptOnly} markdownOnly=${!!s.markdownOnly}），拒绝执行`);
-      continue;
-    }
-    // 运行时按"启用中那条的原串"派生（自改变体原串也进 targets，派生正则按结构识别）。
-    if (!regexTargets.includes(s.findRegex)) regexTargets.push(s.findRegex);
-    const tagDesc = boundaryTags.map(t => '<' + t + '>').join(' 或 ');
-    const sameAsOriginal = normalizeFindStructure(s.findRegex) === normalizeFindStructure(w.expect) && s.findRegex === w.expect;
-    changes.push({
-      kind: 'regex-wrap',
-      title: `正则「${w.name}」：保存/导出的 find 原串一字不动，仅运行时改用派生边界` +
-        (sameAsOriginal ? '' : `（识别为同结构自改变体：${JSON.stringify(String(s.findRegex).slice(0, 60))}）`) +
-        (hits.length > 1 ? `（另有 ${hits.length - 1} 条停用同结构副本，派生不生效于停用条目）` : ''),
-      id: s.id || '',
-      name: s.scriptName || w.name,
-      before: s.findRegex,
-      after: `【运行时派生·不写回文件】匹配边界 = 第一个非代码/反引号真标签（${tagDesc}），而不是贪婪的最后一个；捕获组与折叠 HTML 原样`,
-    });
-  }
+  const regexTargets = collectRegexTargets(inp.regexScripts, boundaryTags, errors, changes);
   if (errors.length > 0) {
     return planFail();
   }
@@ -873,6 +916,511 @@ export function buildScenePlan(input) {
     collectionInsert,
     enabled: cfg.enabled,
   };
+}
+
+/* ========================================================================
+ * buildEffectiveScenePlan（1.1.0 新增：自动分界唯一入口）
+ * ===================================================================== */
+
+const CRITIQUE_FALLBACK_TAG = 'critique';
+// raw 计划里"链改写"类 changes/promptEdits 的 kind（critique 模式要按首边界重建这一类，其余保留）
+const CHAIN_EDIT_KINDS = new Set(['chain-retag', 'chain-decl', 'chain-content']);
+
+/**
+ * 从点评提示词内容提取输出标签：优先 setvar::critique_mod 值里的 `<tag> ... </tag>` 字面；
+ * 认不出/撞保留名 → 回退 'critique'。输入字符串永不改动。
+ */
+function extractCritiqueTag(content) {
+  const v = setvarValue(String(content || ''), 'critique_mod');
+  const src = (v !== null ? v : String(content || '')).trim();
+  const m = /^`{0,2}\s*<([A-Za-z][A-Za-z0-9_:-]{0,63})>\s*\.\.\.\s*<\/\1>/.exec(src)
+    || /^`{0,2}\s*<([A-Za-z][A-Za-z0-9_:-]{0,63})>/.exec(src);
+  if (m) {
+    const t = m[1];
+    const lower = t.toLowerCase();
+    if (lower !== 'scene' && lower !== 'content' && !TAG_DENY.has(lower)) return t;
+  }
+  return CRITIQUE_FALLBACK_TAG;
+}
+
+/**
+ * 识别场记引导（scene）提示词：稳定 ID → resolver 映射 → 内容锚（唯一非空 setvar::scene_mod）。
+ * 用户自改 setvar/内容不影响识别（known/resolver 优先）；多候选歧义 → {error}（硬阻断）；
+ * 完全没有 → {prompt:null}（本预设没接场记体系，不算错误，auto 路径据此生效）。
+ */
+function identifyGuidePrompt(prompts, resolvePromptId, warnings) {
+  const withContent = prompts.filter(p => typeof p.content === 'string');
+  let hits = withContent.filter(p => p.identifier === KNOWN_IDS.guide);
+  let source = '稳定ID';
+  if (hits.length === 0 && typeof resolvePromptId === 'function') {
+    let rid = null;
+    try { rid = resolvePromptId(KNOWN_IDS.guide); } catch (e) { rid = null; }
+    if (typeof rid === 'string' && rid && rid !== KNOWN_IDS.guide) {
+      hits = withContent.filter(p => p.identifier === rid);
+      source = 'resolver映射';
+    }
+  }
+  if (hits.length === 0) {
+    const cands = withContent.filter(p => isNonEmptySetvarSceneMod(p.content));
+    if (cands.length === 1) { hits = [cands[0]]; source = '内容锚'; }
+    else if (cands.length > 1) {
+      return { error: `场记引导提示词按内容锚出现 ${cands.length} 份候选（${cands.map(p => p.name || p.identifier).join('、')}），锚点歧义，拒绝自动判定` };
+    }
+  }
+  if (hits.length === 1) {
+    const p = hits[0];
+    if (source !== '稳定ID') warnings.push(`场记引导提示词未命中稳定ID（${KNOWN_IDS.guide}），按${source}识别（${p.identifier}）`);
+    return { prompt: p, source };
+  }
+  if (hits.length > 1) {
+    return { error: `场记引导提示词按${source}命中 ${hits.length} 份（${hits.map(p => p.name || p.identifier).join('、')}），无法唯一，拒绝自动判定` };
+  }
+  return { prompt: null };
+}
+
+/**
+ * 识别点评（critique）提示词：稳定 ID → resolver 映射 → 内容锚（非空 setvar::critique_mod，必须唯一）。
+ * 多候选/歧义 → {error}（调用方硬阻断）；完全没有 → {prompt:null}（本预设没接点评，不算错误）。
+ * 用户自改 prompt 只影响标签提取，其余内容一字不动（本函数只定位，不改写）。
+ */
+function identifyCritiquePrompt(prompts, resolvePromptId, warnings) {
+  const withContent = prompts.filter(p => typeof p.content === 'string');
+  let hits = withContent.filter(p => p.identifier === KNOWN_IDS.critique);
+  let source = '稳定ID';
+  if (hits.length === 0 && typeof resolvePromptId === 'function') {
+    let rid = null;
+    try { rid = resolvePromptId(KNOWN_IDS.critique); } catch (e) { rid = null; }
+    if (typeof rid === 'string' && rid && rid !== KNOWN_IDS.critique) {
+      hits = withContent.filter(p => p.identifier === rid);
+      source = 'resolver映射';
+    }
+  }
+  if (hits.length === 0) {
+    const cands = withContent.filter(p => {
+      const v = setvarValue(p.content, 'critique_mod');
+      return v !== null && v.trim() !== '';
+    });
+    if (cands.length === 1) { hits = [cands[0]]; source = '内容锚'; }
+    else if (cands.length > 1) {
+      return { error: `点评（critique）提示词按内容锚出现 ${cands.length} 份候选（${cands.map(p => p.name || p.identifier).join('、')}），锚点歧义，拒绝自动判定` };
+    }
+  }
+  if (hits.length === 1) {
+    const p = hits[0];
+    if (source !== '稳定ID') warnings.push(`点评提示词未命中稳定ID（${KNOWN_IDS.critique}），按${source}识别（${p.identifier}）`);
+    return { prompt: p, tag: extractCritiqueTag(p.content), source };
+  }
+  if (hits.length > 1) {
+    return { error: `点评（critique）提示词按${source}命中 ${hits.length} 份（${hits.map(p => p.name || p.identifier).join('、')}），无法唯一，拒绝自动判定` };
+  }
+  return { prompt: null };
+}
+
+/** 标签集合合并去重（保序）；只收非空字符串。historyTags 只并入边界集合，绝不影响任何编辑判定。 */
+function mergeTagList(...lists) {
+  const out = [];
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const t of list) {
+      if (typeof t === 'string' && t.trim() !== '' && !out.includes(t)) out.push(t);
+    }
+  }
+  return out;
+}
+
+/**
+ * 自动分界计划（1.1.0）。全部只读、零 mutation；raw buildScenePlan（1.0.x 手动语义）原样保留、内部复用。
+ *
+ * 首边界优先级（按 order 100001 实况）：
+ *   ① critique 开启（稳定ID mp150ie2myxpbnujg2o 优先 → resolvePromptId 映射 → 内容锚，必要 order 唯一）
+ *      → 首边界 critique，不管 scene 开/关；已知链 id 全部 <scene>→<critique>、未知 id 只 首输出声明 局部换，
+ *      不强改模块 tag / closeScene（manual 的 format/omit/贴入模块/关闭场记决定全部保留）。
+ *   ② manual enabled 且 mode=replace → 首边界 = 手动标签（1.0.x replace 语义）。
+ *      manual enabled 且 mode=content → 首边界 content（1.0.x content 语义）。
+ *   ③ 否则 scene 开 → 原 scene 路径（active=false；历史边界集合非空时仅加宽派生正则边界、零编辑）；
+ *      scene 关 → 自动 content（没有 manual 配置也生效；不要求场记引导开启；用合成 content 模式复用 raw）。
+ *
+ * config 永远回"手动保存配置"（归一化后；自动路径 enabled 保持 false——不会让 makeOmitTagRegex 自动启用；
+ * manual replace 时回 raw 解析后的 config，tag 已按贴入模块解析，与 1.0.x provider 读法一致）。
+ * 历史边界集合（只并入 boundaryTags，派生正则/折叠标记用；findFirstRealTag 本就取最早，绝不参与编辑判定）：
+ *   固定候选 critique/scene/content + main 按 preset 维护的已验证 historyTags + 手动配置保留 tag
+ *   （即使 enabled=false——刷新后手动已关也不能只 scene，否则旧自定义首标签的历史思考泄漏；
+ *   只收合法 tag 名且非 critique）。main 历史 map 只存当前成功 tag，更早的随改随丢（明确边界，不加配置）。
+ *
+ * @param {{prompts?:array, order?:array|object, regexScripts?:array, config?:object,
+ *          resolvePromptId?:Function, historyTags?:string[]}} input
+ * @returns {object} raw plan 全字段 + {active, sceneEnabled, critiqueEnabled, manualEnabled,
+ *          boundaryTag, outputTag, critiqueTag, mode}
+ */
+export function buildEffectiveScenePlan(input) {
+  const inp = input || {};
+  const prompts = Array.isArray(inp.prompts) ? inp.prompts.filter(p => p && typeof p === 'object') : [];
+  const enabledMap = new Map(resolveOrderList(inp.order).map(o => [o.identifier, o.enabled]));
+  const regexScripts = Array.isArray(inp.regexScripts) ? inp.regexScripts : [];
+  const historyTags = Array.isArray(inp.historyTags)
+    ? inp.historyTags.filter(t => typeof t === 'string' && t.trim() !== '').map(t => t.trim())
+    : [];
+
+  const norm = (isPlainObject(inp.config) && inp.config.ok && inp.config.config)
+    ? inp.config
+    : normalizeSceneConfig(isPlainObject(inp.config) ? inp.config : {});
+  const cfg = norm.ok ? norm.config : null;
+  const manualEnabled = !!(cfg && cfg.enabled === true);
+  const errors = [];
+  const warnings = [];
+
+  // 有效计划骨架：raw plan 全字段（失败态全空）+ 1.1.0 新字段。errors/warnings 按引用共享，随后继续 push 仍生效。
+  const skeleton = (over) => Object.assign({
+    ok: true,
+    active: false,
+    version: PLAN_VERSION,
+    errors,
+    warnings,
+    changes: [],
+    config: cfg,
+    promptEdits: Object.create(null),
+    boundaryTags: [],
+    regexTargets: [],
+    guideId: null,
+    formatId: null,
+    worldId: null,
+    chainIds: [],
+    closeGuide: false,
+    collectionInsert: null,
+    enabled: manualEnabled,
+    // —— 1.1.0 新增 ——
+    manualEnabled,
+    sceneEnabled: false,
+    critiqueEnabled: false,
+    boundaryTag: null,
+    outputTag: null,
+    critiqueTag: null,
+    mode: null,
+  }, over);
+
+  if (!norm.ok) {
+    errors.push(...norm.errors);
+    return skeleton({ ok: false });
+  }
+  warnings.push(...norm.warnings);
+
+  // ---- 识别：场记引导（scene）——契约：稳定 ID → resolver 映射 → 内容锚（唯一非空 setvar::scene_mod）。
+  // 用户自改 setvar/内容不影响识别（known/resolver 优先）；多候选歧义才拒绝。----
+  const guideInfo = identifyGuidePrompt(prompts, typeof inp.resolvePromptId === 'function' ? inp.resolvePromptId : null, warnings);
+  if (guideInfo.error) {
+    errors.push(guideInfo.error);
+    return skeleton({ ok: false });
+  }
+  const guide = guideInfo.prompt;
+  const guideOrderEnabled = guide ? enabledOf(enabledMap, guide.identifier) : false;
+
+  // ---- 识别：点评（critique）----
+  const critiqueInfo = identifyCritiquePrompt(prompts, typeof inp.resolvePromptId === 'function' ? inp.resolvePromptId : null, warnings);
+  if (critiqueInfo.error) {
+    errors.push(critiqueInfo.error);
+    return skeleton({ ok: false });
+  }
+  const critiquePrompt = critiqueInfo.prompt;
+  const critiqueTag = critiquePrompt ? critiqueInfo.tag : null;
+  const critiqueOpen = critiquePrompt ? '<' + critiqueTag + '>' : null;
+  const critiqueEnabled = !!(critiquePrompt && enabledOf(enabledMap, critiquePrompt.identifier));
+
+  // ---- 历史边界集合（只用于派生正则/折叠标记的边界集合，绝不参与任何编辑判定）----
+  // 来源①：main 按 preset 内存维护的"已验证 tag"（historyTags 参数）；
+  // 来源②：手动配置里保留的 tag——即使 enabled=false 也并入（刷新后手动已关，不能只 scene，
+  //         否则旧自定义首标签的历史思考会泄漏）。只并已验证合法 tag：TAG_NAME_RE 且不在 TAG_DENY，
+  //         且不是 critique（critique 由 critiqueEnabled 与主历史表负责）。
+  // 边界（明确）：main 历史 map 只存当前成功 tag，用户多次改 tag 重开后更早的 tag 不再保留——
+  // 那些轮次按"找不到更早标签"回退原正则行为，不为追旧历史无限加配置。
+  let configHistoryTag = null;
+  if (cfg && typeof cfg.tag === 'string') {
+    const t = cfg.tag.trim();
+    if (t !== '' && TAG_NAME_RE.test(t) && !TAG_DENY.has(t.toLowerCase()) && t.toLowerCase() !== 'critique') {
+      configHistoryTag = t;
+    }
+  }
+  const historySet = mergeTagList(historyTags, configHistoryTag ? [configHistoryTag] : []);
+
+  // ---- sceneEnabled = 有效是否发送 scene：场记在且启用，且 manual 没有关它（critique 不改 closeScene）----
+  const manualClosesScene = manualEnabled && (cfg.mode === 'content' || (cfg.mode === 'replace' && cfg.closeScene !== false));
+  const sceneEnabled = !!(guide && guideOrderEnabled) && !manualClosesScene;
+
+  // ---- 模式判定（首边界优先级：critique > manual > scene 实况）----
+  let mode;
+  if (critiqueEnabled) mode = 'critique';
+  else if (manualEnabled) mode = cfg.mode === 'replace' ? 'manual-replace' : 'manual-content';
+  else if (guide && guideOrderEnabled) mode = 'scene-idle';
+  else mode = 'auto-content';
+
+  /* -------- scene-idle：场记开启、点评关闭、无手动配置 → 原场记路径 + 固定候选正则兼容层 --------
+   * 兼容层常开（不等用户有自定义 tag）：critique 刚 on→off、sceneoff content→scene on 等切换后，
+   * 旧楼的 critique/content 首标签历史若退回原 <scene> 正则会漏/被吞——派生边界固定候选
+   * critique/scene/content（findFirstRealTag 取最早）保住旧楼，零 promptEdits、不碰任何编辑。 */
+  if (mode === 'scene-idle') {
+    const base = {
+      sceneEnabled: true,
+      boundaryTag: 'scene',
+      outputTag: 'scene',
+      critiqueTag,
+      critiqueEnabled: false,
+      mode,
+      guideId: guide.identifier,
+    };
+    // critiqueTag 为 null（本预设没有点评提示词）时 mergeTagList 只收非空字符串，不会派生出 <null>。
+    const tags = mergeTagList([critiqueTag], ['scene', 'content'], historySet);
+    const softErrors = [];
+    const softChanges = [];
+    const targets = collectRegexTargets(regexScripts, tags, softErrors, softChanges);
+    if (softErrors.length > 0) {
+      warnings.push('场记开启、点评关闭、无手动配置：两条边界正则缺失/停用/模式不符，本预设对分界兼容层不支持，' +
+        '按原正则运行、不猜、不介入（active=false），历史兼容不生效：' + softErrors[0]);
+      return skeleton(base);
+    }
+    warnings.push('场记开启、点评关闭、无手动配置：本轮保持原场记路径（active=true 仅正则兼容层、零编辑）；' +
+      '派生边界固定候选 ' + tags.map(t => '<' + t + '>').join('、') +
+      '，防状态切换（点评 on→off、content→scene 等）后旧楼非 scene 思考被原正则吞掉');
+    return skeleton({
+      ...base,
+      active: true,
+      boundaryTags: tags,
+      regexTargets: targets,
+      changes: softChanges,
+    });
+  }
+
+  /* -------- auto-content：scene 关（无 manual、无 critique）→ 自动 content 分界 -------- */
+  if (mode === 'auto-content') {
+    // 合成 content 模式复用 raw：场记引导未启用 → 无 disabled 编辑；链/世界支线/正则目标全套复用。
+    const synth = buildScenePlan({
+      prompts,
+      order: inp.order,
+      regexScripts,
+      config: { enabled: true, mode: 'content', source: 'existing', closeScene: true, omitTag: false },
+    });
+    if (synth.ok) {
+      warnings.push(...(synth.warnings || []));
+      warnings.push('场记未开启且无手动/点评配置：自动分界生效，首边界 = <content>（自动，未写任何配置）');
+      return skeleton({
+        active: true,
+        boundaryTag: 'content',
+        outputTag: 'content',
+        critiqueTag,
+        critiqueEnabled,
+        mode,
+        guideId: synth.guideId,
+        worldId: synth.worldId,
+        chainIds: synth.chainIds,
+        changes: synth.changes,
+        promptEdits: synth.promptEdits,
+        boundaryTags: mergeTagList([critiqueTag], synth.boundaryTags, historySet),
+        regexTargets: synth.regexTargets,
+        closeGuide: synth.closeGuide,
+        collectionInsert: synth.collectionInsert,
+      });
+    }
+    // 失败分两档：预设里根本没有场记体系 → 降级"完全不支持"（active=false + 明确 warnings）；
+    // 体系在但必要目标坏（必要 regex 缺/歧义等）→ 硬阻断 plan false。
+    const systemPresent = (synth.changes || []).length > 0;
+    if (!systemPresent) {
+      warnings.push(...(synth.errors || []));
+      warnings.push('预设里没有可识别的场记体系目标（无启用中的 <scene> 引用链提示词，两条边界正则也缺失/停用）：' +
+        '自动分界对本预设完全不支持，不介入（active=false）');
+      return skeleton({
+        boundaryTag: 'content',
+        outputTag: 'content',
+        critiqueTag,
+        critiqueEnabled,
+        mode,
+      });
+    }
+    errors.push(...(synth.errors || []));
+    return skeleton({
+      ok: false,
+      boundaryTag: 'content',
+      outputTag: 'content',
+      critiqueTag,
+      critiqueEnabled,
+      mode,
+    });
+  }
+
+  /* -------- manual-replace / manual-content（点评关闭）：1.0.x 手动语义原样 + 新字段 -------- */
+  if (mode === 'manual-replace' || mode === 'manual-content') {
+    const raw = buildScenePlan({ prompts, order: inp.order, regexScripts, config: cfg });
+    if (!raw.ok) {
+      errors.push(...(raw.errors || []));
+      const bt = mode === 'manual-replace' ? ((raw.config && raw.config.tag) || null) : 'content';
+      return skeleton({ ok: false, boundaryTag: bt, outputTag: bt, critiqueTag, critiqueEnabled, mode });
+    }
+    warnings.push(...(raw.warnings || []));
+    const tagOut = mode === 'manual-replace' ? raw.config.tag : 'content';
+    return skeleton({
+      active: true,
+      boundaryTag: tagOut,
+      outputTag: tagOut,
+      critiqueTag,
+      critiqueEnabled,
+      mode,
+      guideId: raw.guideId,
+      formatId: raw.formatId,
+      worldId: raw.worldId,
+      chainIds: raw.chainIds,
+      changes: raw.changes,
+      promptEdits: raw.promptEdits,
+      boundaryTags: mergeTagList([critiqueTag], raw.boundaryTags, ['content'], historySet),
+      regexTargets: raw.regexTargets,
+      closeGuide: raw.closeGuide,
+      collectionInsert: raw.collectionInsert,
+      config: raw.config, // 手动配置（含解析后的 tag；enabled 保持手动保存值，不改）
+    });
+  }
+
+  /* -------- critique 开：首边界 = critique（不管 scene 开/关；manual 模块决定全部保留）--------
+   * 链改写按首边界重建：已知链 id 全部 <scene>→<critique>；未知自定义 id 只 首输出声明 局部换
+   * （用户已有真实 module 正文/自改文本绝不整体改成 critique）。manual 计划的 format/关闭场记/
+   * 世界支线/贴入模块编辑原样保留（manualTag 仍决定 format/omit/tagtree）。 */
+  const raw = manualEnabled
+    ? buildScenePlan({ prompts, order: inp.order, regexScripts, config: cfg })
+    : null;
+  if (manualEnabled && !(raw && raw.ok)) {
+    errors.push(...((raw && raw.errors) || []));
+    return skeleton({
+      ok: false,
+      boundaryTag: critiqueTag,
+      outputTag: null,
+      critiqueTag,
+      critiqueEnabled,
+      mode,
+    });
+  }
+  if (raw) warnings.push(...(raw.warnings || []));
+
+  const changes = raw ? raw.changes.filter(c => !CHAIN_EDIT_KINDS.has(c.kind)) : [];
+  const promptEdits = Object.create(null);
+  if (raw) {
+    for (const [id, edit] of Object.entries(raw.promptEdits)) {
+      if (!CHAIN_EDIT_KINDS.has(edit.kind)) promptEdits[id] = edit;
+    }
+  }
+  const chainIds = [];
+  const addEdit = (p, kind, title, newContent, note) => {
+    promptEdits[p.identifier] = { kind, title, newContent, note: note || '' };
+    changes.push({ kind, title, id: p.identifier, name: p.name || '', before: p.content || '', after: newContent });
+  };
+
+  // 世界支线：manual 计划已处理（含改写或明确保留的 warning）时不再动；无 manual 时按本轮场记实况处理。
+  let worldIdFound = null;
+  if (!raw) {
+    const world = findWorldPrompt(prompts, warnings);
+    worldIdFound = world ? world.identifier : null;
+    if (!world) {
+      warnings.push('找不到世界支线提示词，其 <scene> 引用保持原样');
+    } else if (!enabledOf(enabledMap, world.identifier)) {
+      warnings.push('世界支线提示词未启用，跳过其 <scene> 引用改写');
+    } else if (sceneEnabled) {
+      warnings.push('点评为首边界但场记本轮仍在生成：世界支线的 <scene> 时间引用保留原样');
+    } else {
+      applyWorldNeutralRewrite(world, addEdit, warnings);
+    }
+    if (!guide) {
+      warnings.push('找不到场记引导提示词（应含非空的 {{setvar::scene_mod::…}}）：scene_mod 无来源，本轮首边界为 ' + critiqueOpen);
+    } else if (!guideOrderEnabled) {
+      warnings.push('场记引导提示词在顺序表（100001）里未启用：本轮「关闭」为空操作，不要求先开启它；首边界为 ' + critiqueOpen);
+    }
+  }
+
+  // 链重建：跳过 场记引导/format/世界支线（与 raw 同一套 skipIds；命中已编辑的再跳一次，防重）。
+  const skipIds = new Set();
+  if (guide) skipIds.add(guide.identifier);
+  if (raw && raw.formatId) skipIds.add(raw.formatId);
+  if (raw && raw.worldId) skipIds.add(raw.worldId);
+  else if (!raw && worldIdFound) skipIds.add(worldIdFound);
+  for (const p of prompts) {
+    if (!p || typeof p.content !== 'string') continue;
+    if (Object.prototype.hasOwnProperty.call(promptEdits, p.identifier)) continue;
+    if (skipIds.has(p.identifier)) continue;
+    if (enabledMap.get(p.identifier) !== true) continue; // 只处理当前启用链；切链后每轮重建
+    const sceneCount = countOccurrences(p.content, '<scene>');
+    if (sceneCount === 0) continue; // 没提场记的提示词不用动
+    const isKnownChain = KNOWN_IDS.chains.includes(p.identifier);
+    if (isKnownChain) {
+      // 已知链：全部 <scene> 引用 → critique（与 362"链要联动"同机制，目标换成首边界）
+      const newContent = p.content.split('<scene>').join(critiqueOpen);
+      if (newContent !== p.content) {
+        addEdit(p, 'chain-retag',
+          `链联动（点评首边界·稳定ID）：${p.name} 的 ${sceneCount} 处 <scene> 引用 → ${critiqueOpen}（其余文本原样；manual 模块决定不变）`, newContent);
+        chainIds.push(p.identifier);
+      }
+    } else {
+      // 未知自定义 id：只在 首个/第一个/首标签 声明处局部换；module 正文/自改文本一字不动
+      const r = replaceFirstDeclarations(p.content, critiqueOpen);
+      if (r.count > 0 && r.content !== p.content) {
+        addEdit(p, 'chain-decl',
+          `链联动（点评首边界·首输出声明）：${p.name || p.identifier} 的 ${r.count} 处 首个/第一个/首标签 <scene> 声明 → ${critiqueOpen}（其余自改文本一字不动）`, r.content);
+        chainIds.push(p.identifier);
+      } else {
+        warnings.push(`启用中的提示词「${p.name || p.identifier}」含 <scene> 但没有可确认的 首个/第一个/首标签 输出声明，按约定不动（不按名字猜）`);
+      }
+    }
+  }
+
+  // 正则目标：manual 计划已带（两条 find 原串）；无 manual 时按 critique 边界集合现收（必要目标，缺/歧义硬阻断）。
+  let regexTargets;
+  let boundaryTags;
+  if (raw) {
+    regexTargets = raw.regexTargets;
+    boundaryTags = mergeTagList([critiqueTag], raw.boundaryTags, ['content'], historySet);
+  } else {
+    boundaryTags = mergeTagList([critiqueTag], ['scene', 'content'], historySet);
+    regexTargets = collectRegexTargets(regexScripts, boundaryTags, errors, changes);
+    if (errors.length > 0) {
+      return skeleton({
+        ok: false,
+        boundaryTag: critiqueTag,
+        outputTag: sceneEnabled ? 'scene' : 'content',
+        critiqueTag,
+        critiqueEnabled,
+        mode,
+        chainIds,
+        changes,
+      });
+    }
+  }
+
+  // 输出模块 tag 与分界 tag 分开：boundaryTag=critique；outputTag=manualtag | scene | content。
+  const outputTag = manualEnabled
+    ? (cfg.mode === 'replace' ? raw.config.tag : 'content')
+    : (sceneEnabled ? 'scene' : 'content');
+
+  // raw warnings 与 critique 重建可能对同一提示词各说一遍 → 去重（保序）。
+  const seenWarn = new Set();
+  const dedupWarnings = warnings.filter(w => {
+    if (seenWarn.has(w)) return false;
+    seenWarn.add(w);
+    return true;
+  });
+
+  return skeleton({
+    active: true,
+    boundaryTag: critiqueTag,
+    outputTag,
+    critiqueTag,
+    critiqueEnabled,
+    sceneEnabled,
+    mode,
+    guideId: raw ? raw.guideId : (guide ? guide.identifier : null),
+    formatId: raw ? raw.formatId : null,
+    worldId: raw ? raw.worldId : worldIdFound,
+    chainIds,
+    changes,
+    promptEdits,
+    boundaryTags,
+    regexTargets,
+    closeGuide: raw ? raw.closeGuide : false,
+    collectionInsert: raw ? raw.collectionInsert : null,
+    config: raw ? raw.config : cfg, // 手动保存配置原样（自动路径 enabled=false，不让 omit 自动启用）
+    warnings: dedupWarnings,
+  });
 }
 
 /* ========================================================================

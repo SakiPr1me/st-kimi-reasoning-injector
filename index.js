@@ -6,9 +6,9 @@ import { saveSettings, saveSettingsDebounced, substituteParams, eventSource, eve
 import * as ST_Script from "../../../../script.js";
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
 import { toggleDrawer } from "../../../utils.js";
-import { stTagMountSettings, setTagBoundaryProvider } from "./tag-fixer.js?b=v1.46.362";
-import { buildScenePlan, normalizeSceneConfig, createSceneRuntime, makeOmitTagRegex } from './scene-boundary.js?b=v1.0.2';
-import { mountSceneBoundaryUI } from './scene-boundary-ui.js?b=v1.0.3';
+import { stTagMountSettings, setTagBoundaryProvider } from "./tag-fixer.js?b=v1.46.368";
+import { buildScenePlan, buildEffectiveScenePlan, normalizeSceneConfig, createSceneRuntime, makeOmitTagRegex } from './scene-boundary.js?b=v1.1.0';
+import { mountSceneBoundaryUI } from './scene-boundary-ui.js?b=v1.1.0';
 import { RegexProvider, runRegexScript } from '../../regex/engine.js';
 import { mountApiPoolCard } from "./api-pool.js?b=v1.46.327";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
@@ -19,12 +19,12 @@ import { createCustomModelManager } from './custom-models.js?b=v1.0.4';
 import { createSchemeSwitcher } from './scheme-api.js?b=v1.0.0';
 import { createSelfUpdater } from './self-update.js?b=v1.0.0';
 import { createControlCenter } from './control-center.js?b=v1.3.14';
-import { createPresetControls } from './preset-controls.js?b=v1.4.24';
+import { createPresetControls } from './preset-controls.js?b=v1.4.25';
 import { createCompanion, COMPANION_DEFAULTS } from './companion.js?b=v1.3.4';
 import { applyConsoleHomeDefaults, HOME_ACTION_FAVORITES, HOME_SCHEME_IDS } from './console-home-defaults.js?b=v1.0.2';
 import { getChatCompletionPreset } from '../../../openai.js';
-import { ID as YW_PRESET_ID } from './preset-control-defs.js?b=v1.4.24';
-import { placeAfter, syncLinkedSetting, selectStrictPromptScenario, resolveNsfwPresetLink, nsfwLinkSignature, shouldApplyNsfwLink, clearNsfwLinkState, applyNsfwDefaults, applyNsfwLink, applyNsfwMaster, planNsfwMasterAction, NSFW_PROMPT_ID, NSFW_PROMPT_ALIAS_ID } from './console-linked-controls.js?b=v1.0.1';
+import { ID as YW_PRESET_ID } from './preset-control-defs.js?b=v1.4.25';
+import { placeAfter, syncLinkedSetting, resolveChainFamily, planChainInjectionLink, selectStrictPromptScenario, resolveNsfwPresetLink, nsfwLinkSignature, shouldApplyNsfwLink, clearNsfwLinkState, applyNsfwDefaults, applyNsfwLink, applyNsfwMaster, planNsfwMasterAction, NSFW_PROMPT_ID, NSFW_PROMPT_ALIAS_ID } from './console-linked-controls.js?b=v1.0.2';
 
 
 // SWIPE 常量本地兜底：ST 1.15.0 才引入（1.13 无 SWIPE_DIRECTION/SWIPE_SOURCE），
@@ -380,7 +380,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.367'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.368'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -4717,6 +4717,35 @@ function ywSetNsfwMaster(want) {
     ywApplyNsfwRuntime(changed.length ? changed : ['nsfwEnabled']);
     return changed;
 }
+let ywChainInjectionState = null;
+let ywInjectionPanelSync = null;
+function ywSyncChainInjection() {
+    const selected = selectStrictPromptScenario(oai_settings?.prompt_order);
+    const detected = resolveChainFamily({ prompts: oai_settings?.prompts, scenario: selected.ok ? selected.scenario : null,
+        resolvePromptId: ywResolvedPromptId });
+    const action = planChainInjectionLink(ywChainInjectionState, { presetKey: getCurrentPresetName() || '', family: detected.family });
+    if (action.state) ywChainInjectionState = action.state;
+    if (action.warning) { try { toastr.warning('多个思维链同时开启，请只保留一组；本次没有自动切换注入。'); } catch (e) { } }
+    if (!action.apply) return false;
+    const modes = new Set(Array.isArray(settings.injectModes) ? settings.injectModes : []);
+    if (action.step1) modes.add('reasoning_content'); else modes.delete('reasoning_content');
+    settings.injectModes = [...modes];
+    if (action.target) {
+        settings.injectTarget = action.target;
+        const presets = currentPresets();
+        settings.reasoningContent = presets[settings.language] || presets.zh;
+    }
+    const checkbox = document.getElementById(extensionName + '_inject_rc');
+    if (checkbox) checkbox.checked = !!action.step1;
+    if (action.target) {
+        document.querySelectorAll('input[name="' + extensionName + '_inject_target"]').forEach(input => { input.checked = input.value === action.target; });
+        const text = document.getElementById(extensionName + '_reasoning_value');
+        if (text) { text.value = settings.reasoningContent; text.readOnly = true; }
+    }
+    try { ywInjectionPanelSync?.(); refreshSeed(); } catch (e) { console.warn('[余温工具箱] 注入联动界面同步失败', e); }
+    saveSettingsDebounced();
+    return true;
+}
 function ywSyncLinkedControls() {
     const scenario = getPromptScenario();
     const rows = scenario?.order;
@@ -4725,6 +4754,7 @@ function ywSyncLinkedControls() {
     const reordered = placeAfter(rows, niahId, part2Id);
     const changed = syncLinkedSetting(settings, rows, niahId);
     const nsfwChanged = ywSyncNsfwLinked({ persist: false });
+    ywSyncChainInjection();
     const input = document.getElementById(extensionName + '_wrap4a');
     if (input) input.checked = !!settings.wrap4aEnabled;
     if (changed || nsfwChanged) saveSettingsDebounced();
@@ -4833,6 +4863,26 @@ function getPresetNames() {
 }
 let sceneBoundaryUi = null;
 let scenePlanCache = null;
+let effectiveSceneCache = null;
+const sceneBoundaryHistory = new Map();
+function effectiveScenePlan() {
+    const name = getCurrentPresetName() || '';
+    const config = readSceneBoundaryConfig();
+    const prompts = oai_settings?.prompts;
+    const order = getPromptScenario()?.order;
+    const regexScripts = oai_settings?.extensions?.regex_scripts;
+    const signature = JSON.stringify([name, config, order]);
+    if (effectiveSceneCache?.signature === signature && effectiveSceneCache.prompts === prompts
+        && effectiveSceneCache.regexScripts === regexScripts) return effectiveSceneCache.plan;
+    const tags = sceneBoundaryHistory.get(name) || new Set();
+    const plan = buildEffectiveScenePlan({ prompts, order, regexScripts, config,
+        resolvePromptId: ywResolvedPromptId, historyTags: [...tags] });
+    if (plan.ok && plan.manualEnabled && plan.outputTag && !['scene', 'content', 'critique'].includes(plan.outputTag)) {
+        tags.add(plan.outputTag); sceneBoundaryHistory.set(name, tags);
+    }
+    effectiveSceneCache = { signature, prompts, regexScripts, plan };
+    return plan;
+}
 function readSceneBoundaryConfig() {
     const name = getCurrentPresetName();
     const map = settings.sceneBoundaryByPreset;
@@ -4845,20 +4895,22 @@ function scenePlanFor(config = readSceneBoundaryConfig()) {
     const name = getCurrentPresetName();
     if (scenePlanCache && scenePlanCache.name === name && scenePlanCache.config === config
         && scenePlanCache.prompts === prompts && scenePlanCache.order === order && scenePlanCache.regexScripts === regexScripts) return scenePlanCache.plan;
-    const plan = buildScenePlan({ prompts, order, regexScripts, config });
+    const plan = buildEffectiveScenePlan({ prompts, order, regexScripts, config: { ...config, enabled: true },
+        resolvePromptId: ywResolvedPromptId, historyTags: [...(sceneBoundaryHistory.get(name || '') || [])] });
     scenePlanCache = { name, config, prompts, order, regexScripts, plan };
     return plan;
 }
 const sceneBoundaryRuntime = createSceneRuntime({
-    getPlan: () => scenePlanFor(),
-    getEnabled: () => settings.enabled === true && readSceneBoundaryConfig()?.enabled === true,
+    getPlan: effectiveScenePlan,
+    getEnabled: () => settings.enabled === true && effectiveScenePlan()?.active === true,
     regexProvider: RegexProvider.instance,
 });
 sceneBoundaryRuntime.installRegexProvider();
 setTagBoundaryProvider(() => {
-    if (!settings.enabled || !readSceneBoundaryConfig()?.enabled) return null;
-    const plan = scenePlanFor();
-    return plan.ok ? { tag: plan.config.tag, keepScene: plan.config.mode === 'replace' && plan.config.closeScene === false } : null;
+    if (!settings.enabled) return null;
+    const plan = effectiveScenePlan();
+    return plan.ok && plan.active ? { tag: plan.outputTag || plan.boundaryTag, keepScene: plan.sceneEnabled === true,
+        prefixTags: plan.critiqueEnabled ? [plan.critiqueTag || 'critique'] : [] } : null;
 });
 async function ensureScenePromptHook() {
     const pm = await inlineInsGetPm();
@@ -4866,8 +4918,8 @@ async function ensureScenePromptHook() {
 }
 function applySceneOmitTag(messages) {
     if (!settings.enabled || !readSceneBoundaryConfig()?.enabled || !Array.isArray(messages)) return false;
-    const plan = scenePlanFor();
-    if (!plan.ok) return false;
+    const plan = effectiveScenePlan();
+    if (!plan.ok || !plan.manualEnabled) return false;
     const rule = makeOmitTagRegex(plan.config);
     if (!rule) return false;
     let changed = false;
@@ -4922,13 +4974,13 @@ async function saveSceneBoundaryConfig(raw, expectedPreset) {
     if (name !== getCurrentPresetName()) return false;
     const wasEnabled = readSceneBoundaryConfig()?.enabled === true;
     const normalized = normalizeSceneConfig(raw);
-    scenePlanCache = null;
+    scenePlanCache = null; effectiveSceneCache = null;
     if (raw.enabled && (!normalized.ok || !scenePlanFor(raw).ok)) return false;
     const map = settings.sceneBoundaryByPreset;
     const next = map && typeof map === 'object' && !Array.isArray(map) ? { ...map } : {};
     Object.defineProperty(next, name, { value: normalized.config, enumerable: true, configurable: true, writable: true });
     settings.sceneBoundaryByPreset = next;
-    scenePlanCache = null;
+    scenePlanCache = null; effectiveSceneCache = null;
     if (wasEnabled && normalized.config.enabled === false && !reopenSceneAfterBoundaryOff()) {
         try { toastr.warning('功能已关闭，但没有找到唯一的开幕场记条目，请检查预设开关。'); } catch (e) { }
     }
@@ -9820,6 +9872,7 @@ try { rerollGuard.confirmBranch(); } catch (e) { } // v1.37.54 真实生成开�
 // 时机 GENERATION_AFTER_COMMANDS 在 substituteParams 渲染之前，dry-run 也触发。
 eventSource.on(event_types.GENERATION_AFTER_COMMANDS, () => {
     try {
+        ywSyncChainInjection();
         const modes = Array.isArray(settings.injectModes) ? settings.injectModes : [];
         // 仅 KIMI 模式要求模型输出 <cot> 块（DS/自定义模板不要求）
         const wantCot = modes.includes('partial') && settings.injectTarget === 'kimi';
@@ -10830,6 +10883,25 @@ function ywOpenOfficialStore() {
     else openCardFloat('presetstore');
     return storeApi.openStorePage('official') !== false;
 }
+function ywOpenInjectionSection(section) {
+    if (!['wrap4a', 'rand_head'].includes(section)) return false;
+    const center = getYwUnifiedConsole().center;
+    center.open('modules', 'card:inject');
+    const box = document.getElementById(extensionName + '_' + section + '_box');
+    const head = box?.previousElementSibling;
+    if (!box || !head) return false;
+    box.style.display = '';
+    head.classList.add('open');
+    const target = head;
+    requestAnimationFrame(() => {
+        const scroll = target.closest('.ywcc-scroll') || target.closest('.ywcc-body');
+        if (scroll) scroll.scrollTop += target.getBoundingClientRect().top - scroll.getBoundingClientRect().top - 10;
+        else target.scrollIntoView({ block: 'nearest' });
+        target.setAttribute('tabindex', '-1');
+        try { target.focus({ preventScroll: true }); } catch (e) { }
+    });
+    return true;
+}
 function getYwUnifiedConsole() {
     if (ywUnifiedConsole) return ywUnifiedConsole;
     const subscribers = new Set();
@@ -10838,6 +10910,7 @@ function getYwUnifiedConsole() {
         document, window, getContext: ywConsoleContext, getOaiSettings: () => oai_settings,
         getSettings: () => settings, saveSettings: saveSettingsDebounced, saveSettingsNow: saveSettings,
         readToggles: readPromptToggles, writeToggles: writePromptToggles,
+        openInjectionSection: ywOpenInjectionSection,
         readToolboxFlag: key => key === 'randHeadEnabled' && settings.randHeadEnabled === true,
         writeToolboxFlag: ywWriteToolboxFlag,
         saveCurrentPreset: ywConsoleSaveCurrentPreset, savePromptContent: ywConsoleSavePromptContent, getCurrentPresetName, subscribeChanges,
@@ -10875,8 +10948,8 @@ function getYwUnifiedConsole() {
         status: () => ({ open: center.isOpen(), preset: presets.getSnapshot(), actor: actor.status() }),
     };
     const events = [event_types.OAI_PRESET_CHANGED_AFTER, event_types.PRESET_CHANGED, event_types.CHAT_CHANGED, event_types.SETTINGS_UPDATED].filter(Boolean);
-    for (const event of new Set(events)) eventSource.on(event, () => { scenePlanCache = null; sceneBoundaryUi?.refresh(); ensureScenePromptHook().catch(() => {}); ywSyncLinkedControls(); subscribers.forEach(fn => fn()); ywConsoleChanged(); });
-    document.addEventListener('click', event => { if (event.target?.closest?.('#completion_prompt_manager .prompt-manager-toggle-action')) queueMicrotask(() => { scenePlanCache = null; sceneBoundaryUi?.refresh(); ywSyncLinkedControls(); subscribers.forEach(fn => fn()); ywConsoleChanged(); }); });
+    for (const event of new Set(events)) eventSource.on(event, () => { scenePlanCache = null; effectiveSceneCache = null; sceneBoundaryUi?.refresh(); ensureScenePromptHook().catch(() => {}); ywSyncLinkedControls(); subscribers.forEach(fn => fn()); ywConsoleChanged(); });
+    document.addEventListener('click', event => { if (event.target?.closest?.('#completion_prompt_manager .prompt-manager-toggle-action')) queueMicrotask(() => { scenePlanCache = null; effectiveSceneCache = null; sceneBoundaryUi?.refresh(); ywSyncLinkedControls(); subscribers.forEach(fn => fn()); ywConsoleChanged(); }); });
     /* 列表广播不是强制重置：仍走签名门槛；刚缝入新增条目/改开关会因签名变化自然应用。 */
     window.addEventListener('yw-store-official-update', () => { ywSyncLinkedControls(); ywConsoleChanged(); });
     ywSyncLinkedControls();
@@ -12700,6 +12773,9 @@ const storeBuild = 'v2.2.124';
         saveSettingsDebounced();
         console.log("[余温工具箱] 注入模式切换为:", target, "| Reasoning Content 已更新");
     }
+    const injectionPanelSync = () => { renderTargetRadios(); customNameRowSync(); syncReasoningValueLock(); };
+    ywInjectionPanelSync = injectionPanelSync;
+    panelScope.own(() => { if (ywInjectionPanelSync === injectionPanelSync) ywInjectionPanelSync = null; });
     // 事件委托：radio 组（含动态追加的自定义模板）；命名空间防重渲染重复绑定
     $(document).off('change.kimiTarget').on('change.kimiTarget', `input[name="${extensionName}_inject_target"]`, onInjectTargetChange);
 
@@ -13032,7 +13108,7 @@ const storeBuild = 'v2.2.124';
         if (host) {
             const mounted = mountSceneBoundaryUI(host, {
                 getPresetKey: () => getCurrentPresetName() || '', getConfig: readSceneBoundaryConfig,
-                preview: scenePlanFor, saveConfig: saveSceneBoundaryConfig,
+                preview: scenePlanFor, getEffectivePlan: effectiveScenePlan, saveConfig: saveSceneBoundaryConfig,
                 onError: message => toastr.warning(message),
             });
             sceneBoundaryUi = mounted;
@@ -13336,7 +13412,7 @@ const storeBuild = 'v2.2.124';
 // 全局事件只绑定一次（语言切换重渲染 initSettingsPanel 时不会重复监听）
 eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, onSettingsReady);
 if (event_types.CHAT_COMPLETION_PROMPT_READY) eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, data => applySceneOmitTag(data?.chat));
-eventSource.on(event_types.GENERATION_AFTER_COMMANDS, async () => { scenePlanCache = null; try { await ensureScenePromptHook(); } catch (e) { console.warn('[余温工具箱] 场记适配未挂载，本轮保持原样', e); } });
+eventSource.on(event_types.GENERATION_AFTER_COMMANDS, async () => { scenePlanCache = null; effectiveSceneCache = null; try { ywSyncChainInjection(); await ensureScenePromptHook(); } catch (e) { console.warn('[余温工具箱] 场记适配未挂载，本轮保持原样', e); } });
 
 // ★W167c（作者报：429 限流时「空回自动重roll」不动作）：
 //   429 这类接口失败时，ST 连一条空占位消息都不会生成（聊天最后一条还是 user），

@@ -6,7 +6,7 @@
      本文件里的 enabled 一律不写死。
    ========================================================================== */
 
-export const PRESET_CONTROLS_VERSION = '1.4.24';
+export const PRESET_CONTROLS_VERSION = '1.4.25';
 export const CHARACTER_ID = 100001;
 export const LENGTH_PROMPT_ID = 'e54f6cda-5eee-421c-921f-1bb405f9e968';
 export const LENGTH_PROMPT_NAME = '🔢字数要求';
@@ -472,7 +472,9 @@ const SECTION_DEFS = [
         { type: 'option', value: 'gmn2', width: 6 },
       ]) }),
       D(ID.break1, '破限 Part 1'),
-      D(ID.break2, '破限 Part 2'),
+      /* 2026-11-15：默认展示名加「(1不行再关)」提示；只改展示，真实 prompt.name/body
+         一字不动；用户在布局/钉选里自定义的标题仍优先于这个默认名。 */
+      D(ID.break2, '破限 Part 2(1不行再关)'),
       D(ID.niah, '插小说防道歉'),
       /* 首页/完整预设页的“随机头部”：只控工具箱 randHeadEnabled，不冒充 preset id。
          _ref/_uid 让 preset-layout 的默认布局/保存布局能按内置控件稳定物化。 */
@@ -669,7 +671,8 @@ export const PROMPT_NAMES = Object.freeze({
   [ID.thinkLong]: '🧠长思考(择1自改)',
   [ID.niah]: '🙇‍♂️插小说防道歉',
   [ID.break1]: '🔓破限 Part 1(道歉关)',
-  [ID.break2]: '🔓破限 Part 2',
+  /* 2026-11-15：Part 2 默认展示名加提示后缀（只影响展示/缺项提示，不改真实条目名）。 */
+  [ID.break2]: '🔓破限 Part 2(1不行再关)',
   [ID.chainDs]: '🐋思维链·DS',
   [ID.chainKimi]: '🌙思维链1·KIMI',
   [ID.chainGmn]: '😺思维链·Gmn',

@@ -38,7 +38,7 @@ const FIELD_SET = new Set(FIELDS);
  *  closeScene 默认 true = 延续 361（原场记本轮关闭）；omitTag 默认 false = 模块内容照常发送。 */
 export const SCENE_FIELD_DEFAULTS = { closeScene: true, omitTag: false };
 /** 本 UI 模块版本（362 波次升 1.0.1；主插件加载戳与 manifest 由主统一配对）。 */
-export const SCENE_BOUNDARY_UI_VERSION = '1.0.3';
+export const SCENE_BOUNDARY_UI_VERSION = '1.1.0';
 /** 布尔兜底：'true'/'false' 字符串也认（防手改 settings.json）；缺（undefined/null）给同源缺省值。 */
 const asBool = (v, dflt) => (v === 'true' ? true : v === 'false' ? false : (v === undefined || v === null) ? dflt : v === true);
 
@@ -757,7 +757,12 @@ export function mountSceneBoundaryUI(host, deps) {
         chkOmit.input.disabled = s.busy > 0 || s.dead;
         setVal(tagInput, vis.tag);
         setVal(moduleText, vis.moduleText);
-        effLine.textContent = '当前生效：' + effectiveSummary(s.effective, s.key);
+        let currentBoundary = '';
+        try {
+            const plan = deps.getEffectivePlan?.();
+            if (plan?.ok && plan.boundaryTag) currentBoundary = ' · 思考分界 <' + plan.boundaryTag + '>（' + (plan.manualEnabled ? '手动配置' : '跟随预设') + '）';
+        } catch (e) { }
+        effLine.textContent = '当前生效：' + effectiveSummary(s.effective, s.key) + currentBoundary;
         chip.hidden = !s.draft;
         btnPreview.disabled = s.busy > 0;
         btnApply.disabled = s.busy > 0 || !core.canApply();

@@ -93,9 +93,13 @@ function effectiveTagTree() {
 	if (typeof tag !== 'string' || !/^[A-Za-z][\w:-]*$/.test(tag)) return settings.tagTree;
 	const lines = settings.tagTree.split('\n');
 	const hasTag = lines.some(line => line.trim() === tag);
-	return lines.flatMap(line => line.trim() === 'scene'
+	const effective = lines.flatMap(line => line.trim() === 'scene'
 		? (boundary?.keepScene ? (hasTag ? [line] : [line.replace('scene', tag), line]) : (hasTag ? [] : [line.replace('scene', tag)]))
-		: [line]).join('\n');
+		: [line]);
+	for (const prefix of (Array.isArray(boundary?.prefixTags) ? boundary.prefixTags : []).slice().reverse()) {
+		if (/^[A-Za-z][\w:-]*$/.test(prefix) && !effective.some(line => line.trim() === prefix)) effective.unshift(prefix);
+	}
+	return effective.join('\n');
 }
 function parseTagTree() {
 	const lines = effectiveTagTree().split('\n').filter(l => l.trim());
