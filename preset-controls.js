@@ -37,7 +37,7 @@ import {
   NARRATION_PROMPT_IDS,
   TOOLBOX_FLAG_RAND_HEAD,
   TOOLBOX_FLAG_KEYS,
-} from './preset-control-defs.js?b=v1.4.28';
+} from './preset-control-defs.js?b=v1.4.29';
 import { readEditableLengthRule, replaceLengthRule } from './preset-length.js?b=v1.0.1';
 import {
   LAYOUT_SETTINGS_KEY,
@@ -66,6 +66,7 @@ export const STYLE_ID = 'ywpc-style';
 /* 首页常用钉选的设置键：对象，键 = presetLayoutKey(预设名, 100001)，值 = 有序 pin 数组。
    与主 index 的 defaultSettings.presetControlHomePins 同名；这里只读写，不创建默认值。 */
 export const HOME_PINS_SETTINGS_KEY = 'presetControlHomePins';
+export const HOME_FOLD_SETTINGS_KEY = 'presetControlHomeFold';
 /* 首页常用默认升级标记（每 presetLayoutKey 一项；由主 index 的 defaultSettings 同源补 {}）。
    也用于“常用里默认两项被用户移除后不再复活”。 */
 export const HOME_DEFAULTS_VERSION_KEY = 'presetControlHomeDefaultsVersion';
@@ -420,7 +421,9 @@ export const PRESET_CONTROLS_CSS = `
 .ywpc-toast[data-tone="error"]{color:var(--ywpc-warn);font-weight:600}
 .ywpc-compact .ywpc-sec-note,.ywpc-compact .ywpc-toggle-sub,.ywpc-compact .ywpc-seg-sub{display:none}
 .ywpc-compact .ywpc-body{gap:9px}
+.ywpc-compact .ywpc-toast:empty{display:none}
 .ywpc-compact .ywpc-sec{padding-top:8px}
+.ywpc-compact .ywpc-sec:first-child{padding-top:0}
 .ywpc-compact .ywpc-toggle{min-height:34px;padding:5px 8px}
 .ywpc-compact .ywpc-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}
 .ywpc-status-compact{margin:0;font-size:11.5px;line-height:1.4}
@@ -7966,6 +7969,29 @@ export function createPresetControls(deps = {}) {
     }
   }
 
+  function compactCommonOpenPreference() {
+    const settings = readSettings();
+    const name = text(safeCall(deps.getCurrentPresetName, '') || '').trim();
+    const store = settings && settings[HOME_FOLD_SETTINGS_KEY];
+    const key = presetLayoutKey(name, CHARACTER_ID);
+    return name && isPlainObject(store) && hasOwn(store, key) && typeof store[key] === 'boolean'
+      ? store[key] : true;
+  }
+
+  function saveCompactCommonOpen(details) {
+    if (!compact || homeEdit || editing || !details || details.getAttribute('data-ywpc-section') !== 'common') return;
+    const token = captureToken();
+    if (!token || !token.name || !tokenCurrent(token)) return;
+    const settings = readSettings();
+    if (!settings) return;
+    const store = isPlainObject(settings[HOME_FOLD_SETTINGS_KEY]) ? settings[HOME_FOLD_SETTINGS_KEY] : {};
+    const key = presetLayoutKey(token.name, CHARACTER_ID);
+    const open = sectionOpen(details);
+    if (store[key] === open) return;
+    settings[HOME_FOLD_SETTINGS_KEY] = { ...store, [key]: open };
+    persistSettings();
+  }
+
   function restoreOpenSections(map, samePreset) {
     if (!root) return;
     const nodes = Array.from(root.querySelectorAll('details[data-ywpc-section]'));
@@ -7985,8 +8011,9 @@ export function createPresetControls(deps = {}) {
       }
       return;
     }
-    /* 换预设时默认只展开第一组（compact 只有常用，也展开）。 */
-    const defaultId = compact ? 'common' : (nodes[0] ? nodes[0].getAttribute('data-ywpc-section') : '');
+    /* 首页按预设恢复用户折叠偏好；完整预设页仍默认第一组。 */
+    const defaultId = compact ? (compactCommonOpenPreference() ? 'common' : '')
+      : (nodes[0] ? nodes[0].getAttribute('data-ywpc-section') : '');
     for (const node of nodes) {
       setSectionOpen(node, node.getAttribute('data-ywpc-section') === defaultId);
     }
@@ -10320,6 +10347,7 @@ export function createPresetControls(deps = {}) {
       if (typeof event.preventDefault === 'function') event.preventDefault();
       noteActiveSection(summaryEl);
       toggleAccordion(summaryEl.parentElement);
+      saveCompactCommonOpen(summaryEl.parentElement);
       return;
     }
     /* 普通态：只记录用户点过的分组，供「编辑布局」进入当前组。 */

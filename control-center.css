@@ -2302,6 +2302,7 @@
 
 /* 首页紧凑330 */
 #ywcc-root.ywcc-root .ywcc-home { gap: 8px; }
+#ywcc-root.ywcc-root .ywcc-home:not(.is-editing) .ywcc-home-common { margin-block: -4px; }
 #ywcc-root.ywcc-root .ywcc-scheme-list,
 #ywcc-root.ywcc-root .ywcc-fav-grid { gap: 4px; }
 
