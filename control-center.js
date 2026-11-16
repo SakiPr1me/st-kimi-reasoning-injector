@@ -5,7 +5,7 @@
    - 不写业务数据；只通过 getSettings/saveSettings 保存 controlCenter.favorites/recent。
    ========================================================================== */
 
-export const CONTROL_CENTER_VERSION = '1.3.15';
+export const CONTROL_CENTER_VERSION = '1.3.16';
 export const PANEL_SELECTOR = '#ywcc-root .ywcc-panel';
 
 const ROOT_ID = 'ywcc-root';
@@ -1568,6 +1568,44 @@ export function createControlCenter(options) {
         return bar;
     }
 
+    function renderApologyTips(hero) {
+        const trigger = H('button', 'ywcc-tips-trigger');
+        trigger.type = 'button';
+        trigger.append(H('span', '', 'Gmn道歉怎么办？'), icon('chev'));
+        trigger.setAttribute('aria-expanded', 'false');
+        trigger.setAttribute('aria-controls', 'ywcc-apology-tips');
+        const card = H('section', 'ywcc-tips-card');
+        card.id = 'ywcc-apology-tips';
+        card.hidden = true;
+        card.setAttribute('aria-labelledby', 'ywcc-apology-tips-title');
+        const header = H('div', 'ywcc-tips-head');
+        const title = H('h3', '', 'Gmn道歉怎么办？');
+        title.id = 'ywcc-apology-tips-title';
+        const close = H('button', 'ywcc-tips-close');
+        close.type = 'button';
+        close.setAttribute('aria-label', '收起道歉提示');
+        close.appendChild(icon('close'));
+        header.append(title, close);
+        const list = H('ol', 'ywcc-tips-list');
+        for (const text of [
+            '检查预设是否是最新（从条目商店缝入V1113）',
+            '关掉破限 part1（改完123流程还道歉就关part2），打开塞小说防道歉 （已经塞了默认示例 但你楼越高 需要塞的越厚 可以自己改）',
+            '打开角色卡的世界书，把深度D 1、2、3这些，全部丢到D4，如果你是记忆插件，看看是否能调整插入位置',
+        ]) list.appendChild(H('li', '', text));
+        const foot = H('p', 'ywcc-tips-foot', '可以搭配重roll里的半截楼重roll使用。多roll吧 roll治百病。');
+        card.append(header, list, foot);
+        const setOpen = open => {
+            card.hidden = !open;
+            trigger.setAttribute('aria-expanded', String(open));
+        };
+        trigger.addEventListener('click', () => setOpen(card.hidden));
+        close.addEventListener('click', () => {
+            setOpen(false);
+            try { trigger.focus({ preventScroll: true }); } catch (e) { }
+        });
+        hero.append(trigger, card);
+    }
+
     function renderHome() {
         const preset = currentPresetName();
         const result = getModulesSafe();
@@ -1584,6 +1622,7 @@ export function createControlCenter(options) {
         activeName.hidden = !active;
         heroText.appendChild(activeName);
         hero.appendChild(heroText);
+        renderApologyTips(hero);
         /* 三个入口紧凑横排在预设信息下方。 */
         const tools = renderHomeTools();
         hero.appendChild(tools);

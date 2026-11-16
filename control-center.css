@@ -368,7 +368,7 @@
     content: "";
     position: absolute;
     top: -28px;
-    right: -20px;
+    right: 0;
     width: 92px;
     height: 92px;
     border-radius: 50%;
@@ -2328,3 +2328,38 @@
     width: 14px;
     height: 14px;
 }
+
+/* 首页右上 tips：默认仅入口，主动点击才展开卡片。 */
+#ywcc-root.ywcc-root .ywcc-hero { grid-template-columns: minmax(0, 1fr) auto; }
+#ywcc-root.ywcc-root .ywcc-hero > .ywcc-home-tools { grid-column: 1 / -1; grid-row: 3; }
+#ywcc-root.ywcc-root .ywcc-tips-trigger {
+    position: relative; z-index: 1; grid-column: 2; grid-row: 1;
+    display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px;
+    align-self: start; max-width: 142px; min-height: 32px; padding: 0 0 0 5px;
+    border: 0; background: transparent; color: var(--ywcc-flame-ink);
+    font: inherit; font-size: 11.5px; font-weight: 500; line-height: 1.4;
+    text-align: right; cursor: pointer;
+}
+#ywcc-root.ywcc-root .ywcc-tips-trigger:hover { color: var(--ywcc-ink); }
+#ywcc-root.ywcc-root .ywcc-tips-trigger .ywcc-ico { flex: none; transition: transform .15s ease; }
+#ywcc-root.ywcc-root .ywcc-tips-trigger[aria-expanded="true"] .ywcc-ico { transform: rotate(90deg); }
+#ywcc-root.ywcc-root .ywcc-tips-card {
+    position: relative; z-index: 1; grid-column: 1 / -1; grid-row: 2; min-width: 0;
+    box-sizing: border-box; width: 100%; max-width: 100%; justify-self: stretch;
+    margin: 3px 0 4px; padding: 10px 12px; border: 1px solid var(--ywcc-line-strong);
+    border-radius: 12px; background: var(--ywcc-surface); color: var(--ywcc-ink);
+    font-size: 12px; line-height: 1.65; overflow-wrap: anywhere;
+}
+#ywcc-root.ywcc-root .ywcc-tips-card[hidden] { display: none; }
+#ywcc-root.ywcc-root .ywcc-tips-head { display: flex; align-items: center; gap: 8px; }
+#ywcc-root.ywcc-root .ywcc-tips-head h3 { flex: 1; margin: 0; font-size: 13px; font-weight: 650; }
+#ywcc-root.ywcc-root .ywcc-tips-close {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px;
+    background: transparent; color: var(--ywcc-muted); cursor: pointer;
+}
+#ywcc-root.ywcc-root .ywcc-tips-close:hover { color: var(--ywcc-ink); background: var(--ywcc-surface-2); }
+#ywcc-root.ywcc-root .ywcc-tips-list { display: grid; gap: 8px; margin: 7px 0 0; padding-left: 1.5em; }
+#ywcc-root.ywcc-root .ywcc-tips-list li { padding-left: 2px; }
+#ywcc-root.ywcc-root .ywcc-tips-list li::marker { color: var(--ywcc-flame-ink); font-weight: 650; }
+#ywcc-root.ywcc-root .ywcc-tips-foot { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--ywcc-line); }
