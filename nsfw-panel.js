@@ -1702,6 +1702,25 @@ export function nsfwSetSendOff(chatId, name, on) {
 export function nsfwClearSendOnce(chatId) {
     return updateSendStores(chatId, [{ key: SEND_ONCE_KEY, clear: true }, { key: SEND_OFF_KEY, clear: true }]);
 }
+/** 取消 AUTO 同时取消当前聊天所有角色勾选；两个入口共用同一动作。 */
+export function nsfwSetAutoSend(want) {
+    const st = _getSettings() || {};
+    const next = !!want;
+    const edits = [{ key: SEND_ONCE_KEY, clear: true }, { key: SEND_OFF_KEY, clear: true }];
+    if (!next) edits.unshift({ key: SEND_KEY, clear: true });
+    const result = updateSendStores(nsfwChatId(), edits);
+    if (!result.ok) { sendPreferenceNotice(result); nsfwRefreshSendUi(); return false; }
+    const previous = st.nsfwAutoSend;
+    st.nsfwAutoSend = next;
+    try { if (_save) _save(); } catch (error) {
+        st.nsfwAutoSend = previous;
+        sendPreferenceNotice({ error: stateError(error) });
+        nsfwRefreshSendUi();
+        return false;
+    }
+    nsfwRefreshSendUi();
+    return true;
+}
 /** ★W366：只看「真实用户输入」——作者用 4A 包裹/<user_input> 把用户楼层包了，小说前缀里的名字不该触发 AUTO */
 function realUserInput(t) {
     let s = String(t || '');
@@ -2475,18 +2494,7 @@ export function nsfwMountSender() {
         }
         const autoCb = host.querySelector('.yw-nsfw-sd-auto input');
         autoCb.addEventListener('change', (e) => {
-            const nextAuto = !!e.target.checked;
-            /* Opening AUTO clears one-round overrides only after both stores validate. */
-            if (nextAuto) {
-                const result = nsfwClearSendOnce(chatId);
-                if (!result.ok) { autoCb.checked = auto; sendPreferenceNotice(result); return; }
-            }
-            st.nsfwAutoSend = nextAuto;
-            try { if (_save) _save(); } catch (error) {
-                st.nsfwAutoSend = auto; autoCb.checked = auto;
-                sendPreferenceNotice({ error: stateError(error) }); return;
-            }
-            nsfwRefreshSendUi();
+            nsfwSetAutoSend(!!e.target.checked);
         });
         host.querySelectorAll('input[data-send]').forEach((cb) => {
             const previous = cb.checked;

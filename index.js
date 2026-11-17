@@ -13,7 +13,7 @@ import { RegexProvider, runRegexScript } from '../../regex/engine.js';
 import { mountApiPoolCard } from "./api-pool.js?b=v1.46.327";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
-import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwStopObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwRefreshSendUi, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwSetStat, nsfwSetStats, nsfwProfilesFromText, nsfwEditFloor, nsfwCompleteLatest, nsfwGuideSyncFromPreset, nsfwGuideAllows, NSFW_DEFAULT_RULES } from "./nsfw-panel.js?b=v1.46.384"; // ★W290 NSFW 状态栏
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwStopObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwRefreshSendUi, nsfwSetAutoSend, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwSetStat, nsfwSetStats, nsfwProfilesFromText, nsfwEditFloor, nsfwCompleteLatest, nsfwGuideSyncFromPreset, nsfwGuideAllows, NSFW_DEFAULT_RULES } from "./nsfw-panel.js?b=v1.46.387"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 import { createCustomModelManager } from './custom-models.js?b=v1.0.4';
 import { createSchemeSwitcher } from './scheme-api.js?b=v1.0.0';
@@ -380,7 +380,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.385'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.387'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -863,7 +863,7 @@ const OC_RELAY_I18N = {
         wrap4aDemoNote: '最好自己找小说，大家都发同样的，我不确定会不会被标记。',
         wrap4aTok: 'token',
         randHeadTitle: '随机头部（防标记）',
-        randHeadHint: '每次请求现生成一小段诗（200~300 字），贴在第一条系统消息最前面（防前缀指纹）。关掉后请求里一个字都不加。',
+        randHeadHint: '每次请求生成320个随机数字和字母，下一行接一小段诗（200~300字），贴在第一条系统消息最前面。关掉后不添加。',
         randNameTitle: '随机AI身份（防标记）',
         randNameSourceLabel: 'AI身份', randMasterTitle: '总开关：关着时下面两个都不生效（勾选状态会保留）',
         randNameCurrent: '下次发送将使用：',
@@ -923,7 +923,7 @@ const OC_RELAY_I18N = {
         wrap4aDemoNote: 'Better to use your own novel — everyone sending the same text might get flagged (unknown).',
         wrap4aTok: 'token',
         randHeadTitle: 'Random header (anti-flag)',
-        randHeadHint: 'A short poem (200–300 chars) is generated for every request and prepended to the first system message (anti-fingerprint). When off, nothing is added.',
+        randHeadHint: 'Every request prepends 320 random letters and digits, then a short poem (200–300 chars), to the first system message. When off, nothing is added.',
         randNameTitle: 'Random AI identity (anti-flag)',
         randNameSourceLabel: 'AI identity', randMasterTitle: 'Master switch: when off, neither identity below takes effect (your ticks are kept)',
         randNameCurrent: 'Next send will use: ',
@@ -982,7 +982,7 @@ const OC_RELAY_I18N = {
         wrap4aDemoNote: '가능하면 직접 소설을 구하세요. 모두 같은 글을 보내면 표시될 수 있습니다(미확인).',
         wrap4aTok: 'token',
         randHeadTitle: '랜덤 헤더 (표시 방지)',
-        randHeadHint: '요청마다 짧은 시(200~300자)를 만들어 첫 시스템 메시지 맨 앞에 붙입니다(지문 방지). 끄면 요청에 아무것도 추가되지 않습니다.',
+        randHeadHint: '요청마다 무작위 영문자와 숫자 320자 뒤에 짧은 시(200~300자)를 붙여 첫 시스템 메시지 앞에 추가합니다. 끄면 추가하지 않습니다.',
         randNameTitle: '랜덤 AI 정체성 (표시 방지)',
         randNameSourceLabel: 'AI 정체성', randMasterTitle: '마스터 스위치: 꺼져 있으면 아래 두 항목 모두 적용되지 않습니다 (체크 상태는 유지)',
         randNameCurrent: '다음 전송에 사용: ',
@@ -1933,8 +1933,8 @@ const RAND_HEAD_DONE = new WeakSet();   // ★W170：已注入过的 messages �
 const RAND_HEAD_MSGS = new WeakSet();   // ★W170：已贴过头的 system 消息对象（两处调用若各拿一份新数组，靠这条兜住）
 const RAND_NL = String.fromCharCode(10);
 function randInt(n) { const v = Math.floor(Math.random() * (Number(n) || 1)); return v < 0 ? 0 : v; }
-/** 现生成一页诗（结构化随机，不用固定句子池）：200~300 字、行数随池子自然成篇。
- *  ★W170：**首行不再有任何标题**（第一行就是诗本身）；字数按「含换行」的总长算 ⇒ 输出长度必在 200~300。
+/** 现生成320字符的数字字母行，下一行接200~300字诗歌，行数随池子自然成篇。
+ *  无标题；诗歌按含换行200~300字计算，随机字符行另计。
  *  保留最近 5 个，重复就重抽；remember=false ⇒ 只生成、不占名额（面板那行示例用）。 */
 function buildRandHeader(remember) {
     const make = () => {
@@ -1958,7 +1958,9 @@ function buildRandHeader(remember) {
         RAND_HEAD_RECENT.push(key());
         while (RAND_HEAD_RECENT.length > 5) RAND_HEAD_RECENT.shift();
     }
-    return block;
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const noise = Array.from({ length: 320 }, () => alphabet[randInt(alphabet.length)]).join('');
+    return noise + RAND_NL + block;
 }
 
 // —— 随机人名：姓 + 中字 + 名（14 × 4 × 24 = 1344 种组合）——
@@ -9576,10 +9578,7 @@ function bindNsfwCard() {
     });
     const $autoOn = $("#" + extensionName + "_nsfw_auto");
     $autoOn.off("change.kimiNsfwAuto").on("change.kimiNsfwAuto", function () {
-        settings.nsfwAutoSend = $(this).is(":checked");
-        try { nsfwClearSendOnce(nsfwChatId()); } catch (e) { }
-        saveSettingsDebounced();
-        try { renderRoster(); nsfwRefreshSendUi(); } catch (e) { }
+        try { renderRoster(); nsfwSetAutoSend($(this).is(":checked")); } catch (e) { }
     });
     $('#' + extensionName + '_nsfw_density').on('change', function () {
         settings.nsfwDensity = String($(this).val() || 'normal');
@@ -11328,7 +11327,7 @@ ${t('showTpsLabel')}
 </div>
 <div id="${extensionName}_rand_head_box" style="display:${foldIsOpen('rand_head', settings.randHeadEnabled) ? '' : 'none'}">
 <p class="kimi-hint" style="margin:2px 0 5px;line-height:1.5">${ocr('randHeadHint')}</p>
-<div id="${extensionName}_rand_head_demo" class="kimi-hint" style="margin:0;font:12px/1.6 ui-monospace,Consolas,monospace;opacity:.9;white-space:pre-wrap"></div>
+<div id="${extensionName}_rand_head_demo" class="kimi-hint" style="margin:0;font:12px/1.6 ui-monospace,Consolas,monospace;opacity:.9;white-space:pre-wrap;overflow-wrap:anywhere"></div>
 <div style="margin-top:6px"><button type="button" id="${extensionName}_rand_head_edit" class="kimi-btn">${ocr('randHeadPoolEdit')}</button></div>
 <div id="${extensionName}_rand_head_edit_box" style="display:none;margin-top:5px">
 <textarea id="${extensionName}_rand_head_pool" class="text_pole" style="width:100%;min-height:92px;font:12px/1.45 ui-monospace,Consolas,monospace"></textarea>
