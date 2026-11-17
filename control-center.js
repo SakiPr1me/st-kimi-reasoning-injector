@@ -5,7 +5,7 @@
    - 不写业务数据；只通过 getSettings/saveSettings 保存 controlCenter.favorites/recent。
    ========================================================================== */
 
-export const CONTROL_CENTER_VERSION = '1.3.19';
+export const CONTROL_CENTER_VERSION = '1.3.20';
 export const PANEL_SELECTOR = '#ywcc-root .ywcc-panel';
 
 const ROOT_ID = 'ywcc-root';
@@ -1589,10 +1589,11 @@ export function createControlCenter(options) {
         const list = H('ol', 'ywcc-tips-list');
         for (const text of [
             '检查预设是否是最新（从条目商店缝入V1113）',
-            '关掉破限 part1（改完123流程还道歉就关part2），打开塞小说防道歉 （已经塞了默认示例 但你楼越高 需要塞的越厚 可以自己改）\n打开角色卡的世界书，把深度D 1、2、3这些，全部丢到D4，如果你是记忆插件，看看是否能调整插入内容位置，查看提示词管理器，把它注入到提示词的 #历史记录 这部分',
-            '可以搭配重roll里的半截楼重roll使用。多roll吧 roll治百病。',
+            '关掉破限 part1（改完123流程还道歉就关part2），打开塞小说防道歉 （已经塞了默认示例 但你楼越高 需要塞的越厚 可以自己改）',
+            '打开角色卡的世界书，把深度D 1、2、3这些，全部丢到D4，如果你是记忆插件，看看是否能调整插入内容位置，查看提示词管理器，把它注入到提示词的 #历史记录 这部分',
         ]) list.appendChild(H('li', '', text));
-        card.append(header, list);
+        const foot = H('p', 'ywcc-tips-foot', '可以搭配重roll里的半截楼重roll使用。多roll吧 roll治百病。');
+        card.append(header, list, foot);
         const setOpen = open => {
             card.hidden = !open;
             trigger.setAttribute('aria-expanded', String(open));

@@ -2360,8 +2360,9 @@
 }
 #ywcc-root.ywcc-root .ywcc-tips-close:hover { color: var(--ywcc-ink); background: var(--ywcc-surface-2); }
 #ywcc-root.ywcc-root .ywcc-tips-list { display: grid; gap: 8px; margin: 7px 0 0; padding-left: 1.5em; }
-#ywcc-root.ywcc-root .ywcc-tips-list li { padding-left: 2px; white-space: pre-line; }
+#ywcc-root.ywcc-root .ywcc-tips-list li { padding-left: 2px; }
 #ywcc-root.ywcc-root .ywcc-tips-list li::marker { color: var(--ywcc-flame-ink); font-weight: 650; }
+#ywcc-root.ywcc-root .ywcc-tips-foot { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--ywcc-line); }
 
 /* 总控内原分页：电脑和手机共用一层外边距，保留内部功能卡。 */
 #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card {
