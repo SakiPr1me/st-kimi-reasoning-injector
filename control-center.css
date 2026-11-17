@@ -2360,6 +2360,103 @@
 }
 #ywcc-root.ywcc-root .ywcc-tips-close:hover { color: var(--ywcc-ink); background: var(--ywcc-surface-2); }
 #ywcc-root.ywcc-root .ywcc-tips-list { display: grid; gap: 8px; margin: 7px 0 0; padding-left: 1.5em; }
-#ywcc-root.ywcc-root .ywcc-tips-list li { padding-left: 2px; }
+#ywcc-root.ywcc-root .ywcc-tips-list li { padding-left: 2px; white-space: pre-line; }
 #ywcc-root.ywcc-root .ywcc-tips-list li::marker { color: var(--ywcc-flame-ink); font-weight: 650; }
-#ywcc-root.ywcc-root .ywcc-tips-foot { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--ywcc-line); }
+
+/* 总控内原分页：电脑和手机共用一层外边距，保留内部功能卡。 */
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+}
+
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card.kimi-card[data-card] > .kimi-card-body {
+    padding: 0;
+}
+#ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card[data-card="presetstore"] > .kimi-card-body > .yws-box-main {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+#ywcc-root.ywcc-root #ywpu-card {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+/* 手机：文字收一档，保留触摸热区。 */
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
+    #ywcc-root.ywcc-root {
+        font-size: 13px;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+    #ywcc-root.ywcc-root .ywcc-title { font-size: 15px; }
+    #ywcc-root.ywcc-root .ywcc-sub { font-size: 11px; }
+    #ywcc-root.ywcc-root .ywcc-preset-name { font-size: 17px; }
+    #ywcc-root.ywcc-root .ywcc-preset-name.is-muted { font-size: 13px; }
+    #ywcc-root.ywcc-root .ywcc-active-scheme { font-size: 11px; }
+    #ywcc-root.ywcc-root .ywcc-quick-label,
+    #ywcc-root.ywcc-root .ywcc-row-title { font-size: 12px; }
+    #ywcc-root.ywcc-root .ywcc-quick-sub,
+    #ywcc-root.ywcc-root .ywcc-row-desc,
+    #ywcc-root.ywcc-root .ywcc-mini-meta,
+    #ywcc-root.ywcc-root .ywcc-tips-trigger { font-size: 11px; }
+    #ywcc-root.ywcc-root .ywcc-home-tool,
+    #ywcc-root.ywcc-root .ywcc-scheme-name,
+    #ywcc-root.ywcc-root .ywcc-fav-name,
+    #ywcc-root.ywcc-root .ywcc-mini-title,
+    #ywcc-root.ywcc-root .ywcc-tips-card { font-size: 11.5px; }
+    #ywcc-root.ywcc-root .ywcc-tips-head h3 { font-size: 12px; }
+    #ywcc-root.ywcc-root .ywcc-nav-item { font-size: 10px; }
+    #ywcc-root.ywcc-root .ywpc-root,
+    #ywcc-root.ywcc-root .ywpc-sec-title { font-size: 12px; }
+    #ywcc-root.ywcc-root .ywpc-toggle-label { font-size: 11.5px; }
+    #ywcc-root.ywcc-root .ywpc-seg-label { font-size: 11px; }
+    #ywcc-root.ywcc-root .ywpc-status,
+    #ywcc-root.ywcc-root .ywpc-sec-note,
+    #ywcc-root.ywcc-root .ywpc-control-label,
+    #ywcc-root.ywcc-root .ywpc-sec-count { font-size: 10.5px; }
+    #ywcc-root.ywcc-root .ywpc-toggle-sub,
+    #ywcc-root.ywcc-root .ywpc-seg-sub { font-size: 10px; }
+
+    #ywcc-root.ywcc-root .ywcc-module-host { font-size: 13px; }
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card.kimi-card[data-card] > .kimi-card-body {
+        font-size: 13px;
+    }
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card.kimi-card[data-card] .kimi-btn,
+    #ywcc-root.ywcc-root .ywcc-module-host .ywcc-original-card.kimi-card[data-card] .menu_button { font-size: 11.5px; }
+    #ywcc-root.ywcc-root .ywpc-title,
+    #ywcc-root.ywcc-root .ywc-settings-title,
+    #ywcc-root.ywcc-root .ywcc-search-input { font-size: 12.5px; }
+    #ywcc-root.ywcc-root #ywpu-card {
+        --ywpu-fs-xs: 10.5px;
+        --ywpu-fs-sm: 11px;
+        --ywpu-fs-md: 12px;
+        --ywpu-fs-lg: 14px;
+        --ywpu-fs-name: 12.5px;
+    }
+    #ywcc-root.ywcc-root .yws-host,
+    #ywcc-root.ywcc-root #ywpu-view-store,
+    #ywcc-root.ywcc-root #yws-banner,
+    #ywcc-root.ywcc-root #yws-repbanner,
+    #ywcc-root.ywcc-root #yws-noticebanner {
+        --yws-fs-xs: 10.5px;
+        --yws-fs-sm: 11px;
+        --yws-fs-md: 12px;
+        --yws-fs-lg: 14px;
+        --yws-fs-body: 12px;
+        --yws-fs-title: 14px;
+        --yws-fs-name: 13px;
+    }
+    #ywcc-root.ywcc-root .yws-host .yws-card-t { font-size: var(--yws-fs-title); }
+    #ywcc-root.ywcc-root .yws-host .yws-card-wb { font-size: var(--yws-fs-body); }
+}
