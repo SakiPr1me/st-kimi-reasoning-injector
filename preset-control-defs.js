@@ -6,7 +6,7 @@
      本文件里的 enabled 一律不写死。
    ========================================================================== */
 
-export const PRESET_CONTROLS_VERSION = '1.4.29';
+export const PRESET_CONTROLS_VERSION = '1.4.32';
 export const CHARACTER_ID = 100001;
 export const LENGTH_PROMPT_ID = 'e54f6cda-5eee-421c-921f-1bb405f9e968';
 export const LENGTH_PROMPT_NAME = '🔢字数要求';
@@ -19,9 +19,11 @@ export const STORE_PROMPT_ALIASES = Object.freeze([
 export const LENGTH_SENTENCE = /- 字数要求:正文的字数控制在(\d+)字以上。/g;
 
 /* 工具箱 flag 控件（不是预设条目）：只允许这两个显式 deps 读写。
-   目前只开放 randHeadEnabled；不把它塞进 prompt id / ALL_KNOWN_IDS。 */
+   开放随机头部、随机AI身份和重置文风正则；不把它塞进 prompt id / ALL_KNOWN_IDS。 */
 export const TOOLBOX_FLAG_RAND_HEAD = 'randHeadEnabled';
-export const TOOLBOX_FLAG_KEYS = Object.freeze([TOOLBOX_FLAG_RAND_HEAD]);
+export const TOOLBOX_FLAG_RAND_NAME = 'randNameEnabled';
+export const TOOLBOX_FLAG_RESET_STYLE = 'resetStyleRegex';
+export const TOOLBOX_FLAG_KEYS = Object.freeze([TOOLBOX_FLAG_RAND_HEAD, TOOLBOX_FLAG_RESET_STYLE, TOOLBOX_FLAG_RAND_NAME]);
 
 export const ID = Object.freeze({
   // 常用
@@ -485,6 +487,18 @@ const SECTION_DEFS = [
         label: '🎲随机头部',
         _ref: Object.freeze({ type: 'builtin', key: 'toolbox:' + TOOLBOX_FLAG_RAND_HEAD }),
         _uid: 'builtin:toolbox:' + TOOLBOX_FLAG_RAND_HEAD,
+      },
+      {
+        kind: 'toolboxFlag', flag: TOOLBOX_FLAG_RESET_STYLE,
+        key: 'toolbox.' + TOOLBOX_FLAG_RESET_STYLE, label: '🪄重置文风(不发正文)',
+        _ref: Object.freeze({ type: 'builtin', key: 'toolbox:' + TOOLBOX_FLAG_RESET_STYLE }),
+        _uid: 'builtin:toolbox:' + TOOLBOX_FLAG_RESET_STYLE,
+      },
+      {
+        kind: 'toolboxFlag', flag: TOOLBOX_FLAG_RAND_NAME,
+        key: 'toolbox.' + TOOLBOX_FLAG_RAND_NAME, label: '🎲随机AI身份',
+        _ref: Object.freeze({ type: 'builtin', key: 'toolbox:' + TOOLBOX_FLAG_RAND_NAME }),
+        _uid: 'builtin:toolbox:' + TOOLBOX_FLAG_RAND_NAME,
       },
       D(ID.mutter, '余小温碎碎念'),
       D(ID.summon, '召唤余小温本体', { action: true }),

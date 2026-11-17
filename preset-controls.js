@@ -36,8 +36,10 @@ import {
   NARRATION_RADIO_KEY,
   NARRATION_PROMPT_IDS,
   TOOLBOX_FLAG_RAND_HEAD,
+  TOOLBOX_FLAG_RAND_NAME,
+  TOOLBOX_FLAG_RESET_STYLE,
   TOOLBOX_FLAG_KEYS,
-} from './preset-control-defs.js?b=v1.4.29';
+} from './preset-control-defs.js?b=v1.4.32';
 import { readEditableLengthRule, replaceLengthRule } from './preset-length.js?b=v1.0.1';
 import {
   LAYOUT_SETTINGS_KEY,
@@ -71,7 +73,7 @@ export const HOME_FOLD_SETTINGS_KEY = 'presetControlHomeFold';
    也用于“常用里默认两项被用户移除后不再复活”。 */
 export const HOME_DEFAULTS_VERSION_KEY = 'presetControlHomeDefaultsVersion';
 export const COMMON_HIDDEN_SETTINGS_KEY = 'presetControlCommonHidden';
-const HOME_DEFAULTS_VERSION = 8;
+const HOME_DEFAULTS_VERSION = 9;
 const HOME_THINKING_PIN = Object.freeze({ type: 'combo', key: 'think.model' });
 /* 默认首页的一枚半行空白块：放在 NSFW 状态快照之后、主线之前，让四项剧情开关
    从下一行开始。新装派生与 v7 一次性升级共用这一份定义；用户移走/删除后不复活。 */
@@ -95,6 +97,7 @@ const EDIT_ADD_PROMPT_LIMIT = 8;
    兼容旧的自动显示；之后用户删掉就不再复活。 */
 const HOME_EXTRA_PIN_IDS = Object.freeze([ID.break1, ID.break2, ID.niah]);
 const HOME_RAND_HEAD_PIN = Object.freeze({ type: 'toolboxFlag', key: TOOLBOX_FLAG_RAND_HEAD });
+const HOME_NEW_FLAG_PINS = Object.freeze([TOOLBOX_FLAG_RESET_STYLE, TOOLBOX_FLAG_RAND_NAME].map(key => Object.freeze({ type: 'toolboxFlag', key })));
 /* 2026-11-14 追加：NSFW 指南整组、轻G向、呻吟爱心、NSFW 状态快照、
    主线/感情线/防秒车/结尾钩子、剧情基本档整组、加减速叠加整组。
    新装派生与 v6 升级补齐共用这一份顺序；缺项照旧显示禁用，不按名字猜。 */
@@ -954,6 +957,9 @@ export const PRESET_CONTROLS_CSS = `
 .ywpc-split{gap:0;align-items:stretch;border-radius:9px;transition:background .14s ease}
 .ywpc-split:has(.ywpc-nav-btn:hover:not(:disabled)),
 .ywpc-split:has(.ywpc-split-toggle:hover:not(:disabled)){background:var(--ywpc-surface-2)}
+.ywpc-split:has(.ywpc-split-toggle[aria-checked="true"]:not(:disabled)){
+  background:color-mix(in srgb,var(--ywpc-accent) 9%,var(--ywpc-surface));
+}
 .ywpc-split .ywpc-nav-btn{
   display:flex;align-items:center;gap:5px;min-width:0;flex:1 1 auto;
   min-height:36px;padding:6px 8px;border:0;border-radius:0;
@@ -1264,7 +1270,8 @@ export function createPresetControls(deps = {}) {
   function canUseToolboxFlag(key) {
     return toolboxFlagAllowed(key)
       && typeof deps.readToolboxFlag === 'function'
-      && typeof deps.writeToolboxFlag === 'function';
+      && typeof deps.writeToolboxFlag === 'function'
+      && (typeof deps.toolboxFlagAvailable !== 'function' || safeCall(() => deps.toolboxFlagAvailable(text(key)), false) === true);
   }
 
   function writeToolboxFlag(key, want) {
@@ -1279,6 +1286,11 @@ export function createPresetControls(deps = {}) {
     }
     try {
       const result = deps.writeToolboxFlag(flag, !!want);
+      if (result && typeof result.then === 'function') {
+        result.then(ok => { if (ok === false) showToast('开关没有写入。', 'error'); refresh({ reason: 'toolbox-flag' }); })
+          .catch(e => { showToast('开关写入失败：' + humanError(e), 'error'); refresh({ reason: 'toolbox-flag' }); });
+        return true;
+      }
       if (result === false) {
         showToast('工具箱开关没有写入。', 'error');
         return false;
@@ -1743,6 +1755,15 @@ export function createPresetControls(deps = {}) {
         }
         changed = true;
       }
+      if (previous < 9 && raw.length) {
+        let at = raw.findIndex(pin => homePinMatchesDefault(pin, HOME_RAND_HEAD_PIN));
+        if (at >= 0) for (const pin of HOME_NEW_FLAG_PINS) {
+          const existing = raw.findIndex(item => homePinMatchesDefault(item, pin));
+          if (existing >= 0) { at = existing; continue; }
+          raw.splice(++at, 0, { ...pin });
+          changed = true;
+        }
+      }
       persistSettings();
       return changed;
     } catch (e) {
@@ -1787,6 +1808,8 @@ export function createPresetControls(deps = {}) {
       out.splice(niahAt >= 0 ? niahAt + 1 : out.length, 0, { ...HOME_RAND_HEAD_PIN });
       seen.add(randKey);
     }
+    const flagAt = out.findIndex(pin => homePinMatchesDefault(pin, HOME_RAND_HEAD_PIN));
+    out.splice(flagAt >= 0 ? flagAt + 1 : out.length, 0, ...HOME_NEW_FLAG_PINS.map(pin => ({ ...pin })));
     push({ ...HOME_THINKING_PIN });
     push({ type: 'radio', key: PARAGRAPH_RADIO_KEY });
     push({ type: 'radio', key: NARRATION_RADIO_KEY });
@@ -2064,6 +2087,21 @@ export function createPresetControls(deps = {}) {
         outSections.splice(0, outSections.length, ...next);
         orderChanged = true;
       }
+    }
+    const present = new Set(outSections.flatMap(section => (section.controls || []).map(savedControlKey)));
+    const removed = new Set(Array.isArray(saved.removedControls) ? saved.removedControls : []);
+    const thinkAt = outSections.findIndex(section => section && section.id === 'think_meta' && section.custom !== true);
+    if (thinkAt >= 0) {
+      const section = outSections[thinkAt], controls = (section.controls || []).slice();
+      let at = controls.findIndex(control => savedControlKey(control) === 'builtin:toolbox:' + TOOLBOX_FLAG_RAND_HEAD);
+      if (at >= 0) for (const pin of HOME_NEW_FLAG_PINS) {
+        const key = 'builtin:toolbox:' + pin.key;
+        if (present.has(key) || removed.has(key)) continue;
+        const def = TOOLBOX_FLAG_BY_KEY.get(pin.key);
+        controls.splice(++at, 0, { uid: key, ref: { type: 'builtin', key: 'toolbox:' + pin.key }, title: def.label, sub: '', icon: '' });
+        changed = true;
+      }
+      if (controls.length !== (section.controls || []).length) outSections[thinkAt] = { ...section, controls };
     }
     return changed || orderChanged ? { ...saved, sections: outSections } : saved;
   }
@@ -3230,7 +3268,7 @@ export function createPresetControls(deps = {}) {
     nav.setAttribute('aria-label', ready ? hint + '（不改开关）' : '工具箱导航接口未就绪');
     const main = createEl(doc, 'span', 'ywpc-toggle-main');
     const labelEl = createEl(doc, 'span', 'ywpc-toggle-label');
-    labelEl.textContent = toggleLabelText(o.label || '', o.realName || o.label || '');
+    appendToggleLabel(labelEl, null, toggleLabelText(o.label || '', o.realName || o.label || ''));
     append(main, labelEl);
     if (o.sub) {
       const subEl = createEl(doc, 'span', 'ywpc-toggle-sub');
@@ -3276,14 +3314,31 @@ export function createPresetControls(deps = {}) {
   }
 
   function appendToggleLabel(node, id, label) {
-    const match = [ID.break1, ID.break2].includes(id) ? /^(.*?)([（(][^（）()]*[）)])$/.exec(label) : null;
-    if (!match) { node.textContent = label; return; }
-    const name = createEl(doc, 'span', 'ywpc-toggle-name');
-    name.textContent = match[1];
-    const aside = createEl(doc, 'span', 'ywpc-toggle-aside');
-    aside.textContent = match[2];
-    append(node, name);
-    append(node, aside);
+    node.textContent = '';
+    const source = String(label || '');
+    const stack = [];
+    let start = 0, bracketAt = -1;
+    const part = (text, small) => {
+      if (!text) return;
+      const span = createEl(doc, 'span', small ? 'ywpc-toggle-aside' : 'ywpc-toggle-name');
+      span.textContent = text;
+      append(node, span);
+    };
+    for (let i = 0; i < source.length; i++) {
+      const ch = source[i];
+      if (ch === '(' || ch === '（') {
+        if (!stack.length) bracketAt = i;
+        stack.push(ch === '(' ? ')' : '）');
+      } else if (stack.length && ch === stack[stack.length - 1]) {
+        stack.pop();
+        if (!stack.length) {
+          part(source.slice(start, bracketAt), false);
+          part(source.slice(bracketAt, i + 1), true);
+          start = i + 1;
+        }
+      }
+    }
+    part(source.slice(start), false);
   }
 
   function makeToggle(m, id, label, options) {
@@ -3372,7 +3427,7 @@ export function createPresetControls(deps = {}) {
       btn.title = ids.length ? ids.map(id => PROMPT_NAMES[id] || id).join(' / ') : option.label;
     }
     const labelEl = createEl(doc, 'span', 'ywpc-seg-label');
-    labelEl.textContent = optionDisplayLabel(m, control, option);
+    appendToggleLabel(labelEl, null, optionDisplayLabel(m, control, option));
     append(btn, labelEl);
     if (option.sub) {
       const subEl = createEl(doc, 'span', 'ywpc-seg-sub');
@@ -3386,7 +3441,7 @@ export function createPresetControls(deps = {}) {
     const wrap = createEl(doc, 'div', 'ywpc-row');
     wrap.setAttribute('data-ywpc-pin-group', 'radio:' + control.key);
     const label = createEl(doc, 'span', 'ywpc-control-label');
-    label.textContent = displayLabel(m, control);
+    appendToggleLabel(label, null, displayLabel(m, control));
     append(wrap, label);
 
     const selected = selectedRadioValue(m, control);
@@ -3457,7 +3512,7 @@ export function createPresetControls(deps = {}) {
       btn.title = ids.map(id => PROMPT_NAMES[id] || id).join(' + ');
     }
     const labelEl = createEl(doc, 'span', 'ywpc-seg-label');
-    labelEl.textContent = optionDisplayLabel(m, control, option);
+    appendToggleLabel(labelEl, null, optionDisplayLabel(m, control, option));
     append(btn, labelEl);
     if (option.sub) {
       const subEl = createEl(doc, 'span', 'ywpc-seg-sub');
@@ -3471,7 +3526,7 @@ export function createPresetControls(deps = {}) {
     const wrap = createEl(doc, 'div', 'ywpc-row');
     wrap.setAttribute('data-ywpc-pin-group', 'combo:' + control.key);
     const label = createEl(doc, 'span', 'ywpc-control-label');
-    label.textContent = displayLabel(m, control);
+    appendToggleLabel(label, null, displayLabel(m, control));
     append(wrap, label);
 
     const selected = selectedComboValue(m, control);
@@ -3533,7 +3588,7 @@ export function createPresetControls(deps = {}) {
 
     const main = createEl(doc, 'span', 'ywpc-toggle-main');
     const labelEl = createEl(doc, 'span', 'ywpc-toggle-label');
-    labelEl.textContent = displayLabel(m, control);
+    appendToggleLabel(labelEl, null, displayLabel(m, control));
     const subEl = createEl(doc, 'span', 'ywpc-toggle-sub');
     subEl.setAttribute('data-ywpc-sub', '1');
     subEl.textContent = !allAvailable
@@ -3552,7 +3607,7 @@ export function createPresetControls(deps = {}) {
   function renderMulti(m, control) {
     const wrap = createEl(doc, 'div', 'ywpc-row');
     const label = createEl(doc, 'span', 'ywpc-control-label');
-    label.textContent = displayLabel(m, control);
+    appendToggleLabel(label, null, displayLabel(m, control));
     append(wrap, label);
 
     const parentOn = isOn(m, control.parentId);
@@ -3590,7 +3645,7 @@ export function createPresetControls(deps = {}) {
       check.setAttribute('aria-hidden', 'true');
       const name = createEl(doc, 'span', 'ywpc-chip-name');
       const chipLabel = (control.labels && control.labels[index]) || shortLabelFor(id);
-      name.textContent = emojiPrefix(chipLabel) ? chipLabel : withEmoji(emojiPrefix(PROMPT_NAMES[id]), chipLabel);
+      appendToggleLabel(name, null, emojiPrefix(chipLabel) ? chipLabel : withEmoji(emojiPrefix(PROMPT_NAMES[id]), chipLabel));
       append(chip, check);
       append(chip, name);
       append(grid, chip);
@@ -3690,7 +3745,7 @@ export function createPresetControls(deps = {}) {
         btn.setAttribute('aria-disabled', 'true');
       }
       const segLabel = createEl(doc, 'span', 'ywpc-seg-label');
-      segLabel.textContent = option.label;
+      appendToggleLabel(segLabel, null, option.label);
       append(btn, segLabel);
       append(seg, btn);
     }
@@ -3860,7 +3915,7 @@ export function createPresetControls(deps = {}) {
     btn.title = (control.members || []).map(id => PROMPT_NAMES[id] || id).join(' + ');
     const main = createEl(doc, 'span', 'ywpc-toggle-main');
     const labelEl = createEl(doc, 'span', 'ywpc-toggle-label');
-    labelEl.textContent = control.label || '组合开关';
+    appendToggleLabel(labelEl, null, control.label || '组合开关');
     const subEl = createEl(doc, 'span', 'ywpc-toggle-sub');
     subEl.setAttribute('data-ywpc-sub', '1');
     subEl.setAttribute('data-ywpc-sub-default', status.status);
@@ -3886,7 +3941,7 @@ export function createPresetControls(deps = {}) {
     btn.setAttribute('aria-disabled', 'true');
     const main = createEl(doc, 'span', 'ywpc-toggle-main');
     const labelEl = createEl(doc, 'span', 'ywpc-toggle-label');
-    labelEl.textContent = control.label || '缺项';
+    appendToggleLabel(labelEl, null, control.label || '缺项');
     const subEl = createEl(doc, 'span', 'ywpc-toggle-sub');
     subEl.textContent = control._missingReason || '当前预设没有这项';
     append(main, labelEl);
@@ -3974,19 +4029,20 @@ export function createPresetControls(deps = {}) {
     const card = createEl(doc, 'div', 'ywpc-shortcut');
     card.setAttribute('data-ywpc-shortcut', 'toolbox:' + flag);
     const stateText = usable ? (on ? '已开启' : '已关闭') : '工具箱开关接口未就绪';
-    if (flag === TOOLBOX_FLAG_RAND_HEAD) {
+    if (flag === TOOLBOX_FLAG_RAND_HEAD || flag === TOOLBOX_FLAG_RAND_NAME) {
+      const section = flag === TOOLBOX_FLAG_RAND_NAME ? 'rand_name' : INJECTION_SECTION_RAND_HEAD;
       /* 2026-11-15：随机头部 = 前面导航 + 后面拨钮两颗并列按钮；
          前面只导航（deps.openInjectionSection('rand_head')），
          后面拨钮保持 writeToolboxFlag 原写入路径。 */
       card.classList.add('ywpc-split');
-      const nav = makeInjectionNavButton(INJECTION_SECTION_RAND_HEAD, {
+      const nav = makeInjectionNavButton(section, {
         kind: 'toolboxFlag',
         id: flag,
         label: definition.label || '🎲随机头部',
         realName: definition.label || '随机头部',
         sub: stateText,
-        navTitle: '打开工具箱「随机头部」设置',
-        focusKey: 'nav:' + INJECTION_SECTION_RAND_HEAD,
+        navTitle: '打开工具箱「' + (definition.label || '随机头部') + '」设置',
+        focusKey: 'nav:' + section,
       });
       const btn = makeSplitSwitchButton({ 'data-ywpc-toolbox-flag': flag }, {
         focusKey: 'toolbox:' + flag,
@@ -4012,7 +4068,7 @@ export function createPresetControls(deps = {}) {
     btn.title = (definition.label || '随机头部') + ' · 只改工具箱这一项开关';
     const main = createEl(doc, 'span', 'ywpc-toggle-main');
     const labelEl = createEl(doc, 'span', 'ywpc-toggle-label');
-    labelEl.textContent = definition.label || '随机头部';
+    appendToggleLabel(labelEl, null, definition.label || '随机头部');
     const subEl = createEl(doc, 'span', 'ywpc-toggle-sub');
     subEl.setAttribute('data-ywpc-sub', '1');
     subEl.setAttribute('data-ywpc-sub-default', stateText);
@@ -4059,7 +4115,7 @@ export function createPresetControls(deps = {}) {
     btn.title = resolved.label + (resolved.sub ? ' · ' + resolved.sub : '');
     const main = createEl(doc, 'span', 'ywpc-toggle-main');
     const labelEl = createEl(doc, 'span', 'ywpc-toggle-label');
-    labelEl.textContent = resolved.label || homePinKey(pin);
+    appendToggleLabel(labelEl, null, resolved.label || homePinKey(pin));
     const subEl = createEl(doc, 'span', 'ywpc-toggle-sub');
     subEl.setAttribute('data-ywpc-sub', '1');
     subEl.setAttribute('data-ywpc-sub-default', resolved.sub || '');
@@ -4234,7 +4290,7 @@ export function createPresetControls(deps = {}) {
     append(row, handle);
     const main = createEl(doc, 'div', 'ywpc-pin-main');
     const label = createEl(doc, 'span', 'ywpc-pin-label');
-    label.textContent = resolved.label || homePinKey(pin);
+    appendToggleLabel(label, null, resolved.label || homePinKey(pin));
     const sub = createEl(doc, 'span', 'ywpc-pin-sub');
     sub.textContent = resolved.sub || '';
     append(main, label);
@@ -4350,7 +4406,7 @@ export function createPresetControls(deps = {}) {
       const row = createEl(doc, 'div', 'ywpc-pick-row');
       const main = createEl(doc, 'div', 'ywpc-pick-main');
       const label = createEl(doc, 'span', 'ywpc-pick-label');
-      label.textContent = item.label;
+      appendToggleLabel(label, null, item.label);
       const sub = createEl(doc, 'span', 'ywpc-pick-sub');
       const available = isShortcutToggleable(m, item.id);
       const fixed = FIXED_SET.has(item.id);
@@ -6915,7 +6971,7 @@ export function createPresetControls(deps = {}) {
       if (selected) chip.classList.add('is-on');
       chip.setAttribute('aria-checked', selected ? 'true' : 'false');
       const label = createEl(doc, 'span', 'ywpc-cblock-optlabel');
-      label.textContent = option.label || value;
+      appendToggleLabel(label, null, option.label || value);
       label.title = option.label || value;
       append(chip, label);
       append(box, chip);
@@ -6993,7 +7049,7 @@ export function createPresetControls(deps = {}) {
         + (control.kind === 'radio' ? (control.atMostOne ? ' · 可全关' : ' · 必选') : ''));
     append(head, kind);
     const name = createEl(doc, 'span', 'ywpc-cblock-title');
-    name.textContent = control.label || (control.kind === 'spacer' ? '空白块' : '未命名控件');
+    appendToggleLabel(name, null, control.label || (control.kind === 'spacer' ? '空白块' : '未命名控件'));
     name.title = name.textContent;
     /* 开关/动作/工具箱块的完整名字在下面卡片里；顶部不再重复一个会被挤成单字的标题。 */
     if (control.kind !== 'toggle' && control.kind !== 'action' && control.kind !== 'toolboxFlag') {
@@ -7480,7 +7536,7 @@ export function createPresetControls(deps = {}) {
     card.setAttribute('data-ywpc-missing-control', controlUid(control));
     const main = createEl(doc, 'span', 'ywpc-toggle-main');
     const label = createEl(doc, 'span', 'ywpc-toggle-label');
-    label.textContent = control.label || '缺项控件';
+    appendToggleLabel(label, null, control.label || '缺项控件');
     const sub = createEl(doc, 'span', 'ywpc-toggle-sub');
     sub.textContent = control._missingReason || '当前预设里缺项；可删除或恢复默认布局。';
     append(main, label);
@@ -7682,8 +7738,17 @@ export function createPresetControls(deps = {}) {
         && control.kind === 'toggle' && control.id === ID.niah) || null;
       const randControl = visible.find(control => control
         && control.kind === 'toolboxFlag' && control.flag === TOOLBOX_FLAG_RAND_HEAD) || null;
+      const resetControl = visible.find(control => control
+        && control.kind === 'toolboxFlag' && control.flag === TOOLBOX_FLAG_RESET_STYLE) || null;
+      const nameControl = visible.find(control => control
+        && control.kind === 'toolboxFlag' && control.flag === TOOLBOX_FLAG_RAND_NAME) || null;
       let paired = false;
       for (const control of visible) {
+        if (nameControl && control === nameControl && resetControl) continue;
+        if (resetControl && control === resetControl && nameControl) {
+          append(body, renderInlinePair(renderToolboxFlagCard(m, resetControl), renderToolboxFlagCard(m, nameControl)));
+          continue;
+        }
         if (randControl && control === randControl && niahControl && !paired) continue;
         if (niahControl && control === niahControl && randControl) {
           append(body, renderInlinePair(
@@ -8280,7 +8345,7 @@ export function createPresetControls(deps = {}) {
       if (resolved.available) row.classList.remove('ywpc-missing');
       else row.classList.add('ywpc-missing');
       const label = row.querySelector('.ywpc-pin-label');
-      if (label) label.textContent = resolved.label || homePinKey(pin);
+      if (label) appendToggleLabel(label, null, resolved.label || homePinKey(pin));
       const sub = row.querySelector('.ywpc-pin-sub');
       if (sub) sub.textContent = resolved.sub || '';
     }

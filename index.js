@@ -13,18 +13,18 @@ import { RegexProvider, runRegexScript } from '../../regex/engine.js';
 import { mountApiPoolCard } from "./api-pool.js?b=v1.46.327";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
-import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwStopObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwSetStat, nsfwSetStats, nsfwProfilesFromText, nsfwEditFloor, nsfwCompleteLatest, nsfwGuideSyncFromPreset, nsfwGuideAllows, NSFW_DEFAULT_RULES } from "./nsfw-panel.js?b=v1.46.346"; // ★W290 NSFW 状态栏
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwStopObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwRefreshSendUi, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwSetStat, nsfwSetStats, nsfwProfilesFromText, nsfwEditFloor, nsfwCompleteLatest, nsfwGuideSyncFromPreset, nsfwGuideAllows, NSFW_DEFAULT_RULES } from "./nsfw-panel.js?b=v1.46.384"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 import { createCustomModelManager } from './custom-models.js?b=v1.0.4';
 import { createSchemeSwitcher } from './scheme-api.js?b=v1.0.0';
 import { createSelfUpdater } from './self-update.js?b=v1.0.0';
-import { createControlCenter } from './control-center.js?b=v1.3.20';
-import { createPresetControls } from './preset-controls.js?b=v1.4.29';
+import { createControlCenter } from './control-center.js?b=v1.3.21';
+import { createPresetControls } from './preset-controls.js?b=v1.4.32';
 import { createCompanion, COMPANION_DEFAULTS } from './companion.js?b=v1.3.4';
 import { applyConsoleHomeDefaults, HOME_ACTION_FAVORITES, HOME_SCHEME_IDS } from './console-home-defaults.js?b=v1.0.2';
 import { getChatCompletionPreset } from '../../../openai.js';
-import { ID as YW_PRESET_ID } from './preset-control-defs.js?b=v1.4.29';
-import { placeAfter, syncLinkedSetting, resolveChainFamily, planChainInjectionLink, selectStrictPromptScenario, resolveNsfwPresetLink, nsfwLinkSignature, shouldApplyNsfwLink, clearNsfwLinkState, applyNsfwDefaults, applyNsfwLink, applyNsfwMaster, planNsfwMasterAction, NSFW_PROMPT_ID, NSFW_PROMPT_ALIAS_ID } from './console-linked-controls.js?b=v1.0.2';
+import { ID as YW_PRESET_ID } from './preset-control-defs.js?b=v1.4.32';
+import { placeAfter, syncLinkedSetting, resolveChainFamily, planChainInjectionLink, selectStrictPromptScenario, resolveNsfwPresetLink, nsfwLinkSignature, shouldApplyNsfwLink, clearNsfwLinkState, applyNsfwDefaults, applyNsfwLink, applyNsfwMaster, planNsfwMasterAction, NSFW_PROMPT_ID, NSFW_PROMPT_ALIAS_ID } from './console-linked-controls.js?b=v1.0.3';
 
 
 // SWIPE 常量本地兜底：ST 1.15.0 才引入（1.13 无 SWIPE_DIRECTION/SWIPE_SOURCE），
@@ -380,7 +380,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.378'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.385'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -4800,7 +4800,59 @@ function ywSetWrap4a(want) {
     } else saveSettingsDebounced();
     ywConsoleChanged();
 }
+function ywResetStyleRegex() {
+    const list = oai_settings?.extensions?.regex_scripts;
+    if (!Array.isArray(list)) return null;
+    const candidates = list.filter(script => script && (script.id === 'f8c5d6cc-7e6d-4df9-a99b-a356eea94fc6'
+        || script.scriptName === '重置文风（打开后跑一轮后关闭）'));
+    if (candidates.length !== 1) return null;
+    const script = candidates[0];
+    return script.promptOnly === true && script.markdownOnly !== true && Array.isArray(script.placement)
+        && script.placement.includes(2) ? script : null;
+}
+function ywReadToolboxFlag(key) {
+    if (key === 'resetStyleRegex') { const script = ywResetStyleRegex(); return !!script && !script.disabled; }
+    // 历史快捷项 key 保留；首页这一项只管最外层随机身份总开关。
+    if (key === 'randNameEnabled') return settings.randMasterEnabled === true;
+    return key === 'randHeadEnabled' && settings.randHeadEnabled === true;
+}
+async function ywGetRegexPresetManager() {
+    try {
+        const mod = await import('../../../preset-manager.js');
+        return mod.getPresetManager('openai');
+    } catch (e) {
+        return window.SillyTavern?.getContext?.()?.getPresetManager?.('openai') || null;
+    }
+}
+async function ywSetResetStyleRegex(want) {
+    const script = ywResetStyleRegex(), oai = oai_settings, presetName = getCurrentPresetName();
+    if (!script || !presetName) return false;
+    const pm = await ywGetRegexPresetManager();
+    const selectedName = pm?.getSelectedPresetName?.();
+    if (!pm || typeof pm.writePresetExtensionField !== 'function' || typeof pm.readPresetExtensionField !== 'function'
+        || typeof selectedName !== 'string' || selectedName.trim() !== presetName || oai_settings !== oai
+        || getCurrentPresetName() !== presetName || ywResetStyleRegex() !== script) return false;
+    const list = oai.extensions.regex_scripts;
+    const next = list.map(item => item === script ? { ...item, disabled: !want } : item);
+    await pm.writePresetExtensionField({ name: selectedName, path: 'regex_scripts', value: next });
+    const saved = pm.readPresetExtensionField({ name: selectedName, path: 'regex_scripts' });
+    const at = list.indexOf(script);
+    const verified = Array.isArray(saved) && saved.length === next.length
+        && saved[at]?.disabled === !want && JSON.stringify(saved) === JSON.stringify(next);
+    if (oai_settings === oai && getCurrentPresetName() === presetName) ywConsoleChanged();
+    return verified;
+}
 function ywWriteToolboxFlag(key, want) {
+    if (key === 'resetStyleRegex') return ywSetResetStyleRegex(!!want);
+    if (key === 'randNameEnabled') {
+        settings.randMasterEnabled = !!want;
+        const input = document.getElementById(extensionName + '_rand_master');
+        if (input) input.checked = !!want;
+        try { refreshRandNameLabel(); refreshRandNameLabel('user'); } catch (e) { }
+        saveSettingsDebounced();
+        ywConsoleChanged();
+        return true;
+    }
     if (key !== 'randHeadEnabled') return false;
     settings.randHeadEnabled = !!want;
     const input = document.getElementById(extensionName + '_rand_head');
@@ -9527,7 +9579,7 @@ function bindNsfwCard() {
         settings.nsfwAutoSend = $(this).is(":checked");
         try { nsfwClearSendOnce(nsfwChatId()); } catch (e) { }
         saveSettingsDebounced();
-        try { nsfwMountSender(); } catch (e) { }
+        try { renderRoster(); nsfwRefreshSendUi(); } catch (e) { }
     });
     $('#' + extensionName + '_nsfw_density').on('change', function () {
         settings.nsfwDensity = String($(this).val() || 'normal');
@@ -10905,7 +10957,7 @@ function ywOpenOfficialStore() {
     return storeApi.openStorePage('official') !== false;
 }
 function ywOpenInjectionSection(section) {
-    if (!['wrap4a', 'rand_head'].includes(section)) return false;
+    if (!['wrap4a', 'rand_head', 'rand_name'].includes(section)) return false;
     const center = getYwUnifiedConsole().center;
     center.open('modules', 'card:inject');
     const box = document.getElementById(extensionName + '_' + section + '_box');
@@ -10932,7 +10984,8 @@ function getYwUnifiedConsole() {
         getSettings: () => settings, saveSettings: saveSettingsDebounced, saveSettingsNow: saveSettings,
         readToggles: readPromptToggles, writeToggles: writePromptToggles,
         openInjectionSection: ywOpenInjectionSection,
-        readToolboxFlag: key => key === 'randHeadEnabled' && settings.randHeadEnabled === true,
+        readToolboxFlag: ywReadToolboxFlag,
+        toolboxFlagAvailable: key => key === 'resetStyleRegex' ? !!ywResetStyleRegex() : ['randHeadEnabled', 'randNameEnabled'].includes(key),
         writeToolboxFlag: ywWriteToolboxFlag,
         saveCurrentPreset: ywConsoleSaveCurrentPreset, savePromptContent: ywConsoleSavePromptContent, getCurrentPresetName, subscribeChanges,
     });
@@ -13215,6 +13268,7 @@ const storeBuild = 'v2.2.124';
         $nameChk.on("change", function () {
             settings.randNameEnabled = $(this).is(":checked");
             saveSettingsDebounced();
+            ywConsoleChanged();
         });
         /* ★★W273：外层**总开关** —— 与内层两个勾是"与"关系。
            点它只改 `randMasterEnabled`（内层两个勾**一个字不动**：关掉总开关再开回来，上次勾的还在）。
@@ -13222,6 +13276,7 @@ const storeBuild = 'v2.2.124';
         $("#" + extensionName + "_rand_master").on("change", function () {
             settings.randMasterEnabled = $(this).is(":checked");
             saveSettingsDebounced();
+            ywConsoleChanged();
             try { if (settings.randMasterEnabled && settings.randNameEnabled) renderName(); } catch (e) { }
             try { if (settings.randMasterEnabled && settings.randUserEnabled) renderUserName(); } catch (e) { }
         });

@@ -951,8 +951,6 @@ export function splitValueComment(raw) {
     const barF = s.indexOf('｜');
     if (bar < 0 || (barF >= 0 && barF < bar)) bar = barF;   /* ★W404：全角竖线也算 */
     if (bar >= 0) return { value: s.slice(0, bar).trim(), comment: s.slice(bar + 1).trim() };
-    const m = s.match(/^(.*?)[（(]([^（）()]*)[）)]\s*$/);
-    if (m) return { value: m[1].trim(), comment: m[2].trim() };
     return { value: s, comment: '' };
 }
 
@@ -1403,6 +1401,10 @@ function withUnit(f, val) {
 
 export function buildCharBlock(name, profile) {
     const fields = activeFields(profile);
+    const sendValue = value => String(value == null ? '' : value).split(/\r?\n/).map(line => {
+        const bar = line.search(/[|｜]/);
+        return (bar < 0 ? line : line.slice(0, bar)).trim();
+    }).join(NL);
     const lines = [];
     /* ★W383：跟作者提示词的格式完全一致 —— <nsfw> 无属性，名字/时间写在块内头两行 */
     const snap0 = String((((profile || {}).stats || {}).snapTime || {}).value || '');
@@ -1413,6 +1415,7 @@ export function buildCharBlock(name, profile) {
     const gmap = {};
     const addTo = (g, line, ord) => {
         const gg = String(g || '其它').trim() || '其它';
+        if (gg === '他人视线' || gg === '正文之外') return;
         if (!gmap[gg]) { gmap[gg] = { g: gg, items: [] }; groups.push(gmap[gg]); }
         gmap[gg].items.push({ line: line, ord: (typeof ord === 'number' ? ord : 9999) });
     };
@@ -1422,7 +1425,7 @@ export function buildCharBlock(name, profile) {
         if (f.id === 'snapTime') return;   /* 已在块头 */
         const cell = (profile.stats || {})[f.id]
             || ((profile.static || {})[f.id] ? { value: profile.static[f.id], comment: '' } : null);
-        const val = cell ? fmtVal(f, cell) : '';
+        const val = cell ? sendValue(fmtVal(f, cell)) : '';
         sent0[f.id] = 1;
         /* ★W421：没有值的字段也发一个空位 `id = `，让 AI 下一轮自己补 */
         addTo(f.group, val ? (f.id + ' = ' + val) : (f.id + ' = '), f.ord);   /* ★W438：发送顺序跟指南行序 */
@@ -1435,25 +1438,22 @@ export function buildCharBlock(name, profile) {
         Object.keys(ex).forEach((id) => {
             if (!nsfwGuideAllows(id)) return;   /* ★W413：指南删掉的字段不发送 */
             const e0 = ex[id] || {};
-            /* ★W392：近况只给自己看 —— 不发给 AI（否则它会把上一份照抄/拿正文事件重写一遍） */
             const g0 = nsfwGuideMeta(id) || {};
             if (nsfwMaleFrontHidden(profile, id, g0.group || e0.group)) return;   /* ★W468b */
-            if (id === 'gapLog' || String(g0.group || e0.group || '') === '近况') return;   /* ★W437：组以指南为准 */
-            if (Array.isArray(e0.list) && e0.list.length) return;   /* 多行字段一律不发送 */
-            const v = String(e0.value == null ? "" : e0.value).trim();
+            const v = sendValue(Array.isArray(e0.list) && e0.list.length ? e0.list.join(NL) : e0.value);
             if (!v) return;   /* ★W420：空值交给 W421 补空位 */
             sent0[id] = 1;
             addTo(g0.group || e0.group || '其它', id + ' = ' + v, g0.ord);   /* ★W435/W438：组和顺序都跟指南 */
         });
     } catch (e) { }
-    /* ★W436：他人视线也「反向补充」—— 指南里的每条都发出；这轮没写就空位，写过把原文带上（指南要求「没变的照抄」） */
+    /* desc 字段也按指南当前分组发送；统一出口排除两组，不按旧字段名前缀判断。 */
     try {
         const gmV = nsfwGuide();
         Object.keys(gmV).forEach((id) => {
             if (!/^view/i.test(id)) return;
             if (!nsfwGuideAllows(id)) return;
             const cellV = (profile.desc || {})[id];
-            const txtV = String((cellV && cellV.text) || '').trim();
+            const txtV = sendValue(cellV && cellV.text);
             sent0[id] = 1;
             addTo(gmV[id].group || '他人视线', id + ' = ' + txtV, gmV[id].ord);
         });
@@ -1468,9 +1468,7 @@ export function buildCharBlock(name, profile) {
             const gx0 = gm0[id] || {};
             if (nsfwMaleFrontHidden(profile, id, gx0.group)) return;   /* ★W468b：清单外字段同样不补 */
             if (!nsfwGuideAllows(id)) return;
-            if (/^view/i.test(id)) return;   /* ★W431：他人视线是 desc，不发空位 */
             const g = gm0[id] || {};
-            if (String(g.group || '') === '近况' || String(g.group || '') === '他人视线' || g.multi) return;
             addTo(g.group || '其它', id + ' = ', g.ord);
         });
     } catch (e0) { }
@@ -1725,7 +1723,7 @@ function aiContent(t) {
     const re = /<content>([\s\S]*?)<\/content>/gi;
     let m;
     while ((m = re.exec(s))) parts.push(m[1]);
-    return parts.length ? parts.join(String.fromCharCode(10)) : s;
+    return parts.join(String.fromCharCode(10));
 }
 /** AUTO 这一轮会发谁（只看正文/用户消息里出现过的名字） */
 export function nsfwAutoPicks(chatId, msgs) {
@@ -1734,26 +1732,18 @@ export function nsfwAutoPicks(chatId, msgs) {
         const live = nsfwStateFromMsgs(msgs);
         const names = (bucket.order || []).filter((n) => bucket.chars[n]);
         Object.keys(live.chars).forEach((n) => { if (names.indexOf(n) < 0) names.push(n); });
-        /* ★W462：AUTO 不只认最后一条 assistant —— 往上找最近 4 条 assistant（含块里的 name 行），
-           32 楼有 A、34 楼 B、36 楼只写 B 时，A 仍算在场；否则 UI 勾着 A、请求时却按最后一条文本把 A 丢了。 */
-        const AUTO_RECENT_ASSISTANTS = 4;
-        const texts = [];
-        const blockNames = [];
-        let aSeen = 0;
-        for (let i = (msgs || []).length - 1; i >= 0 && aSeen < AUTO_RECENT_ASSISTANTS; i--) {
+        /* 作者 2026-11-17：只按最近一楼 AI 的 <content> 选人；缺标签时不退回全文或更早楼层。
+           状态数据仍由完整历史重建，这里只限定 AUTO 的正文命中范围。 */
+        let lastA = '';
+        for (let i = (msgs || []).length - 1; i >= 0; i--) {
             const m = msgs[i];
             if (!m || m.role !== 'assistant') continue;
-            aSeen++;
-            const raw = String(m.content || '');
-            texts.push(aiContent(raw));
-            try {
-                const p = nsfwParse(raw);
-                Object.keys((p && p.chars) || {}).forEach((bn) => { if (blockNames.indexOf(bn) < 0) blockNames.push(bn); });
-            } catch (eP) { }
+            lastA = aiContent(m.content);
+            break;
         }
         const lastU = (() => { for (let i = (msgs || []).length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'user') return realUserInput(String(msgs[i].content || '')); } return ''; })();
-        const text = texts.join(String.fromCharCode(10)) + String.fromCharCode(10) + lastU;
-        return names.filter((n) => n && (text.indexOf(n) >= 0 || blockNames.indexOf(n) >= 0));
+        const text = lastA + String.fromCharCode(10) + lastU;
+        return names.filter((n) => n && text.indexOf(n) >= 0);
     } catch (e) { return []; }
 }
 /** 本轮该发送谁：AUTO=正文提到的人 + 手动一次性追加；手动=勾选的 */
@@ -2401,6 +2391,16 @@ export function nsfwChipsRender(host, chatId) {
         });
     } catch (e) { }
 }
+/** AUTO 与发送名单在设置卡和悬浮条之间即时同步，不等待下次挂载。 */
+export function nsfwRefreshSendUi() {
+    const st = _getSettings() || {};
+    const auto = st.nsfwAutoSend !== undefined ? !!st.nsfwAutoSend : String(st.nsfwSendMode || 'auto') === 'auto';
+    const checkbox = document.getElementById('kimi_reasoning_injector_nsfw_auto');
+    if (checkbox) checkbox.checked = auto;
+    const roster = document.getElementById('kimi_reasoning_injector_nsfw_roster');
+    if (roster?.firstElementChild) nsfwChipsRender(roster.firstElementChild, nsfwChatId());
+    nsfwMountSender();
+}
 /** 悬浮发送条：一条横条（可拖）+ AUTO 勾 + 名字列表；点名字看最新快照 */
 let _senderRebuildSig = '';
 let _senderRebuildAt = 0;   /* ★W414 */
@@ -2486,7 +2486,7 @@ export function nsfwMountSender() {
                 st.nsfwAutoSend = auto; autoCb.checked = auto;
                 sendPreferenceNotice({ error: stateError(error) }); return;
             }
-            nsfwMountSender();
+            nsfwRefreshSendUi();
         });
         host.querySelectorAll('input[data-send]').forEach((cb) => {
             const previous = cb.checked;

@@ -4,19 +4,20 @@
  *   判当前预设 100001 场景四链头（KIMI/KIMI2/DS/GMN）族别并给注入写入计划；apply 由 index 接线层执行。
 
  * ★NSFW 状态栏模块联动（2026-11-13）：
- *   模块 4 键 nsfwEnabled / nsfwCaptureHide / nsfwSenderEnabled / nsfwAutoSend
+ *   模块 3 键 nsfwEnabled / nsfwCaptureHide / nsfwSenderEnabled（AUTO 独立记忆）
  *   ↔ 当前预设 character_id === 100001 里「🍑NSFW状态快照」条目的 enabled。
  *   · canonical：9c36b49e-b1e1-4a52-a6e4-54517fccbf68
  *   · 已核 alias：ywp-4c10fb25（历史条目包缺原生 ID 时由内核按准确名生成）
  *   · 准确名兜底：不在本文件重写，一律交给 preset-controls 的 resolvePromptId（341 起）。
  *   本文件只做纯逻辑：不碰 DOM / 不碰真实设置 / 不碰聊天 / 不猜缺项。
  */
-export const CONSOLE_LINKED_CONTROLS_VERSION = '1.0.2';
+export const CONSOLE_LINKED_CONTROLS_VERSION = '1.0.3';
 export const NSFW_PROMPT_ID = '9c36b49e-b1e1-4a52-a6e4-54517fccbf68';
 export const NSFW_PROMPT_ALIAS_ID = 'ywp-4c10fb25';
 export const NSFW_PROMPT_NAME = '🍑NSFW状态快照';
 export const NSFW_LINK_CHARACTER_ID = 100001;
-export const NSFW_LINK_KEYS = Object.freeze(['nsfwEnabled', 'nsfwCaptureHide', 'nsfwSenderEnabled', 'nsfwAutoSend']);
+// AUTO 是独立发送偏好；刷新、切预设和模块总开关均保留用户的选择。
+export const NSFW_LINK_KEYS = Object.freeze(['nsfwEnabled', 'nsfwCaptureHide', 'nsfwSenderEnabled']);
 
 export function placeAfter(rows, id, anchor) {
     if (!Array.isArray(rows)) return false;
@@ -107,7 +108,7 @@ export function clearNsfwLinkState(state) {
 /* 缺键补默认：与 defaultSettings 同一个来源（铁律 32），不在这里写第二套字面量。
  * nsfwAutoSend 的历史口径只有 nsfwSendMode（'auto' = AUTO / 其它 = 手选）——
  * 仅在 nsfwAutoSend 缺键时按值迁移一次；用户已经显式写过的 true/false 永不覆盖。
- * 老键 nsfwSendMode 保留不删（回退旧版本还能读）；它不属于本轮 4 键联动。 */
+ * 老键 nsfwSendMode 保留不删（回退旧版本还能读）；AUTO 不参与模块联动。 */
 export function applyNsfwDefaults(settings, defaults) {
     const changed = [];
     if (!settings || typeof settings !== 'object') return changed;
@@ -129,7 +130,7 @@ export function applyNsfwDefaults(settings, defaults) {
     return changed;
 }
 
-/* 预设权威 → 模块 4 键。只认 enabled === true 为开；非布尔状态由解析层挡掉。 */
+/* 预设权威 → 模块 3 键。只认 enabled === true 为开；非布尔状态由解析层挡掉。 */
 export function applyNsfwLink(settings, link) {
     const changed = [];
     if (!settings || typeof settings !== 'object') return changed;
@@ -144,7 +145,7 @@ export function applyNsfwLink(settings, link) {
     return changed;
 }
 
-/* 工具箱模块主开关：用户直接动作，4 项无条件按 want；不碰 nsfwShowAllFields / 角色发送勾选。 */
+/* 工具箱模块主开关：用户直接动作，3 项按 want；AUTO 保留手动偏好；不碰 nsfwShowAllFields / 角色发送勾选。 */
 export function applyNsfwMaster(settings, want) {
     const changed = [];
     if (!settings || typeof settings !== 'object') return changed;
