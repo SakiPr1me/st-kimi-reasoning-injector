@@ -39,7 +39,7 @@ import {
   TOOLBOX_FLAG_RAND_NAME,
   TOOLBOX_FLAG_RESET_STYLE,
   TOOLBOX_FLAG_KEYS,
-} from './preset-control-defs.js?b=v1.4.32';
+} from './preset-control-defs.js?b=v1.4.33';
 import { readEditableLengthRule, replaceLengthRule } from './preset-length.js?b=v1.0.1';
 import {
   LAYOUT_SETTINGS_KEY,
@@ -73,7 +73,7 @@ export const HOME_FOLD_SETTINGS_KEY = 'presetControlHomeFold';
    也用于“常用里默认两项被用户移除后不再复活”。 */
 export const HOME_DEFAULTS_VERSION_KEY = 'presetControlHomeDefaultsVersion';
 export const COMMON_HIDDEN_SETTINGS_KEY = 'presetControlCommonHidden';
-const HOME_DEFAULTS_VERSION = 9;
+const HOME_DEFAULTS_VERSION = 10;
 const HOME_THINKING_PIN = Object.freeze({ type: 'combo', key: 'think.model' });
 /* 默认首页的一枚半行空白块：放在 NSFW 状态快照之后、主线之前，让四项剧情开关
    从下一行开始。新装派生与 v7 一次性升级共用这一份定义；用户移走/删除后不复活。 */
@@ -1482,13 +1482,7 @@ export function createPresetControls(deps = {}) {
       clean = { ...clean, uid: nextPinInstanceUid(current, clean) };
     }
     if (shortcut) clean = { ...clean, source: 'common' };
-    let at = current.length;
-    if (shortcut) {
-      const lastCommon = current.reduce((last, item, index) => item.source === 'common'
-        || (item.type === 'prompt' && DEFAULT_COMMON_IDS.includes(item.id)) ? index : last, -1);
-      at = lastCommon + 1;
-    }
-    current.splice(at, 0, clean);
+    current.push(clean);
     /* 已保存 pin 的用户顺序是唯一权威：追加后不再按 niah/常用默认做硬归位。 */
     ctx.store[ctx.key] = current;
     return current;
@@ -1603,14 +1597,14 @@ export function createPresetControls(deps = {}) {
     }
   }
 
-  function storedHomePinsFor(settings, name, available, derivedPins) {
+  function storedHomePinsFor(settings, name, available, derivedPins, legacyPins) {
     const store = homePinStoreOf(settings);
     if (!store) return null;
     const key = presetLayoutKey(name, CHARACTER_ID);
     if (!Object.prototype.hasOwnProperty.call(store, key)) return null;
     const raw = store[key];
     if (!Array.isArray(raw)) return null;
-    migrateHomePinsOnce(settings, key, raw, available, derivedPins);
+    migrateHomePinsOnce(settings, key, raw, available, legacyPins, derivedPins);
     /* 只做视图归一：旧 option pin ⇒ 整组；显式重复实例保留。原数组留在设置里。 */
     return normalizeHomePins(raw);
   }
@@ -1624,12 +1618,13 @@ export function createPresetControls(deps = {}) {
      - v6 把旧版 niah 的自动伴生随机头补成显式 pin（紧接 niah 一次），
        兼容旧首页外观；之后用户在首页删掉它，版本已是 6，不会复活。
      空数组 = 用户明确清空，尊重不动（只标已升级）。 */
-  function migrateHomePinsOnce(settings, key, raw, available, derivedPins) {
+  function migrateHomePinsOnce(settings, key, raw, available, derivedPins, nextDefaultPins) {
     try {
       let marks = settings[HOME_DEFAULTS_VERSION_KEY];
       if (!isPlainObject(marks)) { marks = {}; settings[HOME_DEFAULTS_VERSION_KEY] = marks; }
       const previous = Number(marks[key]) || 0;
       if (previous >= HOME_DEFAULTS_VERSION) return false;
+      const oldDefaults = derivedPins();
       marks[key] = HOME_DEFAULTS_VERSION;
       let changed = false;
       const usable = id => !available || Object.prototype.hasOwnProperty.call(available, id);
@@ -1724,7 +1719,7 @@ export function createPresetControls(deps = {}) {
            用户之后移走/删除不会再复活。 */
         if (previous < 7 && !raw.some(pin => pin && pin.type === 'spacer')) {
           const plainRaw = raw.filter(pin => pin && pin.type !== 'spacer');
-          const plainDerived = (Array.isArray(derivedPins) ? derivedPins : [])
+          const plainDerived = oldDefaults
             .filter(pin => pin && pin.type !== 'spacer');
           const sameDefault = plainDerived.length > 0
             && plainRaw.length === plainDerived.length
@@ -1746,9 +1741,9 @@ export function createPresetControls(deps = {}) {
          显式清空仍保留；标记后不复活删除项。只改显示，不改预设开关。 */
       if (previous < 8 && raw.length) {
         const lead = [ID.loveUser, ID.antiSunshine];
-        const olderDefault = (Array.isArray(derivedPins) ? derivedPins : []).filter(pin => !lead.includes(pin.id));
+        const olderDefault = oldDefaults.filter(pin => !lead.includes(pin.id));
         const unmodified = raw.length === olderDefault.length && raw.every((pin, i) => homePinMatchesDefault(pin, olderDefault[i]));
-        if (unmodified) raw.splice(0, raw.length, ...derivedPins.map(pin => ({ ...pin })));
+        if (unmodified) raw.splice(0, raw.length, ...oldDefaults.map(pin => ({ ...pin })));
         else for (let i = lead.length - 1; i >= 0; i--) {
           const pin = { type: 'prompt', id: lead[i] };
           if (!raw.some(item => homePinMatchesDefault(item, pin))) raw.unshift(pin);
@@ -1764,6 +1759,30 @@ export function createPresetControls(deps = {}) {
           changed = true;
         }
       }
+      /* v10：只调整看得出沿用旧默认顺序的首页。允许有已删项和末尾追加项，
+         保留实例对象、宽度和自定义顺序。 */
+      if (previous < 10 && raw.length) {
+        const before = raw.map(pin => oldDefaults.findIndex(item => homePinMatchesDefault(pin, item)));
+        const boundary = before.indexOf(-1);
+        const prefixLength = boundary < 0 ? raw.length : boundary;
+        const known = before.slice(0, prefixLength);
+        const followsOldOrder = known.length > 0
+          && known.every((index, i) => i === 0 || index > known[i - 1])
+          && before.slice(prefixLength).every(index => index < 0);
+        if (followsOldOrder) {
+          const ranks = raw.slice(0, prefixLength).map(pin => nextDefaultPins.findIndex(item => homePinMatchesDefault(pin, item)));
+          if (ranks.every(rank => rank >= 0)) {
+            const ordered = raw.slice(0, prefixLength)
+              .map((pin, i) => ({ pin, rank: ranks[i] }))
+              .sort((a, b) => a.rank - b.rank)
+              .map(item => item.pin);
+            if (ordered.some((pin, i) => raw[i] !== pin)) {
+              raw.splice(0, prefixLength, ...ordered);
+              changed = true;
+            }
+          }
+        }
+      }
       persistSettings();
       return changed;
     } catch (e) {
@@ -1771,7 +1790,7 @@ export function createPresetControls(deps = {}) {
     }
   }
 
-  function derivedHomePinsFor(settings, shortcuts, sections) {
+  function derivedHomePinsFor(settings, shortcuts, sections, legacy = false) {
     const out = [];
     const seen = new Set();
     const push = (pin) => {
@@ -1782,25 +1801,25 @@ export function createPresetControls(deps = {}) {
       seen.add(key);
       out.push(clean);
     };
-    /* 默认四常用、思维链整组和段落风格；只放入口，不替用户切换预设开关。 */
-    const hidden = commonHiddenSet(settings);
-    for (const id of DEFAULT_COMMON_IDS) if (!hidden.has(id)) push({ type: 'prompt', id });
-    for (const id of (Array.isArray(shortcuts) ? shortcuts : [])) push({ type: 'prompt', id, source: 'common' });
-    const common = (Array.isArray(sections) ? sections : []).find(section => section && section.id === 'common');
-    for (const control of (common && common.controls) || []) {
-      if (!control) continue;
-      if (control.kind === 'toggle' || control.kind === 'action') {
-        push({ type: 'prompt', id: control.id });
-      } else if (control.kind === 'comboToggle') {
-        push({ type: 'comboToggle', key: control.key });
-      } else if (control.kind === 'missing') {
-        const ref = control._ref || null;
-        if (ref && ref.type === 'prompt' && ref.id) push({ type: 'prompt', id: ref.id });
+    const addEditablePins = () => {
+      const hidden = commonHiddenSet(settings);
+      for (const id of DEFAULT_COMMON_IDS) if (!hidden.has(id)) push({ type: 'prompt', id });
+      for (const id of (Array.isArray(shortcuts) ? shortcuts : [])) push({ type: 'prompt', id, source: 'common' });
+      const common = (Array.isArray(sections) ? sections : []).find(section => section && section.id === 'common');
+      for (const control of (common && common.controls) || []) {
+        if (!control) continue;
+        if (control.kind === 'toggle' || control.kind === 'action') {
+          push({ type: 'prompt', id: control.id });
+        } else if (control.kind === 'comboToggle') {
+          push({ type: 'comboToggle', key: control.key });
+        } else if (control.kind === 'missing') {
+          const ref = control._ref || null;
+          if (ref && ref.type === 'prompt' && ref.id) push({ type: 'prompt', id: ref.id });
+        }
       }
-    }
-    /* 新增默认三项：放在常用区之后、思维链组之前；缺项照旧渲染为禁用卡片。
-       随机头部独立成 pin，并插在真正的第一条 niah 后面（旧伴生位置）；
-       niah 若已被常用/快捷项提前加入，也不会跑到三项之后。 */
+    };
+    if (legacy) addEditablePins();
+    /* 首页最前：破限、小说、随机头部、重置文风与随机身份。 */
     for (const id of HOME_EXTRA_PIN_IDS) push({ type: 'prompt', id });
     const randKey = homePinKey(HOME_RAND_HEAD_PIN);
     if (!seen.has(randKey)) {
@@ -1821,12 +1840,14 @@ export function createPresetControls(deps = {}) {
     const mainlineAt = out.findIndex(pin => pin.type === 'prompt' && pin.id === ID.mainline);
     const spacerAt = snapshotAt >= 0 ? snapshotAt + 1 : (mainlineAt >= 0 ? mainlineAt : out.length);
     out.splice(spacerAt, 0, { ...HOME_MAINLINE_SPACER_PIN });
+    if (!legacy) addEditablePins();
     return out;
   }
 
   function effectiveHomePinsFor(settings, name, shortcuts, sections, available) {
     const derived = derivedHomePinsFor(settings, shortcuts, sections);
-    const stored = storedHomePinsFor(settings, name, available, derived);
+    const stored = storedHomePinsFor(settings, name, available, derived,
+      () => derivedHomePinsFor(settings, shortcuts, sections, true));
     /* 已保存 pin 的用户顺序是唯一权威：不再按 niah/默认常用归位，也不补回已删项。
        派生默认仍按新装顺序，随机头是 niah 之后的独立 pin。 */
     if (stored) return { pins: stored, stored: true };

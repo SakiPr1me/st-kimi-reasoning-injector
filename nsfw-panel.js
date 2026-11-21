@@ -2434,6 +2434,12 @@ export function nsfwMountSender() {
             nsfwFloatRelease();
             return;
         }
+        if (st.nsfwSenderHidden === true) {
+            const sender = document.getElementById('yw-nsfw-sender');
+            if (sender) { if (sender._nsfwDisposeDrag) sender._nsfwDisposeDrag(); sender.remove(); }
+            nsfwFloatRelease();
+            return;
+        }
         nsfwEnsureStyle();
         let host = document.getElementById('yw-nsfw-sender');
         if (!host) {

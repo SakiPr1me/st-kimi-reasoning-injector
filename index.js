@@ -13,17 +13,17 @@ import { RegexProvider, runRegexScript } from '../../regex/engine.js';
 import { mountApiPoolCard } from "./api-pool.js?b=v1.46.327";
 import { injectRouteProbe, inspectResponse as inspectRouteResponse } from "./route-monitor.js";
 import { createRerollGuard } from "./reroll-guard.js"; // v1.37.54 截断→重roll 状态判定
-import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwStopObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwRefreshSendUi, nsfwSetAutoSend, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwSetStat, nsfwSetStats, nsfwProfilesFromText, nsfwEditFloor, nsfwCompleteLatest, nsfwGuideSyncFromPreset, nsfwGuideAllows, NSFW_DEFAULT_RULES } from "./nsfw-panel.js?b=v1.46.387"; // ★W290 NSFW 状态栏
+import { nsfwInit, buildInjection as nsfwBuildInjection, nsfwParse, nsfwApply, nsfwMountToMessage, nsfwReattachAll, nsfwChatId, nsfwList, nsfwEnsure, nsfwRemove, nsfwStaticText, nsfwApplyStatic, nsfwMarkMentions, nsfwAllFields, nsfwAddCustomField, nsfwDeleteCustomField, nsfwUpdateCustomField, nsfwSetFieldOverride, nsfwGetChar, nsfwFillDemo, nsfwDumpText, nsfwSaveSnap, nsfwRebuildFromChat, nsfwWrapBlocks, nsfwStripBlocks, nsfwPickForRequest, nsfwBuildSend, nsfwMountSender, nsfwShowSnapshot, nsfwStartObserver, nsfwStopObserver, nsfwClearSendOnce, nsfwInstallFormatterHook, nsfwChipsRender, nsfwRefreshSendUi, nsfwSetAutoSend, nsfwSetGuide, nsfwRewriteRequest, nsfwStripHistory, nsfwSetStat, nsfwSetStats, nsfwProfilesFromText, nsfwEditFloor, nsfwCompleteLatest, nsfwGuideSyncFromPreset, nsfwGuideAllows, NSFW_DEFAULT_RULES } from "./nsfw-panel.js?b=v1.46.389"; // ★W290 NSFW 状态栏
 import { oai_settings } from "../../../openai.js"; // Cline cline-pass 前缀检测用
 import { createCustomModelManager } from './custom-models.js?b=v1.0.4';
 import { createSchemeSwitcher } from './scheme-api.js?b=v1.0.0';
 import { createSelfUpdater } from './self-update.js?b=v1.0.0';
 import { createControlCenter } from './control-center.js?b=v1.3.21';
-import { createPresetControls } from './preset-controls.js?b=v1.4.32';
+import { createPresetControls } from './preset-controls.js?b=v1.4.33';
 import { createCompanion, COMPANION_DEFAULTS } from './companion.js?b=v1.3.4';
 import { applyConsoleHomeDefaults, HOME_ACTION_FAVORITES, HOME_SCHEME_IDS } from './console-home-defaults.js?b=v1.0.2';
 import { getChatCompletionPreset } from '../../../openai.js';
-import { ID as YW_PRESET_ID } from './preset-control-defs.js?b=v1.4.32';
+import { ID as YW_PRESET_ID } from './preset-control-defs.js?b=v1.4.33';
 import { placeAfter, syncLinkedSetting, resolveChainFamily, planChainInjectionLink, selectStrictPromptScenario, resolveNsfwPresetLink, nsfwLinkSignature, shouldApplyNsfwLink, clearNsfwLinkState, applyNsfwDefaults, applyNsfwLink, applyNsfwMaster, planNsfwMasterAction, NSFW_PROMPT_ID, NSFW_PROMPT_ALIAS_ID } from './console-linked-controls.js?b=v1.0.3';
 
 
@@ -380,7 +380,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.387'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.389'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -516,6 +516,7 @@ const defaultSettings = {
     nsfwDensity: 'normal',
     nsfwCaptureHide: true,          // 捕捉并隐藏楼里的快照（关了就不解析、不画卡、不隐藏）
     nsfwSenderEnabled: true,        // 发送悬浮窗（关了就不显示、也不发送）
+    nsfwSenderHidden: false,        // 只隐藏发送控制窗，发送功能与AUTO保持原样
     nsfwAutoSend: true           // 发给 AI：true=AUTO（正文出现谁发谁）/ false=只发悬浮条里勾选的人            // 卡片行距：compact / normal / loose
 };
 
@@ -642,7 +643,7 @@ const UI = {
         nsfwHint: "将已有状态快照画卡，并注入提示词中，需要同时打开预设里的NSFW状态快照条目",
         nsfwFullCount: "在场全量人数：", nsfwAllFields: "注入全部字段（更细但更费 token）",
         nsfwRoster: "角色名册", nsfwNewName: "角色名", nsfwAdd: "＋ 建档", nsfwRemove: "删",
-        nsfwCaptureHide: "捕捉并隐藏NSFW状态栏", nsfwCaptureHideHint: "常开", nsfwSenderToggle: "发送悬浮窗", nsfwSenderHint: "新增一个悬浮框，选谁就将谁的状态快照发送；AUTO 为上一轮正文 + 用户发送里有谁的名字，就帮你勾选并发送谁，也可在悬浮窗手动勾选（勾/取消只影响这一轮）。", nsfwPeekList: "当前聊天（点名字看状态）", nsfwAutoHint: "自动：正文里出现谁就发谁",
+        nsfwCaptureHide: "捕捉并隐藏NSFW状态栏", nsfwCaptureHideHint: "常开", nsfwSenderToggle: "发送悬浮窗", nsfwSenderHidden: "隐藏发送悬浮窗", nsfwSenderHint: "新增一个悬浮框，选谁就将谁的状态快照发送；AUTO 为上一轮正文 + 用户发送里有谁的名字，就帮你勾选并发送谁，也可在悬浮窗手动勾选（勾/取消只影响这一轮）。", nsfwPeekList: "当前聊天（点名字看状态）", nsfwAutoHint: "自动：正文里出现谁就发谁",
         nsfwInjectMode: "每轮注入", nsfwInjectFull: "完整（规则 + 状态 + 协议）", nsfwInjectState: "仅当前状态（规则/格式在预设里）", nsfwInjectOff: "不注入（状态只看楼层）",
         nsfwRules: "更新规则（每行一条，注入时按顺序发出）", nsfwPreview: "预览本轮注入", nsfwPeek: "看快照", nsfwDemo: "示例填充（先看效果）", nsfwDump: "查看/复制全部状态",
         nsfwNoChars: "还没有角色，先在上面建档。",
@@ -719,7 +720,7 @@ const UI = {
         nsfwHint: "When on: every turn injects the in-scene character states + update rules + output protocol; the AI replies with two blocks at the end (values with sensory notes + outsider views); the plugin parses them, strips the raw text and renders a card in the message. Off by default.",
         nsfwFullCount: "Full-state characters: ", nsfwAllFields: "Inject all fields (finer, more tokens)",
         nsfwRoster: "Characters", nsfwNewName: "Name", nsfwAdd: "＋ Add", nsfwRemove: "Del",
-        nsfwCaptureHide: "Capture & hide the block", nsfwCaptureHideHint: "On: parse the snapshot from the floor and hide the raw text. Off: no parsing, no card, raw text stays.", nsfwSenderToggle: "Sender bar", nsfwSenderHint: "The small bar at bottom right: check who to send. AUTO picks from the last AI content / your input. Checks apply to this round only.", nsfwPeekList: "This chat (click a name)", nsfwAutoHint: "Auto: send whoever appears",
+        nsfwCaptureHide: "Capture & hide the block", nsfwCaptureHideHint: "On: parse the snapshot from the floor and hide the raw text. Off: no parsing, no card, raw text stays.", nsfwSenderToggle: "Sender bar", nsfwSenderHidden: "Hide sender window", nsfwSenderHint: "The small bar at bottom right: check who to send. AUTO picks from the last AI content / your input. Checks apply to this round only.", nsfwPeekList: "This chat (click a name)", nsfwAutoHint: "Auto: send whoever appears",
         nsfwInjectMode: "Per-turn injection", nsfwInjectFull: "Full (rules + state + format)", nsfwInjectState: "State only (rules/format live in the preset)", nsfwInjectOff: "Off (state comes from the floors)",
         nsfwRules: "Update rules (one per line, injected in order)", nsfwPreview: "Preview injection", nsfwPeek: "Snapshot", nsfwDemo: "Fill demo data", nsfwDump: "View / copy all states",
         nsfwNoChars: "No characters yet - add one above.",
@@ -796,7 +797,7 @@ const UI = {
         nsfwHint: "켜면 매 턴 등장 캐릭터 상태 + 갱신 규칙 + 출력 프로토콜을 주입하고, AI가 본문 끝에 두 블록(수치+관능 평가 / 타인 시선)을 출력하며, 플러그인이 이를 파싱해 원문을 지우고 메시지에 카드로 그립니다. 기본 꺼짐.",
         nsfwFullCount: "전체 상태 인원: ", nsfwAllFields: "모든 필드 주입 (더 자세하지만 토큰 소모 큼)",
         nsfwRoster: "캐릭터 목록", nsfwNewName: "이름", nsfwAdd: "＋ 추가", nsfwRemove: "삭제",
-        nsfwCaptureHide: "스냅샷 캡처 및 숨김", nsfwCaptureHideHint: "켜면 층의 스냅샷을 읽고 원문을 숨깁니다. 끄면 파싱/카드 없이 원문 그대로.", nsfwSenderToggle: "전송 바", nsfwSenderHint: "오른쪽 아래 작은 바. 체크한 사람에게 전송. AUTO는 본문/입력에 나온 사람 자동 판정, 체크/해제는 이번 턴만.", nsfwPeekList: "현재 채팅 (이름 클릭)", nsfwAutoHint: "자동: 본문에 나온 사람",
+        nsfwCaptureHide: "스냅샷 캡처 및 숨김", nsfwCaptureHideHint: "켜면 층의 스냅샷을 읽고 원문을 숨깁니다. 끄면 파싱/카드 없이 원문 그대로.", nsfwSenderToggle: "전송 바", nsfwSenderHidden: "전송 창 숨기기", nsfwSenderHint: "오른쪽 아래 작은 바. 체크한 사람에게 전송. AUTO는 본문/입력에 나온 사람 자동 판정, 체크/해제는 이번 턴만.", nsfwPeekList: "현재 채팅 (이름 클릭)", nsfwAutoHint: "자동: 본문에 나온 사람",
         nsfwInjectMode: "매 턴 주입", nsfwInjectFull: "전체 (규칙 + 상태 + 형식)", nsfwInjectState: "현재 상태만 (규칙/형식은 프리셋에)", nsfwInjectOff: "주입 안 함 (층의 상태만 사용)",
         nsfwRules: "갱신 규칙 (한 줄에 하나, 순서대로 주입)", nsfwPreview: "이번 턴 주입 미리보기", nsfwPeek: "스냅샷", nsfwDemo: "예시 데이터 채우기", nsfwDump: "전체 상태 보기/복사",
         nsfwNoChars: "아직 캐릭터가 없습니다. 위에서 추가하세요.",
@@ -1265,6 +1266,7 @@ if (settings.dblEditInPlace === undefined) settings.dblEditInPlace = defaultSett
    nsfwAutoSend 的历史 nsfwSendMode 只在这里按值迁移一次；用户显式写过的 true/false 永不覆盖。
    nsfwShowAllFields 不属于联动 4 键，保持原默认（不参与预设联动）。 */
 try { applyNsfwDefaults(settings, defaultSettings); } catch (e) { }
+if (settings.nsfwSenderHidden === undefined) settings.nsfwSenderHidden = defaultSettings.nsfwSenderHidden;
 if (settings.nsfwFullCount === undefined) settings.nsfwFullCount = defaultSettings.nsfwFullCount;
 if (settings.nsfwShowAllFields === undefined) settings.nsfwShowAllFields = defaultSettings.nsfwShowAllFields;
 if (settings.nsfwRules === undefined) settings.nsfwRules = defaultSettings.nsfwRules;
@@ -9576,6 +9578,12 @@ function bindNsfwCard() {
         saveSettingsDebounced();
         try { nsfwMountSender(); } catch (e) { }
     });
+    const $senderHidden = $("#" + extensionName + "_nsfw_sender_hidden");
+    $senderHidden.off("change.kimiNsfwSenderHidden").on("change.kimiNsfwSenderHidden", function () {
+        settings.nsfwSenderHidden = $(this).is(":checked");
+        saveSettingsDebounced();
+        try { nsfwMountSender(); } catch (e) { }
+    });
     const $autoOn = $("#" + extensionName + "_nsfw_auto");
     $autoOn.off("change.kimiNsfwAuto").on("change.kimiNsfwAuto", function () {
         try { renderRoster(); nsfwSetAutoSend($(this).is(":checked")); } catch (e) { }
@@ -11698,6 +11706,7 @@ ${renderWordReplaceRows()}
 <label class="checkbox_label" style="margin-top:6px"><input id="${extensionName}_nsfw_capturehide" type="checkbox" ${settings.nsfwCaptureHide !== false ? 'checked' : ''}/><span>${t('nsfwCaptureHide')}</span></label>
 <div class="kimi-hint">${t('nsfwCaptureHideHint')}</div>
 <label class="checkbox_label" style="margin-top:6px"><input id="${extensionName}_nsfw_sender" type="checkbox" ${settings.nsfwSenderEnabled !== false ? 'checked' : ''}/><span>${t('nsfwSenderToggle')}</span></label>
+<label class="checkbox_label" style="margin-top:6px"><input id="${extensionName}_nsfw_sender_hidden" type="checkbox" ${settings.nsfwSenderHidden === true ? 'checked' : ''}/><span>${t('nsfwSenderHidden')}</span></label>
 <div class="kimi-label" style="margin-top:10px">${t('nsfwPeekList')}</div>
 <div class="kimi-row kimi-nsfw-autorow" style="margin-top:2px"><label class="checkbox_label" style="margin:0"><input id="${extensionName}_nsfw_auto" type="checkbox" ${settings.nsfwAutoSend !== false ? 'checked' : ''}/><span>AUTO</span></label><div id="${extensionName}_nsfw_roster" class="kimi-nsfw-roster"></div></div>
 <div id="${extensionName}_nsfw_char_editor"></div>
