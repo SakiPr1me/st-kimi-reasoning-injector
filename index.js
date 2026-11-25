@@ -6,6 +6,7 @@ import { saveSettings, saveSettingsDebounced, substituteParams, eventSource, eve
 import * as ST_Script from "../../../../script.js";
 import { getLocalVariable, getGlobalVariable, setLocalVariable } from "../../../variables.js";
 import { toggleDrawer } from "../../../utils.js";
+import { yaml } from "../../../../lib.js";
 import { stTagMountSettings, setTagBoundaryProvider } from "./tag-fixer.js?b=v1.46.368";
 import { buildScenePlan, buildEffectiveScenePlan, normalizeSceneConfig, createSceneRuntime, makeOmitTagRegex } from './scene-boundary.js?b=v1.1.0';
 import { mountSceneBoundaryUI } from './scene-boundary-ui.js?b=v1.1.0';
@@ -380,7 +381,7 @@ function ywEnsureSwipesFallback(message) {
 /* ★W279b（2026-10-29 · 作者口令"推送记得升版本"）：1.46.147 → **1.46.148**（随 W279a 戳补救一起推；自更新触发靠本号 + manifest 成对升） */
 /* ★W288（2026-11-04 · 作者报「完整生成后又自己重来，横幅挂着 这次没生成出内容」）：1.46.148 → **1.46.149**
    （修 800ms 失败检查不取消 ⇒ 新一代开始后被旧定时器误判；见下方 __genSeq 注释） */
-const PLUGIN_VERSION = '1.46.407'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
+const PLUGIN_VERSION = '1.46.408'; // 与 manifest.json version 同步（提前声明到文件顶部：下方加载日志要引用它；原先声明在 ~1942 行会触发 TDZ 报错导致插件整体加载失败）
 console.log("[余温工具箱] v" + PLUGIN_VERSION + " 已加载（中/英/韩；兼容 ST 1.13 起（1.13.0 / 1.13.5 / 1.14.0 / …/ 1.19 逐档实证可加载，见 W142）× 旧WebView；标签修复拆分 tag-fixer.js）");
 const extensionName = "kimi_reasoning_injector";
 const defaultSettings = {
@@ -581,7 +582,7 @@ const UI = {
         dsEffortLabel: "Deepseek思考强度：", dsEffortOff: "off（不注入，用 DeepSeek 默认 high）", dsEffortLow: "low（flash: low / pro: high）", dsEffortHigh: "high（flash: high / pro: high）", dsEffortXhigh: "xhigh（flash: high / pro: max）", dsEffortMax: "max（flash: max / pro: max）",
         k3EffortLabel: "Kimi3 思考强度：", k3EffortOff: "off（不注入，用 K3 默认 max）", k3EffortLow: "low（思考快）", k3EffortHigh: "high", k3EffortMax: "max（思考最久）",
         geminiThinkingLabel: "Vertex思考强度",
-        geminiThinkingHint: "默认低，手动选择优先，切其它模型不注入。影响不显示的原生英文思考，据说模型觉得原生思考够了时会简写预设CoT？（不注入默认中，据说低更好破限，高/低哪个RP质量更好我没测过你自己试，坐等反馈）",
+        geminiThinkingHint: "（限TT酒馆）默认低，手动选择优先，切其它模型不注入。影响不显示的原生英文思考，据说模型觉得原生思考够了时会简写预设CoT？（不注入默认中，据说低更好破限，高/低哪个RP质量更好我没测过你自己试，坐等反馈）",
         geminiThinkingChoices: {"DEFAULT":"不注入","MINIMAL":"极低","LOW":"低","MEDIUM":"中","HIGH":"高","XHIGH":"超高"},
         injectLabel: "注入破限：", injectSettingsTitle: "注入设置", customModelsTitle: "自定义模型", injectStep1: "step 1：中破限·原生思维链夺舍（gemini需要关闭我）", injectStep2: "step 2：强破限·正文输出思维链夺舍（大多数渠道已失效，别选我）",
         injectTitle: "注入（模型/渠道/附加参数）", modelTitle: "模型参数", rerollTitle: "自动重Roll/截断（妙妙方法）", autoStopTitle: "自动截断", beautifyTitle: "思维链", presetUpdTitle: "预设更新器（更新时对比/保存自缝内容）", presetStoreTitle: "条目商店（上传/缝入条目/小剧场收藏）", playFavTitle: "小剧场收藏", playFavNow: "立即打开一次", playFavNotReady: "条目商店还没准备好（正在加载，或者这个包里没有它）—— 过一两秒再点一次。", playFavJumpFail: "商店打开了，但没能打开「收藏记录」—— 在商店里点一下「⭐ 收藏记录」。",
@@ -665,7 +666,7 @@ const UI = {
         dsEffortLabel: "DeepSeek Effort: ", dsEffortOff: "off (no inject, DeepSeek default high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 Effort: ", k3EffortOff: "off (no inject, K3 default max)", k3EffortLow: "low (fast thinking)", k3EffortHigh: "high", k3EffortMax: "max (longest thinking)",
         geminiThinkingLabel: "Vertex thinking level",
-        geminiThinkingHint: "Defaults to Low. Manual choices take priority. No override when switching to other models. It affects hidden native English thinking. Does the model shorten the preset CoT when it has thought enough? (Without an override, the default is Medium. Low is said to work better for jailbreaks. I haven’t tested whether High or Low writes better RP. Try it and let me know.)",
+        geminiThinkingHint: "(TauriTavern only) Defaults to Low. Manual choices take priority. No override when switching to other models. It affects hidden native English thinking. Does the model shorten the preset CoT when it has thought enough? (Without an override, the default is Medium. Low is said to work better for jailbreaks. I haven’t tested whether High or Low writes better RP. Try it and let me know.)",
         geminiThinkingChoices: {"DEFAULT":"No override","MINIMAL":"Minimal","LOW":"Low","MEDIUM":"Medium","HIGH":"High","XHIGH":"Extra high"},
         injectLabel: "Injection Modes: ", injectSettingsTitle: "Injection settings", customModelsTitle: "Custom models", injectStep1: "step 1: medium jailbreak - native CoT takeover (turn me off for gemini)", injectStep2: "step 2: strong jailbreak - body CoT takeover (defunct on most channels - don't pick me)",
         injectTitle: "Injection (Model / Channel / Extra Params)", modelTitle: "Model Settings", rerollTitle: "Auto Reroll / Truncate (the neat trick)", autoStopTitle: "Auto-Stop", beautifyTitle: "Chain of Thought", presetUpdTitle: "Preset Updater (Compare on Update / Save Stitched Content)", presetStoreTitle: "Entry Store (Upload / Stitch Entries / Theater Favorites)", playFavTitle: "Play favorites", playFavNow: "Open once", playFavNotReady: "The entry store isn't ready yet (still loading, or not included in this build) — try again in a second.", playFavJumpFail: "The store opened but the favorites view did not — click the ⭐ favorites button in the store.",
@@ -746,7 +747,7 @@ const UI = {
         dsEffortLabel: "DeepSeek 강도: ", dsEffortOff: "off (주입 안 함, DeepSeek 기본 high)", dsEffortLow: "low (flash: low / pro: high)", dsEffortHigh: "high (flash: high / pro: high)", dsEffortXhigh: "xhigh (flash: high / pro: max)", dsEffortMax: "max (flash: max / pro: max)",
         k3EffortLabel: "Kimi3 강도: ", k3EffortOff: "off (주입 안 함, K3 기본 max)", k3EffortLow: "low (빠른 사고)", k3EffortHigh: "high", k3EffortMax: "max (가장 긴 사고)",
         geminiThinkingLabel: "Vertex 추론 강도",
-        geminiThinkingHint: "기본값은 낮음이며 수동 선택이 우선합니다. 다른 모델로 전환하면 적용하지 않습니다. 화면에 표시되지 않는 모델의 자체 영어 추론에 영향을 줍니다. 자체 추론이 충분하면 프리셋 CoT를 짧게 쓴다는 말도 있나요? (설정을 적용하지 않으면 기본값은 중간입니다. 낮음이 제한을 풀기 더 쉽다는 말도 있어요. 높음과 낮음 중 어느 쪽이 RP를 더 잘 쓰는지는 테스트하지 않았어요. 직접 써 보시고 알려 주세요.)",
+        geminiThinkingHint: "(TauriTavern 전용) 기본값은 낮음이며 수동 선택이 우선합니다. 다른 모델로 전환하면 적용하지 않습니다. 화면에 표시되지 않는 모델의 자체 영어 추론에 영향을 줍니다. 자체 추론이 충분하면 프리셋 CoT를 짧게 쓴다는 말도 있나요? (설정을 적용하지 않으면 기본값은 중간입니다. 낮음이 제한을 풀기 더 쉽다는 말도 있어요. 높음과 낮음 중 어느 쪽이 RP를 더 잘 쓰는지는 테스트하지 않았어요. 직접 써 보시고 알려 주세요.)",
         geminiThinkingChoices: {"DEFAULT":"덮어쓰지 않음","MINIMAL":"최소","LOW":"낮음","MEDIUM":"중간","HIGH":"높음","XHIGH":"매우 높음"},
         injectLabel: "주입 모드: ", injectSettingsTitle: "주입 설정", customModelsTitle: "사용자 정의 모델", injectStep1: "step 1: 중간 탈옥·네이티브 CoT 탈취 (gemini는 끄세요)", injectStep2: "step 2: 강한 탈옥·본문 CoT 탈취 (대부분 채널에서 무효 — 고르지 마세요)",
         injectTitle: "주입 (모델/채널/추가 파라미터)", modelTitle: "모델 설정", rerollTitle: "자동 reroll/중단 (꿀팁 방법)", autoStopTitle: "자동 중단", beautifyTitle: "사고 과정", presetUpdTitle: "프리셋 업데이터 (업데이트 시 비교/이어붙인 내용 저장)", presetStoreTitle: "항목 상점 (업로드/항목 이어붙이기/소극장 즐겨찾기)", playFavTitle: "소극장 즐겨찾기", playFavNow: "한 번 열기", playFavNotReady: "항목 상점이 아직 준비되지 않았습니다(불러오는 중이거나 이 빌드에 없음) — 잠시 후 다시 눌러 주세요.", playFavJumpFail: "상점은 열렸지만 즐겨찾기를 열지 못했습니다 — 상점에서 ⭐ 즐겨찾기 버튼을 눌러 주세요.",
@@ -1574,6 +1575,45 @@ function refreshSeed() {
     }
 }
 
+function applyTtVertexThinkingLevel(request, level) {
+    try {
+        const raw = request.custom_include_body;
+        const parsed = typeof raw === 'string' ? yaml.parse(raw) : raw;
+        const entries = Array.isArray(parsed) ? parsed : [parsed];
+        const isMap = value => value != null && typeof value === 'object' && !Array.isArray(value);
+        if (entries.some(entry => entry != null && !isMap(entry))) return;
+        const params = Object.fromEntries(entries.filter(isMap).flatMap(Object.entries));
+        let config = params.generationConfig;
+
+        // TT merges additional parameters at the top level. Reproduce its Carbon defaults
+        // only when the user has not already supplied generationConfig.
+        if (config === undefined) {
+            config = {};
+            if (request.max_tokens != null) config.maxOutputTokens = request.max_tokens;
+            if (request.seed != null) config.seed = request.seed;
+            if (Array.isArray(request.stop) && request.stop.length) config.stopSequences = request.stop;
+            const schemaValue = request.json_schema?.value;
+            const mimeType = typeof request.responseMimeType === 'string' ? request.responseMimeType.trim() : '';
+            if (mimeType || schemaValue != null) config.responseMimeType = mimeType || 'application/json';
+            const schema = request.responseSchema ?? schemaValue;
+            if (schema != null) config.responseSchema = schema;
+        }
+        if (!isMap(config) || (config.thinkingConfig != null && !isMap(config.thinkingConfig))) return;
+
+        const thinkingConfig = {
+            includeThoughts: request.include_reasoning === true,
+            ...config.thinkingConfig,
+            thinkingLevel: level,
+        };
+        delete thinkingConfig.thinkingBudget; // Gemini 4 accepts a level only.
+        params.generationConfig = { ...config, thinkingConfig };
+        request.custom_include_body = JSON.stringify(params);
+    } catch {
+        // Keep the user's original parameters intact if they cannot be parsed here.
+        console.warn('[余温工具箱] 未加入 TT Vertex 思考强度，附加参数保持原样。');
+    }
+}
+
 function onSettingsReady(generateData) {
     if (settings.enabled === true && ywGeminiThinkingActive && generateData) {
         const levels = ywGeminiThinkingLevels(generateData.chat_completion_source, generateData.model);
@@ -1585,6 +1625,10 @@ function onSettingsReady(generateData) {
             else {
                 generateData.reasoning_effort = level === 'MINIMAL' ? 'min' : level.toLowerCase();
                 generateData.yw_gemini_thinking_level = level;
+                if (generateData.chat_completion_source === 'vertexai' && /^gemini-4-carbon(?:-|$)/i.test(model)
+                    && typeof window !== 'undefined' && window.__TAURITAVERN__) {
+                    applyTtVertexThinkingLevel(generateData, level);
+                }
             }
         }
     }
@@ -11655,7 +11699,7 @@ ${poolEditorHtml('user', 'rand_user')}
 <label class="kimi-fold-head" style="flex-wrap:wrap">
 <span style="font-size:0.95em;font-weight:700;color:var(--golden-color,#e0a800)">${t('geminiThinkingLabel')}</span>
 <select id="${extensionName}_gemini_thinking_level" aria-label="${t('geminiThinkingLabel')}" aria-describedby="${extensionName}_gemini_thinking_hint" style="width:auto;min-width:8ch" ${geminiThinkingMenu.disabled ? 'disabled' : ''}>${geminiThinkingMenu.options}</select>
-<span id="${extensionName}_gemini_thinking_hint" class="kimi-hint" style="flex:1 1 12em;min-width:0;margin:0;font-size:.63em">${t('geminiThinkingHint')}</span>
+<span id="${extensionName}_gemini_thinking_hint" class="kimi-hint" style="flex:0 0 100%;min-width:0;margin:0;font-size:.63em">${t('geminiThinkingHint')}</span>
 </label>
 </div>
 <div class="kimi-sep"></div>
