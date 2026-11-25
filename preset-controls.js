@@ -39,8 +39,9 @@ import {
   TOOLBOX_FLAG_RAND_NAME,
   TOOLBOX_FLAG_RESET_STYLE,
   TOOLBOX_FLAG_KEYS,
-} from './preset-control-defs.js?b=v1.4.33';
+} from './preset-control-defs.js?b=v1.4.35';
 import { readEditableLengthRule, replaceLengthRule } from './preset-length.js?b=v1.0.1';
+import { readStyleTags, openStyleTagsDialog } from './preset-style-tags.js?b=v1.0.1';
 import {
   LAYOUT_SETTINGS_KEY,
   LAYOUT_VERSION,
@@ -73,7 +74,7 @@ export const HOME_FOLD_SETTINGS_KEY = 'presetControlHomeFold';
    也用于“常用里默认两项被用户移除后不再复活”。 */
 export const HOME_DEFAULTS_VERSION_KEY = 'presetControlHomeDefaultsVersion';
 export const COMMON_HIDDEN_SETTINGS_KEY = 'presetControlCommonHidden';
-const HOME_DEFAULTS_VERSION = 10;
+const HOME_DEFAULTS_VERSION = 11;
 const HOME_THINKING_PIN = Object.freeze({ type: 'combo', key: 'think.model' });
 /* 默认首页的一枚半行空白块：放在 NSFW 状态快照之后、主线之前，让四项剧情开关
    从下一行开始。新装派生与 v7 一次性升级共用这一份定义；用户移走/删除后不复活。 */
@@ -98,6 +99,9 @@ const EDIT_ADD_PROMPT_LIMIT = 8;
 const HOME_EXTRA_PIN_IDS = Object.freeze([ID.break1, ID.break2, ID.niah]);
 const HOME_RAND_HEAD_PIN = Object.freeze({ type: 'toolboxFlag', key: TOOLBOX_FLAG_RAND_HEAD });
 const HOME_NEW_FLAG_PINS = Object.freeze([TOOLBOX_FLAG_RESET_STYLE, TOOLBOX_FLAG_RAND_NAME].map(key => Object.freeze({ type: 'toolboxFlag', key })));
+const HOME_STYLE_TAG_PIN = Object.freeze({ type: 'prompt', id: ID.wStyleAuto });
+const STYLE_TAG_LABEL = '文风TAG';
+const STYLE_TAG_SECTION = 'style_tags';
 /* 2026-11-14 追加：NSFW 指南整组、轻G向、呻吟爱心、NSFW 状态快照、
    主线/感情线/防秒车/结尾钩子、剧情基本档整组、加减速叠加整组。
    新装派生与 v6 升级补齐共用这一份顺序；缺项照旧显示禁用，不按名字猜。 */
@@ -222,6 +226,37 @@ export const PRESET_CONTROLS_CSS = `
 }
 .ywpc-root button:disabled{cursor:not-allowed}
 .ywpc-root :focus-visible{outline:2px solid var(--ywpc-accent);outline-offset:2px}
+.ywpc-root.ywpc-style-tags{width:min(530px,calc(100% - 20px));max-height:min(660px,calc(100dvh - 20px));padding:12px;margin:auto;border:1px solid var(--ywpc-line-strong);border-radius:14px;background:var(--SmartThemeBlurTintColor,#fff);box-shadow:0 16px 56px #0005;overflow:auto;overscroll-behavior:contain;gap:7px}
+.ywpc-style-tags:not([open]){display:none}
+.ywpc-style-tags::backdrop{background:#0006}
+.ywpc-style-tags-head,.ywpc-style-tags-form,.ywpc-style-tags-foot{display:flex;align-items:center;gap:8px;min-width:0}
+.ywpc-style-tags-head{justify-content:space-between}
+.ywpc-style-tags-head h2,.ywpc-style-tags h3{margin:0;font-size:14px}
+.ywpc-style-tags-chips{display:flex;flex-wrap:wrap;align-content:flex-start;gap:4px;min-width:0}
+.ywpc-style-tags-fixed{max-height:26dvh;overflow:auto;padding:2px}
+.ywpc-style-tags-pool{max-height:min(295px,45dvh);overflow:auto;overscroll-behavior:contain;padding:4px;border:1px solid var(--ywpc-line);border-radius:8px}
+.ywpc-style-tag-item,.ywpc-style-tag-option{display:inline-flex;align-items:stretch;min-width:0;max-width:100%;border:1px solid var(--ywpc-line);border-radius:7px;background:var(--ywpc-surface)}
+.ywpc-style-tag-option[hidden]{display:none}
+.ywpc-style-tags .ywpc-chip,.ywpc-style-tags .ywpc-style-tag-handle,.ywpc-style-tags .ywpc-style-tag-remove{border:0;border-radius:6px;min-width:0;min-height:27px;padding:3px 6px;background:transparent;color:inherit;line-height:1.25}
+.ywpc-style-tags .ywpc-chip{font-size:12px;overflow-wrap:anywhere}
+.ywpc-style-tags .ywpc-style-tag-handle,.ywpc-style-tags .ywpc-style-tag-remove{min-width:26px;flex:none;text-align:center}
+.ywpc-style-tags .ywpc-style-tag-handle{cursor:grab;touch-action:none;user-select:none}
+.ywpc-style-tags .ywpc-style-tag-handle:active{cursor:grabbing}
+.ywpc-style-tags .ywpc-style-tag-remove{border-left:1px solid var(--ywpc-line)}
+.ywpc-style-tag-remove:hover{background:var(--ywpc-surface-2)}
+.ywpc-style-tag-drop{outline:2px solid var(--ywpc-accent);outline-offset:-1px}
+.ywpc-style-tags .ywpc-chip[aria-pressed="true"]{background:color-mix(in srgb,var(--ywpc-accent) 32%,var(--ywpc-surface));box-shadow:inset 0 0 0 1px var(--ywpc-accent)}
+.ywpc-style-tags .ywpc-edit-input{width:100%;min-width:0;min-height:34px}
+.ywpc-style-tags .ywpc-edit-btn{min-height:34px;flex:none}
+.ywpc-style-tags-empty,.ywpc-style-tags-foot{color:var(--ywpc-muted);font-size:12px}
+.ywpc-style-tags-foot{min-height:18px;justify-content:space-between;overflow-wrap:anywhere}
+@media(max-width:600px){
+  .ywpc-root.ywpc-style-tags{padding:9px;gap:6px}
+  .ywpc-root.ywpc-style-tags .ywpc-edit-btn,.ywpc-root.ywpc-style-tags .ywpc-edit-input{min-height:40px}
+  .ywpc-root.ywpc-style-tags .ywpc-edit-input{font-size:16px}
+  .ywpc-root.ywpc-style-tags .ywpc-chip,.ywpc-style-tags .ywpc-style-tag-handle,.ywpc-style-tags .ywpc-style-tag-remove{min-height:30px}
+  .ywpc-style-tags .ywpc-style-tag-handle,.ywpc-style-tags .ywpc-style-tag-remove{min-width:32px}
+}
 .ywpc-head{display:flex;flex-direction:column;gap:4px;min-width:0}
 .ywpc-title-row{display:flex;align-items:center;gap:8px;min-width:0}
 .ywpc-title{font-size:14px;font-weight:650;letter-spacing:.01em}
@@ -1229,6 +1264,7 @@ export function createPresetControls(deps = {}) {
   let contentPickOpen = false;
   let contentPickShowAll = false;
   let contentEdit = null;
+  let styleTagsDialog = null;
   const api = {
     version: PRESET_CONTROLS_VERSION,
     mount,
@@ -1783,6 +1819,12 @@ export function createPresetControls(deps = {}) {
           }
         }
       }
+      if (previous < 11 && raw.length && usable(ID.wStyleAuto)
+        && !raw.some(pin => homePinMatchesDefault(pin, HOME_STYLE_TAG_PIN))) {
+        const after = raw.findIndex(pin => homePinMatchesDefault(pin, HOME_NEW_FLAG_PINS.at(-1)));
+        raw.splice(after < 0 ? raw.length : after + 1, 0, { ...HOME_STYLE_TAG_PIN });
+        changed = true;
+      }
       persistSettings();
       return changed;
     } catch (e) {
@@ -1790,7 +1832,7 @@ export function createPresetControls(deps = {}) {
     }
   }
 
-  function derivedHomePinsFor(settings, shortcuts, sections, legacy = false) {
+  function derivedHomePinsFor(settings, shortcuts, sections, legacy = false, styleTagsAvailable = false) {
     const out = [];
     const seen = new Set();
     const push = (pin) => {
@@ -1829,6 +1871,7 @@ export function createPresetControls(deps = {}) {
     }
     const flagAt = out.findIndex(pin => homePinMatchesDefault(pin, HOME_RAND_HEAD_PIN));
     out.splice(flagAt >= 0 ? flagAt + 1 : out.length, 0, ...HOME_NEW_FLAG_PINS.map(pin => ({ ...pin })));
+    if (!legacy && styleTagsAvailable) push(HOME_STYLE_TAG_PIN);
     push({ ...HOME_THINKING_PIN });
     push({ type: 'radio', key: PARAGRAPH_RADIO_KEY });
     push({ type: 'radio', key: NARRATION_RADIO_KEY });
@@ -1845,7 +1888,7 @@ export function createPresetControls(deps = {}) {
   }
 
   function effectiveHomePinsFor(settings, name, shortcuts, sections, available) {
-    const derived = derivedHomePinsFor(settings, shortcuts, sections);
+    const derived = derivedHomePinsFor(settings, shortcuts, sections, false, hasOwn(available, ID.wStyleAuto));
     const stored = storedHomePinsFor(settings, name, available, derived,
       () => derivedHomePinsFor(settings, shortcuts, sections, true));
     /* 已保存 pin 的用户顺序是唯一权威：不再按 niah/默认常用归位，也不补回已删项。
@@ -2523,7 +2566,7 @@ export function createPresetControls(deps = {}) {
       const realName = realNameFor(m, clean.id);
       const short = FIXED_SET.has(clean.id) ? shortLabelFor(clean.id) : realName;
       const icon = emojiPrefix(realName) || emojiPrefix(PROMPT_NAMES[clean.id] || '');
-      const label = emojiPrefix(short) ? short : withEmoji(icon, short);
+      const label = clean.id === ID.wStyleAuto ? STYLE_TAG_LABEL : (emojiPrefix(short) ? short : withEmoji(icon, short));
       return {
         pin: clean,
         kind: 'prompt',
@@ -3279,7 +3322,7 @@ export function createPresetControls(deps = {}) {
     nav.setAttribute('data-ywpc-nav-id', o.id || '');
     nav.setAttribute('data-ywpc-focus-key', o.focusKey || ('nav:' + section));
     if (o.missing) nav.classList.add('ywpc-missing');
-    const ready = canOpenInjectionSection();
+    const ready = section === STYLE_TAG_SECTION ? !o.missing && typeof deps.savePromptContent === 'function' : canOpenInjectionSection();
     if (!ready) {
       nav.disabled = true;
       nav.setAttribute('aria-disabled', 'true');
@@ -3982,20 +4025,22 @@ export function createPresetControls(deps = {}) {
     const realName = realNameFor(m, id);
     const reason = !present ? '当前预设没有这项' : (!ordinary ? '系统条目，不可切换' : '');
     const label = customLabel || (fixed ? shortLabelFor(id) : realName);
-    if (id === ID.niah) {
+    const styleTags = compact && id === ID.wStyleAuto;
+    if (id === ID.niah || styleTags) {
       /* 2026-11-15：插小说防道歉 = 前面导航 + 后面拨钮两颗并列按钮；
          前面只导航到工具箱注入段（deps.openInjectionSection('wrap4a')），
          后面拨钮保持 applyToggle 原写入路径。 */
       card.classList.add('ywpc-split');
-      const nav = makeInjectionNavButton(INJECTION_SECTION_NIAH, {
+      const section = styleTags ? STYLE_TAG_SECTION : INJECTION_SECTION_NIAH;
+      const nav = makeInjectionNavButton(section, {
         kind: 'prompt',
         id,
-        label,
+        label: styleTags ? STYLE_TAG_LABEL : label,
         realName,
         sub: usable ? '' : reason,
         missing: !usable,
-        navTitle: '打开工具箱「塞小说防道歉」设置',
-        focusKey: 'nav:' + INJECTION_SECTION_NIAH,
+        navTitle: styleTags ? '打开文风TAG设置' : '打开工具箱「塞小说防道歉」设置',
+        focusKey: 'nav:' + section,
       });
       const swBtn = makeSplitSwitchButton({
         'data-ywpc-toggle': id,
@@ -4818,6 +4863,38 @@ export function createPresetControls(deps = {}) {
     /* actualIds 与 prompt.identifier 必须对上；对不上就不猜，宁可提示不可编辑。 */
     if (text(prompt.identifier) !== actual) return null;
     return { canonical: id, actual, prompt };
+  }
+
+  function openStyleTags() {
+    if (styleTagsDialog) { styleTagsDialog.focus(); return; }
+    const target = actualContentTarget(buildModel(), ID.wStyleAuto);
+    const token = captureToken();
+    const parsed = readStyleTags(target?.prompt.content);
+    if (!target || !parsed || !tokenCurrent(token)) {
+      showToast('当前预设的「自适应文风」条目或 TAG 格式无法识别。', 'warn');
+      return;
+    }
+    const orderKey = JSON.stringify([token.name, target.actual]);
+    styleTagsDialog = openStyleTagsDialog(doc, parsed, {
+      rememberedOrder: readSettings()?.styleTagOrders?.[orderKey],
+      rememberOrder(order) {
+        const settings = readSettings();
+        if (!settings || !tokenCurrent(token)) return;
+        if (!isPlainObject(settings.styleTagOrders)) settings.styleTagOrders = {};
+        if (JSON.stringify(settings.styleTagOrders[orderKey]) === JSON.stringify(order)) return;
+        settings.styleTagOrders[orderKey] = order;
+        persistSettings();
+      },
+      save(expectedContent, content) {
+        if (!tokenCurrent(token)) return { switched: true };
+        return deps.savePromptContent({ name: token.name, oai: token.oai, scenario: token.scenario,
+          prompt: target.prompt, promptId: target.actual, expectedContent, content });
+      },
+      onClose() {
+        styleTagsDialog = null;
+        root?.querySelector('[data-ywpc-nav-section="' + STYLE_TAG_SECTION + '"]')?.focus();
+      },
+    });
   }
 
   function contentEntryName(target) {
@@ -10571,6 +10648,7 @@ export function createPresetControls(deps = {}) {
       if (pinMode || editing || contentPick || contentEdit) return;
       const section = text(navEl.getAttribute('data-ywpc-nav-section'));
       if (!section) return;
+      if (section === STYLE_TAG_SECTION) { openStyleTags(); return; }
       if (typeof deps.openInjectionSection !== 'function') {
         showToast('工具箱导航接口未就绪，没有打开任何设置。', 'warn');
         return;
@@ -11078,6 +11156,7 @@ export function createPresetControls(deps = {}) {
   }
 
   function teardown() {
+    styleTagsDialog?.dispose();
     flushPendingSaveOnTeardown();
     disposed = true;
     mounted = false;
