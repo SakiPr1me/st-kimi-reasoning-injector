@@ -2386,6 +2386,11 @@
     box-shadow: none;
 }
 
+/* 总控条目商店与滚动条之间留一层窄边距。 */
+#ywcc-root.ywcc-root .ywcc-scroll:has(.ywcc-module-host .ywcc-original-card[data-card="presetstore"]) {
+    padding-inline: 6px;
+}
+
 #ywcc-root.ywcc-root #ywpu-card {
     margin: 0;
     padding: 0;

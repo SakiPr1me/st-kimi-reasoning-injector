@@ -5,7 +5,7 @@
    - 不写业务数据；只通过 getSettings/saveSettings 保存 controlCenter.favorites/recent。
    ========================================================================== */
 
-export const CONTROL_CENTER_VERSION = '1.3.21';
+export const CONTROL_CENTER_VERSION = '1.3.22';
 export const PANEL_SELECTOR = '#ywcc-root .ywcc-panel';
 
 const ROOT_ID = 'ywcc-root';
